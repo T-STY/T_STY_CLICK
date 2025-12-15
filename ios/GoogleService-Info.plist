@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CLIENT_ID</key>
+	<string>163376358846-1d757nvlvvf3k4aj15r7k7t8d6ea12tb.apps.googleusercontent.com</string>
+	<key>REVERSED_CLIENT_ID</key>
+	<string>com.googleusercontent.apps.163376358846-1d757nvlvvf3k4aj15r7k7t8d6ea12tb</string>
+	<key>API_KEY</key>
+	<string>AIzaSyAPxcV8j0LR0WOhEdY-YMxg5-9eexXIIN8</string>
+	<key>GCM_SENDER_ID</key>
+	<string>163376358846</string>
+	<key>PLIST_VERSION</key>
+	<string>1</string>
+	<key>BUNDLE_ID</key>
+	<string>com.tsty.mx.click</string>
+	<key>PROJECT_ID</key>
+	<string>arthemis-f2966</string>
+	<key>STORAGE_BUCKET</key>
+	<string>arthemis-f2966.appspot.com</string>
+	<key>IS_ADS_ENABLED</key>
+	<false></false>
+	<key>IS_ANALYTICS_ENABLED</key>
+	<false></false>
+	<key>IS_APPINVITE_ENABLED</key>
+	<true></true>
+	<key>IS_GCM_ENABLED</key>
+	<true></true>
+	<key>IS_SIGNIN_ENABLED</key>
+	<true></true>
+	<key>GOOGLE_APP_ID</key>
+	<string>1:163376358846:ios:921a8e10330947868405ef</string>
+	<key>DATABASE_URL</key>
+	<string>https://arthemis-f2966-default-rtdb.firebaseio.com</string>
+</dict>
+</plist>

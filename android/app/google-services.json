@@ -1,0 +1,83 @@
+{
+  "project_info": {
+    "project_number": "163376358846",
+    "firebase_url": "https://arthemis-f2966-default-rtdb.firebaseio.com",
+    "project_id": "arthemis-f2966",
+    "storage_bucket": "arthemis-f2966.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:163376358846:android:8989107c44da41c38405ef",
+        "android_client_info": {
+          "package_name": "com.t_sty.mx.arthemis"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "163376358846-jrh5r99ujlmm87rd011f5v368fc6tfis.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDCo76QVr-P_hs8vUNwTIfh0L9-kaAG5a4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "163376358846-jrh5r99ujlmm87rd011f5v368fc6tfis.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "163376358846-li53j1rqig6narqnjnpsq2866fm3n5tb.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.tsty.mx.arthemis"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:163376358846:android:3a7b44460abc216b8405ef",
+        "android_client_info": {
+          "package_name": "com.t_sty.mx.click"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "163376358846-jrh5r99ujlmm87rd011f5v368fc6tfis.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDCo76QVr-P_hs8vUNwTIfh0L9-kaAG5a4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "163376358846-jrh5r99ujlmm87rd011f5v368fc6tfis.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "163376358846-li53j1rqig6narqnjnpsq2866fm3n5tb.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.tsty.mx.arthemis"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
