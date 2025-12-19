@@ -6,6 +6,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geocoding/geocoding.dart';
 
+import '../../components/shimmer_placeholder.dart';
 import '../../constants/app_images.dart';
 
 class AddressesSection extends StatefulWidget {
@@ -70,13 +71,38 @@ class _AddressesSectionState extends State<AddressesSection> {
         stream: addressesRef.snapshots(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            // Show a loading indicator while data is being fetched
+            // NEW: Shimmer List for Addresses
             return Scaffold(
               appBar: AppBar(
                 backgroundColor: isDarkMode ? Colors.grey[900] : Colors.white,
                 elevation: 0,
               ),
-              body: const Center(child: CircularProgressIndicator()),
+              body: ListView.builder(
+                padding: const EdgeInsets.all(16.0),
+                itemCount: 3, // Show 3 dummy address cards
+                itemBuilder: (context, index) {
+                  return Card(
+                    elevation: 3,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    margin: const EdgeInsets.symmetric(vertical: 8),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: const [
+                          // Street Name Placeholder
+                          ShimmerPlaceholder(width: 200, height: 16),
+                          SizedBox(height: 8),
+                          // City/State Placeholder
+                          ShimmerPlaceholder(width: 150, height: 14),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
             );
           }
 

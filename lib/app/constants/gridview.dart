@@ -1,6 +1,9 @@
 import 'dart:async';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+
+import '../../components/shimmer_placeholder.dart';
 
 class RecipeGrid extends StatefulWidget {
   final String title;
@@ -88,20 +91,77 @@ class _RecipeGridState extends State<RecipeGrid> {
       child: StreamBuilder<QuerySnapshot>(
         stream: widget.query.snapshots(),
         builder: (context, snapshot) {
+          // NEW: Shimmer PageView Loading State
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
+            return PageView.builder(
+              controller: PageController(viewportFraction: 0.9), // Match the width of your items
+              itemCount: 3, // Show 3 dummy items
+              itemBuilder: (context, index) {
+                return Container(
+                  margin: const EdgeInsets.fromLTRB(10, 5, 10, 15),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: const BorderRadius.only(
+                      topLeft: Radius.circular(43),
+                      topRight: Radius.circular(24),
+                      bottomLeft: Radius.circular(14),
+                      bottomRight: Radius.circular(14),
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.1), // Lighter shadow for placeholder
+                        blurRadius: 10,
+                        offset: const Offset(4, 4),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      // Image Shimmer (Matching the unique shape)
+                      const ShimmerPlaceholder(
+                        height: 150,
+                        shapeBorder: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.only(
+                            topLeft: Radius.circular(43),
+                            topRight: Radius.circular(24),
+                            bottomLeft: Radius.circular(14),
+                            bottomRight: Radius.circular(14),
+                          ),
+                        ),
+                      ),
+                      // Text Shimmers
+                      Padding(
+                        padding: const EdgeInsets.all(12.0),
+                        child: Column(
+                          children: const [
+                            ShimmerPlaceholder(width: 150, height: 16),
+                            SizedBox(height: 8),
+                            ShimmerPlaceholder(width: 100, height: 14),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            );
           }
+
           if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
             return const Center(child: Text("No recipes found"));
           }
 
-          List<Widget> items = snapshot.data!.docs.map((doc) => _buildPageItem(context, doc)).toList();
+          List<Widget> items = snapshot.data!.docs
+              .map((doc) => _buildPageItem(context, doc))
+              .toList();
+
           return PageView.builder(
             controller: _pageController,
             itemCount: items.length,
             itemBuilder: (context, index) {
               return GestureDetector(
-                onTap: () => widget.onRecipeSelected(snapshot.data!.docs[index].id), // Pass recipe ID on tap
+                onTap: () => widget.onRecipeSelected(snapshot.data!.docs[index].id),
                 child: items[index],
               );
             },
@@ -154,11 +214,19 @@ class _RecipeGridState extends State<RecipeGrid> {
                   bottomLeft: Radius.circular(14),
                   bottomRight: Radius.circular(14),
                 ),
-                child: Image.network(
-                  data['imageURL'] ?? '/images/placeholder.png',
+                // Inside _buildPageItem:
+                child: CachedNetworkImage(
+                  imageUrl: data['imageURL'] ?? '',
                   fit: BoxFit.cover,
-                  width: double.infinity, // Make the image fill the container width
-                  height: 150, // Set a fixed height for the image container
+                  width: double.infinity,
+                  height: 150,
+                  // NEW: Shimmer Placeholder
+                  placeholder: (context, url) => const ShimmerPlaceholder(height: 150),
+                  errorWidget: (context, url, error) => Container(
+                    height: 150,
+                    color: Colors.grey[300],
+                    child: const Icon(Icons.broken_image),
+                  ),
                 ),
               ),
             ),

@@ -3,6 +3,7 @@ import 'package:flutter_credit_card/flutter_credit_card.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
+import 'package:lottie/lottie.dart';
 
 import '../../constants/app_images.dart'; // For date formatting
 
@@ -298,20 +299,19 @@ class _CreateNewCardState extends State<CreateNewCard> {
                       ElevatedButton(
                         onPressed: _isLoading ? null : _saveCard,
                         style: ElevatedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(
-                              vertical: 16, horizontal: 100),
+                          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 100),
                           backgroundColor: Colors.black,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(16),
                           ),
                         ),
                         child: _isLoading
-                            ? const SizedBox(
-                          height: 20,
-                          width: 20,
-                          child: CircularProgressIndicator(
-                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                            strokeWidth: 2,
+                            ? SizedBox(
+                          height: 35, // Adjusted size for the animation
+                          width: 35,
+                          child: Lottie.asset(
+                            'assets/animations/animation.json', // Your custom loader
+                            fit: BoxFit.contain,
                           ),
                         )
                             : const Text(

@@ -53,6 +53,8 @@ dependencies:
   google_maps_flutter:
   geocoding:
   firebase_app_check:
+  shared_preferences:
+  shimmer:
   flutter_credit_card:
     path: packages/flutter_credit_card-master
   # The following adds the Cupertino Icons font to your application.

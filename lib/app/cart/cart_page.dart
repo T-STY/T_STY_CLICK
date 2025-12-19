@@ -1,13 +1,15 @@
 import 'dart:ui';
-// Import for date and time handling
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:cloud_firestore/cloud_firestore.dart'; // Asegúrate de importar esto
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../components/shimmer_placeholder.dart';
 import '../../constants/app_colors.dart';
 import '../../constants/app_defaults.dart';
 import '../../constants/app_images.dart';
 import '../main.dart';
 import '../payment/checkout_page.dart';
-import '../payment/payment_done_page.dart'; // Import PaymentDonePage
+import '../payment/payment_done_page.dart';
 import 'cart_provider.dart';
 import 'components/product_tile_cart.dart';
 
@@ -21,22 +23,38 @@ class CartPage extends StatefulWidget {
 }
 
 class _CartPageState extends State<CartPage> {
-  int _index = 0; // 0 for cart view, 1 for checkout view, 2 for payment done view
+  int _index = 0; // 0 for cart, 1 for checkout, 2 for payment done
 
-  // Function to check if current time is within delivery hours (9 AM - 6 PM)
+  // Valores por defecto (se sobrescribirán con Firebase)
+  int _openHour = 9;
+  int _closeHour = 18;
+
+  // Función para verificar si la tienda está abierta
   bool _checkOrderTime() {
     final now = DateTime.now();
-    // final localTimeZone = 'America/Mexico_City'; // CST (Guadalajara) - Not used directly but implies context
-    final timeZoneAdjusted = now.toLocal();
+    final timeZoneAdjusted = now.toLocal(); // Asume la hora local del usuario
 
+    // Usamos las variables dinámicas _openHour y _closeHour
     final startTime = DateTime(
-        timeZoneAdjusted.year, timeZoneAdjusted.month, timeZoneAdjusted.day, 9);
+        timeZoneAdjusted.year, timeZoneAdjusted.month, timeZoneAdjusted.day,
+        _openHour);
+
+    // Si la hora de cierre es menor que la de apertura (ej. abre a las 9 y cierra a las 2 AM),
+    // habría que ajustar la lógica, pero para 9 AM - 6 PM esto funciona bien.
     final endTime = DateTime(
         timeZoneAdjusted.year, timeZoneAdjusted.month, timeZoneAdjusted.day,
-        18);
+        _closeHour);
 
     return timeZoneAdjusted.isAfter(startTime) &&
         timeZoneAdjusted.isBefore(endTime);
+  }
+
+  // Función auxiliar para formatear hora (ej. 18 -> 6 PM)
+  String _formatHour(int hour) {
+    if (hour == 12) return '12 PM';
+    if (hour == 0 || hour == 24) return '12 AM';
+    if (hour > 12) return '${hour - 12} PM';
+    return '$hour AM';
   }
 
   @override
@@ -44,22 +62,41 @@ class _CartPageState extends State<CartPage> {
     return IndexedStack(
       index: _index,
       children: [
-        // Cart content
-        _buildCartContent(context),
-        // Checkout content
+        // Envolvemos el contenido del carrito en un StreamBuilder
+        // para escuchar los cambios de horario en tiempo real.
+        StreamBuilder<DocumentSnapshot>(
+          stream: FirebaseFirestore.instance
+              .collection('settings')
+              .doc('store')
+              .snapshots(),
+          builder: (context, snapshot) {
+            // Si hay datos, actualizamos las variables locales
+            if (snapshot.hasData && snapshot.data!.exists) {
+              final data = snapshot.data!.data() as Map<String, dynamic>;
+              // Usamos 9 y 18 como fallback si los campos no existen
+              _openHour = data['open_hour'] ?? 9;
+              _closeHour = data['close_hour'] ?? 18;
+            }
+
+            // Construimos la UI del carrito pasando el estado de carga
+            return _buildCartContent(context,
+                isLoading: snapshot.connectionState == ConnectionState.waiting);
+          },
+        ),
+
         CheckoutPage(
           onBack: () {
             setState(() {
-              _index = 0; // Switch back to cart view
+              _index = 0;
             });
           },
           onOrderPlaced: () {
             setState(() {
-              _index = 2; // Switch to payment done view
+              _index = 2;
             });
           },
         ),
-        // Payment Done Page
+
         PaymentDonePage(
           onBackToHome: () {
             Navigator.of(context).pushAndRemoveUntil(
@@ -72,9 +109,13 @@ class _CartPageState extends State<CartPage> {
     );
   }
 
-  Widget _buildCartContent(BuildContext context) {
+  Widget _buildCartContent(BuildContext context, {bool isLoading = false}) {
     final bool isOrderTimeValid = _checkOrderTime();
-    final String timeNotice = 'Los pedidos solo pueden realizarse entre 9 AM y 6 PM CST.';
+
+    // Mensaje dinámico basado en las horas obtenidas
+    final String timeNotice = 'Los pedidos solo pueden realizarse entre ${_formatHour(
+        _openHour)} y ${_formatHour(_closeHour)}.';
+
     return Container(
       color: Theme
           .of(context)
@@ -116,8 +157,6 @@ class _CartPageState extends State<CartPage> {
                 itemBuilder: (context, index) {
                   final item = cartProvider.items.values.toList()[index];
                   return ProductTileCart(
-                    // CRITICAL FIX: ValueKey ensures Flutter tracks the specific item
-                    // when the list changes, preventing the "delete bottom item" bug.
                     key: ValueKey(item.objectID),
                     objectId: item.objectID,
                     name: item.nombre,
@@ -125,21 +164,24 @@ class _CartPageState extends State<CartPage> {
                     imageUrl: item.imageUrl,
                     quantity: item.quantity,
                     isBulk: item.isBulk,
+                    // Pass new fields to UI
+                    typeSpecific: item.typeSpecific,
+                    variante: item.variante,
                     increaseQuantity: () {
                       if (item.isBulk) {
                         _showBulkOrderDialog(context, cartProvider, item);
                       } else {
-                        final String productName = item.nombre;
-                        final String productImage = item.imageUrl;
-
                         cartProvider.addItem(
                           item.objectID,
-                          productName,
+                          item.nombre,
                           item.price,
-                          productImage,
+                          item.imageUrl,
                           quantity: 1,
                           isBulk: item.isBulk,
-                          stock: item.stock, // Pass stock value
+                          stock: item.stock,
+                          // Pass new fields back to provider
+                          typeSpecific: item.typeSpecific,
+                          variante: item.variante,
                         );
                       }
                     },
@@ -237,8 +279,9 @@ class _CartPageState extends State<CartPage> {
                         ],
                       ),
                       const SizedBox(height: 10),
-                      /// Time Restriction Notice
-                      if (!isOrderTimeValid)
+
+                      /// Time Restriction Notice (Dynamic)
+                      if (!isOrderTimeValid && !isLoading)
                         Padding(
                           padding: const EdgeInsets.symmetric(vertical: 8.0),
                           child: Text(
@@ -255,12 +298,12 @@ class _CartPageState extends State<CartPage> {
                       SizedBox(
                         width: double.infinity,
                         child: ElevatedButton(
-                          onPressed: cartProvider.items.isEmpty ||
-                              !isOrderTimeValid
-                              ? null // Disable the button if no items are in the cart or time is invalid
+                          onPressed: (cartProvider.items.isEmpty ||
+                              !isOrderTimeValid || isLoading)
+                              ? null // Deshabilitar si está cargando, vacío o fuera de horario
                               : () {
                             setState(() {
-                              _index = 1; // Switch to checkout view
+                              _index = 1;
                             });
                           },
                           style: ElevatedButton.styleFrom(
@@ -270,7 +313,14 @@ class _CartPageState extends State<CartPage> {
                               borderRadius: BorderRadius.circular(16),
                             ),
                           ),
-                          child: const Text(
+                          child: isLoading
+                              ? const SizedBox(
+                              height: 20,
+                              width: 20,
+                              child: CircularProgressIndicator(
+                                  strokeWidth: 2, color: Colors.white)
+                          )
+                              : const Text(
                             'Finalizar Compra',
                             style: TextStyle(
                               fontSize: 14,
@@ -293,7 +343,6 @@ class _CartPageState extends State<CartPage> {
     );
   }
 }
-
 void _showBulkOrderDialog(
     BuildContext context, CartProvider cartProvider, CartItem item) {
   final pesosController = TextEditingController();
@@ -341,13 +390,17 @@ void _showBulkOrderDialog(
             children: [
               Row(
                 children: [
+                  // Inside _showBulkOrderDialog:
                   ClipRRect(
                     borderRadius: BorderRadius.circular(8.0),
-                    child: Image.network(
-                      item.imageUrl,
-                      fit: BoxFit.cover,
+                    child: CachedNetworkImage(
+                      imageUrl: item.imageUrl,
+                      fit: BoxFit.contain,
                       width: 50,
                       height: 50,
+                      // NEW: Shimmer Placeholder
+                      placeholder: (context, url) => const ShimmerPlaceholder(width: 50, height: 50),
+                      errorWidget: (context, url, error) => const Icon(Icons.error),
                     ),
                   ),
                   const SizedBox(width: 10),

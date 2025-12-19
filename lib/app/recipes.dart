@@ -1,8 +1,11 @@
 import 'dart:ui';
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
+import '../components/custom_loader.dart';
+import '../components/shimmer_placeholder.dart';
 import 'cart/cart_provider.dart';
 
 class RecipeDetailPage extends StatefulWidget {
@@ -69,11 +72,14 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
         // Extract the product data
         final productData = productDoc.data();
         if (productData != null) {
-          // Extract the necessary fields with proper null checks
           final double? productPrice = (productData['price'] as num?)?.toDouble();
           final double? availableStock = (productData['stock'] as num?)?.toDouble();
           final String productName = productData['nombre'] ?? 'Producto desconocido';
           final String imageUrl = productData['image_url'] ?? '';
+
+          // 1. EXTRACT NEW FIELDS
+          final String typeSpecific = productData['type_specific'] as String? ?? '';
+          final String variante = productData['variante'] as String? ?? '';
 
           // Ensure that the price and stock are non-null before proceeding
           if (productPrice == null || availableStock == null) {
@@ -83,7 +89,6 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
 
           // Check if there's enough stock
           if (requestedQuantity > availableStock) {
-            // If not enough stock, add to insufficient stock items
             insufficientStockItems.add({
               'productId': productId,
               'name': productName,
@@ -92,10 +97,11 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
               'requestedQuantity': requestedQuantity,
               'price': productPrice,
               'isBulk': ingredient['isBulk'] ?? false,
-              'stock': availableStock, // Added stock here for reference
+              'stock': availableStock,
+              'typeSpecific': typeSpecific, // <--- ADD THIS
+              'variante': variante,         // <--- ADD THIS
             });
           } else {
-            // If sufficient stock, add to available items
             availableItems.add({
               'productId': productId,
               'name': productName,
@@ -103,7 +109,9 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
               'quantity': requestedQuantity,
               'price': productPrice,
               'isBulk': ingredient['isBulk'] ?? false,
-              'stock': availableStock, // <--- FIXED: Added stock here so it isn't null later
+              'stock': availableStock,
+              'typeSpecific': typeSpecific, // <--- ADD THIS
+              'variante': variante,         // <--- ADD THIS
             });
           }
         }
@@ -138,6 +146,7 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
             child: AlertDialog(
               title: const Text('Problemas con el inventario'),
               content: SingleChildScrollView(
+                // ... (El contenido del diálogo se mantiene igual)
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -149,9 +158,14 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
                       const SizedBox(height: 8),
                       ...missingItems.map((item) => Row(
                         children: [
-                          Image.network(item['imageUrl'] ?? '', width: 50, height: 50, errorBuilder: (_, __, ___) {
-                            return const Icon(Icons.broken_image);
-                          }),
+                          CachedNetworkImage(
+                            imageUrl: item['imageUrl'] ?? '',
+                            width: 50,
+                            height: 50,
+                            fit: BoxFit.contain,
+                            placeholder: (context, url) => const SizedBox(width: 50, height: 50),
+                            errorWidget: (context, url, error) => const Icon(Icons.broken_image),
+                          ),
                           const SizedBox(width: 8),
                           Expanded(child: Text(item['name'] ?? 'Producto desconocido')),
                         ],
@@ -166,9 +180,14 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
                       const SizedBox(height: 8),
                       ...insufficientStockItems.map((item) => Row(
                         children: [
-                          Image.network(item['imageUrl'] ?? '', width: 50, height: 50, errorBuilder: (_, __, ___) {
-                            return const Icon(Icons.broken_image);
-                          }),
+                          CachedNetworkImage(
+                            imageUrl: item['imageUrl'] ?? '',
+                            width: 50,
+                            height: 50,
+                            fit: BoxFit.contain,
+                            placeholder: (context, url) => const SizedBox(width: 50, height: 50),
+                            errorWidget: (context, url, error) => const Icon(Icons.broken_image),
+                          ),
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
@@ -184,19 +203,21 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
               actions: [
                 TextButton(
                   onPressed: () async {
-                    // Add only available items
+                    // Opción 1: Agregar solo lo disponible y salir
                     await _addAvailableItemsToCart(availableItems, cartProvider);
-                    // Dismiss the dialog
-                    Navigator.of(context).pop();
+
+                    Navigator.of(context).pop(); // 1. Cierra el diálogo
+                    widget.onBackPressed();      // 2. Regresa a la pantalla principal
                   },
                   child: const Text('Excluir'),
                 ),
                 TextButton(
                   onPressed: () async {
-                    // Add all items, including insufficient stock items (capped at max stock)
+                    // Opción 2: Agregar todo lo que se pueda y salir
                     await _addAllIncludingInsufficient(availableItems, insufficientStockItems, cartProvider);
-                    // Dismiss the dialog
-                    Navigator.of(context).pop();
+
+                    Navigator.of(context).pop(); // 1. Cierra el diálogo
+                    widget.onBackPressed();      // 2. Regresa a la pantalla principal
                   },
                   child: const Text('Agregar'),
                 ),
@@ -215,7 +236,7 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
     // Add items with sufficient stock
     await _addAvailableItemsToCart(availableItems, cartProvider);
 
-    // Add items with insufficient stock (limited to available stock)
+    // Add items with insufficient stock
     for (var item in insufficientStockItems) {
       double availableStock = item['availableStock'];
       double price = item['price'];
@@ -225,9 +246,11 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
         item['name'],
         price,
         item['imageUrl'],
-        quantity: availableStock, // Add only available stock
+        quantity: availableStock,
         isBulk: item['isBulk'] ?? false,
-        stock: availableStock,  // Pass stock here
+        stock: availableStock,
+        typeSpecific: item['typeSpecific'], // <--- PASS HERE
+        variante: item['variante'],         // <--- PASS HERE
       );
     }
   }
@@ -237,7 +260,6 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
       CartProvider cartProvider,
       ) async {
     for (var item in availableItems) {
-      // FIXED: Safely access stock and handle nulls to prevent crashes
       cartProvider.addItem(
         item['productId'],
         item['name'],
@@ -246,11 +268,12 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
         quantity: item['quantity'],
         isBulk: item['isBulk'] ?? false,
         stock: (item['stock'] as num?)?.toDouble() ?? 0.0,
+        typeSpecific: item['typeSpecific'], // <--- PASS HERE
+        variante: item['variante'],         // <--- PASS HERE
       );
     }
   }
 
-  /// Success dialog after items are added
   Future<void> _showSuccessDialog() async {
     return showDialog<void>(
       context: context,
@@ -259,11 +282,13 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
             filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
             child: AlertDialog(
               title: const Text('Productos agregados'),
-              content: const Text(
-                  'Todos los productos disponibles han sido agregados exitosamente al carrito.'),
+              content: const Text('Todos los productos disponibles han sido agregados exitosamente al carrito.'),
               actions: <Widget>[
                 TextButton(
-                  onPressed: () => Navigator.of(context).pop(),
+                  onPressed: () {
+                    Navigator.of(context).pop(); // 1. Cierra el diálogo
+                    widget.onBackPressed();      // 2. Regresa a la pantalla principal
+                  },
                   child: const Text('OK'),
                 ),
               ],
@@ -277,10 +302,28 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
     return ingredients.map((ingredient) => FutureBuilder<DocumentSnapshot>(
       future: FirebaseFirestore.instance.collection('products').doc(ingredient['productId']).get(),
       builder: (context, snapshot) {
+        // LOADING STATE: Shimmer Skeleton Row
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Padding(
-            padding: EdgeInsets.only(bottom: 8),
-            child: Center(child: CircularProgressIndicator()),
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Row(
+              children: [
+                // Shimmer for Image
+                const ShimmerPlaceholder(width: 50, height: 50),
+                const SizedBox(width: 8),
+                // Shimmer for Text details
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: const [
+                      ShimmerPlaceholder(width: double.infinity, height: 16),
+                      SizedBox(height: 4),
+                      ShimmerPlaceholder(width: 100, height: 14),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           );
         }
 
@@ -291,14 +334,13 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
               children: [
                 ClipRRect(
                   borderRadius: BorderRadius.circular(8),
-                  child: Image.network(
-                    ingredient['imageUrl'] ?? '',
+                  child: CachedNetworkImage(
+                    imageUrl: ingredient['imageUrl'] ?? '',
                     width: 50,
                     height: 50,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) {
-                      return const Icon(Icons.broken_image);
-                    },
+                    fit: BoxFit.contain,
+                    placeholder: (context, url) => const ShimmerPlaceholder(width: 50, height: 50),
+                    errorWidget: (context, url, error) => const Icon(Icons.broken_image),
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -326,14 +368,13 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
             children: [
               ClipRRect(
                 borderRadius: BorderRadius.circular(8),
-                child: Image.network(
-                  ingredient['imageUrl'] ?? '',
+                child: CachedNetworkImage(
+                  imageUrl: ingredient['imageUrl'] ?? '',
                   width: 50,
                   height: 50,
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) {
-                    return const Icon(Icons.broken_image);
-                  },
+                  fit: BoxFit.contain,
+                  placeholder: (context, url) => const ShimmerPlaceholder(width: 50, height: 50),
+                  errorWidget: (context, url, error) => const Icon(Icons.broken_image),
                 ),
               ),
               const SizedBox(width: 8),
@@ -367,7 +408,8 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
   Widget build(BuildContext context) {
     if (recipeData == null) {
       return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
+        // Replaced Center(child: CircularProgressIndicator())
+        body: CustomLoader(),
       );
     }
 
@@ -377,8 +419,8 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
 
     return WillPopScope(
       onWillPop: () async {
-        widget.onBackPressed();
-        return true;
+        widget.onBackPressed(); // Llama a la función que cambia _showRecipeDetail a false en home.dart
+        return false; // Retornamos false porque la navegación la maneja el padre manualmente
       },
       child: Scaffold(
         body: SingleChildScrollView(
@@ -389,11 +431,14 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
               // Image section
               ClipRRect(
                 borderRadius: BorderRadius.circular(20),
-                child: Image.network(
-                  recipeData!['imageURL'],
+                child: CachedNetworkImage(
+                  imageUrl: recipeData!['imageURL'],
                   width: double.infinity,
-                  fit: BoxFit.fill,
                   height: 250,
+                  fit: BoxFit.fill,
+                  // NEW: Rectangular Shimmer Placeholder
+                  placeholder: (context, url) => const ShimmerPlaceholder.rectangular(height: 250),
+                  errorWidget: (context, url, error) => const Icon(Icons.error),
                 ),
               ),
               const SizedBox(height: 20),

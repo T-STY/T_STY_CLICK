@@ -3,6 +3,7 @@ import 'package:lottie/lottie.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../auth/login_page.dart';
+import '../../components/custom_loader.dart';
 import '../../constants/app_images.dart';
 import '../../main.dart';
 import 'addresses_section.dart';
@@ -296,7 +297,8 @@ class _SettingsPageState extends State<SettingsPage> {
         ),
         backgroundColor: Colors.white,
         body: _isLoading
-            ? const Center(child: CircularProgressIndicator())
+        // NEW: Use CustomLoader instead of CircularProgressIndicator
+            ? const CustomLoader()
             : ListView(
           padding: const EdgeInsets.all(16.0),
           children: [

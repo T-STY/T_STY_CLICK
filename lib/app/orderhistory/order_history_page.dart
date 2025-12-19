@@ -1,9 +1,11 @@
 // lib/pages/order_history/order_history_page.dart
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../constants/app_colors.dart';
+import '../../components/shimmer_placeholder.dart';
 import '../../constants/app_images.dart';
 import 'OrderDetailPage.dart';
 import 'orders.dart';
@@ -57,7 +59,9 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
       }).toList();
 
       // Return only the orders that are not older than 30 days
-      return orders.where((order) => order.timestamp.isAfter(cutoffDate)).toList();
+      return orders
+          .where((order) => order.timestamp.isAfter(cutoffDate))
+          .toList();
     });
   }
 
@@ -133,21 +137,57 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
     return StreamBuilder<List<UserOrder>>(
       stream: _fetchOrderHistory(),
       builder: (context, snapshot) {
+        // NEW: Shimmer List Loading State
         if (snapshot.connectionState == ConnectionState.waiting) {
-          // While the data is loading
-          return const Center(child: CircularProgressIndicator());
+          return ListView.builder(
+            itemCount: 6, // Show 6 dummy items
+            itemBuilder: (context, index) {
+              return Card(
+                elevation: 4,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16)),
+                margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Row(
+                    children: [
+                      // Image Placeholder
+                      const ShimmerPlaceholder(width: 80, height: 80),
+                      const SizedBox(width: 16),
+                      // Text Details Placeholders
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: const [
+                            ShimmerPlaceholder(width: 120, height: 16),
+                            // Order ID
+                            SizedBox(height: 8),
+                            ShimmerPlaceholder(width: 150, height: 14),
+                            // Date
+                            SizedBox(height: 4),
+                            ShimmerPlaceholder(width: 80, height: 14),
+                            // Price
+                            SizedBox(height: 4),
+                            ShimmerPlaceholder(width: 100, height: 14),
+                            // Status
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          );
         } else if (snapshot.hasError) {
-          // If an error occurred
           return Center(
             child: Text('Error al cargar los pedidos: ${snapshot.error}'),
           );
         } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
-          // If there are no orders
           return const Center(
             child: Text('No tienes pedidos en tu historial.'),
           );
         } else {
-
           final orders = snapshot.data!;
           return ListView.builder(
             itemCount: orders.length + 1,
@@ -160,9 +200,7 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
                   onTap: () => _navigateToOrderDetail(order, index + 1),
                 );
               } else {
-
-                return SizedBox(
-                    height: 120);
+                return const SizedBox(height: 120);
               }
             },
           );
@@ -222,22 +260,22 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
           child: Row(
             children: [
               // Order Image
+              // Inside OrderCard:
               ClipRRect(
                 borderRadius: BorderRadius.circular(12),
-                child: Image.network(
-                  order.items.isNotEmpty
-                      ? order.items[0].imageUrl
-                      : 'https://via.placeholder.com/100',
+                child: CachedNetworkImage(
+                  imageUrl: order.items.isNotEmpty ? order.items[0].imageUrl : '',
                   width: 80,
                   height: 80,
-                  fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) =>
-                      Container(
-                        width: 80,
-                        height: 80,
-                        color: Colors.grey.shade200,
-                        child: const Icon(Icons.broken_image, color: Colors.grey),
-                      ),
+                  fit: BoxFit.contain,
+                  // NEW: Shimmer Placeholder
+                  placeholder: (context, url) => const ShimmerPlaceholder(width: 80, height: 80),
+                  errorWidget: (context, url, error) => Container(
+                    width: 80,
+                    height: 80,
+                    color: Colors.grey.shade200,
+                    child: const Icon(Icons.broken_image, color: Colors.grey),
+                  ),
                 ),
               ),
               const SizedBox(width: 16),

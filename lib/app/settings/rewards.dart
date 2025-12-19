@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_credit_card/flutter_credit_card.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../../components/shimmer_placeholder.dart';
 import '../../constants/app_images.dart';
 import 'create_new_card.dart'; // Ensure this path is correct
 
@@ -77,8 +78,8 @@ class _RewardsCardPageState extends State<RewardsCardPage> {
             double? saldo = rewardsData['saldo'] is String
                 ? double.tryParse(rewardsData['saldo'])
                 : (rewardsData['saldo'] is int)
-                ? (rewardsData['saldo'] as int).toDouble()
-                : rewardsData['saldo'];
+                    ? (rewardsData['saldo'] as int).toDouble()
+                    : rewardsData['saldo'];
 
             setState(() {
               _rewardsCardData = {
@@ -159,8 +160,8 @@ class _RewardsCardPageState extends State<RewardsCardPage> {
           });
         }
       } else {
-        _showAlertDialog(
-            'Error', 'No se encontró un monedero con esos datos. Verifica tu número y NIP.');
+        _showAlertDialog('Error',
+            'No se encontró un monedero con esos datos. Verifica tu número y NIP.');
       }
     } catch (e) {
       _showAlertDialog('Error', 'Error al agregar el monedero: $e');
@@ -227,7 +228,8 @@ class _RewardsCardPageState extends State<RewardsCardPage> {
 
     // Ensure the phone number has exactly 10 digits before proceeding
     if (phoneNumber.length != 10) {
-      _showAlertDialog('Error', 'El número de teléfono debe tener exactamente 10 dígitos');
+      _showAlertDialog(
+          'Error', 'El número de teléfono debe tener exactamente 10 dígitos');
       return;
     }
 
@@ -281,7 +283,8 @@ class _RewardsCardPageState extends State<RewardsCardPage> {
         _showAlertDialog('Error', 'No se encontró ningún monedero');
       }
     } catch (e) {
-      _showAlertDialog('Error', 'No se pudo actualizar el número de teléfono: $e');
+      _showAlertDialog(
+          'Error', 'No se pudo actualizar el número de teléfono: $e');
     }
   }
 
@@ -348,8 +351,9 @@ class _RewardsCardPageState extends State<RewardsCardPage> {
         body: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
           stream: _userCardStream(),
           builder: (context, userCardSnapshot) {
+            // LOADING STATE 1
             if (userCardSnapshot.connectionState == ConnectionState.waiting) {
-              return const Center(child: CircularProgressIndicator());
+              return _buildShimmerLoading(); // <--- Replaced CircularProgressIndicator
             }
 
             if (!userCardSnapshot.hasData || !userCardSnapshot.data!.exists) {
@@ -366,11 +370,14 @@ class _RewardsCardPageState extends State<RewardsCardPage> {
             return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
               stream: _rewardsCardStream(cardNumber),
               builder: (context, rewardsSnapshot) {
-                if (rewardsSnapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
+                // LOADING STATE 2
+                if (rewardsSnapshot.connectionState ==
+                    ConnectionState.waiting) {
+                  return _buildShimmerLoading(); // <--- Replaced CircularProgressIndicator
                 }
 
-                if (!rewardsSnapshot.hasData || rewardsSnapshot.data!.docs.isEmpty) {
+                if (!rewardsSnapshot.hasData ||
+                    rewardsSnapshot.data!.docs.isEmpty) {
                   return _buildNoCardView();
                 }
 
@@ -389,7 +396,8 @@ class _RewardsCardPageState extends State<RewardsCardPage> {
                         cardNumber: cardNumber ?? 'T_STY-0000000000',
                         obscureCardNumber: false,
                         expiryDate: userData?['customerSince'] ?? 'MM/YY',
-                        cardHolderName: userData?['cardHolderName'] ?? 'Card Holder',
+                        cardHolderName:
+                            userData?['cardHolderName'] ?? 'Card Holder',
                         cvvCode: userData?['cvvCode'] ?? '',
                         obscureCardCvv: false,
                         showBackView: false,
@@ -418,10 +426,11 @@ class _RewardsCardPageState extends State<RewardsCardPage> {
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
-                        margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 16),
+                        margin: const EdgeInsets.symmetric(
+                            vertical: 4, horizontal: 16),
                         child: ListTile(
-                          leading:
-                          const Icon(Icons.account_balance_wallet, color: Colors.white),
+                          leading: const Icon(Icons.account_balance_wallet,
+                              color: Colors.white),
                           title: const Text(
                             'Monedero',
                             style: TextStyle(
@@ -487,7 +496,7 @@ class _RewardsCardPageState extends State<RewardsCardPage> {
                   filled: true,
                   fillColor: Colors.grey[100],
                   contentPadding:
-                  const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+                      const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                     borderSide: BorderSide.none,
@@ -540,7 +549,7 @@ class _RewardsCardPageState extends State<RewardsCardPage> {
                   filled: true,
                   fillColor: Colors.grey[100],
                   contentPadding:
-                  const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+                      const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                     borderSide: BorderSide.none,
@@ -550,7 +559,8 @@ class _RewardsCardPageState extends State<RewardsCardPage> {
                 onEditingComplete: () {
                   String cvv = _cvvController.text.trim();
                   if (cvv.length != 4) {
-                    _showAlertDialog('Error', 'El NIP debe tener exactamente 4 dígitos');
+                    _showAlertDialog(
+                        'Error', 'El NIP debe tener exactamente 4 dígitos');
                   }
                 },
               ),
@@ -579,12 +589,59 @@ class _RewardsCardPageState extends State<RewardsCardPage> {
     );
   }
 
+  Widget _buildShimmerLoading() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16.0),
+      child: Column(
+        children: [
+          // 1. Credit Card Shimmer
+          const ShimmerPlaceholder(
+            height: 200,
+            width: double.infinity,
+            shapeBorder: RoundedRectangleBorder(
+              borderRadius: BorderRadius.all(Radius.circular(16)),
+            ),
+          ),
+          const SizedBox(height: 10),
+
+          // 2. Balance Card Shimmer
+          const ShimmerPlaceholder(
+            height: 70,
+            width: double.infinity,
+            shapeBorder: RoundedRectangleBorder(
+              borderRadius: BorderRadius.all(Radius.circular(12)),
+            ),
+          ),
+          const SizedBox(height: 20),
+
+          // 3. Settings Options Shimmer
+          const ShimmerPlaceholder(
+            height: 60,
+            width: double.infinity,
+            shapeBorder: RoundedRectangleBorder(
+              borderRadius: BorderRadius.all(Radius.circular(16)),
+            ),
+          ),
+          const SizedBox(height: 10),
+          const ShimmerPlaceholder(
+            height: 60,
+            width: double.infinity,
+            shapeBorder: RoundedRectangleBorder(
+              borderRadius: BorderRadius.all(Radius.circular(16)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildNoCardView() {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     final textColor = isDarkMode ? Colors.white70 : Colors.black87;
     final backgroundColor = isDarkMode ? Colors.grey[800] : Colors.white;
     final cardColor = isDarkMode ? Colors.grey[900] : Colors.white;
-    final shadowColor = isDarkMode ? Colors.black54 : Colors.grey.withOpacity(0.5);
+    final shadowColor =
+        isDarkMode ? Colors.black54 : Colors.grey.withOpacity(0.5);
 
     return Center(
       child: Padding(
@@ -612,7 +669,8 @@ class _RewardsCardPageState extends State<RewardsCardPage> {
             ElevatedButton(
               onPressed: _navigateToCreateCard,
               style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 100),
+                padding:
+                    const EdgeInsets.symmetric(vertical: 16, horizontal: 100),
                 backgroundColor: Colors.black,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(16),
@@ -639,7 +697,8 @@ class _RewardsCardPageState extends State<RewardsCardPage> {
                 });
               },
               style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 100),
+                padding:
+                    const EdgeInsets.symmetric(vertical: 16, horizontal: 100),
                 backgroundColor: Colors.black,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(16),
@@ -722,7 +781,8 @@ class _RewardsCardPageState extends State<RewardsCardPage> {
               ElevatedButton(
                 onPressed: _addExistingCard,
                 style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 25),
+                  padding:
+                      const EdgeInsets.symmetric(vertical: 16, horizontal: 25),
                   backgroundColor: Colors.black,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(16),
@@ -746,6 +806,7 @@ class _RewardsCardPageState extends State<RewardsCardPage> {
     );
   }
 }
+
 
 // Custom ExpansionTile with animation
 class CustomExpansionTile extends StatefulWidget {

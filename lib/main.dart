@@ -8,6 +8,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'app/cart/cart_provider.dart';
 import 'app/main.dart';
 import 'auth/login_page.dart';
+import 'components/custom_loader.dart';
 import 'custom_page_route.dart';
 import 'firebase_options.dart';
 import 'package:provider/provider.dart';
@@ -172,9 +173,11 @@ class CheckUserScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     _checkUser(context);
     return const Scaffold(
-      body: Center(child: CircularProgressIndicator()),
+      // Replaced Center(child: CircularProgressIndicator())
+      body: CustomLoader(),
     );
   }
+}
 
   Future<void> _checkUser(BuildContext context) async {
     try {
@@ -188,4 +191,3 @@ class CheckUserScreen extends StatelessWidget {
       Navigator.of(context).pushReplacement(customPageRouteBuilder(const LoginPage()));
     }
   }
-}

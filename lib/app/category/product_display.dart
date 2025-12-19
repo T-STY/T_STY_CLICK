@@ -1,11 +1,13 @@
 import 'dart:async';
 import 'dart:ui';
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
 
+import '../../components/shimmer_placeholder.dart';
 import '../../constants/app_images.dart';
 import '../cart/cart_provider.dart';
 
@@ -105,8 +107,64 @@ class _ProductDisplayPageState extends State<ProductDisplayPage> {
                       .where('category', isEqualTo: widget.selectedCategory)
                       .snapshots(),
                   builder: (context, AsyncSnapshot<QuerySnapshot> snapshot) {
+                    // NEW: Shimmer Grid Loading State
                     if (snapshot.connectionState == ConnectionState.waiting) {
-                      return const Center(child: CircularProgressIndicator());
+                      return GridView.builder(
+                        padding: const EdgeInsets.only(bottom: 20),
+                        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 2,
+                          crossAxisSpacing: 10,
+                          mainAxisSpacing: 20,
+                          childAspectRatio: 7 / 10,
+                        ),
+                        itemCount: 6, // Show 6 dummy items
+                        itemBuilder: (context, index) {
+                          return Container(
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(15),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.grey.withOpacity(0.1),
+                                  spreadRadius: 5,
+                                  blurRadius: 10,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ],
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                // Image Placeholder
+                                const Expanded(
+                                  child: ShimmerPlaceholder(
+                                    shapeBorder: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.only(
+                                        topLeft: Radius.circular(15),
+                                        topRight: Radius.circular(15),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                // Text Placeholders
+                                Padding(
+                                  padding: const EdgeInsets.all(8.0),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: const [
+                                      ShimmerPlaceholder(width: 100, height: 16),
+                                      SizedBox(height: 8),
+                                      ShimmerPlaceholder(width: 60, height: 14),
+                                      SizedBox(height: 8),
+                                      ShimmerPlaceholder(width: double.infinity, height: 36), // Button
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      );
                     }
                     if (snapshot.hasError) {
                       return Center(child: Text('Error: ${snapshot.error}'));
@@ -160,6 +218,9 @@ class _ProductDisplayPageState extends State<ProductDisplayPage> {
     final String imageUrl = data['image_url'] ?? '';
     final bool isBulk = data['bulk'] as bool? ?? false;
     final double stock = (data['stock'] as num?)?.toDouble() ?? 0.0;
+    // 1. EXTRACT NEW FIELDS
+    final String? typeSpecific = data['type_specific'] as String?;
+    final String? variante = data['variante'] as String?;
 
     return Container(
       decoration: BoxDecoration(
@@ -177,6 +238,7 @@ class _ProductDisplayPageState extends State<ProductDisplayPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Inside _buildProductCard:
           Expanded(
             child: ClipRRect(
               borderRadius: const BorderRadius.only(
@@ -185,10 +247,13 @@ class _ProductDisplayPageState extends State<ProductDisplayPage> {
               ),
               child: Padding(
                 padding: const EdgeInsets.only(top: 8),
-                child: Image.network(
-                  imageUrl,
+                child: CachedNetworkImage(
+                  imageUrl: imageUrl,
                   fit: BoxFit.contain,
                   width: double.infinity,
+                  // NEW: Shimmer Placeholder
+                  placeholder: (context, url) => const ShimmerPlaceholder(width: double.infinity),
+                  errorWidget: (context, url, error) => const Icon(Icons.error),
                 ),
               ),
             ),
@@ -231,6 +296,8 @@ class _ProductDisplayPageState extends State<ProductDisplayPage> {
                     'image_url': imageUrl,
                     'bulk': isBulk,
                     'stock': stock,
+                    'type_specific': typeSpecific, // <--- ADD THIS
+                    'variante': variante,
                   },
                   textColor: Colors.black,
                 ),
@@ -329,6 +396,9 @@ class __AddToCartButtonState extends State<_AddToCartButton> {
     final double? price = widget.data['price'] as double?;
     final String? imageUrl = widget.data['image_url'] as String?;
     final bool isBulk = widget.data['bulk'] as bool? ?? false;
+    // 1. EXTRACT FROM WIDGET DATA
+    final String? typeSpecific = widget.data['type_specific'] as String?;
+    final String? variante = widget.data['variante'] as String?;
 
     if (docId != null && name != null && price != null && imageUrl != null) {
       if (isBulk) {
@@ -340,13 +410,14 @@ class __AddToCartButtonState extends State<_AddToCartButton> {
           _showAgregadoButton = false;
         });
 
-        _resetAndStartTimer(docId, name, price, imageUrl, cartProvider, isBulk);
+        // 2. PASS TO HELPER
+        _resetAndStartTimer(docId, name, price, imageUrl, cartProvider, isBulk, typeSpecific, variante);
       }
     }
   }
 
   void _resetAndStartTimer(String docId, String name, double price,
-      String imageUrl, CartProvider cartProvider, bool isBulk) {
+      String imageUrl, CartProvider cartProvider, bool isBulk, String? typeSpecific, String? variante) { // <--- Update Args
     _timer?.cancel();
 
     _timer = Timer(const Duration(seconds: 2), () {
@@ -361,6 +432,8 @@ class __AddToCartButtonState extends State<_AddToCartButton> {
               _quantity,
               isBulk: isBulk,
               stock: stock, // Pass stock here
+              typeSpecific: typeSpecific, // <--- PASS HERE
+              variante: variante,
             );
           } else {
             cartProvider.removeItemCompletely(docId);
@@ -394,9 +467,10 @@ class __AddToCartButtonState extends State<_AddToCartButton> {
       final String? imageUrl = widget.data['image_url'] as String?;
       final bool isBulk = widget.data['bulk'] as bool? ?? false;
       final cartProvider = Provider.of<CartProvider>(context, listen: false);
+      final String? typeSpecific = widget.data['type_specific'] as String?;
+      final String? variante = widget.data['variante'] as String?;
 
-      _resetAndStartTimer(
-          docId!, name!, price!, imageUrl!, cartProvider, isBulk);
+      _resetAndStartTimer(docId!, name!, price!, imageUrl!, cartProvider, isBulk, typeSpecific, variante);
     }
   }
 
@@ -412,9 +486,10 @@ class __AddToCartButtonState extends State<_AddToCartButton> {
       final String? imageUrl = widget.data['image_url'] as String?;
       final bool isBulk = widget.data['bulk'] as bool? ?? false;
       final cartProvider = Provider.of<CartProvider>(context, listen: false);
+      final String? typeSpecific = widget.data['type_specific'] as String?;
+      final String? variante = widget.data['variante'] as String?;
 
-      _resetAndStartTimer(
-          docId!, name!, price!, imageUrl!, cartProvider, isBulk);
+      _resetAndStartTimer(docId!, name!, price!, imageUrl!, cartProvider, isBulk, typeSpecific, variante);
     }
   }
 
@@ -557,7 +632,7 @@ class __AddToCartButtonState extends State<_AddToCartButton> {
                           child: Image.network(
                             widget.data['image_url'] ??
                                 '/images/placeholder.png',
-                            fit: BoxFit.cover,
+                            fit: BoxFit.contain,
                             width: 50,
                             height: 50,
                           ),
@@ -691,9 +766,7 @@ class __AddToCartButtonState extends State<_AddToCartButton> {
                       );
                     } else {
                       Navigator.of(context).pop();
-                      if (widget.data['docId'] != null &&
-                          widget.data['nombre'] != null) {
-                        // Replace the quantity in the cart with the new value
+                      if (widget.data['docId'] != null && widget.data['nombre'] != null) {
                         cartProvider.setItem(
                           widget.data['docId'],
                           widget.data['nombre'],
@@ -701,7 +774,9 @@ class __AddToCartButtonState extends State<_AddToCartButton> {
                           widget.data['image_url'] ?? '/images/placeholder.png',
                           kilos,
                           isBulk: true,
-                          stock: stock, // Pass stock here
+                          stock: stock,
+                          typeSpecific: widget.data['type_specific'], // <--- ADD THIS
+                          variante: widget.data['variante'],          // <--- ADD THIS
                         );
                       }
                       if (kDebugMode) {

@@ -1,10 +1,13 @@
 import 'dart:ui';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:click/app/recipes.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:algolia/algolia.dart';
 import 'package:provider/provider.dart';
+import '../components/custom_loader.dart';
+import '../components/shimmer_placeholder.dart';
 import '../constants/app_images.dart';
 import 'cart/cart_provider.dart';
 import 'category/filter_dialog.dart';
@@ -260,12 +263,12 @@ class _HomeState extends State<Home> {
                   ),
                   Expanded(
                     child: _isSearching
-                        ? const Center(child: CircularProgressIndicator())
+                        ? const CustomLoader() // <--- Replaced CircularProgressIndicator
                         : (_searchText.isNotEmpty
-                            ? _buildSearchResults()
-                            : (_selectedFilters.isNotEmpty
-                                ? _buildFilteredProductList()
-                                : _buildProductGrids())),
+                        ? _buildSearchResults()
+                        : (_selectedFilters.isNotEmpty
+                        ? _buildFilteredProductList()
+                        : _buildProductGrids())),
                   ),
                 ],
               ),
@@ -370,6 +373,9 @@ class _HomeState extends State<Home> {
     String? imageUrl;
     bool isBulk;
     double stock;
+    // New variables
+    String? typeSpecific;
+    String? variante;
 
     // Handle Algolia snapshot
     if (doc is AlgoliaObjectSnapshot) {
@@ -380,6 +386,8 @@ class _HomeState extends State<Home> {
       imageUrl = data['image_url'] as String?;
       isBulk = data['bulk'] as bool? ?? false;
       stock = (data['stock'] as num?)?.toDouble() ?? 0.0;
+      typeSpecific = data['type_specific'] as String?; // Extract
+      variante = data['variante'] as String?;          // Extract
 
       // Handle Firestore snapshot
     } else if (doc is DocumentSnapshot) {
@@ -390,8 +398,10 @@ class _HomeState extends State<Home> {
       imageUrl = data['image_url'] as String?;
       isBulk = data['bulk'] as bool? ?? false;
       stock = (data['stock'] as num?)?.toDouble() ?? 0.0;
+      typeSpecific = data['type_specific'] as String?; // Extract
+      variante = data['variante'] as String?;          // Extract
     } else {
-      return const SizedBox.shrink(); // If it's neither type, return empty
+      return const SizedBox.shrink();
     }
 
     final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
@@ -413,13 +423,17 @@ class _HomeState extends State<Home> {
       child: ListTile(
         contentPadding:
             const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
+        // Replace the existing ClipRRect with this:
         leading: ClipRRect(
-          borderRadius: BorderRadius.circular(8.0), // Round the image corners
-          child: Image.network(
-            imageUrl ?? '/images/placeholder.png',
-            fit: BoxFit.contain,
+          borderRadius: BorderRadius.circular(8.0),
+          child: CachedNetworkImage(
+            imageUrl: imageUrl ?? '',
             width: 50,
             height: 50,
+            fit: BoxFit.contain,
+            // NEW: Shimmer Placeholder
+            placeholder: (context, url) => const ShimmerPlaceholder(width: 50, height: 50),
+            errorWidget: (context, url, error) => const Icon(Icons.error),
           ),
         ),
         title: Text(
@@ -429,18 +443,21 @@ class _HomeState extends State<Home> {
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              data['variante'] ?? 'No variant',
-              style: TextStyle(color: textColor),
-            ),
+            // Display Variant and Type Specific in Search List
+            if (variante != null && variante.isNotEmpty)
+              Text(
+                variante,
+                style: TextStyle(color: textColor, fontSize: 12),
+              ),
             Text(
               _formatPrice(price),
               style: const TextStyle(color: Colors.green),
             ),
-            Text(
-              data['type_specific'] ?? 'N/A',
-              style: const TextStyle(color: Colors.grey),
-            ),
+            if (typeSpecific != null && typeSpecific.isNotEmpty)
+              Text(
+                typeSpecific,
+                style: const TextStyle(color: Colors.grey, fontSize: 12),
+              ),
           ],
         ),
         trailing: SizedBox(
@@ -452,7 +469,9 @@ class _HomeState extends State<Home> {
               'price': price,
               'image_url': imageUrl,
               'bulk': isBulk,
-              'stock': stock, // Pass stock information
+              'stock': stock,
+              'type_specific': typeSpecific, // Pass to button
+              'variante': variante,          // Pass to button
             },
             textColor: textColor,
           ),
@@ -541,6 +560,9 @@ class FirestoreProductGrid extends StatelessWidget {
     final bool isBulk =
         data['bulk'] as bool? ?? false; // Check if the item is bulk
     final double stock = (data['stock'] as num?)?.toDouble() ?? 0.0;
+    // 1. EXTRACT NEW FIELDS
+    final String? typeSpecific = data['type_specific'] as String?;
+    final String? variante = data['variante'] as String?;
 
     final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
     final textColor = isDarkMode ? Colors.white : Colors.black;
@@ -563,15 +585,19 @@ class FirestoreProductGrid extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: <Widget>[
+            SizedBox(height: 5,),
             Expanded(
               child: ClipRRect(
                 borderRadius: const BorderRadius.only(
                   topLeft: Radius.circular(10),
                   topRight: Radius.circular(10),
                 ),
-                child: Image.network(
-                  imageUrl ?? '/images/placeholder.png',
-                  fit: BoxFit.cover,
+                child: CachedNetworkImage(
+                  imageUrl: imageUrl ?? '',
+                  fit: BoxFit.contain,
+                  // NEW: Shimmer Placeholder
+                  placeholder: (context, url) => const ShimmerPlaceholder(height: 120),
+                  errorWidget: (context, url, error) => const Icon(Icons.error),
                 ),
               ),
             ),
@@ -611,6 +637,8 @@ class FirestoreProductGrid extends StatelessWidget {
                         'image_url': imageUrl,
                         'bulk': isBulk,
                         'stock': stock, // Pass stock information
+                        'type_specific': typeSpecific, // <--- ADD THIS
+                        'variante': variante,
                       },
                       textColor: textColor,
                     ),
@@ -716,24 +744,27 @@ class __AddToCartButtonState extends State<_AddToCartButton> {
     final double? price = widget.data['price'] as double?;
     final String? imageUrl = widget.data['image_url'] as String?;
     final bool isBulk = widget.data['bulk'] as bool? ?? false;
+    final String? typeSpecific = widget.data['type_specific'] as String?;
+    final String? variante = widget.data['variante'] as String?;
 
     if (docId != null && name != null && price != null && imageUrl != null) {
       if (isBulk) {
-        _showBulkOrderDialog(); // Display the bulk order dialog if it's a bulk item
+        _showBulkOrderDialog();
       } else {
         setState(() {
           _showSwitchTile = true;
-          _quantity = 1; // Reset quantity to 1
+          _quantity = 1;
           _showAgregadoButton = false;
         });
 
-        _resetAndStartTimer(docId, name, price, imageUrl, cartProvider, isBulk);
+        // Update timer call to include new fields if needed, or pass via widget.data in closure
+        _resetAndStartTimer(docId, name, price, imageUrl, cartProvider, isBulk, typeSpecific, variante);
       }
     }
   }
 
   void _resetAndStartTimer(String docId, String name, double price,
-      String imageUrl, CartProvider cartProvider, bool isBulk) {
+      String imageUrl, CartProvider cartProvider, bool isBulk, String? typeSpecific, String? variante) {
     _timer?.cancel();
 
     _timer = Timer(const Duration(seconds: 2), () {
@@ -747,16 +778,14 @@ class __AddToCartButtonState extends State<_AddToCartButton> {
               imageUrl,
               _quantity,
               isBulk: isBulk,
-              stock: stock, // Pass stock here
+              stock: stock,
+              typeSpecific: typeSpecific, // Pass new field
+              variante: variante,         // Pass new field
             );
           } else {
             cartProvider.removeItemCompletely(docId);
           }
-          _showSwitchTile = false; // Hide the switch tile
-          _showAgregadoButton = true; // Show the "Agregado" button
-          if (kDebugMode) {
-            print('Set quantity of $name to $_quantity in cart');
-          }
+          // ... rest of logic
         });
       }
     });
@@ -780,10 +809,15 @@ class __AddToCartButtonState extends State<_AddToCartButton> {
       final double? price = widget.data['price'] as double?;
       final String? imageUrl = widget.data['image_url'] as String?;
       final bool isBulk = widget.data['bulk'] as bool? ?? false;
+
+      // Extract the new fields
+      final String? typeSpecific = widget.data['type_specific'] as String?;
+      final String? variante = widget.data['variante'] as String?;
+
       final cartProvider = Provider.of<CartProvider>(context, listen: false);
 
       _resetAndStartTimer(
-          docId!, name!, price!, imageUrl!, cartProvider, isBulk);
+          docId!, name!, price!, imageUrl!, cartProvider, isBulk, typeSpecific, variante);
     }
   }
 
@@ -798,10 +832,15 @@ class __AddToCartButtonState extends State<_AddToCartButton> {
       final double? price = widget.data['price'] as double?;
       final String? imageUrl = widget.data['image_url'] as String?;
       final bool isBulk = widget.data['bulk'] as bool? ?? false;
+
+      // Extract the new fields
+      final String? typeSpecific = widget.data['type_specific'] as String?;
+      final String? variante = widget.data['variante'] as String?;
+
       final cartProvider = Provider.of<CartProvider>(context, listen: false);
 
       _resetAndStartTimer(
-          docId!, name!, price!, imageUrl!, cartProvider, isBulk);
+          docId!, name!, price!, imageUrl!, cartProvider, isBulk, typeSpecific, variante);
     }
   }
 
@@ -939,14 +978,16 @@ class __AddToCartButtonState extends State<_AddToCartButton> {
                   children: [
                     Row(
                       children: [
+                        // Inside the Row children:
                         ClipRRect(
                           borderRadius: BorderRadius.circular(8.0),
-                          child: Image.network(
-                            widget.data['image_url'] ??
-                                '/images/placeholder.png',
-                            fit: BoxFit.cover,
+                          child: CachedNetworkImage(
+                            imageUrl: widget.data['image_url'] ?? '',
                             width: 50,
                             height: 50,
+                            fit: BoxFit.contain,
+                            placeholder: (context, url) => const ShimmerPlaceholder(width: 50, height: 50),
+                            errorWidget: (context, url, error) => const Icon(Icons.error),
                           ),
                         ),
                         const SizedBox(width: 10),
@@ -1078,9 +1119,7 @@ class __AddToCartButtonState extends State<_AddToCartButton> {
                       );
                     } else {
                       Navigator.of(context).pop();
-                      if (widget.data['docId'] != null &&
-                          widget.data['nombre'] != null) {
-                        // Replace the quantity in the cart with the new value
+                      if (widget.data['docId'] != null && widget.data['nombre'] != null) {
                         cartProvider.setItem(
                           widget.data['docId'],
                           widget.data['nombre'],
@@ -1088,7 +1127,9 @@ class __AddToCartButtonState extends State<_AddToCartButton> {
                           widget.data['image_url'] ?? '/images/placeholder.png',
                           kilos,
                           isBulk: true,
-                          stock: stock, // Pass stock here
+                          stock: stock,
+                          typeSpecific: widget.data['type_specific'], // Pass field
+                          variante: widget.data['variante'],          // Pass field
                         );
                       }
                       if (kDebugMode) {

@@ -1,8 +1,11 @@
 import 'dart:math'; // For random selection
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../components/custom_loader.dart';
+import '../../components/shimmer_placeholder.dart';
 import '../../constants/app_colors.dart';
 import '../verse/verse_model.dart';
 import 'applied_coupon.dart';
@@ -155,9 +158,9 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
             ),
             const SizedBox(height: 16),
 
-            // Address Section (No additional Card wrapping)
             _isFetchingAddress
-                ? const Center(child: CircularProgressIndicator())
+            // NEW: Rectangular Shimmer to mimic the Address Card
+                ? const ShimmerPlaceholder.rectangular(height: 80)
                 : _fetchError != null
                 ? Text(
               _fetchError!,
@@ -380,15 +383,17 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
                 child: Row(
                   children: [
                     // Product Image
+                    // Inside _buildReceiptStyleOrderItems:
                     ClipRRect(
                       borderRadius: BorderRadius.circular(8),
-                      child: Image.network(
-                        item.imageUrl,
+                      child: CachedNetworkImage(
+                        imageUrl: item.imageUrl,
                         width: 50,
                         height: 50,
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) =>
-                        const Icon(Icons.error),
+                        fit: BoxFit.contain,
+                        // NEW: Shimmer Placeholder
+                        placeholder: (context, url) => const ShimmerPlaceholder(width: 50, height: 50),
+                        errorWidget: (context, url, error) => const Icon(Icons.error),
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -677,11 +682,11 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
         batch.update(userOrderRef, updateData);
         batch.update(topLevelOrderRef, updateData);
 
-        // Show loading indicator
         showDialog(
           context: context,
           barrierDismissible: false,
-          builder: (context) => const Center(child: CircularProgressIndicator()),
+          // NEW: Use CustomLoader instead of CircularProgressIndicator
+          builder: (context) => const CustomLoader(),
         );
 
         // Commit the batch

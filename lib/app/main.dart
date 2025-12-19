@@ -2,9 +2,11 @@ import 'package:animations/animations.dart';
 import 'package:click/app/settings/settings.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_iconly/flutter_iconly.dart';
+import 'package:provider/provider.dart';
 
 import '../../constants/app_colors.dart';
 import 'cart/cart_page.dart';
+import 'cart/cart_provider.dart';
 import 'category/category.dart';
 import 'home.dart';
 import 'orderhistory/order_history_page.dart';
@@ -49,7 +51,6 @@ class MainMenuScreenState extends State<MainMenuScreen> with TickerProviderState
   ];
 
 
-
   @override
   void initState() {
     super.initState();
@@ -82,7 +83,9 @@ class MainMenuScreenState extends State<MainMenuScreen> with TickerProviderState
         preferredSize: const Size.fromHeight(0.0),
         child: AppBar(
           scrolledUnderElevation: 0,
-          backgroundColor: Theme.of(context).brightness == Brightness.dark
+          backgroundColor: Theme
+              .of(context)
+              .brightness == Brightness.dark
               ? Colors.transparent
               : Colors.white,
         ),
@@ -112,25 +115,35 @@ class MainMenuScreenState extends State<MainMenuScreen> with TickerProviderState
   }
 
   Widget _buildElevatedNavBar() {
-    // Adjusting height and padding for better control over nav bar appearance
-    double navBarHeight = MediaQuery.of(context).size.height * 0.1;
-    double iconSize = MediaQuery.of(context).size.width * 0.08; // Example for responsive icon size
+    // 1. Set a stable height range.
+    // This ensures it's at least 65px on small phones and max 80px on large screens.
+    double screenHeight = MediaQuery
+        .of(context)
+        .size
+        .height;
+    double navBarHeight = (screenHeight * 0.1).clamp(65.0, 80.0);
 
-    // Determine bottom padding based on platform
-    if (Theme.of(context).platform == TargetPlatform.iOS) {
-// Reduce or remove additional bottom padding for iOS if needed
-    }
+    // 2. Clamp icon size so it doesn't get massive on tablets/web
+    double screenWidth = MediaQuery
+        .of(context)
+        .size
+        .width;
+    double iconSize = (screenWidth * 0.08).clamp(24.0, 32.0);
 
     return Container(
-      height: navBarHeight, // Include bottom padding in the total height
-      margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 25.0),
+      // 3. Margin should be smaller on mobile, larger on web
+      margin: EdgeInsets.symmetric(
+          horizontal: screenWidth > 600 ? 40.0 : 16.0,
+          vertical: screenWidth > 600 ? 30.0 : 20.0
+      ),
+      height: navBarHeight,
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16.0),
+        borderRadius: BorderRadius.circular(24.0), // Match ClipRRect
         boxShadow: const [
           BoxShadow(
             color: Colors.black12,
             blurRadius: 20.0,
-            spreadRadius: 10.0,
+            spreadRadius: 2.0, // Reduced spread to avoid "glow" overlap
           ),
         ],
       ),
@@ -138,26 +151,32 @@ class MainMenuScreenState extends State<MainMenuScreen> with TickerProviderState
         borderRadius: BorderRadius.circular(24.0),
         child: BottomNavigationBar(
           currentIndex: _currentIndex,
+          onTap: updateMenu,
+          // Use the built-in tap handler
           type: BottomNavigationBarType.fixed,
           selectedFontSize: 0,
           unselectedFontSize: 0,
           iconSize: iconSize,
-          selectedItemColor: Theme.of(context).brightness == Brightness.dark
+          selectedItemColor: Theme
+              .of(context)
+              .brightness == Brightness.dark
               ? Colors.white
               : AppColors.primary,
-          unselectedItemColor: Theme.of(context).brightness == Brightness.dark
+          unselectedItemColor: Theme
+              .of(context)
+              .brightness == Brightness.dark
               ? Colors.grey[500]
               : const Color(0xFFD0D0D0),
-          backgroundColor: Theme.of(context).brightness == Brightness.dark
+          backgroundColor: Theme
+              .of(context)
+              .brightness == Brightness.dark
               ? Colors.grey[800]
               : Colors.white,
           items: List.generate(5, (index) {
             return BottomNavigationBarItem(
               label: "",
-              icon: _paddedNavItem(
-                _buildNavItem(index),
-                index,
-              ),
+              // 4. Removed the heavy vertical padding here
+              icon: _buildNavItem(index),
             );
           }),
         ),
@@ -165,23 +184,38 @@ class MainMenuScreenState extends State<MainMenuScreen> with TickerProviderState
     );
   }
 
-  Widget _paddedNavItem(Widget child, int index) {
-    return GestureDetector(
-      onTap: () => updateMenu(index),
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 27), // Reduced padding
-        child: child,
-      ),
-    );
-  }
-
   Widget _buildNavItem(int index) {
-    return ScaleTransition(
-      scale: _currentIndex == index ? _animationController.drive(Tween<double>(begin: 1.0, end: 1.2)) : const AlwaysStoppedAnimation(1.0),
-      child: Icon(
-        _currentIndex == index ? _selectedIcons[index] : _unselectedIcons[index],
+    // 5. Use a simple Padding or Center instead of a huge fixed number
+    return Padding(
+      padding: const EdgeInsets.only(top: 8.0), // Small top nudge for alignment
+      child: ScaleTransition(
+        scale: _currentIndex == index
+            ? _animationController.drive(Tween<double>(begin: 1.0, end: 1.2))
+            : const AlwaysStoppedAnimation(1.0),
+        child: index == 3 // Index 3 is your Cart/Bag icon
+            ? Consumer<CartProvider>(
+          builder: (context, cart, child) {
+            // Get the total number of items
+            int itemCount = cart.items.length;
+
+            return Badge(
+              label: Text(itemCount.toString()),
+              isLabelVisible: itemCount > 0, // Hide badge if cart is empty
+              backgroundColor: AppColors.primary,
+              child: Icon(
+                _currentIndex == index
+                    ? _selectedIcons[index]
+                    : _unselectedIcons[index],
+              ),
+            );
+          },
+        )
+            : Icon(
+          _currentIndex == index
+              ? _selectedIcons[index]
+              : _unselectedIcons[index],
+        ),
       ),
     );
   }
 }
-

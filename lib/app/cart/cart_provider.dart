@@ -1,7 +1,13 @@
-import 'package:flutter/material.dart';
+import 'dart:convert';
+import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class CartProvider extends ChangeNotifier {
   Map<String, CartItem> _items = {};
+
+  CartProvider() {
+    _loadCartFromStorage();
+  }
 
   Map<String, CartItem> get items => {..._items};
 
@@ -13,15 +19,56 @@ class CartProvider extends ChangeNotifier {
     return total;
   }
 
+  int get totalItemCount {
+    return _items.length;
+  }
+
+  // --- PERSISTENCE METHODS ---
+
+  Future<void> _saveCartToStorage() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      String encodedData = jsonEncode(
+        _items.map((key, item) => MapEntry(key, item.toMap())),
+      );
+      await prefs.setString('tsty_cart_data', encodedData);
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error al guardar el carrito: $e');
+      }
+    }
+  }
+
+  Future<void> _loadCartFromStorage() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      String? savedData = prefs.getString('tsty_cart_data');
+
+      if (savedData != null) {
+        Map<String, dynamic> decodedData = jsonDecode(savedData);
+        _items = decodedData.map((key, value) =>
+            MapEntry(key, CartItem.fromJson(value as Map<String, dynamic>))
+        );
+        notifyListeners();
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error al cargar el carrito: $e');
+      }
+    }
+  }
+
+  // --- CART LOGIC ---
+
+  // Updated: Added typeSpecific and variante
   void addItem(String productId, String name, double price, String imageUrl,
-      {double quantity = 1.0, required bool isBulk, required double stock}) {
+      {double quantity = 1.0, required bool isBulk, required double stock, String? typeSpecific, String? variante}) {
     if (_items.containsKey(productId)) {
       _items.update(
         productId,
             (existingCartItem) {
           double newQuantity = existingCartItem.quantity + quantity;
 
-          // Ensure the new quantity does not exceed available stock
           if (newQuantity > stock) {
             newQuantity = stock;
             _showStockExceededDialog(existingCartItem.nombre);
@@ -35,11 +82,12 @@ class CartProvider extends ChangeNotifier {
             objectID: existingCartItem.objectID,
             isBulk: existingCartItem.isBulk,
             stock: existingCartItem.stock,
+            typeSpecific: existingCartItem.typeSpecific, // Keep existing
+            variante: existingCartItem.variante,         // Keep existing
           );
         },
       );
     } else {
-      // Ensure the initial quantity does not exceed available stock
       double initialQuantity = quantity;
       if (initialQuantity > stock) {
         initialQuantity = stock;
@@ -56,14 +104,18 @@ class CartProvider extends ChangeNotifier {
           objectID: productId,
           isBulk: isBulk,
           stock: stock,
+          typeSpecific: typeSpecific ?? '', // Save new
+          variante: variante ?? '',         // Save new
         ),
       );
     }
     notifyListeners();
+    _saveCartToStorage();
   }
 
+  // Updated: Added typeSpecific and variante
   void setItem(String productId, String name, double price, String imageUrl,
-      double quantity, {required bool isBulk, required double stock}) {
+      double quantity, {required bool isBulk, required double stock, String? typeSpecific, String? variante}) {
     if (quantity > stock) {
       quantity = stock;
       _showStockExceededDialog(name);
@@ -80,6 +132,8 @@ class CartProvider extends ChangeNotifier {
           objectID: productId,
           isBulk: isBulk,
           stock: stock,
+          typeSpecific: typeSpecific ?? existingCartItem.typeSpecific,
+          variante: variante ?? existingCartItem.variante,
         ),
         ifAbsent: () => CartItem(
           nombre: name,
@@ -89,12 +143,15 @@ class CartProvider extends ChangeNotifier {
           objectID: productId,
           isBulk: isBulk,
           stock: stock,
+          typeSpecific: typeSpecific ?? '',
+          variante: variante ?? '',
         ),
       );
     } else {
       _items.remove(productId);
     }
     notifyListeners();
+    _saveCartToStorage();
   }
 
   void removeItem(String productId, {required bool isBulk}) {
@@ -105,8 +162,7 @@ class CartProvider extends ChangeNotifier {
               (existingCartItem) {
             double newQuantity = existingCartItem.quantity - 1;
             if (isBulk) {
-              // For bulk items, handle decrement accordingly
-              newQuantity = existingCartItem.quantity - 0.5; // Example for half reduction
+              newQuantity = existingCartItem.quantity - 0.5;
             }
             return CartItem(
               nombre: existingCartItem.nombre,
@@ -116,6 +172,8 @@ class CartProvider extends ChangeNotifier {
               objectID: existingCartItem.objectID,
               isBulk: existingCartItem.isBulk,
               stock: existingCartItem.stock,
+              typeSpecific: existingCartItem.typeSpecific,
+              variante: existingCartItem.variante,
             );
           },
         );
@@ -124,27 +182,29 @@ class CartProvider extends ChangeNotifier {
       }
     }
     notifyListeners();
+    _saveCartToStorage();
   }
 
   void removeItemCompletely(String productId) {
     _items.remove(productId);
     notifyListeners();
+    _saveCartToStorage();
   }
 
   CartItem? getItem(String productId) {
     return _items[productId];
   }
 
-  // Clear the cart
   void clearCart() {
     _items.clear();
     notifyListeners();
+    _saveCartToStorage();
   }
 
-  // Method to show stock exceeded dialog
   void _showStockExceededDialog(String productName) {
-    print('Stock exceeded for product: $productName');
-    // You can implement a dialog or use a ScaffoldMessenger here to notify the user.
+    if (kDebugMode) {
+      print('Stock excedido para el producto: $productName');
+    }
   }
 }
 
@@ -155,7 +215,10 @@ class CartItem {
   final String imageUrl;
   final String objectID;
   final bool isBulk;
-  final double stock; // Add the available stock field
+  final double stock;
+  // New Fields
+  final String typeSpecific;
+  final String variante;
 
   CartItem({
     required this.nombre,
@@ -164,7 +227,9 @@ class CartItem {
     required this.imageUrl,
     required this.objectID,
     required this.isBulk,
-    required this.stock, // Initialize available stock
+    required this.stock,
+    this.typeSpecific = '',
+    this.variante = '',
   });
 
   Map<String, dynamic> toMap() {
@@ -175,7 +240,23 @@ class CartItem {
       'imageUrl': imageUrl,
       'objectID': objectID,
       'isBulk': isBulk,
-      'stock': stock, // Include stock in the map
+      'stock': stock,
+      'type_specific': typeSpecific, // Added to map
+      'variante': variante,          // Added to map
     };
+  }
+
+  factory CartItem.fromJson(Map<String, dynamic> json) {
+    return CartItem(
+      nombre: json['nombre'] as String,
+      price: (json['price'] as num).toDouble(),
+      quantity: (json['quantity'] as num).toDouble(),
+      imageUrl: json['imageUrl'] as String,
+      objectID: json['objectID'] as String,
+      isBulk: json['isBulk'] as bool,
+      stock: (json['stock'] as num).toDouble(),
+      typeSpecific: json['type_specific'] as String? ?? '', // Added from json
+      variante: json['variante'] as String? ?? '',          // Added from json
+    );
   }
 }

@@ -186,7 +186,7 @@ class _PasswordResetDialogState extends State<PasswordResetDialog> {
                   ? Lottie.asset('assets/animations/error.json',
                   width: 200,
                   height: 200,
-                  fit: BoxFit.cover,
+                  fit: BoxFit.contain,
                   repeat: false,
                   onLoaded: (composition) {
                     Future.delayed(composition.duration, () {
@@ -198,7 +198,7 @@ class _PasswordResetDialogState extends State<PasswordResetDialog> {
                   : Lottie.asset('assets/animations/check.json',
                   width: 200,
                   height: 200,
-                  fit: BoxFit.cover,
+                  fit: BoxFit.contain,
                   repeat: false,
                   onLoaded: (composition) {
                     Future.delayed(composition.duration, () {
