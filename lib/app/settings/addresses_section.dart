@@ -32,10 +32,41 @@ class _AddressesSectionState extends State<AddressesSection> {
   final _zipCodeController = TextEditingController();
 
   // Other variables
-  final _colonias = ['Andares del Jazmin', 'Rivera del Jazmin'];
+  // Changed from hardcoded final list to dynamic list
+  List<String> _colonias = [];
   final _city = 'Colima';
   final _state = 'Colima';
   LatLng? _selectedLocation;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchColonias();
+  }
+
+  // Fetch colonias from Firebase
+  Future<void> _fetchColonias() async {
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('settings')
+          .doc('store')
+          .get();
+
+      if (doc.exists) {
+        final data = doc.data();
+        if (data != null && data['colonias'] != null) {
+          if (mounted) {
+            setState(() {
+              _colonias = List<String>.from(data['colonias']);
+              _colonias.sort(); // Optional: sort alphabetically
+            });
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Error loading colonias: $e');
+    }
+  }
 
   @override
   void dispose() {
@@ -125,8 +156,6 @@ class _AddressesSectionState extends State<AddressesSection> {
             );
           }
 
-          int addressCount = snapshot.data?.docs.length ?? 0;
-
           return Scaffold(
             appBar: AppBar(
               title: SizedBox(
@@ -143,7 +172,7 @@ class _AddressesSectionState extends State<AddressesSection> {
               backgroundColor: isDarkMode ? Colors.grey[900] : Colors.white,
               elevation: 0,
               centerTitle: true,
-              leading: SizedBox(),
+              leading: const SizedBox(),
               iconTheme: const IconThemeData(color: Colors.blueGrey),
               titleTextStyle: const TextStyle(
                 color: Colors.black,
@@ -155,7 +184,8 @@ class _AddressesSectionState extends State<AddressesSection> {
                 Padding(
                   padding: const EdgeInsets.only(right: 16.0),
                   child: IconButton(
-                    icon: const Icon(Icons.add_location_alt, color: Colors.black),
+                    icon: const Icon(Icons.add_location_alt,
+                        color: Colors.black),
                     onPressed: _startAddingAddress,
                   ),
                 ),
@@ -164,8 +194,8 @@ class _AddressesSectionState extends State<AddressesSection> {
                 Padding(
                   padding: const EdgeInsets.only(right: 16.0),
                   child: IconButton(
-                    icon:
-                    const Icon(Icons.add_location_alt, color: Colors.transparent),
+                    icon: const Icon(Icons.add_location_alt,
+                        color: Colors.transparent),
                     onPressed: () {},
                   ),
                 ),
@@ -182,7 +212,8 @@ class _AddressesSectionState extends State<AddressesSection> {
                   'No has agregado ninguna dirección.',
                   style: TextStyle(
                     fontSize: 16,
-                    color: isDarkMode ? Colors.white70 : Colors.black87,
+                    color:
+                    isDarkMode ? Colors.white70 : Colors.black87,
                   ),
                 ),
               ),
@@ -192,7 +223,8 @@ class _AddressesSectionState extends State<AddressesSection> {
               itemCount: snapshot.data!.docs.length,
               itemBuilder: (context, index) {
                 final addressDoc = snapshot.data!.docs[index];
-                final address = addressDoc.data() as Map<String, dynamic>;
+                final address =
+                addressDoc.data() as Map<String, dynamic>;
                 return AddressExpansionTile(
                   addressId: addressDoc.id,
                   addressData: address,
@@ -220,7 +252,8 @@ class _AddressesSectionState extends State<AddressesSection> {
     });
   }
 
-  void _startEditingAddress(String addressId, Map<String, dynamic> addressData) {
+  void _startEditingAddress(
+      String addressId, Map<String, dynamic> addressData) {
     setState(() {
       _isAddingOrEditing = true;
       _editingAddressId = addressId;
@@ -251,7 +284,6 @@ class _AddressesSectionState extends State<AddressesSection> {
   }
 
   Widget _buildAddressForm() {
-    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     final isEditing = _editingAddressId != null;
 
     return SingleChildScrollView(
@@ -276,12 +308,22 @@ class _AddressesSectionState extends State<AddressesSection> {
                     // Wrap the dropdown field with StatefulBuilder
                     StatefulBuilder(
                       builder: (BuildContext context, StateSetter setState) {
+                        // Create a safe list of items that includes the currently selected value
+                        // This prevents crashes if the edited address has a colonia not in the fetched list
+                        List<String> dropdownItems = List.from(_colonias);
+                        if (_selectedColonia != null &&
+                            !dropdownItems.contains(_selectedColonia)) {
+                          dropdownItems.add(_selectedColonia!);
+                          dropdownItems.sort();
+                        }
+
                         return _buildDropdownField(
                           value: _selectedColonia,
                           label: 'Colonia',
-                          items: _colonias,
+                          items: dropdownItems,
                           onChanged: (value) {
-                            setState(() {
+                            // Update state in parent
+                            this.setState(() {
                               _selectedColonia = value;
                             });
                           },
@@ -460,7 +502,8 @@ class _AddressesSectionState extends State<AddressesSection> {
         List<Location> locations = await locationFromAddress(addressString);
         if (locations.isNotEmpty) {
           final location = locations.first;
-          LatLng initialPosition = LatLng(location.latitude, location.longitude);
+          LatLng initialPosition =
+          LatLng(location.latitude, location.longitude);
 
           // Show a dialog for user to confirm location
           LatLng? selectedPosition = await showDialog<LatLng>(
@@ -484,7 +527,8 @@ class _AddressesSectionState extends State<AddressesSection> {
         _showAlertDialog('Error', 'Error al obtener la ubicación');
       }
     } else {
-      _showAlertDialog('Error', 'Por favor, corrige los errores en el formulario');
+      _showAlertDialog(
+          'Error', 'Por favor, corrige los errores en el formulario');
     }
   }
 
@@ -500,7 +544,8 @@ class _AddressesSectionState extends State<AddressesSection> {
       final querySnapshot = await addressesRef.get();
       if (querySnapshot.docs.length >= 3 && _editingAddressId == null) {
         // User already has 3 addresses and is trying to add a new one
-        _showAlertDialog('Información', 'No puedes agregar más de 3 direcciones');
+        _showAlertDialog(
+            'Información', 'No puedes agregar más de 3 direcciones');
         return;
       }
 
@@ -720,7 +765,8 @@ class AddressExpansionTile extends StatelessWidget {
                   rotateGesturesEnabled: false,
                   tiltGesturesEnabled: false,
                   zoomGesturesEnabled: false,
-                  liteModeEnabled: true, // Use lite mode for better performance
+                  liteModeEnabled:
+                  true, // Use lite mode for better performance
                 ),
               )
             else

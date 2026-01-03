@@ -6,11 +6,9 @@ buildscript {
     }
 
     dependencies {
-        classpath 'com.android.tools.build:gradle:8.12.0'
+        classpath 'com.android.tools.build:gradle:8.13.2'
         classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
         classpath "com.google.gms:google-services:4.4.1"
-
-
     }
 }
 
@@ -22,11 +20,29 @@ allprojects {
 }
 
 rootProject.buildDir = '../build'
+
 subprojects {
     project.buildDir = "${rootProject.buildDir}/${project.name}"
-}
-subprojects {
     project.evaluationDependsOn(':app')
+
+    // --- FIX START: Force Plugins to use API 35 ---
+    // We strictly check (project.name != 'app') to avoid the "already evaluated" error
+    if (project.name != 'app') {
+        afterEvaluate { project ->
+            if (project.hasProperty('android')) {
+                project.android {
+                    // Fixes namespace errors for older plugins
+                    if (namespace == null) {
+                        namespace project.group
+                    }
+                    // FORCE the compile SDK version to 35.
+                    // This resolves the conflict where plugins use 31 but dependencies need 34+.
+                    compileSdkVersion 35
+                }
+            }
+        }
+    }
+    // --- FIX END ---
 }
 
 tasks.register("clean", Delete) {

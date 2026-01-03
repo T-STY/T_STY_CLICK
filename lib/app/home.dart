@@ -551,14 +551,11 @@ class FirestoreProductGrid extends StatelessWidget {
     final data = doc.data() as Map<String, dynamic>;
 
     // Ensure that objectID is retrieved correctly for grid view
-    final String? docId =
-        doc.id; // Firebase document ID as fallback if objectID isn't available
+    final String? docId = doc.id;
     final String? name = data['nombre'] as String?;
-    final double? price =
-        (data['price'] as num?)?.toDouble(); // Ensure price is a double
+    final double? price = (data['price'] as num?)?.toDouble();
     final String? imageUrl = data['image_url'] as String?;
-    final bool isBulk =
-        data['bulk'] as bool? ?? false; // Check if the item is bulk
+    final bool isBulk = data['bulk'] as bool? ?? false;
     final double stock = (data['stock'] as num?)?.toDouble() ?? 0.0;
     // 1. EXTRACT NEW FIELDS
     final String? typeSpecific = data['type_specific'] as String?;
@@ -570,80 +567,110 @@ class FirestoreProductGrid extends StatelessWidget {
     return SizedBox(
       width: 150,
       child: Container(
-        margin: const EdgeInsets.fromLTRB(8.0, 8.0, 5.0, 15),
+        // Reduced bottom margin to 8.0 to pull rows closer
+        margin: const EdgeInsets.fromLTRB(8.0, 8.0, 5.0, 8.0),
         decoration: BoxDecoration(
           color: isDarkMode ? Colors.grey[800] : Colors.white,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(12), // Slightly reduced radius
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.2),
-              blurRadius: 10,
-              offset: const Offset(4, 4),
+              color: Colors.black.withOpacity(0.15), // Softer shadow
+              blurRadius: 6,
+              offset: const Offset(2, 4),
             ),
           ],
         ),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.center,
+          // 'spaceBetween' pushes the image to top and button to bottom,
+          // but without the aggressive gap of a Spacer() if the aspect ratio is tight.
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: <Widget>[
-            SizedBox(height: 5,),
-            Expanded(
-              child: ClipRRect(
-                borderRadius: const BorderRadius.only(
-                  topLeft: Radius.circular(10),
-                  topRight: Radius.circular(10),
+            // 1. IMAGE SECTION
+            Column(
+              children: [
+                const SizedBox(height: 4), // Tiny top padding
+                ClipRRect(
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+                  child: SizedBox(
+                    height: 136, // Fixed height prevents images from taking over
+                    width: double.infinity,
+                    child: CachedNetworkImage(
+                      imageUrl: imageUrl ?? '',
+                      // BoxFit.contain ensures the whole image is seen.
+                      // Use BoxFit.cover if you prefer it to fill the box fully (but might crop).
+                      fit: BoxFit.contain,
+                      placeholder: (context, url) => const ShimmerPlaceholder(height: 80),
+                      errorWidget: (context, url, error) => const Icon(Icons.error, size: 30),
+                    ),
+                  ),
                 ),
-                child: CachedNetworkImage(
-                  imageUrl: imageUrl ?? '',
-                  fit: BoxFit.contain,
-                  // NEW: Shimmer Placeholder
-                  placeholder: (context, url) => const ShimmerPlaceholder(height: 120),
-                  errorWidget: (context, url, error) => const Icon(Icons.error),
-                ),
-              ),
+              ],
             ),
+            // 2. TEXT SECTION (Tighter padding)
             Padding(
-              padding: const EdgeInsets.all(8.0),
+              padding: const EdgeInsets.symmetric(horizontal: 6.0, vertical: 6.0),
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   Text(
                     name ?? 'Unnamed',
                     style: TextStyle(
-                        fontWeight: FontWeight.bold, color: textColor),
+                      fontWeight: FontWeight.bold,
+                      color: textColor,
+                      fontSize: 13, // Slightly smaller font for compactness
+                    ),
                     textAlign: TextAlign.center,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                   ),
-                  Text(
-                    data['variante'] ?? 'No variant',
-                    style: TextStyle(color: textColor),
-                    textAlign: TextAlign.center,
-                  ),
+                  if (variante != null && variante.isNotEmpty) // Only show if exists
+                    Text(
+                      variante,
+                      style: TextStyle(color: textColor.withOpacity(0.8), fontSize: 12),
+                      textAlign: TextAlign.center,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   Text(
                     _formatPrice(price),
-                    style: const TextStyle(color: Colors.green),
+                    style: const TextStyle(
+                        color: Colors.green,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12
+                    ),
                     textAlign: TextAlign.center,
+                    maxLines: 1,
                   ),
                   Text(
-                    data['type_specific'] ?? 'N/A',
-                    style: const TextStyle(color: Colors.grey),
+                    typeSpecific ?? '', // Simplified fallback
+                    style: const TextStyle(color: Colors.grey, fontSize: 10),
                     textAlign: TextAlign.center,
-                  ),
-                  SizedBox(
-                    width: double.infinity,
-                    child: _AddToCartButton(
-                      data: {
-                        'docId': docId,
-                        'nombre': name,
-                        'price': price,
-                        'image_url': imageUrl,
-                        'bulk': isBulk,
-                        'stock': stock, // Pass stock information
-                        'type_specific': typeSpecific, // <--- ADD THIS
-                        'variante': variante,
-                      },
-                      textColor: textColor,
-                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ],
+              ),
+            ),
+            Spacer(),
+            // 3. BUTTON SECTION
+            Padding(
+              // Reduced padding around button
+              padding: const EdgeInsets.only(left: 6.0, right: 6.0, bottom: 6.0),
+              child: SizedBox(
+                width: double.infinity,
+                height: 40, // Fixed small height for button
+                child: _AddToCartButton(
+                  data: {
+                    'docId': docId,
+                    'nombre': name,
+                    'price': price,
+                    'image_url': imageUrl,
+                    'bulk': isBulk,
+                    'stock': stock,
+                    'type_specific': typeSpecific,
+                    'variante': variante,
+                  },
+                  textColor: textColor,
+                ),
               ),
             ),
           ],

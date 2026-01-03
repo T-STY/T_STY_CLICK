@@ -1,20 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:cloud_firestore/cloud_firestore.dart'; // Para Firestore
-import 'package:firebase_auth/firebase_auth.dart'; // Para autenticación
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:slide_to_act_reborn/slide_to_act_reborn.dart';
 
 import '../../constants/app_colors.dart';
 import '../../constants/app_defaults.dart';
 import '../../constants/app_images.dart';
-import '../cart/cart_provider.dart'; // Importar CartProvider
+import '../cart/cart_provider.dart';
 
-// Importaciones adicionales
-import 'components/address_card.dart'; // Asegúrate de que la ruta sea correcta
-import 'components/payment_method_card.dart'; // Asegúrate de que la ruta sea correcta
+import 'components/address_card.dart';
+import 'components/payment_method_card.dart';
 
 class CheckoutPage extends StatefulWidget {
-  final VoidCallback? onBack; // Agregado para navegación hacia atrás
+  final VoidCallback? onBack;
   final VoidCallback onOrderPlaced;
   const CheckoutPage({
     Key? key,
@@ -22,49 +21,52 @@ class CheckoutPage extends StatefulWidget {
     required this.onOrderPlaced,
   }) : super(key: key);
 
-
   @override
   _CheckoutPageState createState() => _CheckoutPageState();
 }
 
 class _CheckoutPageState extends State<CheckoutPage> {
-  // Selección de método de pago
-  String _selectedPaymentMethod = 'efectivo'; // Predeterminado a efectivo
+// Selección de método de pago
+  String _selectedPaymentMethod = 'efectivo';
 
-  // Selección de dirección
+// Selección de dirección
   String? _selectedAddressId;
 
-  // Datos de la tarjeta de recompensas
+// Datos de la tarjeta de recompensas
   Map<String, dynamic>? _rewardsCardData;
   bool _useRewardsBalance = false;
 
-  // Cupones
+// Cupones
   List<Map<String, dynamic>> _assignedCoupons = [];
-  String? _selectedCouponCode; // Assuming 'code' is unique
+  String? _selectedCouponCode;
   TextEditingController _couponController = TextEditingController();
 
-  // Totales
+// Shipping Pricing Data
+  Map<String, dynamic> _coloniaPricing = {};
+
+// Totales
   double _subtotal = 0.0;
-  double _deliveryFee = 15.0; // Suponiendo una tarifa de entrega fija
+  double _deliveryFee = 0.0; // Initialized to 0, calculated dynamically
   double _total = 0.0;
 
-  // Saldo de recompensas
+// Saldo de recompensas
   double _rewardsBalance = 0.0;
   double _appliedRewards = 0.0;
 
-  // Descuento del cupón
+// Descuento del cupón
   double _discount = 0.0;
 
-  // Direcciones
+// Direcciones
   List<Map<String, dynamic>> _addresses = [];
 
-  // Información del usuario
+// Información del usuario
   String _userName = '';
   String _userPhone = '';
 
   @override
   void initState() {
     super.initState();
+    _fetchStorePricing(); // Fetch pricing settings
     _fetchRewardsCardData();
     _fetchAssignedCoupons();
     _fetchAddresses();
@@ -83,8 +85,75 @@ class _CheckoutPageState extends State<CheckoutPage> {
     }
   }
 
+// Fetch store pricing settings
+  Future<void> _fetchStorePricing() async {
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('settings')
+          .doc('store')
+          .get();
+      if (doc.exists && doc.data() != null) {
+        final data = doc.data()!;
+        if (data.containsKey('pricing')) {
+          setState(() {
+            _coloniaPricing = data['pricing'];
+          });
+// Recalculate fee in case addresses are already loaded
+          _calculateDeliveryFee();
+        }
+      }
+    } catch (e) {
+      print("Error loading shipping settings: $e");
+    }
+  }
 
-  // Método para obtener datos de la tarjeta de recompensas
+// Calculate delivery fee based on selected address colonia
+  void _calculateDeliveryFee() {
+    if (_selectedAddressId == null || _addresses.isEmpty) {
+      setState(() {
+        _deliveryFee = 0.0;
+      });
+      _calculateTotal();
+      return;
+    }
+
+    final selectedAddress = _addresses.firstWhere(
+      (addr) => addr['id'] == _selectedAddressId,
+      orElse: () => {},
+    );
+
+    if (selectedAddress.isEmpty || !selectedAddress.containsKey('colonia')) {
+      setState(() {
+        _deliveryFee = 0.0; // Fallback if no colonia found
+      });
+      _calculateTotal();
+      return;
+    }
+
+    String colonia = selectedAddress['colonia'];
+
+// Check pricing map
+    if (_coloniaPricing.containsKey(colonia)) {
+      var priceVal = _coloniaPricing[colonia];
+      double fee = 0.0;
+      if (priceVal is String) {
+        fee = double.tryParse(priceVal) ?? 0.0;
+      } else if (priceVal is num) {
+        fee = priceVal.toDouble();
+      }
+
+      setState(() {
+        _deliveryFee = fee;
+      });
+    } else {
+// If colonia is not in the pricing list, set to 0 or handle default
+      setState(() {
+        _deliveryFee = 0.0;
+      });
+    }
+    _calculateTotal();
+  }
+
   Future<void> _fetchRewardsCardData() async {
     final userId = FirebaseAuth.instance.currentUser?.uid;
     if (userId == null) return;
@@ -108,14 +177,10 @@ class _CheckoutPageState extends State<CheckoutPage> {
 
         if (querySnapshot.docs.isNotEmpty) {
           var rewardsData = querySnapshot.docs.first.data();
-          double? saldo = rewardsData['saldo'] is String
-              ? double.tryParse(rewardsData['saldo'])
-              : (rewardsData['saldo'] is int)
-              ? (rewardsData['saldo'] as int).toDouble()
-              : rewardsData['saldo'];
+          double? saldo = _toDouble(rewardsData['saldo']);
 
           setState(() {
-            _rewardsBalance = saldo ?? 0.0;
+            _rewardsBalance = saldo;
           });
         }
       }
@@ -137,26 +202,24 @@ class _CheckoutPageState extends State<CheckoutPage> {
           .where('expiry_date', isGreaterThanOrEqualTo: now)
           .get();
 
-      // Verify each document has a valid 'expiry_date'
-      final validCoupons = couponsSnapshot.docs.where((doc) {
-        final data = doc.data();
-        return data.containsKey('expiry_date') &&
-            data['expiry_date'] is Timestamp;
-      }).map((doc) => {'code': doc.id, ...doc.data()}).toList();
+      final validCoupons = couponsSnapshot.docs
+          .where((doc) {
+            final data = doc.data();
+            return data.containsKey('expiry_date') &&
+                data['expiry_date'] is Timestamp;
+          })
+          .map((doc) => {'code': doc.id, ...doc.data()})
+          .toList();
 
       setState(() {
         _assignedCoupons = validCoupons;
       });
-
     } catch (e) {
-      print('Error fetching coupons: $e'); // Detailed error log
+      print('Error fetching coupons: $e');
       _showAlertDialog('Error', 'No se pudieron cargar los cupones: $e');
     }
   }
 
-
-
-  // Método para obtener direcciones
   Future<void> _fetchAddresses() async {
     final userId = FirebaseAuth.instance.currentUser?.uid;
     if (userId == null) return;
@@ -172,9 +235,9 @@ class _CheckoutPageState extends State<CheckoutPage> {
           .map((doc) => {'id': doc.id, ...doc.data()})
           .toList();
 
-      // Establecer dirección seleccionada por defecto
-      if (_addresses.isNotEmpty) {
+      if (_addresses.isNotEmpty && _selectedAddressId == null) {
         _selectedAddressId = _addresses[0]['id'];
+        _calculateDeliveryFee(); // Calculate fee for default address
       }
     });
   }
@@ -183,10 +246,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
     final userId = FirebaseAuth.instance.currentUser?.uid;
     if (userId == null) return;
 
-    final userDoc = await FirebaseFirestore.instance
-        .collection('users')
-        .doc(userId)
-        .get();
+    final userDoc =
+        await FirebaseFirestore.instance.collection('users').doc(userId).get();
 
     if (userDoc.exists) {
       final userData = userDoc.data();
@@ -199,7 +260,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
         .collection('users')
         .doc(userId)
         .collection('userInfo')
-        .doc('userInfo') // Ajusta el ID del documento según tu estructura
+        .doc('userInfo')
         .get();
 
     if (userInfoDoc.exists) {
@@ -210,20 +271,15 @@ class _CheckoutPageState extends State<CheckoutPage> {
     }
   }
 
-
   Future<void> _applyCoupon(String code) async {
     final userId = FirebaseAuth.instance.currentUser?.uid;
     if (userId == null) return;
-
     final firestore = FirebaseFirestore.instance;
 
     try {
       await firestore.runTransaction((transaction) async {
-        // Step 1: Reference to the global coupon document
-        final couponDocRef = firestore.collection('coupons').doc(
-            code.toUpperCase());
-
-        // Step 2: Get the coupon document
+        final couponDocRef =
+            firestore.collection('coupons').doc(code.toUpperCase());
         final couponSnapshot = await transaction.get(couponDocRef);
 
         if (!couponSnapshot.exists) {
@@ -237,7 +293,6 @@ class _CheckoutPageState extends State<CheckoutPage> {
           throw Exception('Este cupón ya no está disponible.');
         }
 
-        // Optional: Check for expiry
         final expiryTimestamp = couponData['expiry_date'];
         if (expiryTimestamp != null) {
           final expiryDate = expiryTimestamp.toDate();
@@ -246,28 +301,23 @@ class _CheckoutPageState extends State<CheckoutPage> {
           }
         }
 
-        // Step 3: Reference to the user's coupon document
         final userCouponRef = firestore
             .collection('users')
             .doc(userId)
             .collection('coupons')
             .doc(code.toUpperCase());
 
-        // Step 4: Check if the user already has this coupon
         final userCouponSnapshot = await transaction.get(userCouponRef);
 
         if (userCouponSnapshot.exists) {
           final existingCoupon = userCouponSnapshot.data()!;
           if (!(existingCoupon['used'] ?? true)) {
-            // Coupon is already applied and not used
             throw Exception('Ya has aplicado este cupón.');
           } else {
-            // Coupon has been used; prevent re-application
             throw Exception('Este cupón ya ha sido utilizado.');
           }
         }
 
-        // Step 5: Assign the coupon to the user
         transaction.set(userCouponRef, {
           'code': couponData['code'],
           'max_discount': couponData['max_discount'],
@@ -276,16 +326,12 @@ class _CheckoutPageState extends State<CheckoutPage> {
           'used': false,
         });
 
-        // Step 6: Decrement remaining uses globally
         transaction.update(couponDocRef, {
           'remaining_uses': remainingUses - 1,
         });
       });
 
-      // Step 7: Refresh assigned coupons
       await _fetchAssignedCoupons();
-
-      // Step 8: Set the selected coupon and calculate discount
       setState(() {
         _selectedCouponCode = code.toUpperCase();
         _calculateDiscount();
@@ -299,17 +345,16 @@ class _CheckoutPageState extends State<CheckoutPage> {
 
   void _calculateDiscount() {
     if (_selectedCouponCode != null) {
-      // Find the coupon data based on the code
       final couponData = _assignedCoupons.firstWhere(
-            (coupon) => coupon['code'] == _selectedCouponCode,
+        (coupon) => coupon['code'] == _selectedCouponCode,
         orElse: () => {},
       );
 
       if (couponData.isNotEmpty) {
         double percentage = _toDouble(couponData['percentage']);
         double maxDiscount = _toDouble(couponData['max_discount']);
-        double discountAmount = (_subtotal * percentage / 100).clamp(
-            0, maxDiscount);
+        double discountAmount =
+            (_subtotal * percentage / 100).clamp(0, maxDiscount);
         setState(() {
           _discount = discountAmount;
         });
@@ -321,18 +366,14 @@ class _CheckoutPageState extends State<CheckoutPage> {
     }
   }
 
-
-
   void _calculateTotal() {
     final cartProvider = Provider.of<CartProvider>(context, listen: false);
     double subtotal = cartProvider.totalPrice;
 
     _calculateDiscount();
 
-
     double total = subtotal - _discount + _deliveryFee;
 
-    // Aplicar saldo de recompensas si está seleccionado
     double appliedRewards = 0.0;
     if (_useRewardsBalance && _rewardsBalance > 0) {
       if (_rewardsBalance >= total) {
@@ -347,13 +388,10 @@ class _CheckoutPageState extends State<CheckoutPage> {
     setState(() {
       _subtotal = subtotal;
       _total = total;
-      _appliedRewards =
-          appliedRewards; // Nueva variable para rastrear recompensas aplicadas
+      _appliedRewards = appliedRewards;
     });
   }
 
-
-  // Método para mostrar AlertDialog
   void _showAlertDialog(String title, String message) {
     showDialog(
       context: context,
@@ -365,7 +403,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
             TextButton(
               child: const Text('Aceptar'),
               onPressed: () {
-                Navigator.of(context).pop(); // Cerrar el diálogo
+                Navigator.of(context).pop();
               },
             ),
           ],
@@ -374,67 +412,56 @@ class _CheckoutPageState extends State<CheckoutPage> {
     );
   }
 
-  /// Update _placeOrder to handle rewards balance deduction
   void _placeOrder() async {
     final userId = FirebaseAuth.instance.currentUser?.uid;
     if (userId == null) return;
-
     final cartProvider = Provider.of<CartProvider>(context, listen: false);
 
-    // Verify if a delivery address is selected
     if (_selectedAddressId == null) {
       _showAlertDialog(
           'Error', 'Por favor, selecciona una dirección de entrega.');
       return;
     }
 
-    // Find the selected coupon data
     Map<String, dynamic>? selectedCouponData;
     if (_selectedCouponCode != null) {
       try {
         selectedCouponData = _assignedCoupons.firstWhere(
-              (coupon) => coupon['code'] == _selectedCouponCode,
+          (coupon) => coupon['code'] == _selectedCouponCode,
         );
       } catch (e) {
-        // Coupon not found; handle accordingly
         selectedCouponData = null;
       }
     }
 
-    // Create order data with 'state' field
     Map<String, dynamic> orderData = {
       'userId': userId,
       'addressId': _selectedAddressId,
       'paymentMethod': _selectedPaymentMethod,
       'items': cartProvider.items.values.map((item) => item.toMap()).toList(),
       'subtotal': _subtotal,
-      'deliveryFee': _deliveryFee,
+      'deliveryFee': _deliveryFee, // Use dynamic fee
       'discount': _discount,
       'total': _total,
       'useRewardsBalance': _useRewardsBalance,
       'timestamp': FieldValue.serverTimestamp(),
       'appliedCoupon': selectedCouponData != null
           ? {
-        'code': selectedCouponData['code'],
-        'percentage': selectedCouponData['percentage'],
-        'max_discount': selectedCouponData['max_discount'],
-      }
+              'code': selectedCouponData['code'],
+              'percentage': selectedCouponData['percentage'],
+              'max_discount': selectedCouponData['max_discount'],
+            }
           : null,
-      'state': 'En Revision', // New field added
+      'state': 'En Revision',
     };
 
     try {
-      // Create a new document reference with a unique ID
       DocumentReference orderRef =
-      FirebaseFirestore.instance.collection('orders').doc();
-
-      // Initialize a Firestore write batch
+          FirebaseFirestore.instance.collection('orders').doc();
       WriteBatch batch = FirebaseFirestore.instance.batch();
 
-      // Step 1: Save order to 'orders' collection
       batch.set(orderRef, orderData);
 
-      // Step 2: Save a copy to 'users/{userId}/orderHistory' subcollection
       DocumentReference userOrderHistoryRef = FirebaseFirestore.instance
           .collection('users')
           .doc(userId)
@@ -442,20 +469,16 @@ class _CheckoutPageState extends State<CheckoutPage> {
           .doc(orderRef.id);
       batch.set(userOrderHistoryRef, orderData);
 
-      // Step 3: Update rewards balance if used
       if (_useRewardsBalance && _appliedRewards > 0) {
-        // Calculate new saldo values
         double newUserSaldo = _rewardsBalance - _appliedRewards;
         if (newUserSaldo < 0) newUserSaldo = 0.0;
 
-        // Reference to user's rewards card saldo
         DocumentReference userRewardsSaldoRef = FirebaseFirestore.instance
             .collection('users')
             .doc(userId)
             .collection('rewardsCard')
             .doc('cardInfo');
 
-        // Query the 'rewards' collection to find the document with the matching cardNumber
         QuerySnapshot rewardsSnapshot = await FirebaseFirestore.instance
             .collection('rewards')
             .where('cardNumber', isEqualTo: _rewardsCardData?['cardNumber'])
@@ -463,27 +486,19 @@ class _CheckoutPageState extends State<CheckoutPage> {
             .get();
 
         if (rewardsSnapshot.docs.isNotEmpty) {
-          DocumentReference rewardsDocRef = rewardsSnapshot.docs.first.reference;
-          double currentRewardsSaldo = _toDouble(rewardsSnapshot.docs.first['saldo']);
+          DocumentReference rewardsDocRef =
+              rewardsSnapshot.docs.first.reference;
+          double currentRewardsSaldo =
+              _toDouble(rewardsSnapshot.docs.first['saldo']);
           double newRewardsSaldo = currentRewardsSaldo - _appliedRewards;
           if (newRewardsSaldo < 0) newRewardsSaldo = 0.0;
 
-          // Reference to 'rewards' collection's saldo
-          // Update both 'users' and 'rewards' saldo in the batch
           batch.update(userRewardsSaldoRef, {'saldo': newUserSaldo});
           batch.update(rewardsDocRef, {'saldo': newRewardsSaldo});
-        } else {
-          // Handle case where rewards document is not found
-          throw Exception('Documento de recompensas no encontrado.');
         }
       }
 
-      // Step 4: Update rewards balance in 'rewards' collection
-      // Already handled in the batch above
-
-      // Step 5: Mark coupon as used
       if (_selectedCouponCode != null) {
-        // Assuming coupon codes are unique and used as document IDs
         DocumentReference userCouponRef = FirebaseFirestore.instance
             .collection('users')
             .doc(userId)
@@ -492,20 +507,14 @@ class _CheckoutPageState extends State<CheckoutPage> {
         batch.update(userCouponRef, {'used': true});
       }
 
-      // Commit the batch
       await batch.commit();
 
-      // Clear cart
       cartProvider.clearCart();
-
-      // Trigger the onOrderPlaced callback to switch to PaymentDonePage
       widget.onOrderPlaced();
     } catch (e) {
       _showAlertDialog('Error', 'No se pudo completar el pedido: $e');
     }
   }
-
-
 
   @override
   void dispose() {
@@ -513,7 +522,6 @@ class _CheckoutPageState extends State<CheckoutPage> {
     super.dispose();
   }
 
-  /// Sección de Tarjeta de Recompensas sin Ripple Effect
   Widget _buildRewardsSection() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16.0),
@@ -528,8 +536,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                'Usar saldo de monedero (\$${_rewardsBalance.toStringAsFixed(
-                    2)})',
+                'Usar saldo de monedero (\$${_rewardsBalance.toStringAsFixed(2)})',
                 style: const TextStyle(fontWeight: FontWeight.bold),
               ),
               Switch(
@@ -549,17 +556,15 @@ class _CheckoutPageState extends State<CheckoutPage> {
     );
   }
 
-
   @override
   Widget build(BuildContext context) {
-    // Calcular el total cada vez que se reconstruye la interfaz
     _calculateTotal();
     final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
     return Scaffold(
       appBar: AppBar(
         scrolledUnderElevation: 0,
         backgroundColor: Colors.white,
-        automaticallyImplyLeading: true, // Permitir navegación hacia atrás
+        automaticallyImplyLeading: true,
         title: Padding(
           padding: const EdgeInsets.all(0),
           child: SizedBox(
@@ -581,8 +586,6 @@ class _CheckoutPageState extends State<CheckoutPage> {
           child: Column(
             children: [
               const SizedBox(height: 16.0),
-
-              /// Selector de Dirección
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16.0),
                 child: AddressCardWidget(
@@ -592,37 +595,23 @@ class _CheckoutPageState extends State<CheckoutPage> {
                     setState(() {
                       _selectedAddressId = value;
                     });
+                    _calculateDeliveryFee(); // Recalculate fee on selection
                   },
                   userName: _userName,
                   userPhone: _userPhone,
                 ),
               ),
-
-
               const SizedBox(height: 16.0),
-
-              /// Título de Información de Facturación
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16.0),
                 child: Text(
                   'Información de Facturación',
-                  style: Theme
-                      .of(context)
-                      .textTheme
-                      .titleLarge,
+                  style: Theme.of(context).textTheme.titleLarge,
                 ),
               ),
-
               const SizedBox(height: 8.0),
-
-              /// Sección de Tarjeta de Recompensas
-              /// Sección de Tarjeta de Recompensas sin Ripple Effect
-              if (_rewardsBalance > 0)
-                _buildRewardsSection(),
-
+              if (_rewardsBalance > 0) _buildRewardsSection(),
               const SizedBox(height: 8.0),
-
-              /// Tarjeta de Información de Facturación
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16.0),
                 child: Card(
@@ -639,13 +628,9 @@ class _CheckoutPageState extends State<CheckoutPage> {
                     useRewardsBalance: _useRewardsBalance,
                     rewardsBalance: _rewardsBalance,
                   ),
-
                 ),
               ),
-
               const SizedBox(height: 16.0),
-
-              /// Métodos de Pago
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16.0),
                 child: PaymentMethods(
@@ -657,32 +642,19 @@ class _CheckoutPageState extends State<CheckoutPage> {
                   },
                 ),
               ),
-
               const SizedBox(height: 16),
-
-              /// Sección de Cupones
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16.0),
                 child: _buildCouponSection(),
               ),
-
               const SizedBox(height: 16),
-
-              /// Acción Deslizable para Pagar
               SizedBox(
-                width: MediaQuery
-                    .of(context)
-                    .size
-                    .width * 0.8,
+                width: MediaQuery.of(context).size.width * 0.8,
                 child: SlideAction(
                   text: 'Desliza para pagar',
-                  textStyle: Theme
-                      .of(context)
-                      .textTheme
-                      .bodyLarge
-                      ?.copyWith(
-                    color: Colors.white,
-                  ),
+                  textStyle: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                        color: Colors.white,
+                      ),
                   outerColor: AppColors.primary,
                   innerColor: Colors.white,
                   onSubmit: _placeOrder,
@@ -692,9 +664,9 @@ class _CheckoutPageState extends State<CheckoutPage> {
               Text(
                 'Efesios 1:7-9',
                 style: TextStyle(
-                  fontSize: 14, // Smaller font size for subtlety
-                  color: Colors.grey[600], // Subdued color for elegance
-                  fontStyle: FontStyle.italic, // Italic style for emphasis
+                  fontSize: 14,
+                  color: Colors.grey[600],
+                  fontStyle: FontStyle.italic,
                 ),
               ),
               const SizedBox(height: 120),
@@ -705,7 +677,6 @@ class _CheckoutPageState extends State<CheckoutPage> {
     );
   }
 
-  /// Método para construir la sección de cupones
   Widget _buildCouponSection() {
     return Card(
       elevation: 2,
@@ -715,8 +686,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
       child: Theme(
         data: Theme.of(context).copyWith(
           dividerColor: Colors.transparent,
-          splashColor: Colors.transparent, // Eliminar efecto de salpicadura
-          highlightColor: Colors.transparent, // Eliminar efecto de resaltado
+          splashColor: Colors.transparent,
+          highlightColor: Colors.transparent,
         ),
         child: ExpansionTile(
           title: const Text(
@@ -724,7 +695,6 @@ class _CheckoutPageState extends State<CheckoutPage> {
             style: TextStyle(fontWeight: FontWeight.bold),
           ),
           children: [
-            // Cupones Asignados
             if (_assignedCoupons.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16.0),
@@ -736,7 +706,6 @@ class _CheckoutPageState extends State<CheckoutPage> {
                     return ListTile(
                       leading: CircularCheckbox(
                         value: isSelected,
-                        // Removed onChanged from CircularCheckbox
                         activeColor: Colors.black,
                         checkColor: Colors.white,
                       ),
@@ -747,10 +716,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
                         ),
                       ),
                       subtitle: Text(
-                        'Expira: ${coupon['expiry_date'].toDate()
-                            .toLocal()
-                            .toString()
-                            .split(' ')[0]}',
+                        'Expira: ${coupon['expiry_date'].toDate().toLocal().toString().split(' ')[0]}',
                         style: TextStyle(
                           color: isSelected ? Colors.black : Colors.grey,
                         ),
@@ -758,10 +724,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
                       onTap: () {
                         setState(() {
                           if (isSelected) {
-                            // Unselect if already selected
                             _selectedCouponCode = null;
                           } else {
-                            // Select the new coupon
                             _selectedCouponCode = coupon['code'];
                           }
                           _calculateTotal();
@@ -772,7 +736,6 @@ class _CheckoutPageState extends State<CheckoutPage> {
                 ),
               ),
             const Divider(),
-            // Ingresar Código de Cupón
             Padding(
               padding: const EdgeInsets.all(AppDefaults.padding),
               child: Row(
@@ -788,13 +751,11 @@ class _CheckoutPageState extends State<CheckoutPage> {
                   ),
                   const SizedBox(width: 8.0),
                   SizedBox(
-                    width: 100, // Define fixed width for the button
+                    width: 100,
                     child: ElevatedButton(
                       style: ElevatedButton.styleFrom(
                         foregroundColor: Colors.white,
-                        // Button text color
                         backgroundColor: AppColors.primary,
-                        // Button background color
                         padding: const EdgeInsets.symmetric(vertical: 16.0),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(8.0),
@@ -804,8 +765,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
                         String code = _couponController.text.trim();
                         if (code.isNotEmpty) {
                           _applyCoupon(code).then((_) {
-                            _couponController
-                                .clear(); // Optional: Clear input after applying
+                            _couponController.clear();
                           });
                         } else {
                           _showAlertDialog('Error',
@@ -829,45 +789,43 @@ class _CheckoutPageState extends State<CheckoutPage> {
     );
   }
 }
-  class CircularCheckbox extends StatelessWidget {
+
+class CircularCheckbox extends StatelessWidget {
   final bool value;
-  // Removed onChanged from CircularCheckbox
   final Color activeColor;
   final Color checkColor;
 
   const CircularCheckbox({
-  Key? key,
-  required this.value,
-  // Removed onChanged from constructor
-  this.activeColor = Colors.black,
-  this.checkColor = Colors.white,
+    Key? key,
+    required this.value,
+    this.activeColor = Colors.black,
+    this.checkColor = Colors.white,
   }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
-  return Container(
-  decoration: BoxDecoration(
-  shape: BoxShape.circle,
-  border: Border.all(
-  color: activeColor,
-  width: 2.0,
-  ),
-  color: value ? activeColor : Colors.transparent,
-  ),
-  width: 24.0,
-  height: 24.0,
-  child: value
-  ? Icon(
-  Icons.check,
-  size: 16.0,
-  color: checkColor,
-  )
-      : null,
-  );
+    return Container(
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        border: Border.all(
+          color: activeColor,
+          width: 2.0,
+        ),
+        color: value ? activeColor : Colors.transparent,
+      ),
+      width: 24.0,
+      height: 24.0,
+      child: value
+          ? Icon(
+              Icons.check,
+              size: 16.0,
+              color: checkColor,
+            )
+          : null,
+    );
   }
-  }
+}
 
-  /// Widget para seleccionar direcciones utilizando AddressCard
 class AddressCardWidget extends StatelessWidget {
   final List<Map<String, dynamic>> addresses;
   final String? selectedAddressId;
@@ -886,7 +844,6 @@ class AddressCardWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Mostrar las direcciones del usuario utilizando AddressCard
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -897,30 +854,29 @@ class AddressCardWidget extends StatelessWidget {
         const SizedBox(height: 8.0),
         addresses.isEmpty
             ? const Padding(
-          padding: EdgeInsets.all(16.0),
-          child: Text('No tienes direcciones guardadas.'),
-        )
+                padding: EdgeInsets.all(16.0),
+                child: Text('No tienes direcciones guardadas.'),
+              )
             : Column(
-          children: addresses.map((address) {
-            return GestureDetector(
-              onTap: () {
-                onAddressSelected(address['id']);
-              },
-              child: AddressCard(
-                label: userName, // Mostrar nombre del usuario
-                number: userPhone, // Mostrar número de teléfono
-                address:
-                '${address['street']} ${address['streetNumber']}, ${address['colonia']}, ${address['city']}, ${address['state']}',
-                isSelected: selectedAddressId == address['id'],
+                children: addresses.map((address) {
+                  return GestureDetector(
+                    onTap: () {
+                      onAddressSelected(address['id']);
+                    },
+                    child: AddressCard(
+                      label: userName,
+                      number: userPhone,
+                      address:
+                          '${address['street']} ${address['streetNumber']}, ${address['colonia']}, ${address['city']}, ${address['state']}',
+                      isSelected: selectedAddressId == address['id'],
+                    ),
+                  );
+                }).toList(),
               ),
-            );
-          }).toList(),
-        ),
       ],
     );
   }
 }
-
 
 class CheckoutBillingInformation extends StatelessWidget {
   final double subtotal;
@@ -948,7 +904,6 @@ class CheckoutBillingInformation extends StatelessWidget {
       padding: const EdgeInsets.all(AppDefaults.padding),
       child: Column(
         children: [
-          // Subtotal
           Row(
             children: [
               const Text(
@@ -963,7 +918,6 @@ class CheckoutBillingInformation extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 10),
-          // Descuento por Cupón
           if (discount > 0)
             Row(
               children: [
@@ -979,7 +933,6 @@ class CheckoutBillingInformation extends StatelessWidget {
               ],
             ),
           const SizedBox(height: 10),
-          // Saldo de Recompensas Aplicado
           if (appliedRewards > 0)
             Row(
               children: [
@@ -995,7 +948,6 @@ class CheckoutBillingInformation extends StatelessWidget {
               ],
             ),
           const SizedBox(height: 10),
-          // Tarifa de Envío
           Row(
             children: [
               const Text(
@@ -1011,7 +963,6 @@ class CheckoutBillingInformation extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           const Divider(),
-          // Total
           Row(
             children: [
               const Text(
@@ -1022,8 +973,8 @@ class CheckoutBillingInformation extends StatelessWidget {
               Text(
                 '\$${total.toStringAsFixed(2)}',
                 style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
+                      fontWeight: FontWeight.bold,
+                    ),
               ),
             ],
           ),
@@ -1033,7 +984,6 @@ class CheckoutBillingInformation extends StatelessWidget {
   }
 }
 
-/// Widget para seleccionar métodos de pago utilizando PaymentMethodCard
 class PaymentMethods extends StatelessWidget {
   final String selectedPaymentMethod;
   final ValueChanged<String?> onPaymentMethodSelected;
@@ -1046,7 +996,6 @@ class PaymentMethods extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Mostrar métodos de pago con animaciones Lottie
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1055,13 +1004,12 @@ class PaymentMethods extends StatelessWidget {
           style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 16),
-        // Fila de métodos de pago
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: [
             PaymentMethodCard(
               methodID: 'efectivo',
-              animationAsset: 'assets/animations/cash.json', // Ruta de la animación Lottie para efectivo
+              animationAsset: 'assets/animations/cash.json',
               isSelected: selectedPaymentMethod == 'efectivo',
               onTap: () {
                 onPaymentMethodSelected('efectivo');
@@ -1069,7 +1017,7 @@ class PaymentMethods extends StatelessWidget {
             ),
             PaymentMethodCard(
               methodID: 'tarjeta',
-              animationAsset: 'assets/animations/card.json', // Ruta de la animación Lottie para tarjeta
+              animationAsset: 'assets/animations/card.json',
               isSelected: selectedPaymentMethod == 'tarjeta',
               onTap: () {
                 onPaymentMethodSelected('tarjeta');
@@ -1081,4 +1029,3 @@ class PaymentMethods extends StatelessWidget {
     );
   }
 }
-
