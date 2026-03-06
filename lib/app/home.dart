@@ -18,6 +18,7 @@ import '../components/shimmer_placeholder.dart';
 import '../constants/app_images.dart';
 import 'cart/cart_provider.dart';
 import 'category/filter_dialog.dart';
+import 'game/slot_machine_screen.dart';
 import 'constants/gridview.dart';
 
 void testNetworkAccess() async {
@@ -63,6 +64,10 @@ class _HomeState extends State<Home> {
   List<DocumentSnapshot> _filteredProducts = [];
 
   final PageController _pageController = PageController();
+
+  // ─── Hidden game trigger ───────────────────────────────────────────────────
+  int _logoTapCount = 0;
+  DateTime? _lastLogoTap;
 
   @override
   void initState() {
@@ -161,6 +166,133 @@ class _HomeState extends State<Home> {
     });
   }
 
+  // ─── Hidden slot machine game ──────────────────────────────────────────────
+
+  void _handleLogoTap() {
+    final now = DateTime.now();
+    if (_lastLogoTap == null ||
+        now.difference(_lastLogoTap!) > const Duration(seconds: 2)) {
+      _logoTapCount = 1;
+    } else {
+      _logoTapCount++;
+    }
+    _lastLogoTap = now;
+    if (_logoTapCount >= 3) {
+      _logoTapCount = 0;
+      _launchGame();
+    }
+  }
+
+  Future<void> _launchGame() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    final uid = user.uid;
+
+    // Check rewards card existence
+    final cardDoc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(uid)
+        .collection('rewardsCard')
+        .doc('cardInfo')
+        .get();
+    if (!cardDoc.exists) return; // No card — silent
+
+    final cardNumber = cardDoc.data()?['cardNumber'] as String?;
+    if (cardNumber == null) return;
+
+    // Fetch saldo from rewards collection
+    final rewardsSnap = await FirebaseFirestore.instance
+        .collection('rewards')
+        .where('cardNumber', isEqualTo: cardNumber)
+        .limit(1)
+        .get();
+    if (rewardsSnap.docs.isEmpty) return;
+
+    final rewardsDoc = rewardsSnap.docs.first;
+    final raw = rewardsDoc.data()['saldo'];
+    final double saldo = raw is String
+        ? double.tryParse(raw) ?? 0.0
+        : raw is int
+            ? raw.toDouble()
+            : (raw as double? ?? 0.0);
+
+    if (!mounted) return;
+
+    // Insufficient balance
+    if (saldo < 10) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content:
+              Text('Puntos insuficientes para jugar (necesitas 10 puntos)'),
+          duration: Duration(seconds: 3),
+        ),
+      );
+      return;
+    }
+
+    // Confirmation dialog
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1A0033),
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text(
+          '🎰  Tragamonedas',
+          style: TextStyle(
+            color: Color(0xFFFFD700),
+            fontFamily: 'monospace',
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        content: Text(
+          'Jugar cuesta 10 puntos.\n'
+          'Saldo actual: ${saldo.toStringAsFixed(0)} pts\n\n'
+          '¿Deseas continuar?',
+          style: const TextStyle(color: Colors.white70),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child:
+                const Text('Cancelar', style: TextStyle(color: Colors.grey)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Jugar',
+                style: TextStyle(color: Color(0xFFFFD700))),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    // Deduct 10 pts atomically
+    final newSaldo = saldo - 10.0;
+    final userCardRef = FirebaseFirestore.instance
+        .collection('users')
+        .doc(uid)
+        .collection('rewardsCard')
+        .doc('cardInfo');
+    final batch = FirebaseFirestore.instance.batch();
+    batch.update(userCardRef, {'saldo': newSaldo});
+    batch.update(rewardsDoc.reference, {'saldo': newSaldo});
+    await batch.commit();
+
+    if (!mounted) return;
+
+    Navigator.push(
+      context,
+      customPageRoute(
+        SlotMachineScreen(
+          userId: uid,
+          rewardsDocRef: rewardsDoc.reference,
+          currentSaldo: newSaldo,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
@@ -184,9 +316,13 @@ class _HomeState extends State<Home> {
               width: 300,
               child: AspectRatio(
                 aspectRatio: 1 / 1,
-                child: Image.asset(
-                  isDarkMode ? AppImages.logowhite : AppImages.logo,
-                  fit: BoxFit.contain,
+                child: GestureDetector(
+                  onTap: _handleLogoTap,
+                  behavior: HitTestBehavior.opaque,
+                  child: Image.asset(
+                    isDarkMode ? AppImages.logowhite : AppImages.logo,
+                    fit: BoxFit.contain,
+                  ),
                 ),
               ),
             ),
