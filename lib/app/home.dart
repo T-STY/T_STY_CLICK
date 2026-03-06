@@ -19,6 +19,7 @@ import '../constants/app_images.dart';
 import 'cart/cart_provider.dart';
 import 'category/filter_dialog.dart';
 import 'game/slot_machine_screen.dart';
+import 'game/snake_game_screen.dart';
 import 'constants/gridview.dart';
 
 void testNetworkAccess() async {
@@ -230,39 +231,106 @@ class _HomeState extends State<Home> {
       return;
     }
 
-    // Confirmation dialog
+    // Step 1 — Game picker (blurred, white)
+    final gameChoice = await showDialog<String>(
+      context: context,
+      barrierColor: Colors.black26,
+      builder: (ctx) => BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+        child: Dialog(
+          backgroundColor: Colors.white,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(24, 28, 24, 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Elige tu juego',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _GameCard(
+                        emoji: '🎰',
+                        title: 'Tragamonedas',
+                        subtitle: 'Azar',
+                        onTap: () => Navigator.pop(ctx, 'slot'),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _GameCard(
+                        emoji: '🐍',
+                        title: 'Snake',
+                        subtitle: 'Habilidad',
+                        onTap: () => Navigator.pop(ctx, 'snake'),
+                      ),
+                    ),
+                  ],
+                ),
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, null),
+                  child: const Text(
+                    'Cancelar',
+                    style: TextStyle(color: Colors.black54),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    if (gameChoice == null || !mounted) return;
+
+    // Step 2 — Confirmation dialog (blurred, white, black text)
+    final gameTitle = gameChoice == 'slot' ? '🎰  Tragamonedas' : '🐍  Snake';
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1A0033),
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text(
-          '🎰  Tragamonedas',
-          style: TextStyle(
-            color: Color(0xFFFFD700),
-            fontFamily: 'monospace',
-            fontWeight: FontWeight.bold,
+      barrierColor: Colors.black26,
+      builder: (ctx) => BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+        child: AlertDialog(
+          backgroundColor: Colors.white,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Text(
+            gameTitle,
+            style: const TextStyle(
+                color: Colors.black, fontWeight: FontWeight.bold),
           ),
+          content: Text(
+            'Jugar cuesta 10 puntos.\n'
+            'Saldo actual: ${saldo.toStringAsFixed(0)} pts\n\n'
+            '¿Deseas continuar?',
+            style: const TextStyle(color: Colors.black87),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text('Cancelar',
+                  style: TextStyle(color: Colors.black54)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.black,
+                foregroundColor: Colors.white,
+                shape: const StadiumBorder(),
+                elevation: 0,
+              ),
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: const Text('Jugar'),
+            ),
+          ],
         ),
-        content: Text(
-          'Jugar cuesta 10 puntos.\n'
-          'Saldo actual: ${saldo.toStringAsFixed(0)} pts\n\n'
-          '¿Deseas continuar?',
-          style: const TextStyle(color: Colors.white70),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child:
-                const Text('Cancelar', style: TextStyle(color: Colors.grey)),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Jugar',
-                style: TextStyle(color: Color(0xFFFFD700))),
-          ),
-        ],
       ),
     );
     if (confirmed != true || !mounted) return;
@@ -281,16 +349,19 @@ class _HomeState extends State<Home> {
 
     if (!mounted) return;
 
-    Navigator.push(
-      context,
-      customPageRoute(
-        SlotMachineScreen(
-          userId: uid,
-          rewardsDocRef: rewardsDoc.reference,
-          currentSaldo: newSaldo,
-        ),
-      ),
-    );
+    final Widget screen = gameChoice == 'slot'
+        ? SlotMachineScreen(
+            userId: uid,
+            rewardsDocRef: rewardsDoc.reference,
+            currentSaldo: newSaldo,
+          )
+        : SnakeGameScreen(
+            userId: uid,
+            rewardsDocRef: rewardsDoc.reference,
+            currentSaldo: newSaldo,
+          );
+
+    Navigator.push(context, customPageRoute(screen));
   }
 
   @override
@@ -1302,5 +1373,57 @@ class _AddToCartButtonState extends State<_AddToCartButton> {
   String _formatPrice(dynamic price) {
     if (price == null) return 'N/A';
     return '\$${(price as num).toStringAsFixed(2)}';
+  }
+}
+
+// ─── Game picker card ─────────────────────────────────────────────────────────
+
+class _GameCard extends StatelessWidget {
+  final String emoji;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  const _GameCard({
+    required this.emoji,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: Colors.black, width: 1.5),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(emoji, style: const TextStyle(fontSize: 36)),
+            const SizedBox(height: 8),
+            Text(
+              title,
+              style: const TextStyle(
+                color: Colors.black,
+                fontWeight: FontWeight.bold,
+                fontSize: 14,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 2),
+            Text(
+              subtitle,
+              style: const TextStyle(color: Colors.black45, fontSize: 12),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

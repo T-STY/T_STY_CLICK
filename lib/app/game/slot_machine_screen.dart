@@ -31,25 +31,20 @@ const _symIsEmoji = {
   _Sym.seven: false,
 };
 
-const _symTextColor = {
-  _Sym.bar: Color(0xFFFFD700),
-  _Sym.seven: Color(0xFFFF4444),
-};
-
 // ─── Win table: cost = 10 pts ────────────────────────────────────────────────
-// 70/30 house edge: 30% of spins win, avg return ≈ 3.1 pts per 10 spent
+// 60/40 house edge: 40% of spins win, avg return ≈ 4.1 pts per 10 spent
+// Per 100 spins: ~584 pts net removed from rewards pool
 const Map<_Sym, double> _winTable = {
-  _Sym.cherry: 10.0, // 18% — break-even
-  _Sym.lemon: 10.0, // 8%  — break-even
-  _Sym.orange: 11.0, // 2.5% — net +1
-  _Sym.watermelon: 12.0, // 0.8% — net +2
-  _Sym.star: 15.0, // 0.4% — net +5
-  _Sym.bar: 20.0, // 0.2% — net +10
-  _Sym.seven: 30.0, // 0.1% — jackpot! net +20
+  _Sym.cherry: 10.0,     // 22% — break-even
+  _Sym.lemon: 10.0,      //  8% — break-even
+  _Sym.orange: 11.0,     // 4%  — net +1
+  _Sym.watermelon: 12.0, // 1%  — net +2
+  _Sym.star: 15.0,       // 0.5% — net +5
+  _Sym.bar: 20.0,        // 0.3% — net +10
+  _Sym.seven: 30.0,      // 0.2% — jackpot! net +20
 };
 
 // ─── Visual strip (20 positions, used for animation cycling) ─────────────────
-// cherry=4, lemon=4, orange=3, grape=3, watermelon=2, star=2, bar=1, seven=1
 const List<_Sym> _strip = [
   _Sym.cherry,
   _Sym.lemon,
@@ -137,42 +132,39 @@ class _SlotMachineScreenState extends State<SlotMachineScreen> {
 
   // ─── Outcome engine ──────────────────────────────────────────────────────
 
-  /// Predetermined outcome using weighted probability (70% house / 30% player).
-  /// Adjusting the `0.30` threshold changes overall win rate.
+  /// Predetermined outcome — 60/40 house edge (40% player wins).
+  /// Adjust the `0.40` threshold to change overall win rate.
   void _determineOutcome() {
     final roll = _rng.nextDouble();
 
-    if (roll < 0.18) {
-      _winSymbol = _Sym.cherry; // 18%
-    } else if (roll < 0.26) {
-      _winSymbol = _Sym.lemon; // 8%
-    } else if (roll < 0.285) {
-      _winSymbol = _Sym.orange; // 2.5%
-    } else if (roll < 0.293) {
-      _winSymbol = _Sym.watermelon; // 0.8%
-    } else if (roll < 0.297) {
-      _winSymbol = _Sym.star; // 0.4%
-    } else if (roll < 0.299) {
-      _winSymbol = _Sym.bar; // 0.2%
-    } else if (roll < 0.30) {
-      _winSymbol = _Sym.seven; // 0.1%
+    if (roll < 0.22) {
+      _winSymbol = _Sym.cherry;      // 22%
+    } else if (roll < 0.34) {
+      _winSymbol = _Sym.lemon;       // 12%
+    } else if (roll < 0.38) {
+      _winSymbol = _Sym.orange;      // 4%
+    } else if (roll < 0.39) {
+      _winSymbol = _Sym.watermelon;  // 1%
+    } else if (roll < 0.395) {
+      _winSymbol = _Sym.star;        // 0.5%
+    } else if (roll < 0.398) {
+      _winSymbol = _Sym.bar;         // 0.3%
+    } else if (roll < 0.40) {
+      _winSymbol = _Sym.seven;       // 0.2%
     } else {
-      _winSymbol = null; // 70% loss
+      _winSymbol = null;             // 60% loss
     }
 
     if (_winSymbol != null) {
-      // All 3 reels show the winning symbol (each picks a different valid position)
       _target1 = _findSymbolPos(_winSymbol!);
       _target2 = _findSymbolPos(_winSymbol!);
       _target3 = _findSymbolPos(_winSymbol!);
     } else {
-      // Loss: guarantee no 3-of-a-kind
       _target1 = _rng.nextInt(_stripLen);
       do {
         _target2 = _rng.nextInt(_stripLen);
       } while (_strip[_target2] == _strip[_target1]);
       _target3 = _rng.nextInt(_stripLen);
-      // Safety guard: ensure not accidentally all same
       int guard = 0;
       while (_strip[_target3] == _strip[_target1] &&
           _strip[_target3] == _strip[_target2] &&
@@ -208,10 +200,8 @@ class _SlotMachineScreenState extends State<SlotMachineScreen> {
       _showWinFlash = false;
     });
 
-    // Fire-and-forget deduction write
     _updateFirestore(_saldo);
 
-    // Fast tick: cycle reels every 60ms
     _ticker = Timer.periodic(const Duration(milliseconds: 60), (_) {
       if (!mounted) return;
       setState(() {
@@ -221,12 +211,9 @@ class _SlotMachineScreenState extends State<SlotMachineScreen> {
       });
     });
 
-    _stop1Timer =
-        Timer(const Duration(milliseconds: 1200), () => _stopReel(1));
-    _stop2Timer =
-        Timer(const Duration(milliseconds: 1900), () => _stopReel(2));
-    _stop3Timer =
-        Timer(const Duration(milliseconds: 2600), () => _stopReel(3));
+    _stop1Timer = Timer(const Duration(milliseconds: 1200), () => _stopReel(1));
+    _stop2Timer = Timer(const Duration(milliseconds: 1900), () => _stopReel(2));
+    _stop3Timer = Timer(const Duration(milliseconds: 2600), () => _stopReel(3));
   }
 
   void _stopReel(int reel) {
@@ -296,7 +283,7 @@ class _SlotMachineScreenState extends State<SlotMachineScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF1A0033),
+      backgroundColor: Colors.white,
       appBar: _buildAppBar(),
       body: Stack(
         children: [
@@ -309,19 +296,24 @@ class _SlotMachineScreenState extends State<SlotMachineScreen> {
 
   AppBar _buildAppBar() {
     return AppBar(
-      backgroundColor: const Color(0xFF0D0020),
+      backgroundColor: Colors.white,
+      scrolledUnderElevation: 0,
+      automaticallyImplyLeading: false,
       title: const Text(
-        '🎰  TRAGAMONEDAS  🎰',
+        '🎰  Tragamonedas',
         style: TextStyle(
-          color: Color(0xFFFFD700),
-          fontFamily: 'monospace',
-          fontSize: 15,
-          letterSpacing: 2,
+          color: Colors.black,
+          fontSize: 18,
           fontWeight: FontWeight.bold,
         ),
       ),
       centerTitle: true,
-      iconTheme: const IconThemeData(color: Color(0xFFFFD700)),
+      actions: [
+        IconButton(
+          icon: const Icon(Icons.close, color: Colors.black),
+          onPressed: () => Navigator.pop(context),
+        ),
+      ],
     );
   }
 
@@ -351,25 +343,23 @@ class _SlotMachineScreenState extends State<SlotMachineScreen> {
 
   Widget _buildSaldoDisplay() {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
       decoration: BoxDecoration(
-        color: const Color(0xFF0D0020),
+        color: Colors.black,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFFFD700).withOpacity(0.5)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Text('💰', style: TextStyle(fontSize: 20)),
+          const Text('💰', style: TextStyle(fontSize: 18)),
           const SizedBox(width: 8),
           Text(
             'SALDO: ${_saldo.toStringAsFixed(0)} pts',
             style: const TextStyle(
-              color: Color(0xFFFFD700),
-              fontSize: 18,
-              fontFamily: 'monospace',
+              color: Colors.white,
+              fontSize: 16,
               fontWeight: FontWeight.bold,
-              letterSpacing: 1.5,
+              letterSpacing: 0.5,
             ),
           ),
         ],
@@ -382,16 +372,9 @@ class _SlotMachineScreenState extends State<SlotMachineScreen> {
       margin: const EdgeInsets.symmetric(horizontal: 20),
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
       decoration: BoxDecoration(
-        color: const Color(0xFF0D0020),
+        color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFFFD700), width: 2),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFFFFD700).withOpacity(0.2),
-            blurRadius: 20,
-            spreadRadius: 2,
-          ),
-        ],
+        border: Border.all(color: Colors.black, width: 1.5),
       ),
       child: Column(
         children: [
@@ -411,33 +394,27 @@ class _SlotMachineScreenState extends State<SlotMachineScreen> {
           Row(
             children: [
               const Text('◄',
-                  style: TextStyle(color: Color(0xFFFF4444), fontSize: 11)),
+                  style: TextStyle(color: Colors.black45, fontSize: 11)),
               Expanded(
-                child: Container(
-                  height: 1,
-                  color: const Color(0xFFFF4444).withOpacity(0.5),
-                ),
+                child: Container(height: 1, color: Colors.black12),
               ),
               const Padding(
                 padding: EdgeInsets.symmetric(horizontal: 6),
                 child: Text(
                   'PAYLINE',
                   style: TextStyle(
-                    color: Color(0xFFFF4444),
+                    color: Colors.black54,
                     fontSize: 10,
                     letterSpacing: 2,
-                    fontFamily: 'monospace',
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
               Expanded(
-                child: Container(
-                  height: 1,
-                  color: const Color(0xFFFF4444).withOpacity(0.5),
-                ),
+                child: Container(height: 1, color: Colors.black12),
               ),
               const Text('►',
-                  style: TextStyle(color: Color(0xFFFF4444), fontSize: 11)),
+                  style: TextStyle(color: Colors.black45, fontSize: 11)),
             ],
           ),
         ],
@@ -446,10 +423,7 @@ class _SlotMachineScreenState extends State<SlotMachineScreen> {
   }
 
   Widget _buildReelDivider() {
-    return Container(
-      width: 1,
-      color: const Color(0xFFFFD700).withOpacity(0.25),
-    );
+    return Container(width: 1, color: Colors.black12);
   }
 
   Widget _buildReel(int centerPos, bool stopped) {
@@ -469,10 +443,14 @@ class _SlotMachineScreenState extends State<SlotMachineScreen> {
   Widget _buildSymbolCell(_Sym sym,
       {required bool dimmed, bool highlight = false}) {
     final isEmoji = _symIsEmoji[sym]!;
-    final textColor = _symTextColor[sym];
+
+    Color? textColor;
+    if (!isEmoji) {
+      textColor = sym == _Sym.seven ? Colors.red.shade700 : Colors.black;
+    }
 
     return AnimatedOpacity(
-      opacity: dimmed ? 0.3 : 1.0,
+      opacity: dimmed ? 0.25 : 1.0,
       duration: const Duration(milliseconds: 80),
       child: Container(
         height: 64,
@@ -480,31 +458,20 @@ class _SlotMachineScreenState extends State<SlotMachineScreen> {
         decoration: highlight && !dimmed
             ? BoxDecoration(
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(
-                    color: const Color(0xFFFFD700).withOpacity(0.5), width: 1),
-                color: const Color(0xFF1A0033),
+                color: Colors.grey.shade100,
+                border: Border.all(color: Colors.black12),
               )
             : null,
         alignment: Alignment.center,
         child: isEmoji
-            ? Text(
-                _symLabel[sym]!,
-                style: const TextStyle(fontSize: 30),
-              )
+            ? Text(_symLabel[sym]!, style: const TextStyle(fontSize: 30))
             : Text(
                 _symLabel[sym]!,
                 style: TextStyle(
                   color: textColor,
                   fontSize: sym == _Sym.bar ? 18 : 34,
                   fontWeight: FontWeight.w900,
-                  fontFamily: 'monospace',
                   letterSpacing: 1,
-                  shadows: [
-                    Shadow(
-                      color: (textColor ?? Colors.white).withOpacity(0.8),
-                      blurRadius: 10,
-                    ),
-                  ],
                 ),
               ),
       ),
@@ -514,43 +481,27 @@ class _SlotMachineScreenState extends State<SlotMachineScreen> {
   Widget _buildSpinButton() {
     final canSpin = !_isSpinning && _saldo >= _spinCost;
 
-    return GestureDetector(
-      onTap: canSpin ? _spin : null,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding:
-            const EdgeInsets.symmetric(horizontal: 40, vertical: 16),
-        decoration: BoxDecoration(
-          gradient: canSpin
-              ? const LinearGradient(
-                  colors: [Color(0xFFFFD700), Color(0xFFFF8C00)],
-                )
-              : null,
-          color: canSpin ? null : Colors.grey.shade800,
-          borderRadius: BorderRadius.circular(50),
-          boxShadow: canSpin
-              ? [
-                  BoxShadow(
-                    color: const Color(0xFFFFD700).withOpacity(0.4),
-                    blurRadius: 15,
-                    spreadRadius: 2,
-                  ),
-                ]
-              : [],
-        ),
-        child: Text(
-          _isSpinning
-              ? '⏳  GIRANDO...'
-              : _saldo < _spinCost
-                  ? 'SIN PUNTOS'
-                  : '🎰  GIRAR  (−10 pts)',
-          style: TextStyle(
-            color: canSpin ? Colors.black : Colors.grey.shade500,
-            fontWeight: FontWeight.bold,
-            fontSize: 15,
-            letterSpacing: 1.5,
-            fontFamily: 'monospace',
-          ),
+    return ElevatedButton(
+      onPressed: canSpin ? _spin : null,
+      style: ElevatedButton.styleFrom(
+        backgroundColor: Colors.black,
+        foregroundColor: Colors.white,
+        disabledBackgroundColor: Colors.grey.shade300,
+        disabledForegroundColor: Colors.grey.shade500,
+        padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 16),
+        shape: const StadiumBorder(),
+        elevation: 0,
+      ),
+      child: Text(
+        _isSpinning
+            ? 'Girando...'
+            : _saldo < _spinCost
+                ? 'Sin puntos suficientes'
+                : '🎰  Girar  (−10 pts)',
+        style: const TextStyle(
+          fontWeight: FontWeight.bold,
+          fontSize: 15,
+          letterSpacing: 0.5,
         ),
       ),
     );
@@ -559,12 +510,8 @@ class _SlotMachineScreenState extends State<SlotMachineScreen> {
   Widget _buildResultText() {
     if (_lastWinAmount == null) {
       return const Text(
-        '¡Toca GIRAR para jugar!',
-        style: TextStyle(
-          color: Colors.white38,
-          fontSize: 13,
-          fontFamily: 'monospace',
-        ),
+        'Toca Girar para jugar',
+        style: TextStyle(color: Colors.black38, fontSize: 13),
       );
     }
 
@@ -573,14 +520,14 @@ class _SlotMachineScreenState extends State<SlotMachineScreen> {
     Color color;
 
     if (amt == 0) {
-      msg = '❌  Sin suerte esta vez...';
-      color = Colors.redAccent;
+      msg = 'Sin suerte esta vez...';
+      color = Colors.red.shade700;
     } else if (amt <= _spinCost) {
-      msg = '🟡  ¡Recuperaste ${amt.toStringAsFixed(0)} pts!';
-      color = Colors.amber;
+      msg = '¡Recuperaste ${amt.toStringAsFixed(0)} pts!';
+      color = Colors.orange.shade700;
     } else {
-      msg = '🎉  ¡GANASTE ${amt.toStringAsFixed(0)} pts!';
-      color = Colors.greenAccent;
+      msg = '¡Ganaste ${amt.toStringAsFixed(0)} pts!';
+      color = Colors.green.shade700;
     }
 
     return Text(
@@ -588,8 +535,7 @@ class _SlotMachineScreenState extends State<SlotMachineScreen> {
       style: TextStyle(
         color: color,
         fontSize: 14,
-        fontFamily: 'monospace',
-        fontWeight: FontWeight.bold,
+        fontWeight: FontWeight.w600,
       ),
     );
   }
@@ -597,63 +543,52 @@ class _SlotMachineScreenState extends State<SlotMachineScreen> {
   Widget _buildWinTable() {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 20),
-      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: const Color(0xFF0D0020),
-        borderRadius: BorderRadius.circular(10),
-        border:
-            Border.all(color: const Color(0xFFFFD700).withOpacity(0.2)),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.black12),
       ),
-      child: Column(
-        children: [
-          const Text(
-            'TABLA DE PREMIOS',
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: ExpansionTile(
+          title: const Text(
+            'Tabla de premios',
             style: TextStyle(
-              color: Color(0xFFFFD700),
-              fontSize: 11,
-              letterSpacing: 2,
-              fontFamily: 'monospace',
               fontWeight: FontWeight.bold,
+              fontSize: 14,
+              color: Colors.black,
             ),
           ),
-          const SizedBox(height: 10),
-          ..._winTable.entries.map((e) {
+          iconColor: Colors.black,
+          collapsedIconColor: Colors.black45,
+          initiallyExpanded: false,
+          childrenPadding:
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          children: _winTable.entries.map((e) {
             final net = e.value - _spinCost;
             final netStr =
                 net >= 0 ? '+${net.toStringAsFixed(0)}' : net.toStringAsFixed(0);
             final netColor = net > 0
-                ? Colors.greenAccent
+                ? Colors.green.shade700
                 : net == 0
-                    ? Colors.amber
-                    : Colors.redAccent;
-            final isEmoji = _symIsEmoji[e.key]!;
-            final label = '${_symLabel[e.key]!} × 3';
+                    ? Colors.orange.shade700
+                    : Colors.red.shade700;
 
             return Padding(
-              padding: const EdgeInsets.symmetric(vertical: 3),
+              padding: const EdgeInsets.symmetric(vertical: 4),
               child: Row(
                 children: [
                   SizedBox(
-                    width: 70,
+                    width: 56,
                     child: Text(
-                      label,
-                      style: TextStyle(
-                        color: isEmoji
-                            ? Colors.white
-                            : (_symTextColor[e.key] ?? Colors.white),
-                        fontSize: 14,
-                        fontFamily: 'monospace',
-                      ),
+                      '${_symLabel[e.key]!} × 3',
+                      style: const TextStyle(fontSize: 14),
                     ),
                   ),
                   const Spacer(),
                   Text(
                     'devuelve ${e.value.toStringAsFixed(0)} pts',
-                    style: const TextStyle(
-                      color: Colors.white54,
-                      fontSize: 12,
-                      fontFamily: 'monospace',
-                    ),
+                    style: const TextStyle(color: Colors.black54, fontSize: 12),
                   ),
                   const SizedBox(width: 8),
                   SizedBox(
@@ -664,7 +599,6 @@ class _SlotMachineScreenState extends State<SlotMachineScreen> {
                       style: TextStyle(
                         color: netColor,
                         fontSize: 12,
-                        fontFamily: 'monospace',
                         fontWeight: FontWeight.bold,
                       ),
                     ),
@@ -672,58 +606,47 @@ class _SlotMachineScreenState extends State<SlotMachineScreen> {
                 ],
               ),
             );
-          }),
-        ],
+          }).toList(),
+        ),
       ),
     );
   }
 
   Widget _buildWinOverlay() {
     final isJackpot = _winSymbol == _Sym.seven;
-    final isBigWin =
-        _winSymbol == _Sym.bar || _winSymbol == _Sym.star;
+    final isBigWin = _winSymbol == _Sym.bar || _winSymbol == _Sym.star;
 
     return Positioned.fill(
       child: IgnorePointer(
         child: Container(
-          color: Colors.black.withOpacity(0.75),
+          color: Colors.white.withOpacity(0.92),
           alignment: Alignment.center,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
                 isJackpot
-                    ? '🎊  JACKPOT!  🎊'
+                    ? '🎊  ¡Jackpot!'
                     : isBigWin
-                        ? '🌟  ¡GRAN WIN!  🌟'
-                        : '🎉  ¡GANASTE!  🎉',
+                        ? '🌟  ¡Gran premio!'
+                        : '🎉  ¡Ganaste!',
                 style: TextStyle(
                   color: isJackpot
-                      ? const Color(0xFFFFD700)
+                      ? Colors.amber.shade700
                       : isBigWin
-                          ? Colors.greenAccent
-                          : Colors.white,
-                  fontSize: isJackpot ? 38 : 30,
+                          ? Colors.green.shade700
+                          : Colors.black,
+                  fontSize: isJackpot ? 36 : 28,
                   fontWeight: FontWeight.bold,
-                  fontFamily: 'monospace',
-                  shadows: [
-                    Shadow(
-                      color: isJackpot
-                          ? const Color(0xFFFFD700)
-                          : Colors.greenAccent,
-                      blurRadius: 20,
-                    ),
-                  ],
                 ),
               ),
               const SizedBox(height: 12),
               Text(
                 '+${_lastWinAmount?.toStringAsFixed(0) ?? '0'} puntos',
                 style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 22,
-                  fontFamily: 'monospace',
-                  letterSpacing: 1,
+                  color: Colors.black87,
+                  fontSize: 20,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ],
