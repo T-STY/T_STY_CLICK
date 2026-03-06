@@ -18,7 +18,7 @@ class SnakeGameScreen extends StatefulWidget {
   final DocumentReference rewardsDocRef;
   final double currentSaldo;
   final ArcadeInputController controller;
-  final VoidCallback onSaldoChanged;
+  final void Function(double) onSaldoChanged;
 
   const SnakeGameScreen({
     super.key,
@@ -199,12 +199,15 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> {
     _ticker?.cancel();
     _level++;
 
-    // Award 1 saldo point every 10 levels
-    if (_level % 10 == 0 && !_awardingPoints) {
+    // Award 1 saldo point every 5 levels
+    if (_level % 5 == 0 && !_awardingPoints) {
       _awardingPoints = true;
       final newSaldo = _saldo + 1.0;
       await _updateFirestore(newSaldo);
-      if (mounted) setState(() => _saldo = newSaldo);
+      if (mounted) {
+        setState(() => _saldo = newSaldo);
+        widget.onSaldoChanged(newSaldo);
+      }
       _awardingPoints = false;
     }
 
@@ -333,12 +336,7 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> {
             ),
             SizedBox(height: 8),
             Text(
-              'Come 5 frutas para subir de nivel',
-              style: TextStyle(color: Colors.black38, fontSize: 12),
-              textAlign: TextAlign.center,
-            ),
-            Text(
-              '+1 pto real cada 10 niveles',
+              'Come 5 frutas para subir de nivel (+1 pto cada 5 niveles)',
               style: TextStyle(color: Colors.black38, fontSize: 12),
               textAlign: TextAlign.center,
             ),

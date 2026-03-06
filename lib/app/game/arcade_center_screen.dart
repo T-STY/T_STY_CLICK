@@ -6,17 +6,18 @@ import 'flappy_bird_screen.dart';
 import 'snake_game_screen.dart';
 import 'space_shooter_screen.dart';
 
-// ─── Palette ─────────────────────────────────────────────────────────────────
+// ─── Palette — classic silver Game Boy (late 90s / early 2000s) ───────────────
 
-const _kBodyTop = Color(0xFF2A0E5C);
-const _kBodyBot = Color(0xFF16063A);
-const _kBezel   = Color(0xFF0A0520);
-const _kBtnA    = Color(0xFFE53935);
-const _kBtnB    = Color(0xFFFFB300);
-const _kBtnX    = Color(0xFF1E88E5);
-const _kBtnY    = Color(0xFF43A047);
-const _kDpad    = Color(0xFF1C1C2E);
-const _kMeta    = Color(0xFF2A2A40);
+const _kBodyTop  = Color(0xFFD4D4D4); // light silver
+const _kBodyBot  = Color(0xFFAAAAAA); // medium silver/gray
+const _kBezel    = Color(0xFF101010); // near-black screen bezel
+const _kBtnA     = Color(0xFFE53935); // red
+const _kBtnB     = Color(0xFFFFB300); // amber
+const _kBtnX     = Color(0xFF1E88E5); // blue
+const _kBtnY     = Color(0xFF43A047); // green
+const _kDpad     = Color(0xFF2E2E2E); // dark charcoal D-pad
+const _kMeta     = Color(0xFF9E9E9E); // gray meta buttons
+const _kBodyBdr  = Color(0xFF888888); // silver border
 
 // ─── Game registry ────────────────────────────────────────────────────────────
 
@@ -25,7 +26,7 @@ typedef ArcadeGameBuilder = Widget Function({
   required DocumentReference rewardsDocRef,
   required double currentSaldo,
   required ArcadeInputController controller,
-  required VoidCallback onSaldoChanged,
+  required void Function(double) onSaldoChanged,
 });
 
 class ArcadeGameDef {
@@ -33,7 +34,7 @@ class ArcadeGameDef {
   final String emoji;
   final String title;
   final String subtitle;
-  final ArcadeGameBuilder builder;
+  final ArcadeGameBuilder builder; // void Function(double) onSaldoChanged
 
   const ArcadeGameDef({
     required this.id,
@@ -186,12 +187,13 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
           colors: [_kBodyTop, _kBodyBot],
         ),
         borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: const Color(0xFF4A1F9A), width: 1.5),
+        border: Border.all(color: _kBodyBdr, width: 1.5),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF7B2FBE).withOpacity(0.35),
-            blurRadius: 24,
-            spreadRadius: 2,
+            color: Colors.black.withOpacity(0.30),
+            blurRadius: 20,
+            spreadRadius: 1,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
@@ -230,19 +232,19 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
         const SizedBox(width: 8),
         const Text(
           'ARCADE CENTER',
-          style: TextStyle(color: Colors.white54, fontSize: 9, fontWeight: FontWeight.w700, letterSpacing: 3),
+          style: TextStyle(color: Color(0xFF555555), fontSize: 9, fontWeight: FontWeight.w700, letterSpacing: 3),
         ),
         const Spacer(),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
           decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.08),
+            color: Colors.black.withOpacity(0.10),
             borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: Colors.white12),
+            border: Border.all(color: Colors.black26),
           ),
           child: Text(
             '💰 ${_saldo.toStringAsFixed(0)} pts',
-            style: const TextStyle(color: Colors.white70, fontSize: 9, fontWeight: FontWeight.w600),
+            style: const TextStyle(color: Color(0xFF333333), fontSize: 9, fontWeight: FontWeight.w600),
           ),
         ),
       ],
@@ -355,7 +357,8 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
       rewardsDocRef: widget.rewardsDocRef,
       currentSaldo: _saldo,
       controller: _ctrl,
-      onSaldoChanged: () {},
+      // Games call this with their updated saldo so the top strip stays in sync
+      onSaldoChanged: (newSaldo) => setState(() => _saldo = newSaldo),
     );
   }
 
@@ -396,8 +399,8 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
 
   Widget _buildDPad() {
     return SizedBox(
-      width: 120,
-      height: 120,
+      width: 144,
+      height: 144,
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
@@ -408,7 +411,7 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
           Row(mainAxisAlignment: MainAxisAlignment.center, children: [
             _ConsoleDPadArm(icon: Icons.keyboard_arrow_left_rounded, btn: ArcadeButton.left, controller: _ctrl,
                 radius: const BorderRadius.horizontal(left: Radius.circular(6))),
-            Container(width: 40, height: 40, decoration: const BoxDecoration(color: _kDpad)),
+            Container(width: 48, height: 48, decoration: const BoxDecoration(color: _kDpad)),
             _ConsoleDPadArm(icon: Icons.keyboard_arrow_right_rounded, btn: ArcadeButton.right, controller: _ctrl,
                 radius: const BorderRadius.horizontal(right: Radius.circular(6))),
           ]),
@@ -455,7 +458,7 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
             width: 4, height: 4,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: Colors.white.withOpacity(0.12),
+              color: Colors.black.withOpacity(0.22),
             ),
           ),
       ],
@@ -489,13 +492,13 @@ class _ConsoleDPadArmState extends State<_ConsoleDPadArm> {
       onTapCancel: () { setState(() => _pressed = false); widget.controller.release(widget.btn); },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 40),
-        width: 40, height: 40,
+        width: 48, height: 48,
         decoration: BoxDecoration(
-          color: _pressed ? const Color(0xFF2D2D44) : _kDpad,
+          color: _pressed ? const Color(0xFF555555) : _kDpad,
           borderRadius: widget.radius,
-          border: Border.all(color: Colors.white.withOpacity(0.06)),
+          border: Border.all(color: Colors.white.withOpacity(0.08)),
         ),
-        child: Icon(widget.icon, color: _pressed ? Colors.white : Colors.white60, size: 22),
+        child: Icon(widget.icon, color: _pressed ? Colors.white : Colors.white70, size: 26),
       ),
     );
   }
@@ -577,17 +580,17 @@ class _ConsoleMetaButtonState extends State<_ConsoleMetaButton> {
         duration: const Duration(milliseconds: 40),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
         decoration: BoxDecoration(
-          color: _pressed ? const Color(0xFF3A3A55) : _kMeta,
+          color: _pressed ? const Color(0xFF707070) : _kMeta,
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: Colors.white.withOpacity(0.1)),
+          border: Border.all(color: Colors.black.withOpacity(0.18)),
           boxShadow: _pressed ? [] : [
-            BoxShadow(color: Colors.black.withOpacity(0.4), blurRadius: 4, offset: const Offset(0, 2)),
+            BoxShadow(color: Colors.black.withOpacity(0.25), blurRadius: 4, offset: const Offset(0, 2)),
           ],
         ),
         child: Text(
           widget.label,
           style: TextStyle(
-            color: _pressed ? Colors.white : Colors.white54,
+            color: _pressed ? Colors.white : const Color(0xFF222222),
             fontSize: 9,
             fontWeight: FontWeight.bold,
             letterSpacing: 1.5,

@@ -67,7 +67,7 @@ class SpaceShooterScreen extends StatefulWidget {
   final DocumentReference rewardsDocRef;
   final double currentSaldo;
   final ArcadeInputController controller;
-  final VoidCallback onSaldoChanged;
+  final void Function(double) onSaldoChanged;
 
   const SpaceShooterScreen({
     super.key,
@@ -504,9 +504,11 @@ class _SpaceShooterScreenState extends State<SpaceShooterScreen> {
     _awardingPoints = true;
     final newSaldo = _saldo + 1.0;
     await _updateFirestore(newSaldo);
-    if (mounted) setState(() => _saldo = newSaldo);
+    if (mounted) {
+      setState(() => _saldo = newSaldo);
+      widget.onSaldoChanged(newSaldo);
+    }
     _awardingPoints = false;
-    widget.onSaldoChanged();
   }
 
   void _startNextWave() {

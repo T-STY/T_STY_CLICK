@@ -32,7 +32,7 @@ class FlappyBirdScreen extends StatefulWidget {
   final DocumentReference rewardsDocRef;
   final double currentSaldo;
   final ArcadeInputController controller;
-  final VoidCallback onSaldoChanged;
+  final void Function(double) onSaldoChanged;
 
   const FlappyBirdScreen({
     super.key,
@@ -62,7 +62,9 @@ class _FlappyBirdScreenState extends State<FlappyBirdScreen> {
   static const double kPipeW = 1.3;
   static const double kPipeSpacing = 4.2; // world units between pipes
   static const double kGapHStart = 3.8; // gap height at wave 1
-  static const double kGapHMin = 2.4; // minimum gap height
+  // Min gap must be >= 1.5 × bird diameter (kBirdR*2=0.76 → 1.5×=1.14).
+  // We keep 2.2 for comfortable playability while satisfying the constraint.
+  static const double kGapHMin = 2.2; // minimum gap height (≈ 2.9× bird diameter)
   static const double kSpeedStart = 3.2;
   static const double kSpeedMax = 7.0;
 
@@ -83,7 +85,7 @@ class _FlappyBirdScreenState extends State<FlappyBirdScreen> {
 
   // Score & saldo
   int _pipesPassed = 0; // raw count
-  int _displayScore = 0; // pipesPassed ~/ 100 (shown as "pts in game")
+  int _displayScore = 0; // pipesPassed ~/ 10 (shown as "pts in game")
   late double _saldo;
   bool _awardingPoints = false;
 
@@ -201,7 +203,10 @@ class _FlappyBirdScreenState extends State<FlappyBirdScreen> {
     _nextPipeX -= _pipeSpeed * dt;
     if (_nextPipeX <= 0) {
       _nextPipeX = kPipeSpacing;
-      final gapH = (kGapHStart - _pipesPassed * 0.008).clamp(kGapHMin, kGapHStart);
+      // Ensure gap never drops below 1.5× bird diameter regardless of score
+      const minSafeGap = kBirdR * 2 * 1.5; // = 1.14 world units
+      final gapH = (kGapHStart - _pipesPassed * 0.008)
+          .clamp(kGapHMin.clamp(minSafeGap, kGapHStart), kGapHStart);
       final gapCentre = (gapH / 2 + 1.5) +
           _rng.nextDouble() * (kGroundY - gapH - 2.5 - (gapH / 2 + 1.5));
       _pipes.add(_Pipe(kW + 0.5, gapCentre));
@@ -212,10 +217,10 @@ class _FlappyBirdScreenState extends State<FlappyBirdScreen> {
       if (!p.scored && p.x + kPipeW < kBirdX) {
         p.scored = true;
         _pipesPassed++;
-        _displayScore = _pipesPassed ~/ 100;
+        _displayScore = _pipesPassed ~/ 10;
 
-        // Award 1 saldo every 100 pipes
-        if (_pipesPassed % 100 == 0) {
+        // Award 1 saldo every 10 pipes
+        if (_pipesPassed % 10 == 0) {
           _awardSaldo();
         }
       }
@@ -274,8 +279,10 @@ class _FlappyBirdScreenState extends State<FlappyBirdScreen> {
       batch.update(userCardRef, {'saldo': newSaldo});
       batch.update(widget.rewardsDocRef, {'saldo': newSaldo});
       await batch.commit();
-      if (mounted) setState(() => _saldo = newSaldo);
-      widget.onSaldoChanged();
+      if (mounted) {
+        setState(() => _saldo = newSaldo);
+        widget.onSaldoChanged(newSaldo);
+      }
     } catch (e) {
       debugPrint('Flappy Firestore error: $e');
     }
@@ -349,7 +356,7 @@ class _FlappyBirdScreenState extends State<FlappyBirdScreen> {
                 const Text('Pasa entre los tubos sin chocar',
                     style: TextStyle(color: Colors.white54, fontSize: 11)),
                 const SizedBox(height: 6),
-                const Text('+1 pto real cada 100 tubos',
+                const Text('+1 pto real cada 10 tubos',
                     style: TextStyle(color: Colors.white38, fontSize: 10)),
                 const SizedBox(height: 2),
                 const Text('SELECT para volver al menú',
