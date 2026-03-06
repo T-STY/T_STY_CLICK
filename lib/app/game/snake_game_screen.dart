@@ -239,12 +239,17 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> {
       backgroundColor: Colors.white,
       appBar: _buildAppBar(),
       body: SafeArea(
-        child: Stack(
-          children: [
-            _buildGameCanvas(),
-            if (!_isRunning && !_isDead) _buildStartOverlay(),
-            if (_isDead) _buildGameOverOverlay(),
-          ],
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onHorizontalDragUpdate: _onHorizontalDrag,
+          onVerticalDragUpdate: _onVerticalDrag,
+          child: Stack(
+            children: [
+              _buildGameCanvas(),
+              if (!_isRunning && !_isDead) _buildStartOverlay(),
+              if (_isDead) _buildGameOverOverlay(),
+            ],
+          ),
         ),
       ),
     );
@@ -277,26 +282,21 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> {
   }
 
   Widget _buildGameCanvas() {
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onHorizontalDragUpdate: _onHorizontalDrag,
-      onVerticalDragUpdate: _onVerticalDrag,
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          return CustomPaint(
-            painter: _SnakePainter(
-              snake: _snake,
-              food: _food,
-              gridW: kGridW,
-              gridH: kGridH,
-            ),
-            child: SizedBox(
-              width: constraints.maxWidth,
-              height: constraints.maxHeight,
-            ),
-          );
-        },
-      ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return CustomPaint(
+          painter: _SnakePainter(
+            snake: _snake,
+            food: _food,
+            gridW: kGridW,
+            gridH: kGridH,
+          ),
+          child: SizedBox(
+            width: constraints.maxWidth,
+            height: constraints.maxHeight,
+          ),
+        );
+      },
     );
   }
 
