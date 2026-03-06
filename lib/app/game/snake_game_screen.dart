@@ -127,7 +127,8 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> {
 
   void _startTicker() {
     _ticker?.cancel();
-    final ms = (kStartTickMs / _level).clamp(100.0, kStartTickMs).round();
+    // Gradual speed increase: ~250ms at lvl 1 down to ~130ms at lvl 12+
+    final ms = (250.0 / (1.0 + (_level - 1) * 0.10)).clamp(130.0, 250.0).round();
     _ticker = Timer.periodic(Duration(milliseconds: ms), (_) => _tick());
   }
 
@@ -381,7 +382,7 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> {
             ),
             const SizedBox(height: 8),
             const Text(
-              'Presiona B para volver al selector',
+              'Presiona SELECT para volver al menú',
               style: TextStyle(color: Colors.black38, fontSize: 11),
             ),
           ],

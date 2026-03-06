@@ -10,13 +10,13 @@ import 'space_shooter_screen.dart';
 
 const _kBodyTop = Color(0xFF2A0E5C);
 const _kBodyBot = Color(0xFF16063A);
-const _kBezel = Color(0xFF0A0520);
-const _kBtnA = Color(0xFFE53935);
-const _kBtnB = Color(0xFFFFB300);
-const _kBtnX = Color(0xFF1E88E5);
-const _kBtnY = Color(0xFF43A047);
-const _kDpad = Color(0xFF1C1C2E);
-const _kMeta = Color(0xFF2A2A40);
+const _kBezel   = Color(0xFF0A0520);
+const _kBtnA    = Color(0xFFE53935);
+const _kBtnB    = Color(0xFFFFB300);
+const _kBtnX    = Color(0xFF1E88E5);
+const _kBtnY    = Color(0xFF43A047);
+const _kDpad    = Color(0xFF1C1C2E);
+const _kMeta    = Color(0xFF2A2A40);
 
 // ─── Game registry ────────────────────────────────────────────────────────────
 
@@ -48,7 +48,7 @@ final List<ArcadeGameDef> kArcadeGames = [
   ArcadeGameDef(
     id: 'snake',
     emoji: '🐍',
-    title: 'Snake',
+    title: 'Serpiente',
     subtitle: 'Habilidad',
     builder: ({required userId, required rewardsDocRef, required currentSaldo,
         required controller, required onSaldoChanged}) =>
@@ -68,7 +68,7 @@ final List<ArcadeGameDef> kArcadeGames = [
   ArcadeGameDef(
     id: 'shooter',
     emoji: '🚀',
-    title: 'Space Shooter',
+    title: 'Invasores',
     subtitle: 'Acción',
     builder: ({required userId, required rewardsDocRef, required currentSaldo,
         required controller, required onSaldoChanged}) =>
@@ -132,13 +132,14 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
         case ArcadeButton.a:
         case ArcadeButton.start:
           _launchSelected();
-        case ArcadeButton.b:
-          Navigator.pop(context);
+        case ArcadeButton.select:
+          Navigator.pop(context); // exit arcade
         default:
           break;
       }
     } else {
-      if (btn == ArcadeButton.b || btn == ArcadeButton.start) {
+      // SELECT returns to selector; B stays as an in-game button
+      if (btn == ArcadeButton.select) {
         setState(() => _activeGame = null);
       }
     }
@@ -213,12 +214,11 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
     );
   }
 
-  // ── Top strip: LED + brand + saldo ────────────────────────────────────────
+  // ── Top strip ─────────────────────────────────────────────────────────────
 
   Widget _buildTopStrip() {
     return Row(
       children: [
-        // Power LED
         Container(
           width: 7, height: 7,
           decoration: BoxDecoration(
@@ -230,12 +230,7 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
         const SizedBox(width: 8),
         const Text(
           'ARCADE CENTER',
-          style: TextStyle(
-            color: Colors.white54,
-            fontSize: 9,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 3,
-          ),
+          style: TextStyle(color: Colors.white54, fontSize: 9, fontWeight: FontWeight.w700, letterSpacing: 3),
         ),
         const Spacer(),
         Container(
@@ -254,7 +249,7 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
     );
   }
 
-  // ── Screen bezel + LCD ────────────────────────────────────────────────────
+  // ── Screen bezel ──────────────────────────────────────────────────────────
 
   Widget _buildScreenBezel() {
     return Container(
@@ -262,9 +257,7 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
         color: _kBezel,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: const Color(0xFF1A0840), width: 2),
-        boxShadow: const [
-          BoxShadow(color: Colors.black87, blurRadius: 10, offset: Offset(0, 3)),
-        ],
+        boxShadow: const [BoxShadow(color: Colors.black87, blurRadius: 10, offset: Offset(0, 3))],
       ),
       padding: const EdgeInsets.all(8),
       child: ClipRRect(
@@ -281,7 +274,7 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           const Text(
-            'SELECT GAME',
+            'ELIGE TU JUEGO',
             style: TextStyle(color: Colors.white38, fontSize: 9, letterSpacing: 3),
           ),
           const SizedBox(height: 20),
@@ -297,9 +290,9 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
             '◄ ► para seleccionar  ·  A para jugar',
             style: TextStyle(color: Colors.white24, fontSize: 8),
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 3),
           const Text(
-            'B para salir  ·  −10 pts por partida',
+            'SELECT para salir  ·  −10 pts por partida',
             style: TextStyle(color: Colors.white24, fontSize: 8),
           ),
         ],
@@ -307,45 +300,51 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
     );
   }
 
+  // Fixed-size cards so all are identical regardless of label length
   Widget _buildSelectorCard(ArcadeGameDef def, bool isSelected) {
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 180),
-      margin: const EdgeInsets.symmetric(horizontal: 4),
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
-      decoration: BoxDecoration(
-        color: isSelected ? Colors.white : const Color(0xFF111827),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: isSelected ? Colors.white : const Color(0xFF2D3748),
-          width: isSelected ? 2 : 1,
+    return SizedBox(
+      width: 78,
+      height: 105,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        margin: const EdgeInsets.symmetric(horizontal: 4),
+        decoration: BoxDecoration(
+          color: isSelected ? Colors.white : const Color(0xFF111827),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isSelected ? Colors.white : const Color(0xFF2D3748),
+            width: isSelected ? 2 : 1,
+          ),
+          boxShadow: isSelected
+              ? [const BoxShadow(color: Colors.white30, blurRadius: 8)]
+              : [],
         ),
-        boxShadow: isSelected
-            ? [const BoxShadow(color: Colors.white30, blurRadius: 8)]
-            : [],
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(def.emoji, style: const TextStyle(fontSize: 28)),
-          const SizedBox(height: 6),
-          Text(
-            def.title,
-            style: TextStyle(
-              color: isSelected ? Colors.black : Colors.white,
-              fontSize: 10,
-              fontWeight: FontWeight.bold,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(def.emoji, style: const TextStyle(fontSize: 28)),
+            const SizedBox(height: 6),
+            Text(
+              def.title,
+              style: TextStyle(
+                color: isSelected ? Colors.black : Colors.white,
+                fontSize: 10,
+                fontWeight: FontWeight.bold,
+              ),
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
             ),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 2),
-          Text(
-            def.subtitle,
-            style: TextStyle(
-              color: isSelected ? Colors.black54 : Colors.white38,
-              fontSize: 8,
+            const SizedBox(height: 2),
+            Text(
+              def.subtitle,
+              style: TextStyle(
+                color: isSelected ? Colors.black54 : Colors.white38,
+                fontSize: 8,
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -360,7 +359,7 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
     );
   }
 
-  // ── SELECT / START strip (above controls) ─────────────────────────────────
+  // ── SELECT / START strip ──────────────────────────────────────────────────
 
   Widget _buildSelectStartStrip() {
     return Row(
@@ -368,7 +367,6 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
       children: [
         _ConsoleMetaButton(label: 'SELECT', btn: ArcadeButton.select, controller: _ctrl),
         const SizedBox(width: 16),
-        // Center decoration: small arcade logo dot
         Container(
           width: 8, height: 8,
           decoration: BoxDecoration(
@@ -383,7 +381,7 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
     );
   }
 
-  // ── Controls row: D-pad | space | ABXY ────────────────────────────────────
+  // ── Controls row ──────────────────────────────────────────────────────────
 
   Widget _buildControlsRow() {
     return Row(
@@ -397,69 +395,55 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
   }
 
   Widget _buildDPad() {
-    return Container(
-      width: 108,
-      height: 108,
-      decoration: BoxDecoration(
-        color: Colors.transparent,
-        borderRadius: BorderRadius.circular(8),
-      ),
+    return SizedBox(
+      width: 120,
+      height: 120,
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-            _ConsoleDPadArm(icon: Icons.keyboard_arrow_up_rounded, btn: ArcadeButton.up, controller: _ctrl, radius: const BorderRadius.vertical(top: Radius.circular(6))),
+            _ConsoleDPadArm(icon: Icons.keyboard_arrow_up_rounded, btn: ArcadeButton.up, controller: _ctrl,
+                radius: const BorderRadius.vertical(top: Radius.circular(6))),
           ]),
           Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-            _ConsoleDPadArm(icon: Icons.keyboard_arrow_left_rounded, btn: ArcadeButton.left, controller: _ctrl, radius: const BorderRadius.horizontal(left: Radius.circular(6))),
-            Container(width: 36, height: 36, decoration: const BoxDecoration(color: _kDpad)),
-            _ConsoleDPadArm(icon: Icons.keyboard_arrow_right_rounded, btn: ArcadeButton.right, controller: _ctrl, radius: const BorderRadius.horizontal(right: Radius.circular(6))),
+            _ConsoleDPadArm(icon: Icons.keyboard_arrow_left_rounded, btn: ArcadeButton.left, controller: _ctrl,
+                radius: const BorderRadius.horizontal(left: Radius.circular(6))),
+            Container(width: 40, height: 40, decoration: const BoxDecoration(color: _kDpad)),
+            _ConsoleDPadArm(icon: Icons.keyboard_arrow_right_rounded, btn: ArcadeButton.right, controller: _ctrl,
+                radius: const BorderRadius.horizontal(right: Radius.circular(6))),
           ]),
           Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-            _ConsoleDPadArm(icon: Icons.keyboard_arrow_down_rounded, btn: ArcadeButton.down, controller: _ctrl, radius: const BorderRadius.vertical(bottom: Radius.circular(6))),
+            _ConsoleDPadArm(icon: Icons.keyboard_arrow_down_rounded, btn: ArcadeButton.down, controller: _ctrl,
+                radius: const BorderRadius.vertical(bottom: Radius.circular(6))),
           ]),
         ],
       ),
     );
   }
 
-  // ABXY in SNES diamond: X top, Y left, A right, B bottom
+  // ABXY diamond: X top, Y left, A right, B bottom
   Widget _buildABXYCluster() {
-    const btnSize = 40.0;
-    const gap = 4.0;
-    const total = btnSize * 3 + gap * 2;
+    const btnSize = 48.0;
+    const gap     = 4.0;
+    const total   = btnSize * 3 + gap * 2; // 152
     return SizedBox(
       width: total,
       height: total,
       child: Stack(
         alignment: Alignment.center,
         children: [
-          // X — top
-          Positioned(
-            top: 0, left: total / 2 - btnSize / 2,
-            child: _ConsoleActionButton(label: 'X', btn: ArcadeButton.x, color: _kBtnX, controller: _ctrl, size: btnSize),
-          ),
-          // Y — left
-          Positioned(
-            left: 0, top: total / 2 - btnSize / 2,
-            child: _ConsoleActionButton(label: 'Y', btn: ArcadeButton.y, color: _kBtnY, controller: _ctrl, size: btnSize),
-          ),
-          // A — right
-          Positioned(
-            right: 0, top: total / 2 - btnSize / 2,
-            child: _ConsoleActionButton(label: 'A', btn: ArcadeButton.a, color: _kBtnA, controller: _ctrl, size: btnSize),
-          ),
-          // B — bottom
-          Positioned(
-            bottom: 0, left: total / 2 - btnSize / 2,
-            child: _ConsoleActionButton(label: 'B', btn: ArcadeButton.b, color: _kBtnB, controller: _ctrl, size: btnSize),
-          ),
+          Positioned(top: 0, left: total / 2 - btnSize / 2,
+              child: _ConsoleActionButton(label: 'X', btn: ArcadeButton.x, color: _kBtnX, controller: _ctrl, size: btnSize)),
+          Positioned(left: 0, top: total / 2 - btnSize / 2,
+              child: _ConsoleActionButton(label: 'Y', btn: ArcadeButton.y, color: _kBtnY, controller: _ctrl, size: btnSize)),
+          Positioned(right: 0, top: total / 2 - btnSize / 2,
+              child: _ConsoleActionButton(label: 'A', btn: ArcadeButton.a, color: _kBtnA, controller: _ctrl, size: btnSize)),
+          Positioned(bottom: 0, left: total / 2 - btnSize / 2,
+              child: _ConsoleActionButton(label: 'B', btn: ArcadeButton.b, color: _kBtnB, controller: _ctrl, size: btnSize)),
         ],
       ),
     );
   }
-
-  // ── Speaker dots (bottom decoration) ─────────────────────────────────────
 
   Widget _buildSpeakerDots() {
     return Row(
@@ -487,12 +471,8 @@ class _ConsoleDPadArm extends StatefulWidget {
   final ArcadeInputController controller;
   final BorderRadius radius;
 
-  const _ConsoleDPadArm({
-    required this.icon,
-    required this.btn,
-    required this.controller,
-    required this.radius,
-  });
+  const _ConsoleDPadArm({required this.icon, required this.btn,
+      required this.controller, required this.radius});
 
   @override
   State<_ConsoleDPadArm> createState() => _ConsoleDPadArmState();
@@ -504,19 +484,18 @@ class _ConsoleDPadArmState extends State<_ConsoleDPadArm> {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTapDown: (_) { setState(() => _pressed = true); widget.controller.press(widget.btn); },
-      onTapUp: (_) { setState(() => _pressed = false); widget.controller.release(widget.btn); },
+      onTapDown: (_) { setState(() => _pressed = true);  widget.controller.press(widget.btn); },
+      onTapUp:   (_) { setState(() => _pressed = false); widget.controller.release(widget.btn); },
       onTapCancel: () { setState(() => _pressed = false); widget.controller.release(widget.btn); },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 40),
-        width: 36,
-        height: 36,
+        width: 40, height: 40,
         decoration: BoxDecoration(
           color: _pressed ? const Color(0xFF2D2D44) : _kDpad,
           borderRadius: widget.radius,
           border: Border.all(color: Colors.white.withOpacity(0.06)),
         ),
-        child: Icon(widget.icon, color: _pressed ? Colors.white : Colors.white60, size: 20),
+        child: Icon(widget.icon, color: _pressed ? Colors.white : Colors.white60, size: 22),
       ),
     );
   }
@@ -531,13 +510,8 @@ class _ConsoleActionButton extends StatefulWidget {
   final ArcadeInputController controller;
   final double size;
 
-  const _ConsoleActionButton({
-    required this.label,
-    required this.btn,
-    required this.color,
-    required this.controller,
-    required this.size,
-  });
+  const _ConsoleActionButton({required this.label, required this.btn,
+      required this.color, required this.controller, required this.size});
 
   @override
   State<_ConsoleActionButton> createState() => _ConsoleActionButtonState();
@@ -549,22 +523,19 @@ class _ConsoleActionButtonState extends State<_ConsoleActionButton> {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTapDown: (_) { setState(() => _pressed = true); widget.controller.press(widget.btn); },
-      onTapUp: (_) { setState(() => _pressed = false); widget.controller.release(widget.btn); },
+      onTapDown: (_) { setState(() => _pressed = true);  widget.controller.press(widget.btn); },
+      onTapUp:   (_) { setState(() => _pressed = false); widget.controller.release(widget.btn); },
       onTapCancel: () { setState(() => _pressed = false); widget.controller.release(widget.btn); },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 40),
-        width: widget.size,
-        height: widget.size,
+        width: widget.size, height: widget.size,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          color: _pressed ? widget.color.withOpacity(0.6) : widget.color,
-          boxShadow: _pressed
-              ? []
-              : [
-                  BoxShadow(color: widget.color.withOpacity(0.5), blurRadius: 8, offset: const Offset(0, 3)),
-                  BoxShadow(color: Colors.black54, blurRadius: 4, offset: const Offset(0, 2)),
-                ],
+          color: _pressed ? widget.color.withOpacity(0.55) : widget.color,
+          boxShadow: _pressed ? [] : [
+            BoxShadow(color: widget.color.withOpacity(0.5), blurRadius: 8, offset: const Offset(0, 3)),
+            BoxShadow(color: Colors.black54, blurRadius: 4, offset: const Offset(0, 2)),
+          ],
         ),
         alignment: Alignment.center,
         child: Text(
@@ -572,7 +543,7 @@ class _ConsoleActionButtonState extends State<_ConsoleActionButton> {
           style: TextStyle(
             color: _pressed ? Colors.white70 : Colors.white,
             fontWeight: FontWeight.bold,
-            fontSize: 14,
+            fontSize: 15,
           ),
         ),
       ),
@@ -587,11 +558,7 @@ class _ConsoleMetaButton extends StatefulWidget {
   final ArcadeButton btn;
   final ArcadeInputController controller;
 
-  const _ConsoleMetaButton({
-    required this.label,
-    required this.btn,
-    required this.controller,
-  });
+  const _ConsoleMetaButton({required this.label, required this.btn, required this.controller});
 
   @override
   State<_ConsoleMetaButton> createState() => _ConsoleMetaButtonState();
@@ -603,19 +570,19 @@ class _ConsoleMetaButtonState extends State<_ConsoleMetaButton> {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTapDown: (_) { setState(() => _pressed = true); widget.controller.press(widget.btn); },
-      onTapUp: (_) { setState(() => _pressed = false); widget.controller.release(widget.btn); },
+      onTapDown: (_) { setState(() => _pressed = true);  widget.controller.press(widget.btn); },
+      onTapUp:   (_) { setState(() => _pressed = false); widget.controller.release(widget.btn); },
       onTapCancel: () { setState(() => _pressed = false); widget.controller.release(widget.btn); },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 40),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
         decoration: BoxDecoration(
           color: _pressed ? const Color(0xFF3A3A55) : _kMeta,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(color: Colors.white.withOpacity(0.1)),
-          boxShadow: _pressed
-              ? []
-              : [BoxShadow(color: Colors.black.withOpacity(0.4), blurRadius: 4, offset: const Offset(0, 2))],
+          boxShadow: _pressed ? [] : [
+            BoxShadow(color: Colors.black.withOpacity(0.4), blurRadius: 4, offset: const Offset(0, 2)),
+          ],
         ),
         child: Text(
           widget.label,
