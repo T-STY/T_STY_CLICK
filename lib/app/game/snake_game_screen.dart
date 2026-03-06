@@ -5,6 +5,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'arcade_input_controller.dart';
+
 // ─── Direction ───────────────────────────────────────────────────────────────
 
 enum _Direction { up, down, left, right }
@@ -15,12 +17,16 @@ class SnakeGameScreen extends StatefulWidget {
   final String userId;
   final DocumentReference rewardsDocRef;
   final double currentSaldo;
+  final ArcadeInputController controller;
+  final VoidCallback onSaldoChanged;
 
   const SnakeGameScreen({
     super.key,
     required this.userId,
     required this.rewardsDocRef,
     required this.currentSaldo,
+    required this.controller,
+    required this.onSaldoChanged,
   });
 
   @override
@@ -54,12 +60,40 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> {
     super.initState();
     _saldo = widget.currentSaldo;
     _initGame();
+    widget.controller.addListener(_onControllerEvent);
   }
 
   @override
   void dispose() {
     _ticker?.cancel();
+    widget.controller.removeListener(_onControllerEvent);
     super.dispose();
+  }
+
+  // ─── Controller input ────────────────────────────────────────────────────
+
+  void _onControllerEvent() {
+    final btn = widget.controller.lastEvent;
+    switch (btn) {
+      case ArcadeButton.up:
+        _tryChangeDir(_Direction.up);
+      case ArcadeButton.down:
+        _tryChangeDir(_Direction.down);
+      case ArcadeButton.left:
+        _tryChangeDir(_Direction.left);
+      case ArcadeButton.right:
+        _tryChangeDir(_Direction.right);
+      case ArcadeButton.a:
+      case ArcadeButton.start:
+        if (!_isRunning && !_isDead) _beginGame(_nextDir);
+      default:
+        break;
+    }
+  }
+
+  void _tryChangeDir(_Direction candidate) {
+    if (!_isOpposite(candidate, _dir)) _nextDir = candidate;
+    if (!_isRunning && !_isDead) _beginGame(candidate);
   }
 
   // ─── Game setup ──────────────────────────────────────────────────────────
@@ -188,24 +222,6 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> {
     _startTicker();
   }
 
-  // ─── Direction input ─────────────────────────────────────────────────────
-
-  void _onHorizontalDrag(DragUpdateDetails d) {
-    if (d.delta.dx.abs() < 5) return;
-    final candidate =
-        d.delta.dx > 0 ? _Direction.right : _Direction.left;
-    if (!_isOpposite(candidate, _dir)) _nextDir = candidate;
-    if (!_isRunning && !_isDead) _beginGame(candidate);
-  }
-
-  void _onVerticalDrag(DragUpdateDetails d) {
-    if (d.delta.dy.abs() < 5) return;
-    final candidate =
-        d.delta.dy > 0 ? _Direction.down : _Direction.up;
-    if (!_isOpposite(candidate, _dir)) _nextDir = candidate;
-    if (!_isRunning && !_isDead) _beginGame(candidate);
-  }
-
   void _beginGame(_Direction firstDir) {
     _nextDir = firstDir;
     _dir = firstDir;
@@ -235,49 +251,34 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: _buildAppBar(),
-      body: SafeArea(
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onHorizontalDragUpdate: _onHorizontalDrag,
-          onVerticalDragUpdate: _onVerticalDrag,
-          child: Stack(
-            children: [
-              _buildGameCanvas(),
-              if (!_isRunning && !_isDead) _buildStartOverlay(),
-              if (_isDead) _buildGameOverOverlay(),
-            ],
-          ),
-        ),
-      ),
+    return Stack(
+      children: [
+        _buildGameCanvas(),
+        _buildScoreBar(),
+        if (!_isRunning && !_isDead) _buildStartOverlay(),
+        if (_isDead) _buildGameOverOverlay(),
+      ],
     );
   }
 
-  AppBar _buildAppBar() {
-    return AppBar(
-      backgroundColor: Colors.white,
-      scrolledUnderElevation: 0,
-      automaticallyImplyLeading: false,
-      title: Text(
-        'Lvl $_level  ·  ⭐ $_score  ·  💰 ${_saldo.toStringAsFixed(0)} pts',
-        style: const TextStyle(
-          color: Colors.black,
-          fontSize: 14,
-          fontWeight: FontWeight.bold,
+  Widget _buildScoreBar() {
+    return Positioned(
+      top: 0,
+      left: 0,
+      right: 0,
+      child: Container(
+        color: Colors.black.withOpacity(0.6),
+        padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+        child: Text(
+          'Lvl $_level  ·  ⭐ $_score  ·  💰 ${_saldo.toStringAsFixed(0)} pts',
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 11,
+            fontWeight: FontWeight.bold,
+          ),
+          textAlign: TextAlign.center,
         ),
       ),
-      centerTitle: true,
-      actions: [
-        IconButton(
-          icon: const Icon(Icons.close, color: Colors.black),
-          onPressed: () {
-            _ticker?.cancel();
-            Navigator.pop(context);
-          },
-        ),
-      ],
     );
   }
 
@@ -323,13 +324,20 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> {
             ),
             const SizedBox(height: 24),
             const Text(
-              'Desliza para empezar',
-              style: TextStyle(color: Colors.black54, fontSize: 15),
+              'Presiona A o START para empezar',
+              style: TextStyle(color: Colors.black54, fontSize: 13),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 4),
+            const Text(
+              'Usa el D-pad para dirigir',
+              style: TextStyle(color: Colors.black38, fontSize: 12),
+              textAlign: TextAlign.center,
             ),
             const SizedBox(height: 8),
             const Text(
               'Come 5 frutas para subir de nivel (+1 pto)',
-              style: TextStyle(color: Colors.black38, fontSize: 13),
+              style: TextStyle(color: Colors.black38, fontSize: 12),
               textAlign: TextAlign.center,
             ),
           ],
@@ -381,16 +389,10 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> {
                     fontWeight: FontWeight.bold, fontSize: 14),
               ),
             ),
-            const SizedBox(height: 12),
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text(
-                'Salir',
-                style: TextStyle(
-                    color: Colors.black54,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600),
-              ),
+            const SizedBox(height: 8),
+            const Text(
+              'Presiona B para volver al selector',
+              style: TextStyle(color: Colors.black38, fontSize: 11),
             ),
           ],
         ),

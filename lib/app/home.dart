@@ -18,8 +18,7 @@ import '../components/shimmer_placeholder.dart';
 import '../constants/app_images.dart';
 import 'cart/cart_provider.dart';
 import 'category/filter_dialog.dart';
-import 'game/slot_machine_screen.dart';
-import 'game/snake_game_screen.dart';
+import 'game/arcade_center_screen.dart';
 import 'constants/gridview.dart';
 
 void testNetworkAccess() async {
@@ -189,19 +188,17 @@ class _HomeState extends State<Home> {
     if (user == null) return;
     final uid = user.uid;
 
-    // Check rewards card existence
     final cardDoc = await FirebaseFirestore.instance
         .collection('users')
         .doc(uid)
         .collection('rewardsCard')
         .doc('cardInfo')
         .get();
-    if (!cardDoc.exists) return; // No card — silent
+    if (!cardDoc.exists) return;
 
     final cardNumber = cardDoc.data()?['cardNumber'] as String?;
     if (cardNumber == null) return;
 
-    // Fetch saldo from rewards collection
     final rewardsSnap = await FirebaseFirestore.instance
         .collection('rewards')
         .where('cardNumber', isEqualTo: cardNumber)
@@ -217,151 +214,20 @@ class _HomeState extends State<Home> {
             ? raw.toDouble()
             : (raw as double? ?? 0.0);
 
-    if (!mounted) return;
-
-    // Insufficient balance
-    if (saldo < 10) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content:
-              Text('Puntos insuficientes para jugar (necesitas 10 puntos)'),
-          duration: Duration(seconds: 3),
-        ),
-      );
-      return;
-    }
-
-    // Step 1 — Game picker (blurred, white)
-    final gameChoice = await showDialog<String>(
-      context: context,
-      barrierColor: Colors.black26,
-      builder: (ctx) => BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
-        child: Dialog(
-          backgroundColor: Colors.white,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(24, 28, 24, 16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text(
-                  'Elige tu juego',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black,
-                  ),
-                ),
-                const SizedBox(height: 20),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _GameCard(
-                        emoji: '🎰',
-                        title: 'Tragamonedas',
-                        subtitle: 'Azar',
-                        onTap: () => Navigator.pop(ctx, 'slot'),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _GameCard(
-                        emoji: '🐍',
-                        title: 'Snake',
-                        subtitle: 'Habilidad',
-                        onTap: () => Navigator.pop(ctx, 'snake'),
-                      ),
-                    ),
-                  ],
-                ),
-                TextButton(
-                  onPressed: () => Navigator.pop(ctx, null),
-                  child: const Text(
-                    'Cancelar',
-                    style: TextStyle(color: Colors.black54),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-    if (gameChoice == null || !mounted) return;
-
-    // Step 2 — Confirmation dialog (blurred, white, black text)
-    final gameTitle = gameChoice == 'slot' ? '🎰  Tragamonedas' : '🐍  Snake';
-    final confirmed = await showDialog<bool>(
-      context: context,
-      barrierColor: Colors.black26,
-      builder: (ctx) => BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
-        child: AlertDialog(
-          backgroundColor: Colors.white,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: Text(
-            gameTitle,
-            style: const TextStyle(
-                color: Colors.black, fontWeight: FontWeight.bold),
-          ),
-          content: Text(
-            'Jugar cuesta 10 puntos.\n'
-            'Saldo actual: ${saldo.toStringAsFixed(0)} pts\n\n'
-            '¿Deseas continuar?',
-            style: const TextStyle(color: Colors.black87),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(false),
-              child: const Text('Cancelar',
-                  style: TextStyle(color: Colors.black54)),
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.black,
-                foregroundColor: Colors.white,
-                shape: const StadiumBorder(),
-                elevation: 0,
-              ),
-              onPressed: () => Navigator.of(ctx).pop(true),
-              child: const Text('Jugar'),
-            ),
-          ],
-        ),
-      ),
-    );
-    if (confirmed != true || !mounted) return;
-
-    // Deduct 10 pts atomically
-    final newSaldo = saldo - 10.0;
-    final userCardRef = FirebaseFirestore.instance
-        .collection('users')
-        .doc(uid)
-        .collection('rewardsCard')
-        .doc('cardInfo');
-    final batch = FirebaseFirestore.instance.batch();
-    batch.update(userCardRef, {'saldo': newSaldo});
-    batch.update(rewardsDoc.reference, {'saldo': newSaldo});
-    await batch.commit();
+    if (saldo < 10) return;
 
     if (!mounted) return;
 
-    final Widget screen = gameChoice == 'slot'
-        ? SlotMachineScreen(
-            userId: uid,
-            rewardsDocRef: rewardsDoc.reference,
-            currentSaldo: newSaldo,
-          )
-        : SnakeGameScreen(
-            userId: uid,
-            rewardsDocRef: rewardsDoc.reference,
-            currentSaldo: newSaldo,
-          );
-
-    Navigator.push(context, customPageRoute(screen));
+    Navigator.push(
+      context,
+      customPageRoute(
+        ArcadeCenterScreen(
+          userId: uid,
+          rewardsDocRef: rewardsDoc.reference,
+          currentSaldo: saldo,
+        ),
+      ),
+    );
   }
 
   @override
@@ -1373,57 +1239,5 @@ class _AddToCartButtonState extends State<_AddToCartButton> {
   String _formatPrice(dynamic price) {
     if (price == null) return 'N/A';
     return '\$${(price as num).toStringAsFixed(2)}';
-  }
-}
-
-// ─── Game picker card ─────────────────────────────────────────────────────────
-
-class _GameCard extends StatelessWidget {
-  final String emoji;
-  final String title;
-  final String subtitle;
-  final VoidCallback onTap;
-
-  const _GameCard({
-    required this.emoji,
-    required this.title,
-    required this.subtitle,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 12),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: Colors.black, width: 1.5),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(emoji, style: const TextStyle(fontSize: 36)),
-            const SizedBox(height: 8),
-            Text(
-              title,
-              style: const TextStyle(
-                color: Colors.black,
-                fontWeight: FontWeight.bold,
-                fontSize: 14,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 2),
-            Text(
-              subtitle,
-              style: const TextStyle(color: Colors.black45, fontSize: 12),
-            ),
-          ],
-        ),
-      ),
-    );
   }
 }

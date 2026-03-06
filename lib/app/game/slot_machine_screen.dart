@@ -5,6 +5,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'arcade_input_controller.dart';
+
 // ─── Symbols ────────────────────────────────────────────────────────────────
 
 enum _Sym { cherry, lemon, orange, grape, watermelon, star, bar, seven }
@@ -77,12 +79,16 @@ class SlotMachineScreen extends StatefulWidget {
   final String userId;
   final DocumentReference rewardsDocRef;
   final double currentSaldo;
+  final ArcadeInputController controller;
+  final VoidCallback onSaldoChanged;
 
   const SlotMachineScreen({
     super.key,
     required this.userId,
     required this.rewardsDocRef,
     required this.currentSaldo,
+    required this.controller,
+    required this.onSaldoChanged,
   });
 
   @override
@@ -118,6 +124,7 @@ class _SlotMachineScreenState extends State<SlotMachineScreen> {
   void initState() {
     super.initState();
     _saldo = widget.currentSaldo;
+    widget.controller.addListener(_onControllerEvent);
   }
 
   @override
@@ -127,7 +134,17 @@ class _SlotMachineScreenState extends State<SlotMachineScreen> {
     _stop2Timer?.cancel();
     _stop3Timer?.cancel();
     _winFlashTimer?.cancel();
+    widget.controller.removeListener(_onControllerEvent);
     super.dispose();
+  }
+
+  // ─── Controller input ────────────────────────────────────────────────────
+
+  void _onControllerEvent() {
+    final btn = widget.controller.lastEvent;
+    if (btn == ArcadeButton.a) {
+      _spin();
+    }
   }
 
   // ─── Outcome engine ──────────────────────────────────────────────────────
@@ -282,60 +299,31 @@ class _SlotMachineScreenState extends State<SlotMachineScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: _buildAppBar(),
-      body: Stack(
-        children: [
-          _buildBody(),
-          if (_showWinFlash) _buildWinOverlay(),
-        ],
-      ),
-    );
-  }
-
-  AppBar _buildAppBar() {
-    return AppBar(
-      backgroundColor: Colors.white,
-      scrolledUnderElevation: 0,
-      automaticallyImplyLeading: false,
-      title: const Text(
-        '🎰  Tragamonedas',
-        style: TextStyle(
-          color: Colors.black,
-          fontSize: 18,
-          fontWeight: FontWeight.bold,
-        ),
-      ),
-      centerTitle: true,
-      actions: [
-        IconButton(
-          icon: const Icon(Icons.close, color: Colors.black),
-          onPressed: () => Navigator.pop(context),
-        ),
+    return Stack(
+      children: [
+        _buildBody(),
+        if (_showWinFlash) _buildWinOverlay(),
       ],
     );
   }
 
   Widget _buildBody() {
-    return SafeArea(
-      child: SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 16),
-          child: Column(
-            children: [
-              _buildSaldoDisplay(),
-              const SizedBox(height: 24),
-              _buildReelFrame(),
-              const SizedBox(height: 24),
-              _buildSpinButton(),
-              const SizedBox(height: 12),
-              _buildResultText(),
-              const SizedBox(height: 20),
-              _buildWinTable(),
-              const SizedBox(height: 16),
-            ],
-          ),
+    return SingleChildScrollView(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        child: Column(
+          children: [
+            _buildSaldoDisplay(),
+            const SizedBox(height: 24),
+            _buildReelFrame(),
+            const SizedBox(height: 24),
+            _buildSpinButton(),
+            const SizedBox(height: 12),
+            _buildResultText(),
+            const SizedBox(height: 20),
+            _buildWinTable(),
+            const SizedBox(height: 16),
+          ],
         ),
       ),
     );
@@ -510,7 +498,7 @@ class _SlotMachineScreenState extends State<SlotMachineScreen> {
   Widget _buildResultText() {
     if (_lastWinAmount == null) {
       return const Text(
-        'Toca Girar para jugar',
+        'Toca Girar o pulsa A para jugar',
         style: TextStyle(color: Colors.black38, fontSize: 13),
       );
     }
