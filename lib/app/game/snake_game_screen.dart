@@ -73,7 +73,9 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> {
   // ─── Controller input ────────────────────────────────────────────────────
 
   void _onControllerEvent() {
-    final btn = widget.controller.lastEvent;
+    final event = widget.controller.lastEvent;
+    if (event == null || !event.isDown) return;
+    final btn = event.button;
     switch (btn) {
       case ArcadeButton.up:
         _tryChangeDir(_Direction.up);
@@ -139,13 +141,11 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> {
     final head = _snake.first;
     final next = _step(head, _dir);
 
-    // Wall collision
     if (next.x < 0 || next.x >= kGridW || next.y < 0 || next.y >= kGridH) {
       _triggerDeath();
       return;
     }
 
-    // Self collision — exclude tail (it will move away)
     if (_snake.sublist(0, _snake.length - 1).contains(next)) {
       _triggerDeath();
       return;
@@ -229,8 +229,6 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> {
     _startTicker();
   }
 
-  // ─── Firestore ───────────────────────────────────────────────────────────
-
   Future<void> _updateFirestore(double newSaldo) async {
     try {
       final userCardRef = FirebaseFirestore.instance
@@ -305,15 +303,12 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> {
     return Positioned.fill(
       child: Container(
         color: Colors.white.withOpacity(0.88),
-        child: Column(
+        child: const Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Text(
-              '🐍',
-              style: TextStyle(fontSize: 64),
-            ),
-            const SizedBox(height: 16),
-            const Text(
+            Text('🐍', style: TextStyle(fontSize: 64)),
+            SizedBox(height: 16),
+            Text(
               'SNAKE',
               style: TextStyle(
                 color: Colors.black,
@@ -322,20 +317,20 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> {
                 letterSpacing: 6,
               ),
             ),
-            const SizedBox(height: 24),
-            const Text(
+            SizedBox(height: 24),
+            Text(
               'Presiona A o START para empezar',
               style: TextStyle(color: Colors.black54, fontSize: 13),
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 4),
-            const Text(
+            SizedBox(height: 4),
+            Text(
               'Usa el D-pad para dirigir',
               style: TextStyle(color: Colors.black38, fontSize: 12),
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 8),
-            const Text(
+            SizedBox(height: 8),
+            Text(
               'Come 5 frutas para subir de nivel (+1 pto)',
               style: TextStyle(color: Colors.black38, fontSize: 12),
               textAlign: TextAlign.center,
@@ -358,10 +353,9 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> {
             const Text(
               'Game Over',
               style: TextStyle(
-                color: Colors.black,
-                fontSize: 36,
-                fontWeight: FontWeight.bold,
-              ),
+                  color: Colors.black,
+                  fontSize: 36,
+                  fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 12),
             Text(
@@ -376,17 +370,13 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> {
                 foregroundColor: Colors.white,
                 disabledBackgroundColor: Colors.grey.shade300,
                 disabledForegroundColor: Colors.grey.shade500,
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 32, vertical: 14),
+                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 14),
                 shape: const StadiumBorder(),
                 elevation: 0,
               ),
               child: Text(
-                canRestart
-                    ? 'Reintentar  (−10 pts)'
-                    : 'Sin puntos suficientes',
-                style: const TextStyle(
-                    fontWeight: FontWeight.bold, fontSize: 14),
+                canRestart ? 'Reintentar  (−10 pts)' : 'Sin puntos suficientes',
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
               ),
             ),
             const SizedBox(height: 8),
@@ -421,13 +411,11 @@ class _SnakePainter extends CustomPainter {
     final cellW = size.width / gridW;
     final cellH = size.height / gridH;
 
-    // White background
     canvas.drawRect(
       Rect.fromLTWH(0, 0, size.width, size.height),
       Paint()..color = Colors.white,
     );
 
-    // Subtle grid dots
     final dotPaint = Paint()..color = const Color(0xFFE8E8E8);
     for (int x = 0; x < gridW; x++) {
       for (int y = 0; y < gridH; y++) {
@@ -439,7 +427,6 @@ class _SnakePainter extends CustomPainter {
       }
     }
 
-    // Food — red circle with soft shadow
     final foodCenter = Offset(
       food.x * cellW + cellW / 2,
       food.y * cellH + cellH / 2,
@@ -457,7 +444,6 @@ class _SnakePainter extends CustomPainter {
       Paint()..color = Colors.red.shade600,
     );
 
-    // Snake body
     final bodyPaint = Paint()..color = const Color(0xFF1A1A1A);
     final headPaint = Paint()..color = Colors.black;
     final r = (cellW * 0.15).clamp(1.0, 4.0);
