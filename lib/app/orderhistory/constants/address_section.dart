@@ -1,16 +1,15 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 class AddressDisplayTile extends StatelessWidget {
-  final String addressId; // Added addressId
+  final String addressId;
   final Map<String, dynamic> addressData;
 
   const AddressDisplayTile({
-    Key? key,
-    required this.addressId, // Require addressId
+    super.key,
+    required this.addressId,
     required this.addressData,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -63,7 +62,7 @@ class AddressDisplayTile extends StatelessWidget {
                     ),
                     markers: {
                       Marker(
-                        markerId: MarkerId(addressId), // Use addressId here
+                        markerId: MarkerId(addressId),
                         position: LatLng(
                           addressData['latitude'],
                           addressData['longitude'],
@@ -76,7 +75,7 @@ class AddressDisplayTile extends StatelessWidget {
                     rotateGesturesEnabled: false,
                     tiltGesturesEnabled: false,
                     zoomGesturesEnabled: false,
-                    liteModeEnabled: true, // Use lite mode for better performance
+                    liteModeEnabled: true,
                   ),
                 ),
               )

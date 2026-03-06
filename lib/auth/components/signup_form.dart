@@ -11,7 +11,7 @@ class SignUpForm extends StatefulWidget {
   const SignUpForm({super.key});
 
   @override
-  _SignUpFormState createState() => _SignUpFormState();
+  State<SignUpForm> createState() => _SignUpFormState();
 }
 
 class _SignUpFormState extends State<SignUpForm> {
@@ -19,7 +19,6 @@ class _SignUpFormState extends State<SignUpForm> {
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
-  final TextEditingController _phoneNumberController = TextEditingController();
   bool _acceptTerms = false;
 
   Future<void> _signUpUser() async {
@@ -31,10 +30,8 @@ class _SignUpFormState extends State<SignUpForm> {
 
       await userCredential.user!.updateDisplayName(_nameController.text);
 
-      // Reference to the main user document
       final userDocRef = FirebaseFirestore.instance.collection('users').doc(userCredential.user!.uid);
 
-      // Store user-specific information in Firestore
       await userDocRef.set({
         'userInfo': {
           'name': _nameController.text,
@@ -42,41 +39,29 @@ class _SignUpFormState extends State<SignUpForm> {
         }
       });
 
-      // Create a placeholder document in each sub-collection to set up the structure
-
-      // Addresses sub-collection
-      await userDocRef.collection('addresses').doc('placeholder').set({
-        'address': 'Placeholder'
-      });
-
-
-      // Order History sub-collection
-      await userDocRef.collection('orderHistory').doc('placeholder').set({
-        'status': 'Placeholder'
-      });
-
-      // UserInfo sub-collection
       await userDocRef.collection('userInfo').doc('userInfo').set({
-        'phoneNumber': _phoneNumberController.text,
+        'phoneNumber': '0000000000',
       });
 
-      // Send email verification
       await userCredential.user!.sendEmailVerification();
+
+      if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('El correo de verificación ha sido enviado. Por favor verifique su correo electrónico.')),
       );
 
-      // Show success snackbar
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('¡Éxito! Usuario registrado.')),
       );
 
-    } catch (error) {}
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $error')),
+      );
+    }
   }
-
-
-
 
   @override
   Widget build(BuildContext context) {
@@ -103,52 +88,6 @@ class _SignUpFormState extends State<SignUpForm> {
                 ),
                 labelText: 'Nombre',
                 hintText: 'John Doe',
-                contentPadding: const EdgeInsets.symmetric(vertical: 15.0, horizontal: 10.0),  // To maintain height
-                border: OutlineInputBorder(
-                  borderSide: BorderSide.none,
-                  borderRadius: BorderRadius.circular(12.0),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderSide: BorderSide.none,
-                  borderRadius: BorderRadius.circular(12.0),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderSide: BorderSide(
-                    color: Theme.of(context).primaryColor,
-                  ),
-                  borderRadius: BorderRadius.circular(12.0),
-                ),
-                floatingLabelBehavior: FloatingLabelBehavior.never,
-                labelStyle: DefaultTextStyle.of(context).style.merge(
-                  TextStyle(
-                    fontSize: 15.0,  // Your desired size
-                    fontWeight: FontWeight.w400,
-                    color: Theme.of(context).brightness == Brightness.dark ? AppColors.defaultWhite : AppColors.defaultBlack,
-                    letterSpacing: 0.8,
-                    fontFamily: 'Gordita',
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: AppDefaults.margin),
-            TextField(
-              controller: _phoneNumberController, // Phone number field
-              decoration: InputDecoration(
-                fillColor: Theme.of(context).brightness == Brightness.dark
-                    ? Colors.grey[800]
-                    : Colors.grey[100],
-                filled: true,
-                prefixIcon: ColorFiltered(
-                  colorFilter: ColorFilter.mode(
-                    Theme.of(context).iconTheme.color ?? Colors.grey,
-                    BlendMode.srcIn,
-                  ),
-                  child: const IconWithBackground(
-                    iconData: IconlyBold.call,
-                  ),
-                ),
-                labelText: 'Teléfono',
-                hintText: '+521234567890',
                 contentPadding: const EdgeInsets.symmetric(vertical: 15.0, horizontal: 10.0),
                 border: OutlineInputBorder(
                   borderSide: BorderSide.none,
@@ -195,7 +134,7 @@ class _SignUpFormState extends State<SignUpForm> {
                 ),
                 labelText: 'Correo',
                 hintText: 'tu@email.com',
-                contentPadding: const EdgeInsets.symmetric(vertical: 15.0, horizontal: 10.0),  // To maintain height
+                contentPadding: const EdgeInsets.symmetric(vertical: 15.0, horizontal: 10.0),
                 border: OutlineInputBorder(
                   borderSide: BorderSide.none,
                   borderRadius: BorderRadius.circular(12.0),
@@ -213,7 +152,7 @@ class _SignUpFormState extends State<SignUpForm> {
                 floatingLabelBehavior: FloatingLabelBehavior.never,
                 labelStyle: DefaultTextStyle.of(context).style.merge(
                   TextStyle(
-                    fontSize: 15.0,  // Your desired size
+                    fontSize: 15.0,
                     fontWeight: FontWeight.w400,
                     color: Theme.of(context).brightness == Brightness.dark ? AppColors.defaultWhite : AppColors.defaultBlack,
                     letterSpacing: 0.8,
@@ -225,7 +164,7 @@ class _SignUpFormState extends State<SignUpForm> {
             const SizedBox(height: AppDefaults.margin),
             TextField(
               controller: _passwordController,
-              obscureText: true,  // This line makes the password obscured
+              obscureText: true,
               decoration: InputDecoration(
                 fillColor: Theme.of(context).brightness == Brightness.dark
                     ? Colors.grey[800]
@@ -242,7 +181,7 @@ class _SignUpFormState extends State<SignUpForm> {
                 ),
                 labelText: 'Contraseña',
                 hintText: '*********',
-                contentPadding: const EdgeInsets.symmetric(vertical: 15.0, horizontal: 10.0),  // To maintain height
+                contentPadding: const EdgeInsets.symmetric(vertical: 15.0, horizontal: 10.0),
                 border: OutlineInputBorder(
                   borderSide: BorderSide.none,
                   borderRadius: BorderRadius.circular(12.0),
@@ -260,7 +199,7 @@ class _SignUpFormState extends State<SignUpForm> {
                 floatingLabelBehavior: FloatingLabelBehavior.never,
                 labelStyle: DefaultTextStyle.of(context).style.merge(
                   TextStyle(
-                    fontSize: 15.0,  // Your desired size
+                    fontSize: 15.0,
                     fontWeight: FontWeight.w400,
                     color: Theme.of(context).brightness == Brightness.dark ? AppColors.defaultWhite : AppColors.defaultBlack,
                     letterSpacing: 0.8,
@@ -273,7 +212,6 @@ class _SignUpFormState extends State<SignUpForm> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                // The TextButton
                 TextButton(
                   onPressed: () {
                     showDialog(
@@ -284,17 +222,14 @@ class _SignUpFormState extends State<SignUpForm> {
                   child: Text(
                       'Acepto contrato de uso',
                       style: TextStyle(
-                        fontSize: 15.0,  // Example size you want
+                        fontSize: 15.0,
                         fontWeight: FontWeight.w800,
                         color: Theme.of(context).brightness == Brightness.dark ? AppColors.defaultWhite : AppColors.defaultBlack,
-                        letterSpacing: 1.0,  // If you have a specific letter spacing in mind
-                        fontFamily: 'Gordita',  // Specify the font family explicitly
-                        // ... any other properties you want to set
+                        letterSpacing: 1.0,
+                        fontFamily: 'Gordita',
                       )
                   ),
                 ),
-
-                // The Switch
                 Switch(
                   value: _acceptTerms,
                   onChanged: (bool value) {
@@ -302,7 +237,7 @@ class _SignUpFormState extends State<SignUpForm> {
                       _acceptTerms = value;
                     });
                   },
-                  activeColor: Colors.black,
+                  activeTrackColor: Colors.black,
                 ),
               ],
             ),
@@ -312,7 +247,6 @@ class _SignUpFormState extends State<SignUpForm> {
               child: ElevatedButton(
                 onPressed: () {
                   if (_acceptTerms) {
-                    // Create the account normally
                     _signUpUser();
                   } else {
                     showDialog(
@@ -323,7 +257,7 @@ class _SignUpFormState extends State<SignUpForm> {
                           children: [
                             BackdropFilter(
                               filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
-                              child: Container(color: Colors.black.withOpacity(0.3)),
+                              child: Container(color: Colors.black.withValues(alpha: 0.3)),
                             ),
                             Dialog(
                               shape: RoundedRectangleBorder(
@@ -349,12 +283,11 @@ class _SignUpFormState extends State<SignUpForm> {
                                       TextButton(
                                         child: Text('OK',
                                             style: TextStyle(
-                                              fontSize: 15.0,  // Example size you want
+                                              fontSize: 15.0,
                                               fontWeight: FontWeight.w800,
                                               color: Theme.of(context).brightness == Brightness.dark ? AppColors.defaultWhite : AppColors.defaultBlack,
-                                              letterSpacing: 1.0,  // If you have a specific letter spacing in mind
-                                              fontFamily: 'Gordita',  // Specify the font family explicitly
-                                              // ... any other properties you want to set
+                                              letterSpacing: 1.0,
+                                              fontFamily: 'Gordita',
                                             )
                                         ),
                                         onPressed: () {
@@ -375,28 +308,34 @@ class _SignUpFormState extends State<SignUpForm> {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.black,
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(25.0), // Your desired border radius
+                    borderRadius: BorderRadius.circular(25.0),
                   ),
-                  padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 16.0), // Define padding explicitly
-                  elevation: 2,// Define elevation explicitly if you have a preference
+                  padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 16.0),
+                  elevation: 2,
                 ),
                 child: const Text(
                   'Crear Cuenta',
                   style: TextStyle(
-                    fontSize: 15.0,  // Example size you want
+                    fontSize: 15.0,
                     fontWeight: FontWeight.normal,
                     color: AppColors.defaultWhite,
-                    letterSpacing: 1.0,  // If you have a specific letter spacing in mind
-                    fontFamily: 'Gordita',  // Specify the font family explicitly
-                    // ... any other properties you want to set
+                    letterSpacing: 1.0,
+                    fontFamily: 'Gordita',
                   ),
                 ),
-
               ),
             ),
           ],
         ),
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
   }
 }

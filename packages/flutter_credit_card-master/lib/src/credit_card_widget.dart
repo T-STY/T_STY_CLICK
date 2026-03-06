@@ -513,7 +513,7 @@ class _CreditCardWidgetState extends State<CreditCardWidget>
                       width: 50,  // Adjust width as needed
                     ),
                   if (widget.isChipVisible)
-                    Spacer(), // Spacing between chip and card number
+                    const Spacer(), // Spacing between chip and card number
                   Text(
                       widget.cardNumber.isEmpty ? AppConstants.sixteenX : number,
                       style: widget.textStyle ?? defaultTextStyle,

@@ -1,12 +1,10 @@
 import 'package:flutter/material.dart';
-
 import 'constants/constants.dart';
 
 class AppTheme {
   final BuildContext context;
   AppTheme(this.context);
 
-  /// Default Font Family Name
   final String _defaultFont = 'Grodita';
 
   ThemeData get lightTheme {
@@ -15,8 +13,7 @@ class AppTheme {
       scaffoldBackgroundColor: Colors.white,
       colorScheme: const ColorScheme.light(
         primary:  Colors.black,
-        secondary: Colors.white, // Or any other color you prefer
-        // ... you can add other properties as needed ...
+        secondary: Colors.white,
       ),
       brightness: Brightness.light,
       fontFamily: _defaultFont,
@@ -42,8 +39,6 @@ class AppTheme {
           borderRadius: AppDefaults.borderRadius,
           borderSide: BorderSide.none,
         ),
-        // enabledBorder: defaultOutlineInputBorder,
-        // focusedBorder: defaultOutlineInputBorder,
         floatingLabelBehavior: FloatingLabelBehavior.never,
       ),
       appBarTheme: AppBarTheme(
@@ -76,7 +71,7 @@ class AppTheme {
 
   ThemeData get darkTheme {
     return ThemeData(
-      primaryColor: AppColors.primaryDark, // assuming you have a dark variant
+      primaryColor: AppColors.primaryDark,
       scaffoldBackgroundColor: AppColors.scaffoldBackgroundDark,
       colorScheme: const ColorScheme.dark(secondary: AppColors.primaryDark),
       brightness: Brightness.dark,
@@ -98,7 +93,7 @@ class AppTheme {
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: AppColors.inputFieldDark, // assuming a dark background color
+        fillColor: AppColors.inputFieldDark,
         border: OutlineInputBorder(
           borderRadius: AppDefaults.borderRadius,
           borderSide: BorderSide.none,
@@ -106,7 +101,7 @@ class AppTheme {
         floatingLabelBehavior: FloatingLabelBehavior.never,
       ),
       appBarTheme: AppBarTheme(
-        backgroundColor: AppColors.appBarDark, // assuming a darker app bar color
+        backgroundColor: AppColors.appBarDark,
         elevation: 0,
         centerTitle: true,
         titleTextStyle: Theme.of(context)
@@ -124,7 +119,7 @@ class AppTheme {
         activeTrackColor: AppColors.primaryDark,
       ),
       cardTheme: const CardThemeData(
-        color: AppColors.cardDark, // assuming a darker card color
+        color: AppColors.cardDark,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.all(
             Radius.circular(16.0),
@@ -133,6 +128,4 @@ class AppTheme {
       ),
     );
   }
-
-
 }

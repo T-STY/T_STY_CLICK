@@ -13,7 +13,6 @@ class ShimmerPlaceholder extends StatelessWidget {
     this.shapeBorder = const RoundedRectangleBorder(),
   });
 
-  // Constructor specifically for rectangular images
   const ShimmerPlaceholder.rectangular({
     super.key,
     this.width,
@@ -32,7 +31,7 @@ class ShimmerPlaceholder extends StatelessWidget {
         width: width,
         height: height,
         decoration: ShapeDecoration(
-          color: Colors.grey, // The color doesn't matter, it's overridden by the shimmer
+          color: Colors.grey,
           shape: shapeBorder,
         ),
       ),

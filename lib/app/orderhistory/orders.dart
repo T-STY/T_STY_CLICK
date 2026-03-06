@@ -80,7 +80,7 @@ class UserOrder {
       status: parseString(data['state']),
       addressId: parseString(data['addressId']),
       appliedCoupon: parseCoupon(data['appliedCoupon']),
-      items: (data['items'] as List<dynamic>?)?.map((item) => OrderItem.fromMap(item)).toList() ?? [], // Safer handling of null or missing items list
+      items: (data['items'] as List<dynamic>?)?.map((item) => OrderItem.fromMap(item)).toList() ?? [],
       useRewardsBalance: parseBool(data['useRewardsBalance']),
       userId: parseString(data['userId']),
     );
@@ -90,7 +90,7 @@ class UserOrder {
 class OrderItem {
   final String objectId;
   final String name;
-  final int quantity;
+  final double quantity;
   final double price;
   final String imageUrl;
   final bool isBulk;
@@ -105,16 +105,6 @@ class OrderItem {
   });
 
   factory OrderItem.fromMap(Map<String, dynamic> data) {
-    int parseInt(dynamic value) {
-      if (value is int) {
-        return value;
-      } else if (value is double) {
-        return value.toInt();
-      } else {
-        return 0;
-      }
-    }
-
     double parseDouble(dynamic value) {
       if (value is int) {
         return value.toDouble();
@@ -144,7 +134,7 @@ class OrderItem {
     return OrderItem(
       objectId: parseString(data['objectId']),
       name: parseString(data['nombre']),
-      quantity: parseInt(data['quantity']),
+      quantity: parseDouble(data['quantity']),
       price: parseDouble(data['price']),
       imageUrl: parseString(data['imageUrl']),
       isBulk: parseBool(data['isBulk']),

@@ -32,10 +32,10 @@
               "client_type": 3
             },
             {
-              "client_id": "163376358846-li53j1rqig6narqnjnpsq2866fm3n5tb.apps.googleusercontent.com",
+              "client_id": "163376358846-1d757nvlvvf3k4aj15r7k7t8d6ea12tb.apps.googleusercontent.com",
               "client_type": 2,
               "ios_info": {
-                "bundle_id": "com.tsty.mx.arthemis"
+                "bundle_id": "com.tsty.mx.click"
               }
             }
           ]
@@ -68,10 +68,118 @@
               "client_type": 3
             },
             {
-              "client_id": "163376358846-li53j1rqig6narqnjnpsq2866fm3n5tb.apps.googleusercontent.com",
+              "client_id": "163376358846-1d757nvlvvf3k4aj15r7k7t8d6ea12tb.apps.googleusercontent.com",
               "client_type": 2,
               "ios_info": {
-                "bundle_id": "com.tsty.mx.arthemis"
+                "bundle_id": "com.tsty.mx.click"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:163376358846:android:cddfa617f017da9a8405ef",
+        "android_client_info": {
+          "package_name": "com.t_sty.mx.kiosk_gen2"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "163376358846-jrh5r99ujlmm87rd011f5v368fc6tfis.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDCo76QVr-P_hs8vUNwTIfh0L9-kaAG5a4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "163376358846-jrh5r99ujlmm87rd011f5v368fc6tfis.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "163376358846-1d757nvlvvf3k4aj15r7k7t8d6ea12tb.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.tsty.mx.click"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:163376358846:android:3fedd706f8e4f4738405ef",
+        "android_client_info": {
+          "package_name": "com.t_sty.mx.pdv2"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "163376358846-jrh5r99ujlmm87rd011f5v368fc6tfis.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDCo76QVr-P_hs8vUNwTIfh0L9-kaAG5a4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "163376358846-jrh5r99ujlmm87rd011f5v368fc6tfis.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "163376358846-1d757nvlvvf3k4aj15r7k7t8d6ea12tb.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.tsty.mx.click"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:163376358846:android:3f9e46cb142d26478405ef",
+        "android_client_info": {
+          "package_name": "com.t_sty.mx.t_sty_delivery"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "163376358846-jrh5r99ujlmm87rd011f5v368fc6tfis.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDCo76QVr-P_hs8vUNwTIfh0L9-kaAG5a4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "163376358846-jrh5r99ujlmm87rd011f5v368fc6tfis.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "163376358846-1d757nvlvvf3k4aj15r7k7t8d6ea12tb.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.tsty.mx.click"
               }
             }
           ]

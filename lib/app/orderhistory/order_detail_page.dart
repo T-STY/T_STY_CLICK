@@ -1,6 +1,5 @@
-import 'dart:math'; // For random selection
+import 'dart:math';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -25,24 +24,23 @@ class OrderDetailPage extends StatefulWidget {
   });
 
   @override
-  _OrderDetailPageState createState() => _OrderDetailPageState();
+  State<OrderDetailPage> createState() => _OrderDetailPageState();
 }
 
 class _OrderDetailPageState extends State<OrderDetailPage> {
-  Map<String, dynamic>? _addressData; // Store fetched address data
-  bool _isFetchingAddress = true; // Loading state for address fetch
-  String? _fetchError; // Store any fetch error
+  Map<String, dynamic>? _addressData;
+  bool _isFetchingAddress = true;
+  String? _fetchError;
 
-  Verse? _selectedVerse; // Variable to hold the selected verse
+  Verse? _selectedVerse;
 
   @override
   void initState() {
     super.initState();
-    _fetchAddress(); // Fetch the address on page load
-    _selectRandomVerse(); // Select a random verse
+    _fetchAddress();
+    _selectRandomVerse();
   }
 
-  /// Selects a random verse from the list
   void _selectRandomVerse() {
     final random = Random();
     setState(() {
@@ -54,23 +52,26 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
   final List<Verse> motivationalVerses = [
     Verse(
       reference: 'Romanos 1:16',
-      text: '“Porque no me avergüenzo del evangelio, porque es poder de Dios para salvación a todo aquel que cree; al judío primeramente, y también al griego.”',
+      text:
+      '“Porque no me avergüenzo del evangelio, porque es poder de Dios para salvación a todo aquel que cree; al judío primeramente, y también al griego.”',
     ),
     Verse(
       reference: '1 Tesalonicenses 5:9-10',
-      text: '“Porque no nos ha puesto Dios para ira, sino para alcanzar salvación por medio de nuestro Señor Jesucristo, quien murió por nosotros para que ya sea que velemos, o que durmamos, vivamos juntamente con él.”',
+      text:
+      '“Porque no nos ha puesto Dios para ira, sino para alcanzar salvación por medio de nuestro Señor Jesucristo, quien murió por nosotros para que ya sea que velemos, o que durmamos, vivamos juntamente con él.”',
     ),
     Verse(
       reference: 'Efesios 5:6-10',
-      text: '“No seáis partícipes con ellos; porque bien sabéis que la impiedad, ni aun seña de ello tiene quien la domine. [...] No participéis en las obras infructuosas de las tinieblas, sino más bien reprendedlas.”',
+      text:
+      '“No seáis partícipes con ellos; porque bien sabéis que la impiedad, ni aun seña de ello tiene quien la domine. [...] No participéis en las obras infructuosas de las tinieblas, sino más bien reprendedlas.”',
     ),
     Verse(
       reference: 'Romanos 6:12–14',
-      text: '“No reine, pues, el pecado en vuestro cuerpo mortal, de manera que lo obedezcáis en sus deseos; ni tampoco presentéis vuestros miembros al pecado como instrumentos de iniquidad, sino presentaos vosotros mismos a Dios como vivos de entre los muertos, y vuestros miembros a Dios como instrumentos de justicia.”',
+      text:
+      '“No reine, pues, el pecado en vuestro cuerpo mortal, de manera que lo obedezcáis en sus deseos; ni tampoco presentéis vuestros miembros al pecado como instrumentos de iniquidad, sino presentaos vosotros mismos a Dios como vivos de entre los muertos, y vuestros miembros a Dios como instrumentos de justicia.”',
     ),
   ];
 
-  /// Fetch address data using the addressId from the order
   Future<void> _fetchAddress() async {
     final userId = FirebaseAuth.instance.currentUser?.uid;
     if (userId == null) {
@@ -81,7 +82,6 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
       return;
     }
 
-    // Check if addressId is valid
     if (widget.order.addressId.isEmpty || widget.order.addressId == "N/A") {
       setState(() {
         _isFetchingAddress = false;
@@ -119,7 +119,6 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
 
   @override
   Widget build(BuildContext context) {
-    // Define a neutral color palette
     const Color cardColor = Colors.white;
     final Color textColor = Colors.grey[800]!;
 
@@ -130,7 +129,6 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Order Summary
             _buildSectionCard(
               color: cardColor,
               child: Column(
@@ -157,22 +155,19 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
               ),
             ),
             const SizedBox(height: 16),
-
-            _isFetchingAddress
-            // NEW: Rectangular Shimmer to mimic the Address Card
-                ? const ShimmerPlaceholder.rectangular(height: 80)
-                : _fetchError != null
-                ? Text(
-              _fetchError!,
-              style: const TextStyle(color: Colors.red),
-            )
-                : AddressDisplayTile(
-              addressId: widget.order.addressId,
-              addressData: _addressData!,
-            ),
+            if (_isFetchingAddress)
+              const ShimmerPlaceholder.rectangular(height: 80)
+            else if (_fetchError != null)
+              Text(
+                _fetchError!,
+                style: const TextStyle(color: Colors.red),
+              )
+            else
+              AddressDisplayTile(
+                addressId: widget.order.addressId,
+                addressData: _addressData!,
+              ),
             const SizedBox(height: 16),
-
-            // Payment Method
             _buildSectionCard(
               color: cardColor,
               child: ListTile(
@@ -191,22 +186,14 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
               ),
             ),
             const SizedBox(height: 16),
-
-            // Financial Details
             _buildFinancialDetailsCard(),
             const SizedBox(height: 16),
-
-            // Order Items - Receipt Style
             _buildReceiptStyleOrderItems(),
             const SizedBox(height: 16),
-
-            // Applied Coupon
             if (widget.order.appliedCoupon != null) ...[
               _buildAppliedCouponCard(widget.order.appliedCoupon!),
               const SizedBox(height: 16),
             ],
-
-            // Motivational Verse Section
             _buildVerseSection(),
             const SizedBox(height: 110),
           ],
@@ -215,8 +202,6 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
     );
   }
 
-  /// Builds the status indicator widget
-  /// Builds the status indicator widget
   Widget _buildStatusIndicator(String status) {
     final bool canCancel = status.toLowerCase() == 'en revision';
 
@@ -226,16 +211,15 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
         mainAxisSize: MainAxisSize.min,
         children: [
           MouseRegion(
-            cursor: canCancel ? SystemMouseCursors.click : SystemMouseCursors
-                .basic,
+            cursor: canCancel
+                ? SystemMouseCursors.click
+                : SystemMouseCursors.basic,
             child: Text(
               status.capitalize(),
               style: TextStyle(
                 color: _getStatusColor(status),
                 fontWeight: FontWeight.bold,
                 fontSize: 14,
-                decoration: canCancel ? TextDecoration.none : TextDecoration
-                    .none,
               ),
             ),
           ),
@@ -250,8 +234,6 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
     );
   }
 
-
-  /// Builds a reusable section card with elevation and rounded corners
   Widget _buildSectionCard({required Widget child, required Color color}) {
     return Card(
       color: color,
@@ -263,7 +245,6 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
     );
   }
 
-  /// Builds the financial details card
   Widget _buildFinancialDetailsCard() {
     return _buildSectionCard(
       color: Colors.white,
@@ -302,7 +283,6 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
     );
   }
 
-  /// Builds a row for financial details
   Widget _buildFinancialRow(String label, dynamic value,
       {bool isTotal = false, bool isCoupon = false, bool isRewards = false}) {
     final TextStyle labelStyle = TextStyle(
@@ -343,7 +323,6 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
     );
   }
 
-  /// Builds the order items in a receipt-like style
   Widget _buildReceiptStyleOrderItems() {
     return Container(
       decoration: BoxDecoration(
@@ -351,10 +330,10 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: Colors.grey.withOpacity(0.1),
+            color: Colors.grey.withValues(alpha: 0.1),
             spreadRadius: 2,
             blurRadius: 5,
-            offset: const Offset(0, 3), // changes position of shadow
+            offset: const Offset(0, 3),
           ),
         ],
       ),
@@ -382,8 +361,6 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
                 padding: const EdgeInsets.symmetric(vertical: 8.0),
                 child: Row(
                   children: [
-                    // Product Image
-                    // Inside _buildReceiptStyleOrderItems:
                     ClipRRect(
                       borderRadius: BorderRadius.circular(8),
                       child: CachedNetworkImage(
@@ -391,13 +368,13 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
                         width: 50,
                         height: 50,
                         fit: BoxFit.contain,
-                        // NEW: Shimmer Placeholder
-                        placeholder: (context, url) => const ShimmerPlaceholder(width: 50, height: 50),
-                        errorWidget: (context, url, error) => const Icon(Icons.error),
+                        placeholder: (context, url) =>
+                        const ShimmerPlaceholder(width: 50, height: 50),
+                        errorWidget: (context, url, error) =>
+                        const Icon(Icons.error),
                       ),
                     ),
                     const SizedBox(width: 12),
-                    // Product Name and Quantity
                     Expanded(
                       flex: 3,
                       child: Column(
@@ -412,7 +389,7 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            'Cantidad: ${item.quantity}',
+                            'Cantidad: ${item.quantity.toStringAsFixed(2)}', // Updated format
                             style: TextStyle(
                               color: Colors.grey[600],
                               fontSize: 12,
@@ -421,12 +398,10 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
                         ],
                       ),
                     ),
-                    // Product Price
                     Expanded(
                       flex: 1,
                       child: Text(
-                        '\$${(item.price * item.quantity).toStringAsFixed(
-                            2)} MXN',
+                        '\$${(item.price * item.quantity).toStringAsFixed(2)} MXN',
                         textAlign: TextAlign.right,
                         style: const TextStyle(
                           fontWeight: FontWeight.bold,
@@ -444,7 +419,6 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
     );
   }
 
-  /// Builds the applied coupon card
   Widget _buildAppliedCouponCard(AppliedCoupon coupon) {
     return _buildSectionCard(
       color: Colors.white,
@@ -478,8 +452,7 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
             ),
             const SizedBox(height: 8),
             Text(
-              'Descuento: ${coupon.percentage}% (Máximo \$${coupon.maxDiscount
-                  .toStringAsFixed(2)} MXN)',
+              'Descuento: ${coupon.percentage}% (Máximo \$${coupon.maxDiscount.toStringAsFixed(2)} MXN)',
               style: TextStyle(
                 fontSize: 14,
                 color: Colors.grey[800],
@@ -491,11 +464,9 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
     );
   }
 
-  /// Builds the motivational verse section
   Widget _buildVerseSection() {
     if (_selectedVerse == null) {
-      return const SizedBox
-          .shrink(); // Return empty widget if no verse is selected
+      return const SizedBox.shrink();
     }
 
     return _buildSectionCard(
@@ -552,19 +523,16 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
     );
   }
 
-  /// Formats the date to a readable string
   String _formatDate(DateTime date) {
     return '${date.day}/${date.month}/${date.year} ${_formatTime(date)}';
   }
 
-  /// Formats time to include leading zeros
   String _formatTime(DateTime date) {
     String hour = date.hour.toString().padLeft(2, '0');
     String minute = date.minute.toString().padLeft(2, '0');
     return '$hour:$minute';
   }
 
-  /// Returns a color based on the order status
   Color _getStatusColor(String status) {
     switch (status.toLowerCase()) {
       case 'en revision':
@@ -580,23 +548,24 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
     }
   }
 
-  /// Handles order cancellation
   Future<void> _cancelOrder() async {
-    // Additional check to prevent cancellation if status changed
     if (widget.order.status.toLowerCase() != 'en revision') {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Este pedido no puede ser cancelado en su estado actual.')),
+        const SnackBar(
+            content:
+            Text('Este pedido no puede ser cancelado en su estado actual.')),
       );
       return;
     }
 
-    // Show confirmation dialog
     final bool? confirm = await showDialog<bool>(
       context: context,
       builder: (context) {
         return AlertDialog(
           title: const Text('Confirmar Cancelación'),
-          content: const Text('¿Estás seguro de que deseas cancelar este pedido?'),
+          content:
+          const Text('¿Estás seguro de que deseas cancelar este pedido?'),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(false),
@@ -612,10 +581,10 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
     );
 
     if (confirm == true) {
+      if (!mounted) return;
       final userId = FirebaseAuth.instance.currentUser?.uid;
-      final orderId = widget.order.id;  // This is the document ID
+      final orderId = widget.order.id;
 
-      // Defensive checks
       if (userId == null) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Usuario no ha iniciado sesión.')),
@@ -623,105 +592,55 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
         return;
       }
 
-      // Print paths for debugging purposes
-      if (kDebugMode) {
-        if (kDebugMode) {
-          if (kDebugMode) {
-            if (kDebugMode) {
-              print('User Order Path: users/$userId/orders/$orderId');
-            }
-          }
-        }
-      }
-      if (kDebugMode) {
-        print('Top-Level Order Path: orders/$orderId');
-      }
-
       try {
-        // Reference to both documents
         final userOrderRef = FirebaseFirestore.instance
             .collection('users')
             .doc(userId)
             .collection('orderHistory')
-            .doc(orderId);  // orderId is the document ID here
+            .doc(orderId);
 
-        final topLevelOrderRef = FirebaseFirestore.instance
-            .collection('orders')
-            .doc(orderId);  // Same orderId in the global orders collection
+        final topLevelOrderRef =
+        FirebaseFirestore.instance.collection('orders').doc(orderId);
 
-        // Fetch both documents to ensure they exist before updating
         final userOrderDoc = await userOrderRef.get();
         final topLevelOrderDoc = await topLevelOrderRef.get();
 
-        if (!userOrderDoc.exists) {
-          if (kDebugMode) {
-            print('User order document not found at: users/$userId/orders/$orderId');
-          }
+        if (!userOrderDoc.exists || !topLevelOrderDoc.exists) return;
 
-          return;
-        }
-
-        if (!topLevelOrderDoc.exists) {
-          if (kDebugMode) {
-            print('Top-level order document not found at: orders/$orderId');
-          }
-          return;
-        }
-
-        // Initialize a WriteBatch
         WriteBatch batch = FirebaseFirestore.instance.batch();
 
-        // Set the data to update
         Map<String, dynamic> updateData = {
           'state': 'Cancelado',
           'cancellationTimestamp': FieldValue.serverTimestamp(),
-          // Add any other fields you want to update
         };
 
-        // Add both updates to the batch
         batch.update(userOrderRef, updateData);
         batch.update(topLevelOrderRef, updateData);
 
+        if (!mounted) return;
         showDialog(
           context: context,
           barrierDismissible: false,
-          // NEW: Use CustomLoader instead of CircularProgressIndicator
           builder: (context) => const CustomLoader(),
         );
 
-        // Commit the batch
         await batch.commit();
 
-        // Dismiss loading indicator
+        if (!mounted) return;
         Navigator.of(context).pop();
 
-
-
-        // Refresh the order details
         setState(() {
           widget.order.status = 'Cancelado';
         });
-      } on FirebaseException catch (e) {
-        // Dismiss loading indicator
-        Navigator.of(context).pop();
-
-        // Specific Firestore error handling
-        if (e.code == 'not-found') {
-
-        } else {
-
-        }
       } catch (e) {
-        // Dismiss loading indicator
+        if (!mounted) return;
         Navigator.of(context).pop();
-
       }
     }
   }
-
 }
 
-  extension StringCasingExtension on String {
+extension StringCasingExtension on String {
   String capitalize() {
     if (isEmpty) return this;
     return '${this[0].toUpperCase()}${substring(1)}';

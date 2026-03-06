@@ -23,8 +23,6 @@ class CartProvider extends ChangeNotifier {
     return _items.length;
   }
 
-  // --- PERSISTENCE METHODS ---
-
   Future<void> _saveCartToStorage() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -58,9 +56,6 @@ class CartProvider extends ChangeNotifier {
     }
   }
 
-  // --- CART LOGIC ---
-
-  // Updated: Added typeSpecific and variante
   void addItem(String productId, String name, double price, String imageUrl,
       {double quantity = 1.0, required bool isBulk, required double stock, String? typeSpecific, String? variante}) {
     if (_items.containsKey(productId)) {
@@ -82,8 +77,8 @@ class CartProvider extends ChangeNotifier {
             objectID: existingCartItem.objectID,
             isBulk: existingCartItem.isBulk,
             stock: existingCartItem.stock,
-            typeSpecific: existingCartItem.typeSpecific, // Keep existing
-            variante: existingCartItem.variante,         // Keep existing
+            typeSpecific: existingCartItem.typeSpecific,
+            variante: existingCartItem.variante,
           );
         },
       );
@@ -104,8 +99,8 @@ class CartProvider extends ChangeNotifier {
           objectID: productId,
           isBulk: isBulk,
           stock: stock,
-          typeSpecific: typeSpecific ?? '', // Save new
-          variante: variante ?? '',         // Save new
+          typeSpecific: typeSpecific ?? '',
+          variante: variante ?? '',
         ),
       );
     }
@@ -113,7 +108,6 @@ class CartProvider extends ChangeNotifier {
     _saveCartToStorage();
   }
 
-  // Updated: Added typeSpecific and variante
   void setItem(String productId, String name, double price, String imageUrl,
       double quantity, {required bool isBulk, required double stock, String? typeSpecific, String? variante}) {
     if (quantity > stock) {
@@ -216,7 +210,6 @@ class CartItem {
   final String objectID;
   final bool isBulk;
   final double stock;
-  // New Fields
   final String typeSpecific;
   final String variante;
 
@@ -241,8 +234,8 @@ class CartItem {
       'objectID': objectID,
       'isBulk': isBulk,
       'stock': stock,
-      'type_specific': typeSpecific, // Added to map
-      'variante': variante,          // Added to map
+      'type_specific': typeSpecific,
+      'variante': variante,
     };
   }
 
@@ -255,8 +248,8 @@ class CartItem {
       objectID: json['objectID'] as String,
       isBulk: json['isBulk'] as bool,
       stock: (json['stock'] as num).toDouble(),
-      typeSpecific: json['type_specific'] as String? ?? '', // Added from json
-      variante: json['variante'] as String? ?? '',          // Added from json
+      typeSpecific: json['type_specific'] as String? ?? '',
+      variante: json['variante'] as String? ?? '',
     );
   }
 }

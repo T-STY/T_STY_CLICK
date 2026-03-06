@@ -1,23 +1,20 @@
-// components/payment_method_card.dart
-
 import 'package:flutter/material.dart';
-import 'package:lottie/lottie.dart'; // Importar Lottie
+import 'package:lottie/lottie.dart';
 
 import '../../../constants/app_defaults.dart';
 import '../../../constants/app_colors.dart';
 
 class PaymentMethodCard extends StatelessWidget {
   const PaymentMethodCard({
-    Key? key,
+    super.key,
     this.methodID,
     required this.animationAsset,
     required this.isSelected,
     this.onTap,
-  }) : super(key: key);
+  });
 
-  /// Usado para reconocer el método
   final String? methodID;
-  final String animationAsset; // Ruta de la animación Lottie
+  final String animationAsset;
   final bool isSelected;
   final void Function()? onTap;
 
@@ -26,17 +23,18 @@ class PaymentMethodCard extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        width: 100, // Ajusta el tamaño según tus necesidades
-        height: 100, // Ajusta el tamaño según tus necesidades
+        width: 100,
+        height: 100,
         margin: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 8.0),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: AppDefaults.borderRadius,
           boxShadow: [
             BoxShadow(
-                blurRadius: 9,
-                offset: const Offset(4, 7),
-                color: Colors.black.withOpacity(0.03))
+              blurRadius: 9,
+              offset: const Offset(4, 7),
+              color: Colors.black.withValues(alpha: 0.03),
+            )
           ],
           border: Border.all(
             color: isSelected ? AppColors.primary : Colors.grey.shade300,
@@ -51,8 +49,8 @@ class PaymentMethodCard extends StatelessWidget {
                 width: 110,
                 height: 70,
                 fit: BoxFit.contain,
-                repeat: true, // Asegura que la animación se repita
-                animate: true, // Asegura que la animación se reproduzca
+                repeat: true,
+                animate: true,
               ),
             ),
             if (isSelected)

@@ -1,16 +1,15 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_iconly/flutter_iconly.dart';
 
 import '../../../constants/constants.dart';
 
 class AddressCard extends StatelessWidget {
   const AddressCard({
-    Key? key,
+    super.key,
     required this.label,
     required this.number,
     required this.address,
     required this.isSelected,
-  }) : super(key: key);
+  });
 
   final String label;
   final String number;
@@ -33,12 +32,12 @@ class AddressCard extends StatelessWidget {
           BoxShadow(
             blurRadius: 8,
             offset: const Offset(4, 7),
-            color: Colors.black.withOpacity(.05),
+            color: Colors.black.withValues(alpha: 0.05),
           ),
         ],
       ),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start, // Alineación superior
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Padding(
             padding: const EdgeInsets.all(8.0),
@@ -53,8 +52,7 @@ class AddressCard extends StatelessWidget {
             ),
           ),
           const SizedBox(width: AppDefaults.margin),
-          // Detalles
-          Expanded( // Permite que la columna ocupe el espacio restante
+          Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -62,12 +60,12 @@ class AddressCard extends StatelessWidget {
                   label,
                   style: Theme.of(context).textTheme.titleMedium,
                 ),
-                const SizedBox(height: 2.0), // Espaciado entre textos
+                const SizedBox(height: 2.0),
                 Text(
                   number,
                   style: Theme.of(context).textTheme.titleSmall,
                 ),
-                const SizedBox(height: 2.0), // Espaciado entre textos
+                const SizedBox(height: 2.0),
                 Text(
                   address,
                   style: Theme.of(context).textTheme.bodySmall,

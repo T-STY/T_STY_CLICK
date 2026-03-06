@@ -2,14 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 
-// Define a Bloc for managing the Algolia products state
 class AlgoliaProductsBloc extends Cubit<List<Map<String, dynamic>>> {
   AlgoliaProductsBloc() : super([]);
 
-  // Method to fetch products based on the filter
   void fetchProducts(String filter) {
-    // Perform Algolia API call and update state with the fetched products
-    // Replace this with your actual Algolia API call
     List<Map<String, dynamic>> products = [
       {"imageURL": "url1", "title": "Product 1", "price": 10.0, "sizes": ["S", "M", "L"]},
       {"imageURL": "url2", "title": "Product 2", "price": 20.0, "sizes": ["M", "L", "XL"]},
@@ -30,7 +26,6 @@ class AlgoliaProductsGrid extends StatelessWidget {
       create: (_) => AlgoliaProductsBloc(),
       child: BlocBuilder<AlgoliaProductsBloc, List<Map<String, dynamic>>>(
         builder: (context, products) {
-          // Fetch products when the widget is built
           context.read<AlgoliaProductsBloc>().fetchProducts(filter);
 
           return MasonryGridView.builder(

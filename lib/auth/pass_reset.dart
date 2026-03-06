@@ -11,7 +11,7 @@ class PasswordResetDialog extends StatefulWidget {
   const PasswordResetDialog({super.key});
 
   @override
-  _PasswordResetDialogState createState() => _PasswordResetDialogState();
+  State<PasswordResetDialog> createState() => _PasswordResetDialogState();
 }
 
 class _PasswordResetDialogState extends State<PasswordResetDialog> {
@@ -27,7 +27,6 @@ class _PasswordResetDialogState extends State<PasswordResetDialog> {
 
     return Stack(
       children: [
-        // Blur effect layer
         Positioned.fill(
           child: BackdropFilter(
             filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
@@ -37,11 +36,10 @@ class _PasswordResetDialogState extends State<PasswordResetDialog> {
           ),
         ),
 
-        // Actual AlertDialog without any blur
         Center(
           child: AlertDialog(
             backgroundColor: Theme.of(context).brightness == Brightness.dark
-                ? AppColors.primary // Replace AppColors.darkGrey with your charcoal color for dark mode
+                ? AppColors.primary
                 : Colors.white,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(25.0),
@@ -62,7 +60,7 @@ class _PasswordResetDialogState extends State<PasswordResetDialog> {
                 ),
                 IconButton(
                   icon: const Icon(Icons.close),
-                  color: Theme.of(context).iconTheme.color, // Automatically uses the correct color
+                  color: Theme.of(context).iconTheme.color,
                   onPressed: () {
                     Navigator.of(context).pop();
                   },
@@ -99,7 +97,7 @@ class _PasswordResetDialogState extends State<PasswordResetDialog> {
                     ),
                     labelText: 'Correo',
                     hintText: 'tu@email.com',
-                    contentPadding: const EdgeInsets.symmetric(vertical: 15.0, horizontal: 10.0),  // To maintain height
+                    contentPadding: const EdgeInsets.symmetric(vertical: 15.0, horizontal: 10.0),
                     border: OutlineInputBorder(
                       borderSide: BorderSide.none,
                       borderRadius: BorderRadius.circular(12.0),
@@ -117,7 +115,7 @@ class _PasswordResetDialogState extends State<PasswordResetDialog> {
                     floatingLabelBehavior: FloatingLabelBehavior.never,
                     labelStyle: DefaultTextStyle.of(context).style.merge(
                       TextStyle(
-                        fontSize: 15.0,  // Your desired size
+                        fontSize: 15.0,
                         fontWeight: FontWeight.w400,
                         color: Theme.of(context).brightness == Brightness.dark ? AppColors.defaultWhite : AppColors.defaultBlack,
                         letterSpacing: 0.8,
@@ -137,25 +135,24 @@ class _PasswordResetDialogState extends State<PasswordResetDialog> {
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.black,
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(25.0), // Your desired border radius
+                      borderRadius: BorderRadius.circular(25.0),
                     ),
-                    padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 16.0), // Define padding explicitly
-                    elevation: 2,// Define elevation explicitly if you have a preference
+                    padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 16.0),
+                    elevation: 2,
                   ),
                   child: const Text(
                     'Enviar Enlace',
                     style: TextStyle(
-                      fontSize: 15.0,  // Example size you want
+                      fontSize: 15.0,
                       fontWeight: FontWeight.normal,
                       color: AppColors.defaultWhite,
-                      letterSpacing: 1.0,  // If you have a specific letter spacing in mind
-                      fontFamily: 'Gordita',  // Specify the font family explicitly
-                      // ... any other properties you want to set
+                      letterSpacing: 1.0,
+                      fontFamily: 'Gordita',
                     ),
                   ),
                   onPressed: () async {
                     if (_resetEmailController.text.isEmpty) {
-                      if ((await Vibration.hasVibrator()) ?? false) {
+                      if (await Vibration.hasVibrator()) {
                         Vibration.vibrate();
                       }
                       setState(() {
@@ -168,6 +165,7 @@ class _PasswordResetDialogState extends State<PasswordResetDialog> {
                           _showSuccessAnimation = true;
                         });
                       } catch (e) {
+                        if (!mounted) return;
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(content: Text('Error: $e')),
                         );
@@ -190,9 +188,11 @@ class _PasswordResetDialogState extends State<PasswordResetDialog> {
                   repeat: false,
                   onLoaded: (composition) {
                     Future.delayed(composition.duration, () {
-                      setState(() {
-                        _showErrorAnimation = false;
-                      });
+                      if (mounted) {
+                        setState(() {
+                          _showErrorAnimation = false;
+                        });
+                      }
                     });
                   })
                   : Lottie.asset('assets/animations/check.json',
@@ -202,9 +202,11 @@ class _PasswordResetDialogState extends State<PasswordResetDialog> {
                   repeat: false,
                   onLoaded: (composition) {
                     Future.delayed(composition.duration, () {
-                      setState(() {
-                        _showSuccessAnimation = false;
-                      });
+                      if (mounted) {
+                        setState(() {
+                          _showSuccessAnimation = false;
+                        });
+                      }
                     });
                   }),
             ),

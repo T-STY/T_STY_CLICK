@@ -1,27 +1,28 @@
 import 'dart:async';
+import 'dart:ui';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-
+import 'package:firebase_auth/firebase_auth.dart';
 import '../../components/shimmer_placeholder.dart';
 
 class RecipeGrid extends StatefulWidget {
   final String title;
   final Query<Map<String, dynamic>> query;
-  final Function(String) onRecipeSelected; // Callback to trigger navigation
+  final Function(String) onRecipeSelected;
 
   const RecipeGrid({
-    Key? key,
+    super.key,
     required this.title,
     required this.query,
     required this.onRecipeSelected,
-  }) : super(key: key);
+  });
 
   @override
-  _RecipeGridState createState() => _RecipeGridState();
+  State<RecipeGrid> createState() => RecipeGridState();
 }
 
-class _RecipeGridState extends State<RecipeGrid> {
+class RecipeGridState extends State<RecipeGrid> {
   final PageController _pageController = PageController();
   int _currentPage = 0;
   Timer? _timer;
@@ -34,17 +35,19 @@ class _RecipeGridState extends State<RecipeGrid> {
 
   void _startAutoSlide() {
     _timer = Timer.periodic(const Duration(seconds: 5), (Timer timer) {
-      if (_currentPage < _pageController.page!.round() + 1) {
-        _currentPage++;
-      } else {
-        _currentPage = 0;
-      }
+      if (_pageController.hasClients) {
+        if (_currentPage < _pageController.page!.round() + 1) {
+          _currentPage++;
+        } else {
+          _currentPage = 0;
+        }
 
-      _pageController.animateToPage(
-        _currentPage,
-        duration: const Duration(milliseconds: 500),
-        curve: Curves.easeInOut,
-      );
+        _pageController.animateToPage(
+          _currentPage,
+          duration: const Duration(milliseconds: 500),
+          curve: Curves.easeInOut,
+        );
+      }
     });
   }
 
@@ -91,11 +94,10 @@ class _RecipeGridState extends State<RecipeGrid> {
       child: StreamBuilder<QuerySnapshot>(
         stream: widget.query.snapshots(),
         builder: (context, snapshot) {
-          // NEW: Shimmer PageView Loading State
           if (snapshot.connectionState == ConnectionState.waiting) {
             return PageView.builder(
-              controller: PageController(viewportFraction: 0.9), // Match the width of your items
-              itemCount: 3, // Show 3 dummy items
+              controller: PageController(viewportFraction: 0.9),
+              itemCount: 3,
               itemBuilder: (context, index) {
                 return Container(
                   margin: const EdgeInsets.fromLTRB(10, 5, 10, 15),
@@ -109,17 +111,16 @@ class _RecipeGridState extends State<RecipeGrid> {
                     ),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.1), // Lighter shadow for placeholder
+                        color: Colors.black.withValues(alpha: 0.1),
                         blurRadius: 10,
                         offset: const Offset(4, 4),
                       ),
                     ],
                   ),
-                  child: Column(
+                  child: const Column(
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
-                      // Image Shimmer (Matching the unique shape)
-                      const ShimmerPlaceholder(
+                      ShimmerPlaceholder(
                         height: 150,
                         shapeBorder: RoundedRectangleBorder(
                           borderRadius: BorderRadius.only(
@@ -130,11 +131,10 @@ class _RecipeGridState extends State<RecipeGrid> {
                           ),
                         ),
                       ),
-                      // Text Shimmers
                       Padding(
-                        padding: const EdgeInsets.all(12.0),
+                        padding: EdgeInsets.all(12.0),
                         child: Column(
-                          children: const [
+                          children: [
                             ShimmerPlaceholder(width: 150, height: 16),
                             SizedBox(height: 8),
                             ShimmerPlaceholder(width: 100, height: 14),
@@ -149,20 +149,18 @@ class _RecipeGridState extends State<RecipeGrid> {
           }
 
           if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-            return const Center(child: Text("No recipes found"));
+            return const Center(child: Text("No se encontraron recetas"));
           }
 
-          List<Widget> items = snapshot.data!.docs
-              .map((doc) => _buildPageItem(context, doc))
-              .toList();
+          final docs = snapshot.data!.docs;
 
           return PageView.builder(
             controller: _pageController,
-            itemCount: items.length,
+            itemCount: docs.length,
             itemBuilder: (context, index) {
               return GestureDetector(
-                onTap: () => widget.onRecipeSelected(snapshot.data!.docs[index].id),
-                child: items[index],
+                onTap: () => widget.onRecipeSelected(docs[index].id),
+                child: _buildPageItem(context, docs[index]),
               );
             },
           );
@@ -176,9 +174,10 @@ class _RecipeGridState extends State<RecipeGrid> {
     final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
     final textColor = isDarkMode ? Colors.white : Colors.black;
     final screenWidth = MediaQuery.of(context).size.width;
+    final bool isGuest = FirebaseAuth.instance.currentUser == null;
 
     return SizedBox(
-      width: screenWidth * 0.9, // Set width to 90% of screen width
+      width: screenWidth * 0.9,
       child: Container(
         margin: const EdgeInsets.fromLTRB(10, 5, 10, 15),
         decoration: BoxDecoration(
@@ -191,7 +190,7 @@ class _RecipeGridState extends State<RecipeGrid> {
           ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.2),
+              color: Colors.black.withValues(alpha: 0.2),
               blurRadius: 10,
               offset: const Offset(4, 4),
             ),
@@ -200,33 +199,24 @@ class _RecipeGridState extends State<RecipeGrid> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: <Widget>[
-            Container(
-              decoration: BoxDecoration(
-                borderRadius: const BorderRadius.only(
-                  topLeft: Radius.circular(43),
-                  topRight: Radius.circular(10),
-                ),
+            ClipRRect(
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(43),
+                topRight: Radius.circular(24),
+                bottomLeft: Radius.circular(14),
+                bottomRight: Radius.circular(14),
               ),
-              child: ClipRRect(
-                borderRadius: const BorderRadius.only(
-                  topLeft: Radius.circular(43),
-                  topRight: Radius.circular(24),
-                  bottomLeft: Radius.circular(14),
-                  bottomRight: Radius.circular(14),
-                ),
-                // Inside _buildPageItem:
-                child: CachedNetworkImage(
-                  imageUrl: data['imageURL'] ?? '',
-                  fit: BoxFit.cover,
-                  width: double.infinity,
+              child: CachedNetworkImage(
+                imageUrl: data['imageURL'] ?? '',
+                fit: BoxFit.cover,
+                width: double.infinity,
+                height: 150,
+                placeholder: (context, url) =>
+                const ShimmerPlaceholder(height: 150),
+                errorWidget: (context, url, error) => Container(
                   height: 150,
-                  // NEW: Shimmer Placeholder
-                  placeholder: (context, url) => const ShimmerPlaceholder(height: 150),
-                  errorWidget: (context, url, error) => Container(
-                    height: 150,
-                    color: Colors.grey[300],
-                    child: const Icon(Icons.broken_image),
-                  ),
+                  color: Colors.grey[300],
+                  child: const Icon(Icons.broken_image),
                 ),
               ),
             ),
@@ -237,13 +227,20 @@ class _RecipeGridState extends State<RecipeGrid> {
                 children: [
                   Text(
                     data['title'] ?? 'Unnamed',
-                    style: TextStyle(fontWeight: FontWeight.bold, color: textColor),
+                    style: TextStyle(
+                        fontWeight: FontWeight.bold, color: textColor),
                     textAlign: TextAlign.center,
                   ),
-                  Text(
-                    'Costo approx. \$${data['precio']?.toString() ?? 'N/A'}',
-                    style: const TextStyle(color: Colors.green),
-                    textAlign: TextAlign.center,
+                  ImageFiltered(
+                    imageFilter: ImageFilter.blur(
+                      sigmaX: isGuest ? 6.0 : 0.0,
+                      sigmaY: isGuest ? 6.0 : 0.0,
+                    ),
+                    child: Text(
+                      'Costo approx. \$${data['precio']?.toString() ?? 'N/A'}',
+                      style: const TextStyle(color: Colors.green),
+                      textAlign: TextAlign.center,
+                    ),
                   ),
                 ],
               ),

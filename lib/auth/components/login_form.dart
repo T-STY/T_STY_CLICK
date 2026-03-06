@@ -9,10 +9,10 @@ import '../pass_reset.dart';
 import 'dart:ui';
 
 class LoginForm extends StatefulWidget {
-  const LoginForm({Key? key}) : super(key: key);
+  const LoginForm({super.key});
 
   @override
-  _LoginFormState createState() => _LoginFormState();
+  State<LoginForm> createState() => _LoginFormState();
 }
 
 class _LoginFormState extends State<LoginForm> {
@@ -20,11 +20,8 @@ class _LoginFormState extends State<LoginForm> {
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
 
-
-
   @override
   Widget build(BuildContext context) {
-
     return Padding(
       padding: const EdgeInsets.all(AppDefaults.padding),
       child: SingleChildScrollView(
@@ -49,7 +46,8 @@ class _LoginFormState extends State<LoginForm> {
                   ),
                   labelText: 'Correo',
                   hintText: 'tu@email.com',
-                  contentPadding: const EdgeInsets.symmetric(vertical: 15.0, horizontal: 10.0),  // To maintain height
+                  contentPadding: const EdgeInsets.symmetric(
+                      vertical: 15.0, horizontal: 10.0),
                   border: OutlineInputBorder(
                     borderSide: BorderSide.none,
                     borderRadius: BorderRadius.circular(12.0),
@@ -67,9 +65,11 @@ class _LoginFormState extends State<LoginForm> {
                   floatingLabelBehavior: FloatingLabelBehavior.never,
                   labelStyle: DefaultTextStyle.of(context).style.merge(
                     TextStyle(
-                      fontSize: 15.0,  // Your desired size
+                      fontSize: 15.0,
                       fontWeight: FontWeight.w400,
-                      color: Theme.of(context).brightness == Brightness.dark ? AppColors.defaultWhite : AppColors.defaultBlack,
+                      color: Theme.of(context).brightness == Brightness.dark
+                          ? AppColors.defaultWhite
+                          : AppColors.defaultBlack,
                       letterSpacing: 0.8,
                       fontFamily: 'Gordita',
                     ),
@@ -96,7 +96,8 @@ class _LoginFormState extends State<LoginForm> {
                   ),
                   labelText: 'Contraseña',
                   hintText: '*********',
-                  contentPadding: const EdgeInsets.symmetric(vertical: 15.0, horizontal: 10.0),  // To maintain height
+                  contentPadding: const EdgeInsets.symmetric(
+                      vertical: 15.0, horizontal: 10.0),
                   border: OutlineInputBorder(
                     borderSide: BorderSide.none,
                     borderRadius: BorderRadius.circular(12.0),
@@ -114,9 +115,11 @@ class _LoginFormState extends State<LoginForm> {
                   floatingLabelBehavior: FloatingLabelBehavior.never,
                   labelStyle: DefaultTextStyle.of(context).style.merge(
                     TextStyle(
-                      fontSize: 15.0,  // Your desired size
+                      fontSize: 15.0,
                       fontWeight: FontWeight.w400,
-                      color: Theme.of(context).brightness == Brightness.dark ? AppColors.defaultWhite : AppColors.defaultBlack,
+                      color: Theme.of(context).brightness == Brightness.dark
+                          ? AppColors.defaultWhite
+                          : AppColors.defaultBlack,
                       letterSpacing: 0.8,
                       fontFamily: 'Gordita',
                     ),
@@ -133,17 +136,16 @@ class _LoginFormState extends State<LoginForm> {
                       builder: (context) => const PasswordResetDialog(),
                     );
                   },
-                  child: Text(
-                    '¿Olvidaste la contraseña?',
+                  child: Text('¿Olvidaste la contraseña?',
                       style: TextStyle(
-                        fontSize: 15.0,  // Example size you want
+                        fontSize: 15.0,
                         fontWeight: FontWeight.w800,
-                        color: Theme.of(context).brightness == Brightness.dark ? AppColors.defaultWhite : AppColors.defaultBlack,
-                        letterSpacing: 1.0,  // If you have a specific letter spacing in mind
-                        fontFamily: 'Gordita',  // Specify the font family explicitly
-                        // ... any other properties you want to set
-                      )
-                  ),
+                        color: Theme.of(context).brightness == Brightness.dark
+                            ? AppColors.defaultWhite
+                            : AppColors.defaultBlack,
+                        letterSpacing: 1.0,
+                        fontFamily: 'Gordita',
+                      )),
                 ),
               ),
               const SizedBox(height: 40.0),
@@ -152,25 +154,26 @@ class _LoginFormState extends State<LoginForm> {
                 child: ElevatedButton(
                   onPressed: () async {
                     try {
-                      UserCredential userCredential = await _auth.signInWithEmailAndPassword(
+                      UserCredential userCredential =
+                      await _auth.signInWithEmailAndPassword(
                         email: _emailController.text,
                         password: _passwordController.text,
                       );
 
-                      // Check if the email is verified
-                      if (userCredential.user!.emailVerified) {
-                        // Remove all previous routes and navigate to AppRoot
+                      if (!context.mounted) return;
 
+                      if (userCredential.user!.emailVerified) {
                         Navigator.pushAndRemoveUntil(
                           context,
-                          customPageRoute( const MainMenuScreen()),
+                          customPageRoute(const MainMenuScreen()),
                               (route) => false,
                         );
                       } else {
                         _showEmailVerificationDialog(context);
                       }
-
                     } catch (e) {
+                      if (!context.mounted) return;
+
                       showDialog(
                         context: context,
                         barrierDismissible: false,
@@ -179,7 +182,8 @@ class _LoginFormState extends State<LoginForm> {
                             children: [
                               BackdropFilter(
                                 filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
-                                child: Container(color: Colors.black.withOpacity(0.3)),
+                                child: Container(
+                                    color: Colors.black.withValues(alpha: 0.3)),
                               ),
                               Dialog(
                                 shape: RoundedRectangleBorder(
@@ -197,20 +201,26 @@ class _LoginFormState extends State<LoginForm> {
                                         const SizedBox(height: 16),
                                         const Text(
                                           'Error',
-                                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 24),
+                                          style: TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 24),
                                         ),
                                         const SizedBox(height: 16),
-                                        const Text('Verifique sus credenciales'),
+                                        const Text(
+                                            'Verifique sus credenciales'),
                                         const SizedBox(height: 16),
                                         TextButton(
                                           child: Text('OK',
                                               style: TextStyle(
-                                                fontSize: 15.0,  // Example size you want
+                                                fontSize: 15.0,
                                                 fontWeight: FontWeight.w800,
-                                                color: Theme.of(context).brightness == Brightness.dark ? AppColors.defaultWhite : AppColors.defaultBlack,
-                                                letterSpacing: 1.0,  // If you have a specific letter spacing in mind
-                                                fontFamily: 'Gordita',  // Specify the font family explicitly
-                                                // ... any other properties you want to set
+                                                color: Theme.of(context)
+                                                    .brightness ==
+                                                    Brightness.dark
+                                                    ? AppColors.defaultWhite
+                                                    : AppColors.defaultBlack,
+                                                letterSpacing: 1.0,
+                                                fontFamily: 'Gordita',
                                               )),
                                           onPressed: () {
                                             Navigator.of(context).pop();
@@ -230,20 +240,20 @@ class _LoginFormState extends State<LoginForm> {
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.black,
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(25.0), // Your desired border radius
+                      borderRadius: BorderRadius.circular(25.0),
                     ),
-                    padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 16.0), // Define padding explicitly
-                    elevation: 2,// Define elevation explicitly if you have a preference
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16.0, vertical: 16.0),
+                    elevation: 2,
                   ),
                   child: const Text(
                     'Ingresar',
                     style: TextStyle(
-                      fontSize: 15.0,  // Example size you want
+                      fontSize: 15.0,
                       fontWeight: FontWeight.normal,
                       color: AppColors.defaultWhite,
-                      letterSpacing: 1.0,  // If you have a specific letter spacing in mind
-                      fontFamily: 'Gordita',  // Specify the font family explicitly
-                      // ... any other properties you want to set
+                      letterSpacing: 1.0,
+                      fontFamily: 'Gordita',
                     ),
                   ),
                 ),
@@ -275,7 +285,7 @@ void _showEmailVerificationDialog(BuildContext context) {
           child: Container(
             decoration: BoxDecoration(
               color: Theme.of(context).brightness == Brightness.dark
-                  ? AppColors.primary // Replace AppColors.darkGrey with your charcoal color for dark mode
+                  ? AppColors.primary
                   : Colors.white,
               borderRadius: BorderRadius.circular(25.0),
             ),
@@ -288,7 +298,8 @@ void _showEmailVerificationDialog(BuildContext context) {
                   const Center(
                     child: Text(
                       'Verificación de Correo',
-                      style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                      style:
+                      TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                       textAlign: TextAlign.center,
                     ),
                   ),
@@ -305,19 +316,20 @@ void _showEmailVerificationDialog(BuildContext context) {
                     child: ElevatedButton(
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.black,
-                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 20, vertical: 10),
                       ),
                       onPressed: () {
                         Navigator.of(context).pop();
                       },
-                      child: const Text('OK',
+                      child: const Text(
+                        'OK',
                         style: TextStyle(
-                          fontSize: 15.0,  // Example size you want
+                          fontSize: 15.0,
                           fontWeight: FontWeight.normal,
                           color: AppColors.defaultWhite,
-                          letterSpacing: 1.0,  // If you have a specific letter spacing in mind
-                          fontFamily: 'Gordita',  // Specify the font family explicitly
-                          // ... any other properties you want to set
+                          letterSpacing: 1.0,
+                          fontFamily: 'Gordita',
                         ),
                       ),
                     ),
@@ -331,8 +343,6 @@ void _showEmailVerificationDialog(BuildContext context) {
     },
     barrierDismissible: true,
     barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
-    barrierColor: Colors.black.withOpacity(0.5),
+    barrierColor: Colors.black.withValues(alpha: 0.5),
   );
 }
-
-

@@ -11,28 +11,23 @@ import '../../constants/app_images.dart';
 
 class AddressesSection extends StatefulWidget {
   final VoidCallback onBack;
-  const AddressesSection({Key? key, required this.onBack}) : super(key: key);
+  const AddressesSection({super.key, required this.onBack});
 
   @override
-  _AddressesSectionState createState() => _AddressesSectionState();
+  State<AddressesSection> createState() => _AddressesSectionState();
 }
 
 class _AddressesSectionState extends State<AddressesSection> {
   final _formKey = GlobalKey<FormState>();
 
-  // Variables for managing form visibility and data
   bool _isAddingOrEditing = false;
   String? _editingAddressId;
-  Map<String, dynamic>? _editingAddressData;
 
-  // Form controllers
   final _streetController = TextEditingController();
   final _streetNumberController = TextEditingController();
   String? _selectedColonia;
   final _zipCodeController = TextEditingController();
 
-  // Other variables
-  // Changed from hardcoded final list to dynamic list
   List<String> _colonias = [];
   final _city = 'Colima';
   final _state = 'Colima';
@@ -44,7 +39,6 @@ class _AddressesSectionState extends State<AddressesSection> {
     _fetchColonias();
   }
 
-  // Fetch colonias from Firebase
   Future<void> _fetchColonias() async {
     try {
       final doc = await FirebaseFirestore.instance
@@ -58,7 +52,7 @@ class _AddressesSectionState extends State<AddressesSection> {
           if (mounted) {
             setState(() {
               _colonias = List<String>.from(data['colonias']);
-              _colonias.sort(); // Optional: sort alphabetically
+              _colonias.sort();
             });
           }
         }
@@ -86,23 +80,22 @@ class _AddressesSectionState extends State<AddressesSection> {
 
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
-    return WillPopScope(
-      onWillPop: () async {
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
         if (_isAddingOrEditing) {
           setState(() {
             _isAddingOrEditing = false;
           });
-          return false;
         } else {
           widget.onBack();
-          return false;
         }
       },
       child: StreamBuilder<QuerySnapshot>(
         stream: addressesRef.snapshots(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            // NEW: Shimmer List for Addresses
             return Scaffold(
               appBar: AppBar(
                 backgroundColor: isDarkMode ? Colors.grey[900] : Colors.white,
@@ -110,7 +103,7 @@ class _AddressesSectionState extends State<AddressesSection> {
               ),
               body: ListView.builder(
                 padding: const EdgeInsets.all(16.0),
-                itemCount: 3, // Show 3 dummy address cards
+                itemCount: 3,
                 itemBuilder: (context, index) {
                   return Card(
                     elevation: 3,
@@ -118,15 +111,13 @@ class _AddressesSectionState extends State<AddressesSection> {
                       borderRadius: BorderRadius.circular(12),
                     ),
                     margin: const EdgeInsets.symmetric(vertical: 8),
-                    child: Padding(
-                      padding: const EdgeInsets.all(16.0),
+                    child: const Padding(
+                      padding: EdgeInsets.all(16.0),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
-                        children: const [
-                          // Street Name Placeholder
+                        children: [
                           ShimmerPlaceholder(width: 200, height: 16),
                           SizedBox(height: 8),
-                          // City/State Placeholder
                           ShimmerPlaceholder(width: 150, height: 14),
                         ],
                       ),
@@ -138,7 +129,6 @@ class _AddressesSectionState extends State<AddressesSection> {
           }
 
           if (snapshot.hasError) {
-            // Handle any errors in fetching data
             return Scaffold(
               appBar: AppBar(
                 backgroundColor: isDarkMode ? Colors.grey[900] : Colors.white,
@@ -191,12 +181,12 @@ class _AddressesSectionState extends State<AddressesSection> {
                 ),
               ]
                   : [
-                Padding(
-                  padding: const EdgeInsets.only(right: 16.0),
+                const Padding(
+                  padding: EdgeInsets.only(right: 16.0),
                   child: IconButton(
-                    icon: const Icon(Icons.add_location_alt,
+                    icon: Icon(Icons.add_location_alt,
                         color: Colors.transparent),
-                    onPressed: () {},
+                    onPressed: null,
                   ),
                 ),
               ],
@@ -247,7 +237,6 @@ class _AddressesSectionState extends State<AddressesSection> {
     setState(() {
       _isAddingOrEditing = true;
       _editingAddressId = null;
-      _editingAddressData = null;
       _clearFormFields();
     });
   }
@@ -257,7 +246,6 @@ class _AddressesSectionState extends State<AddressesSection> {
     setState(() {
       _isAddingOrEditing = true;
       _editingAddressId = addressId;
-      _editingAddressData = addressData;
       _populateFormFields(addressData);
     });
   }
@@ -305,11 +293,8 @@ class _AddressesSectionState extends State<AddressesSection> {
                     const SizedBox(height: 10),
                     _buildTextField(_streetNumberController, 'Número'),
                     const SizedBox(height: 10),
-                    // Wrap the dropdown field with StatefulBuilder
                     StatefulBuilder(
                       builder: (BuildContext context, StateSetter setState) {
-                        // Create a safe list of items that includes the currently selected value
-                        // This prevents crashes if the edited address has a colonia not in the fetched list
                         List<String> dropdownItems = List.from(_colonias);
                         if (_selectedColonia != null &&
                             !dropdownItems.contains(_selectedColonia)) {
@@ -322,7 +307,6 @@ class _AddressesSectionState extends State<AddressesSection> {
                           label: 'Colonia',
                           items: dropdownItems,
                           onChanged: (value) {
-                            // Update state in parent
                             this.setState(() {
                               _selectedColonia = value;
                             });
@@ -345,7 +329,6 @@ class _AddressesSectionState extends State<AddressesSection> {
                 style: ElevatedButton.styleFrom(
                   foregroundColor: Colors.white,
                   backgroundColor: Colors.black,
-                  // Text color
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12.0),
                   ),
@@ -432,7 +415,8 @@ class _AddressesSectionState extends State<AddressesSection> {
   }) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     return DropdownButtonFormField<String>(
-      value: value,
+      // UPDATED: 'value' replaced with 'initialValue' for Flutter 3.33+
+      initialValue: value,
       decoration: InputDecoration(
         labelText: label,
         border: OutlineInputBorder(
@@ -465,7 +449,6 @@ class _AddressesSectionState extends State<AddressesSection> {
     );
   }
 
-  // Método para mostrar AlertDialog
   void _showAlertDialog(String title, String message) {
     showDialog(
       context: context,
@@ -477,7 +460,7 @@ class _AddressesSectionState extends State<AddressesSection> {
             TextButton(
               child: const Text('Aceptar'),
               onPressed: () {
-                Navigator.of(context).pop(); // Cerrar el diálogo
+                Navigator.of(context).pop();
               },
             ),
           ],
@@ -493,19 +476,17 @@ class _AddressesSectionState extends State<AddressesSection> {
         return;
       }
 
-      // Build the full address string
       final addressString =
           '${_streetController.text} ${_streetNumberController.text}, $_selectedColonia, $_city, $_state, ${_zipCodeController.text}, México';
 
       try {
-        // Use geocoding to get latitude and longitude
         List<Location> locations = await locationFromAddress(addressString);
         if (locations.isNotEmpty) {
           final location = locations.first;
           LatLng initialPosition =
           LatLng(location.latitude, location.longitude);
 
-          // Show a dialog for user to confirm location
+          if (!mounted) return;
           LatLng? selectedPosition = await showDialog<LatLng>(
             context: context,
             builder: (context) => ConfirmLocationDialog(
@@ -514,7 +495,6 @@ class _AddressesSectionState extends State<AddressesSection> {
           );
 
           if (selectedPosition != null) {
-            // Save address data along with coordinates
             _saveAddress(selectedPosition);
           } else {
             _showAlertDialog('Información', 'Ubicación no confirmada');
@@ -540,10 +520,8 @@ class _AddressesSectionState extends State<AddressesSection> {
           .doc(userId)
           .collection('addresses');
 
-      // Check if the user already has 3 addresses
       final querySnapshot = await addressesRef.get();
       if (querySnapshot.docs.length >= 3 && _editingAddressId == null) {
-        // User already has 3 addresses and is trying to add a new one
         _showAlertDialog(
             'Información', 'No puedes agregar más de 3 direcciones');
         return;
@@ -586,7 +564,7 @@ class _AddressesSectionState extends State<AddressesSection> {
               actions: [
                 TextButton(
                   onPressed: () {
-                    Navigator.of(context).pop(); // Cancel
+                    Navigator.of(context).pop();
                   },
                   child: const Text('Cancelar'),
                 ),
@@ -600,7 +578,8 @@ class _AddressesSectionState extends State<AddressesSection> {
                           .collection('addresses')
                           .doc(addressId)
                           .delete();
-                      Navigator.of(context).pop(); // Confirm
+                      if (!context.mounted) return;
+                      Navigator.of(context).pop();
                       _showAlertDialog('Éxito', 'Dirección eliminada');
                     }
                   },
@@ -619,11 +598,10 @@ class _AddressesSectionState extends State<AddressesSection> {
 class ConfirmLocationDialog extends StatefulWidget {
   final LatLng initialLocation;
 
-  const ConfirmLocationDialog({Key? key, required this.initialLocation})
-      : super(key: key);
+  const ConfirmLocationDialog({super.key, required this.initialLocation});
 
   @override
-  _ConfirmLocationDialogState createState() => _ConfirmLocationDialogState();
+  State<ConfirmLocationDialog> createState() => _ConfirmLocationDialogState();
 }
 
 class _ConfirmLocationDialogState extends State<ConfirmLocationDialog> {
@@ -676,7 +654,7 @@ class _ConfirmLocationDialogState extends State<ConfirmLocationDialog> {
           actions: [
             TextButton(
               onPressed: () {
-                Navigator.of(context).pop(null); // Cancel
+                Navigator.of(context).pop(null);
               },
               child: const Text('Cancelar'),
             ),
@@ -698,12 +676,12 @@ class AddressExpansionTile extends StatelessWidget {
   final VoidCallback onDelete;
 
   const AddressExpansionTile({
-    Key? key,
+    super.key,
     required this.addressId,
     required this.addressData,
     required this.onEdit,
     required this.onDelete,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -765,8 +743,7 @@ class AddressExpansionTile extends StatelessWidget {
                   rotateGesturesEnabled: false,
                   tiltGesturesEnabled: false,
                   zoomGesturesEnabled: false,
-                  liteModeEnabled:
-                  true, // Use lite mode for better performance
+                  liteModeEnabled: true,
                 ),
               )
             else
@@ -779,7 +756,7 @@ class AddressExpansionTile extends StatelessWidget {
                   ),
                 ),
               ),
-            ButtonBar(
+            OverflowBar(
               alignment: MainAxisAlignment.end,
               children: [
                 TextButton(

@@ -1,5 +1,3 @@
-// lib/models/applied_coupon.dart
-
 class AppliedCoupon {
   final String code;
   final double maxDiscount;

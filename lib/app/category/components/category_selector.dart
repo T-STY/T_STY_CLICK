@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
-
 import 'choice_category.dart';
 
 class CategorySelector extends StatelessWidget {
   const CategorySelector({
-    Key? key,
-  }) : super(key: key);
+    super.key,
+  });
 
   @override
   Widget build(BuildContext context) {

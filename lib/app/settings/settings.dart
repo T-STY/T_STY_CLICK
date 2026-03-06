@@ -5,7 +5,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../auth/login_page.dart';
 import '../../components/custom_loader.dart';
 import '../../constants/app_images.dart';
-import '../../main.dart';
 import 'addresses_section.dart';
 import 'rewards.dart';
 import 'create_new_card.dart';
@@ -14,13 +13,12 @@ class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
 
   @override
-  _SettingsPageState createState() => _SettingsPageState();
+  State<SettingsPage> createState() => _SettingsPageState();
 }
 
 class _SettingsPageState extends State<SettingsPage> {
-  int _currentIndex = 0; // 0 para la vista de Configuración
+  int _currentIndex = 0;
 
-  // Controladores y variables para la información personal
   late TextEditingController _emailController;
   late TextEditingController _phoneNumberController;
   late TextEditingController _passwordController;
@@ -51,32 +49,32 @@ class _SettingsPageState extends State<SettingsPage> {
     super.dispose();
   }
 
-  // Navegar de regreso a la vista de Configuración
   void _navigateToSettings() {
     setState(() {
       _currentIndex = 0;
     });
   }
 
-  // Obtener el nombre del usuario desde Firebase
   Future<void> _fetchUserName() async {
     final userId = FirebaseAuth.instance.currentUser?.uid;
     if (userId != null) {
       try {
-        final userDoc =
-        await FirebaseFirestore.instance.collection('users').doc(userId).get();
+        final userDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(userId)
+            .get();
         if (userDoc.exists) {
           setState(() {
-            _nameController.text = userDoc.data()?['userInfo']['name'] ?? 'Usuario';
+            _nameController.text =
+                userDoc.data()?['userInfo']['name'] ?? 'Usuario';
           });
         }
       } catch (e) {
-        print('Error al obtener el nombre del usuario: $e');
+        debugPrint('Error al obtener el nombre del usuario: $e');
       }
     }
   }
 
-  // Obtener datos del usuario (correo electrónico, teléfono)
   Future<void> _fetchUserData() async {
     final userId = FirebaseAuth.instance.currentUser?.uid;
 
@@ -88,8 +86,10 @@ class _SettingsPageState extends State<SettingsPage> {
     }
 
     try {
-      final userDoc =
-      await FirebaseFirestore.instance.collection('users').doc(userId).get();
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .get();
       final userInfoDoc = await FirebaseFirestore.instance
           .collection('users')
           .doc(userId)
@@ -106,7 +106,8 @@ class _SettingsPageState extends State<SettingsPage> {
 
       if (userInfoDoc.exists) {
         setState(() {
-          _phoneNumberController.text = userInfoDoc.data()?['phoneNumber'] ?? '';
+          _phoneNumberController.text =
+              userInfoDoc.data()?['phoneNumber'] ?? '';
           _isLoading = false;
         });
       } else {
@@ -115,26 +116,18 @@ class _SettingsPageState extends State<SettingsPage> {
         });
       }
     } catch (e) {
-      print('Error al obtener los datos del usuario: $e');
+      debugPrint('Error al obtener los datos del usuario: $e');
       setState(() {
         _isLoading = false;
       });
     }
   }
 
-  // Actualizar información del usuario
   Future<void> _updateUserInfo(String field, String value) async {
     final userId = FirebaseAuth.instance.currentUser?.uid;
     if (userId != null) {
       try {
-        if (field == 'email') {
-          await FirebaseFirestore.instance
-              .collection('users')
-              .doc(userId)
-              .update({
-            'userInfo.$field': value,
-          });
-        } else if (field == 'phoneNumber') {
+        if (field == 'phoneNumber') {
           await FirebaseFirestore.instance
               .collection('users')
               .doc(userId)
@@ -142,17 +135,16 @@ class _SettingsPageState extends State<SettingsPage> {
               .doc('userInfo')
               .update({field: value});
         }
-        // Show success dialog
+        if (!mounted) return;
         _showAlertDialog('Éxito', 'Información actualizada con éxito');
       } catch (e) {
-        print('Error al actualizar la información: $e');
-        // Show error dialog
+        debugPrint('Error al actualizar la información: $e');
+        if (!mounted) return;
         _showAlertDialog('Error', 'Error al actualizar la información');
       }
     }
   }
 
-  // Cambiar contraseña
   Future<void> _changePassword(String password) async {
     try {
       User? user = FirebaseAuth.instance.currentUser;
@@ -160,28 +152,70 @@ class _SettingsPageState extends State<SettingsPage> {
         await user.updatePassword(password);
         _passwordController.clear();
         _confirmPasswordController.clear();
-        // Show success dialog
+        if (!mounted) return;
         _showAlertDialog('Éxito', 'Contraseña actualizada con éxito');
       }
     } catch (e) {
-      print('Error al cambiar la contraseña: $e');
-      // Show error dialog
-      _showAlertDialog('Error', 'Error al cambiar la contraseña');
+      debugPrint('Error al cambiar la contraseña: $e');
+      if (!mounted) return;
+
+      String errorMsg = 'Error al cambiar la contraseña';
+      if (e is FirebaseAuthException && e.code == 'requires-recent-login') {
+        errorMsg = 'Esta operación es sensible y requiere un inicio de sesión reciente. Por favor, vuelve a iniciar sesión e intenta de nuevo.';
+      }
+      _showAlertDialog('Error', errorMsg);
+    }
+  }
+
+  Future<void> _deleteAccount() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Eliminar Cuenta'),
+        content: const Text(
+            '¿Estás seguro de que deseas eliminar tu cuenta y todos tus datos? Esta acción no se puede deshacer.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Eliminar'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      try {
+        await user.delete();
+        if (!mounted) return;
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (context) => const LoginPage()),
+              (route) => false,
+        );
+      } catch (e) {
+        debugPrint('Error al eliminar la cuenta: $e');
+        if (!mounted) return;
+        _showAlertDialog('Error',
+            'No se pudo eliminar la cuenta. Es posible que debas volver a iniciar sesión para confirmar esta acción.');
+      }
     }
   }
 
   void _handleChangePassword() {
-    if (_passwordController.text.isEmpty) {
-      // No se solicitó cambio de contraseña
-      return;
-    }
+    if (_passwordController.text.isEmpty) return;
 
     if (_formKey.currentState?.validate() ?? false) {
       _changePassword(_passwordController.text);
     }
   }
 
-  // Método para mostrar AlertDialog
   void _showAlertDialog(String title, String message) {
     showDialog(
       context: context,
@@ -192,26 +226,12 @@ class _SettingsPageState extends State<SettingsPage> {
           actions: [
             TextButton(
               child: const Text('Aceptar'),
-              onPressed: () {
-                Navigator.of(context).pop(); // Cerrar el diálogo
-              },
+              onPressed: () => Navigator.of(context).pop(),
             ),
           ],
         );
       },
     );
-  }
-
-  // Validaciones
-  String? _validateEmail(String? value) {
-    if (value == null || value.isEmpty) {
-      return 'Por favor, ingresa tu correo electrónico';
-    }
-    final emailRegex = RegExp(r'^[^@]+@[^@]+\.[^@]+');
-    if (!emailRegex.hasMatch(value)) {
-      return 'Por favor, ingresa un correo electrónico válido';
-    }
-    return null;
   }
 
   String? _validatePhoneNumber(String? value) {
@@ -226,67 +246,51 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   String? _validatePassword(String? value) {
-    if (value != null && value.isNotEmpty && value.length < 6) {
+    if (value == null || value.isEmpty) {
+      return 'La contraseña no puede estar vacía';
+    }
+    if (value.length < 6) {
       return 'La contraseña debe tener al menos 6 caracteres';
     }
     return null;
   }
 
   String? _validateConfirmPassword(String? value) {
-    if (_passwordController.text.isNotEmpty) {
-      if (value == null || value.isEmpty) {
-        return 'Por favor, confirma tu contraseña';
-      }
-      if (value != _passwordController.text) {
-        return 'Las contraseñas no coinciden';
-      }
+    if (value == null || value.isEmpty) {
+      return 'Por favor, confirma tu contraseña';
+    }
+    if (value != _passwordController.text) {
+      return 'Las contraseñas no coinciden';
     }
     return null;
   }
 
-  // Lista de páginas correspondientes a cada índice
   List<Widget> _buildPages() {
     return [
       _buildSettingsContent(),
-      AddressesSection(
-        onBack: _navigateToSettings,
-      ),
-      RewardsCardPage(
-        onBack: _navigateToSettings,
-      ),
-      CreateNewCard(
-        onBack: _navigateToSettings,
-      ),
+      AddressesSection(onBack: _navigateToSettings),
+      RewardsCardPage(onBack: _navigateToSettings),
+      CreateNewCard(onBack: _navigateToSettings),
     ];
   }
 
-  // Contenido principal de Configuración
   Widget _buildSettingsContent() {
+    final user = FirebaseAuth.instance.currentUser;
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    final cardColor = isDarkMode ? Colors.white : Colors.white;
-    final accentColor = Colors.black; // Ajusta el color según sea necesario
+    const cardColor = Colors.white;
+    const accentColor = Colors.black;
 
-    return WillPopScope(
-      onWillPop: () async {
-        if (_currentIndex != 0) {
-          _navigateToSettings();
-          return false;
-        }
-        return true;
-      },
-      child: Scaffold(
+    if (user == null) {
+      return Scaffold(
         appBar: AppBar(
-          title: Padding(
-            padding: const EdgeInsets.all(0),
-            child: SizedBox(
-              height: 180,
-              width: 300,
-              child: AspectRatio(
-                aspectRatio: 1 / 1,
-                child: Image.asset(
-                  isDarkMode ? AppImages.logowhite : AppImages.logo,
-                  fit: BoxFit.contain,
-                ),
+          title: SizedBox(
+            height: 180,
+            width: 300,
+            child: AspectRatio(
+              aspectRatio: 1 / 1,
+              child: Image.asset(
+                isDarkMode ? AppImages.logowhite : AppImages.logo,
+                fit: BoxFit.contain,
               ),
             ),
           ),
@@ -296,24 +300,104 @@ class _SettingsPageState extends State<SettingsPage> {
           scrolledUnderElevation: 0,
         ),
         backgroundColor: Colors.white,
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Text(
+                  'Inicia sesión para ver tu configuración',
+                  style: TextStyle(fontSize: 18, color: Colors.grey),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 20),
+                ElevatedButton(
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(builder: (context) => const LoginPage()),
+                    );
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.black,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 40, vertical: 16),
+                    shape: const StadiumBorder(),
+                  ),
+                  child: const Text(
+                    'Iniciar Sesión',
+                    style: TextStyle(color: Colors.white, fontSize: 16),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    return PopScope(
+      canPop: _currentIndex == 0,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        if (_currentIndex != 0) {
+          _navigateToSettings();
+        }
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          leading: const SizedBox(),
+          leadingWidth: 60,
+          title: SizedBox(
+            height: 180,
+            width: 300,
+            child: AspectRatio(
+              aspectRatio: 1 / 1,
+              child: Image.asset(
+                isDarkMode ? AppImages.logowhite : AppImages.logo,
+                fit: BoxFit.contain,
+              ),
+            ),
+          ),
+          backgroundColor: Colors.white,
+          elevation: 0,
+          centerTitle: true,
+          scrolledUnderElevation: 0,
+          actions: [
+            Padding(
+              padding: const EdgeInsets.only(right: 16.0),
+              child: IconButton(
+                icon: const Icon(Icons.logout, color: Colors.black),
+                onPressed: () async {
+                  await FirebaseAuth.instance.signOut();
+                  if (!mounted) return;
+                  Navigator.of(context).pushReplacement(
+                      MaterialPageRoute(builder: (context) => const LoginPage()));
+                },
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: Colors.white,
         body: _isLoading
-        // NEW: Use CustomLoader instead of CircularProgressIndicator
             ? const CustomLoader()
             : ListView(
           padding: const EdgeInsets.all(16.0),
           children: [
             _buildHeaderSection(cardColor),
             const SizedBox(height: 24),
-            _buildExpandingInputCard(
-              title: 'Correo electrónico',
-              controller: _emailController,
-              icon: Icons.email_outlined,
-              keyboardType: TextInputType.emailAddress,
-              validator: _validateEmail,
-              onSave: () => _updateUserInfo('email', _emailController.text),
-              cardColor: cardColor,
-              accentColor: accentColor,
-              tileKey: const Key('email_tile'),
+            Card(
+              color: cardColor,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              elevation: 4,
+              child: ListTile(
+                leading: const Icon(Icons.email_outlined, color: accentColor),
+                title: const Text(
+                  'Correo electrónico',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: accentColor),
+                ),
+                subtitle: Text(_emailController.text),
+              ),
             ),
             const SizedBox(height: 10),
             _buildExpandingInputCard(
@@ -322,8 +406,8 @@ class _SettingsPageState extends State<SettingsPage> {
               icon: Icons.phone_android,
               keyboardType: TextInputType.phone,
               validator: _validatePhoneNumber,
-              onSave: () =>
-                  _updateUserInfo('phoneNumber', _phoneNumberController.text),
+              onSave: () => _updateUserInfo(
+                  'phoneNumber', _phoneNumberController.text),
               cardColor: cardColor,
               accentColor: accentColor,
               tileKey: const Key('phone_tile'),
@@ -334,8 +418,6 @@ class _SettingsPageState extends State<SettingsPage> {
               accentColor: accentColor,
             ),
             const SizedBox(height: 10),
-
-            // Domicilio
             _buildExpansionOption(
               title: 'Domicilio',
               icon: Icons.location_on,
@@ -343,13 +425,11 @@ class _SettingsPageState extends State<SettingsPage> {
               cardColor: cardColor,
               onTap: () {
                 setState(() {
-                  _currentIndex = 1; // Cambiar a la sección de Direcciones
+                  _currentIndex = 1;
                 });
               },
             ),
             const SizedBox(height: 10),
-
-            // Monedero
             _buildExpansionOption(
               title: 'Monedero',
               icon: Icons.card_membership,
@@ -357,27 +437,23 @@ class _SettingsPageState extends State<SettingsPage> {
               cardColor: cardColor,
               onTap: () {
                 setState(() {
-                  _currentIndex = 2; // Cambiar a la página de Monedero
+                  _currentIndex = 2;
                 });
               },
             ),
-
-            // Logout Button (Added Below Monedero)
-            const SizedBox(height: 20),
+            const SizedBox(height: 10),
             ListTile(
-              leading: Icon(Icons.logout, color: accentColor),
-              title: Text(
-                'Cerrar sesión',
+              leading:
+              const Icon(Icons.delete_forever, color: Colors.red),
+              title: const Text(
+                'Eliminar Cuenta',
                 style: TextStyle(
-                  color: accentColor,
+                  color: Colors.red,
                   fontWeight: FontWeight.bold,
                   fontSize: 16,
                 ),
               ),
-              onTap: () async {
-                await FirebaseAuth.instance.signOut();
-                Navigator.of(context).pushReplacement(customPageRouteBuilder(const LoginPage()));
-              },
+              onTap: _deleteAccount,
             ),
           ],
         ),
@@ -385,8 +461,6 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
-
-  // Método para construir la sección de encabezado
   Widget _buildHeaderSection(Color cardColor) {
     return Stack(
       children: [
@@ -394,32 +468,36 @@ class _SettingsPageState extends State<SettingsPage> {
           decoration: BoxDecoration(
             color: cardColor,
             borderRadius: BorderRadius.circular(16),
-            boxShadow: [
+            boxShadow: const [
               BoxShadow(color: Colors.black12, blurRadius: 10, spreadRadius: 2),
             ],
           ),
-          padding: const EdgeInsets.fromLTRB(20,30, 20, 10),
+          padding: const EdgeInsets.fromLTRB(20, 30, 20, 10),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
                 'Bienvenido,',
                 style: TextStyle(
-                    fontSize: 24, fontWeight: FontWeight.bold, color: Colors.black87),
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black87),
               ),
               Text(
                 _nameController.text.isEmpty ? 'Usuario' : _nameController.text,
                 style: const TextStyle(
-                    fontSize: 26, fontWeight: FontWeight.w600, color: Colors.black87),
+                    fontSize: 26,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.black87),
               ),
               const SizedBox(height: 10),
               Divider(color: Colors.grey[400], thickness: 1),
               Text(
                 'Filipenses 1:9-10',
                 style: TextStyle(
-                  fontSize: 14, // Smaller font size for subtlety
-                  color: Colors.grey[600], // Subdued color for elegance
-                  fontStyle: FontStyle.italic, // Italic style for emphasis
+                  fontSize: 14,
+                  color: Colors.grey[600],
+                  fontStyle: FontStyle.italic,
                 ),
               ),
             ],
@@ -435,9 +513,8 @@ class _SettingsPageState extends State<SettingsPage> {
               'assets/animations/animation.json',
               repeat: true,
               animate: true,
-              errorBuilder: (context, error, stackTrace) {
-                return const Icon(Icons.error, color: Colors.red);
-              },
+              errorBuilder: (context, error, stackTrace) =>
+              const Icon(Icons.error, color: Colors.red),
             ),
           ),
         ),
@@ -445,7 +522,6 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
-  // Método para construir los campos de entrada expandibles
   Widget _buildExpandingInputCard({
     required String title,
     required TextEditingController controller,
@@ -466,11 +542,11 @@ class _SettingsPageState extends State<SettingsPage> {
       child: Theme(
         data: Theme.of(context).copyWith(
           dividerColor: Colors.transparent,
-          splashColor: Colors.transparent, // Eliminar efecto de salpicadura
-          highlightColor: Colors.transparent, // Eliminar efecto de resaltado
+          splashColor: Colors.transparent,
+          highlightColor: Colors.transparent,
         ),
         child: ExpansionTile(
-          key: tileKey, // Clave única
+          key: tileKey,
           initiallyExpanded: false,
           tilePadding: const EdgeInsets.symmetric(horizontal: 16.0),
           childrenPadding: EdgeInsets.zero,
@@ -506,8 +582,8 @@ class _SettingsPageState extends State<SettingsPage> {
                           hintText: 'Ingresa $title',
                           filled: true,
                           fillColor: Colors.grey[100],
-                          contentPadding:
-                          const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+                          contentPadding: const EdgeInsets.symmetric(
+                              vertical: 14, horizontal: 16),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
                             borderSide: BorderSide.none,
@@ -517,7 +593,7 @@ class _SettingsPageState extends State<SettingsPage> {
                     ),
                     const SizedBox(width: 10),
                     SizedBox(
-                      width: 50, // Ajusta el ancho según sea necesario
+                      width: 50,
                       child: ElevatedButton(
                         onPressed: onSave,
                         style: ElevatedButton.styleFrom(
@@ -525,7 +601,7 @@ class _SettingsPageState extends State<SettingsPage> {
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(8),
                           ),
-                          padding: EdgeInsets.zero, // Eliminar padding interno
+                          padding: EdgeInsets.zero,
                         ),
                         child: const Icon(
                           Icons.check_circle,
@@ -556,8 +632,8 @@ class _SettingsPageState extends State<SettingsPage> {
       child: Theme(
         data: Theme.of(context).copyWith(
           dividerColor: Colors.transparent,
-          splashColor: Colors.transparent, // Eliminar efecto de salpicadura
-          highlightColor: Colors.transparent, // Eliminar efecto de resaltado
+          splashColor: Colors.transparent,
+          highlightColor: Colors.transparent,
         ),
         child: ExpansionTile(
           key: const Key('password_tile'),
@@ -582,60 +658,63 @@ class _SettingsPageState extends State<SettingsPage> {
           children: [
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 8),
-              child: Column(
-                children: [
-                  TextFormField(
-                    controller: _passwordController,
-                    obscureText: true,
-                    validator: _validatePassword,
-                    decoration: InputDecoration(
-                      hintText: 'Nueva contraseña',
-                      filled: true,
-                      fillColor: Colors.grey[100],
-                      contentPadding:
-                      const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide.none,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    controller: _confirmPasswordController,
-                    obscureText: true,
-                    validator: _validateConfirmPassword,
-                    decoration: InputDecoration(
-                      hintText: 'Confirmar contraseña',
-                      filled: true,
-                      fillColor: Colors.grey[100],
-                      contentPadding:
-                      const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide.none,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: _handleChangePassword,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: accentColor,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  children: [
+                    TextFormField(
+                      controller: _passwordController,
+                      obscureText: true,
+                      validator: _validatePassword,
+                      decoration: InputDecoration(
+                        hintText: 'Nueva contraseña',
+                        filled: true,
+                        fillColor: Colors.grey[100],
+                        contentPadding: const EdgeInsets.symmetric(
+                            vertical: 14, horizontal: 16),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide.none,
                         ),
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                      ),
-                      child: const Text(
-                        'Actualizar contraseña',
-                        style: TextStyle(color: Colors.white, fontSize: 16),
                       ),
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: _confirmPasswordController,
+                      obscureText: true,
+                      validator: _validateConfirmPassword,
+                      decoration: InputDecoration(
+                        hintText: 'Confirmar contraseña',
+                        filled: true,
+                        fillColor: Colors.grey[100],
+                        contentPadding: const EdgeInsets.symmetric(
+                            vertical: 14, horizontal: 16),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide.none,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: _handleChangePassword,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: accentColor,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                        ),
+                        child: const Text(
+                          'Actualizar contraseña',
+                          style: TextStyle(color: Colors.white, fontSize: 16),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
             const SizedBox(height: 8),
@@ -645,7 +724,6 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
-  // Nuevo método para construir las opciones de Domicilio y Monedero como ExpansionTile
   Widget _buildExpansionOption({
     required String title,
     required IconData icon,

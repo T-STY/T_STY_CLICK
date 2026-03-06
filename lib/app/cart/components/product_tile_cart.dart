@@ -11,12 +11,11 @@ class ProductTileCart extends StatelessWidget {
   final void Function()? increaseQuantity;
   final void Function()? decreaseQuantity;
   final bool isBulk;
-  // New fields
   final String? typeSpecific;
   final String? variante;
 
   const ProductTileCart({
-    Key? key,
+    super.key,
     required this.objectId,
     required this.name,
     required this.price,
@@ -27,7 +26,7 @@ class ProductTileCart extends StatelessWidget {
     required this.isBulk,
     this.typeSpecific,
     this.variante,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -42,7 +41,7 @@ class ProductTileCart extends StatelessWidget {
         borderRadius: BorderRadius.circular(16.0),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.1),
+            color: Colors.black.withValues(alpha: 0.1),
             blurRadius: 6,
             offset: const Offset(0, 4),
           ),
@@ -70,7 +69,6 @@ class ProductTileCart extends StatelessWidget {
             ),
             const SizedBox(width: 16.0),
 
-            // Product Info
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -82,7 +80,6 @@ class ProductTileCart extends StatelessWidget {
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  // Display Variant and Type Specific
                   if ((variante != null && variante!.isNotEmpty) || (typeSpecific != null && typeSpecific!.isNotEmpty))
                     Text(
                       "${variante ?? ''} ${typeSpecific ?? ''}".trim(),
@@ -104,7 +101,6 @@ class ProductTileCart extends StatelessWidget {
               ),
             ),
 
-            // Quantity Controls (Same as before)
             Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [

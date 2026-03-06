@@ -6,23 +6,31 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 import '../../components/shimmer_placeholder.dart';
 import '../../constants/app_images.dart';
 import '../cart/cart_provider.dart';
+import '../../auth/login_page.dart';
+import '../../custom_page_route.dart';
 
 class ProductDisplayPage extends StatefulWidget {
   final String selectedCategory;
   final VoidCallback onBack;
 
-  ProductDisplayPage({required this.selectedCategory, required this.onBack});
+  const ProductDisplayPage({
+    super.key,
+    required this.selectedCategory,
+    required this.onBack,
+  });
 
   @override
-  _ProductDisplayPageState createState() => _ProductDisplayPageState();
+  ProductDisplayPageState createState() => ProductDisplayPageState();
 }
 
-class _ProductDisplayPageState extends State<ProductDisplayPage> {
-  TextEditingController _searchController = TextEditingController();
+class ProductDisplayPageState extends State<ProductDisplayPage> {
+
+  final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
 
   @override
@@ -48,13 +56,15 @@ class _ProductDisplayPageState extends State<ProductDisplayPage> {
   Widget build(BuildContext context) {
     bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
-    return WillPopScope(
-      onWillPop: () async {
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
         widget.onBack();
-        return false; // Prevent default back behavior
       },
       child: Scaffold(
         appBar: AppBar(
+          scrolledUnderElevation: 0,
           title: Padding(
             padding: const EdgeInsets.all(0),
             child: SizedBox(
@@ -70,13 +80,13 @@ class _ProductDisplayPageState extends State<ProductDisplayPage> {
             ),
           ),
           backgroundColor: Colors.transparent,
-          automaticallyImplyLeading: true, // Enables default back button and gestures
+          automaticallyImplyLeading:
+          true,
         ),
         body: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 70),
           child: Column(
             children: [
-              // Search bar in the body
               TextField(
                 controller: _searchController,
                 decoration: InputDecoration(
@@ -87,7 +97,7 @@ class _ProductDisplayPageState extends State<ProductDisplayPage> {
                     icon: const Icon(Icons.clear),
                     onPressed: () {
                       _searchController.clear();
-                      _onSearchChanged(); // Clear search results
+                      _onSearchChanged();
                     },
                   )
                       : null,
@@ -107,17 +117,17 @@ class _ProductDisplayPageState extends State<ProductDisplayPage> {
                       .where('category', isEqualTo: widget.selectedCategory)
                       .snapshots(),
                   builder: (context, AsyncSnapshot<QuerySnapshot> snapshot) {
-                    // NEW: Shimmer Grid Loading State
                     if (snapshot.connectionState == ConnectionState.waiting) {
                       return GridView.builder(
                         padding: const EdgeInsets.only(bottom: 20),
-                        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                        gridDelegate:
+                        const SliverGridDelegateWithFixedCrossAxisCount(
                           crossAxisCount: 2,
                           crossAxisSpacing: 10,
                           mainAxisSpacing: 20,
                           childAspectRatio: 7 / 10,
                         ),
-                        itemCount: 6, // Show 6 dummy items
+                        itemCount: 6,
                         itemBuilder: (context, index) {
                           return Container(
                             decoration: BoxDecoration(
@@ -125,18 +135,17 @@ class _ProductDisplayPageState extends State<ProductDisplayPage> {
                               borderRadius: BorderRadius.circular(15),
                               boxShadow: [
                                 BoxShadow(
-                                  color: Colors.grey.withOpacity(0.1),
+                                  color: Colors.grey.withValues(alpha: 0.1),
                                   spreadRadius: 5,
                                   blurRadius: 10,
                                   offset: const Offset(0, 4),
                                 ),
                               ],
                             ),
-                            child: Column(
+                            child: const Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                // Image Placeholder
-                                const Expanded(
+                                Expanded(
                                   child: ShimmerPlaceholder(
                                     shapeBorder: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.only(
@@ -146,17 +155,20 @@ class _ProductDisplayPageState extends State<ProductDisplayPage> {
                                     ),
                                   ),
                                 ),
-                                // Text Placeholders
                                 Padding(
-                                  padding: const EdgeInsets.all(8.0),
+                                  padding: EdgeInsets.all(8.0),
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: const [
-                                      ShimmerPlaceholder(width: 100, height: 16),
+                                    crossAxisAlignment:
+                                    CrossAxisAlignment.start,
+                                    children: [
+                                      ShimmerPlaceholder(
+                                          width: 100, height: 16),
                                       SizedBox(height: 8),
                                       ShimmerPlaceholder(width: 60, height: 14),
                                       SizedBox(height: 8),
-                                      ShimmerPlaceholder(width: double.infinity, height: 36), // Button
+                                      ShimmerPlaceholder(
+                                          width: double.infinity,
+                                          height: 36),
                                     ],
                                   ),
                                 ),
@@ -174,15 +186,30 @@ class _ProductDisplayPageState extends State<ProductDisplayPage> {
                       return const Center(child: Text('No products found'));
                     }
 
-                    // Filter products based on search query
                     final products = snapshot.data!.docs.where((product) {
                       final data = product.data() as Map<String, dynamic>;
-                      final productName = data['nombre']?.toString().toLowerCase() ?? '';
+                      final productName =
+                          data['nombre']?.toString().toLowerCase() ?? '';
                       return productName.contains(_searchQuery);
                     }).toList();
 
+                    products.sort((a, b) {
+                      final dataA = a.data() as Map<String, dynamic>;
+                      final dataB = b.data() as Map<String, dynamic>;
+
+                      final nameA =
+                      (dataA['nombre'] as String? ?? '').toLowerCase();
+                      final nameB =
+                      (dataB['nombre'] as String? ?? '').toLowerCase();
+
+                      return nameA.compareTo(nameB);
+                    });
+
                     return GridView.builder(
-                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+
+                      padding: const EdgeInsets.only(bottom: 50),
+                      gridDelegate:
+                      const SliverGridDelegateWithFixedCrossAxisCount(
                         crossAxisCount: 2,
                         crossAxisSpacing: 10,
                         mainAxisSpacing: 20,
@@ -194,7 +221,6 @@ class _ProductDisplayPageState extends State<ProductDisplayPage> {
 
                         return GestureDetector(
                           onTap: () {
-                            // Add functionality for detailed product view if necessary
                           },
                           child: _buildProductCard(context, product),
                         );
@@ -206,7 +232,9 @@ class _ProductDisplayPageState extends State<ProductDisplayPage> {
             ],
           ),
         ),
-        backgroundColor: isDarkMode ? Colors.grey[850] : Colors.white, // Adjust background color for dark mode
+        backgroundColor: isDarkMode
+            ? Colors.grey[850]
+            : Colors.white,
       ),
     );
   }
@@ -218,9 +246,9 @@ class _ProductDisplayPageState extends State<ProductDisplayPage> {
     final String imageUrl = data['image_url'] ?? '';
     final bool isBulk = data['bulk'] as bool? ?? false;
     final double stock = (data['stock'] as num?)?.toDouble() ?? 0.0;
-    // 1. EXTRACT NEW FIELDS
     final String? typeSpecific = data['type_specific'] as String?;
     final String? variante = data['variante'] as String?;
+    final bool isGuest = FirebaseAuth.instance.currentUser == null;
 
     return Container(
       decoration: BoxDecoration(
@@ -228,7 +256,7 @@ class _ProductDisplayPageState extends State<ProductDisplayPage> {
         borderRadius: BorderRadius.circular(15),
         boxShadow: [
           BoxShadow(
-            color: Colors.grey.withOpacity(0.1),
+            color: Colors.grey.withValues(alpha: 0.1),
             spreadRadius: 5,
             blurRadius: 10,
             offset: const Offset(0, 4),
@@ -238,7 +266,6 @@ class _ProductDisplayPageState extends State<ProductDisplayPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Inside _buildProductCard:
           Expanded(
             child: ClipRRect(
               borderRadius: const BorderRadius.only(
@@ -251,8 +278,8 @@ class _ProductDisplayPageState extends State<ProductDisplayPage> {
                   imageUrl: imageUrl,
                   fit: BoxFit.contain,
                   width: double.infinity,
-                  // NEW: Shimmer Placeholder
-                  placeholder: (context, url) => const ShimmerPlaceholder(width: double.infinity),
+                  placeholder: (context, url) =>
+                  const ShimmerPlaceholder(width: double.infinity),
                   errorWidget: (context, url, error) => const Icon(Icons.error),
                 ),
               ),
@@ -272,11 +299,17 @@ class _ProductDisplayPageState extends State<ProductDisplayPage> {
                   ),
                 ),
                 const SizedBox(height: 4),
-                Text(
-                  '\$${price.toString()}',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.grey[600],
+                ImageFiltered(
+                  imageFilter: ImageFilter.blur(
+                    sigmaX: isGuest ? 6.0 : 0.0,
+                    sigmaY: isGuest ? 6.0 : 0.0,
+                  ),
+                  child: Text(
+                    '\$${price.toString()}',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.grey[600],
+                    ),
                   ),
                 ),
                 const SizedBox(height: 4),
@@ -296,7 +329,7 @@ class _ProductDisplayPageState extends State<ProductDisplayPage> {
                     'image_url': imageUrl,
                     'bulk': isBulk,
                     'stock': stock,
-                    'type_specific': typeSpecific, // <--- ADD THIS
+                    'type_specific': typeSpecific,
                     'variante': variante,
                   },
                   textColor: Colors.black,
@@ -315,7 +348,7 @@ class _AddToCartButton extends StatefulWidget {
   final Color textColor;
 
   const _AddToCartButton(
-      {super.key, required this.data, required this.textColor});
+      {required this.data, required this.textColor});
 
   @override
   __AddToCartButtonState createState() => __AddToCartButtonState();
@@ -326,7 +359,7 @@ class __AddToCartButtonState extends State<_AddToCartButton> {
   bool _showAgregadoButton = false;
   double _quantity = 1;
   Timer? _timer;
-  late double stock; // Add stock as a state variable
+  late double stock;
   CartProvider? cartProvider;
 
   @override
@@ -337,7 +370,6 @@ class __AddToCartButtonState extends State<_AddToCartButton> {
     cartProvider = Provider.of<CartProvider>(context, listen: false);
     cartProvider!.addListener(_checkCartState);
 
-    // Initialize stock
     stock = widget.data['stock'] as double? ?? 0.0;
   }
 
@@ -358,9 +390,9 @@ class __AddToCartButtonState extends State<_AddToCartButton> {
     }
   }
 
-  // Method to continuously check the cart state
+
   void _checkCartState() {
-    if (!mounted) return; // Prevent execution if the widget is unmounted
+    if (!mounted) return;
 
     final cartProvider = Provider.of<CartProvider>(context, listen: false);
     final String? docId = widget.data['docId'] as String?;
@@ -384,8 +416,12 @@ class __AddToCartButtonState extends State<_AddToCartButton> {
   }
 
   void _onAddToCartPressed() {
+    if (FirebaseAuth.instance.currentUser == null) {
+      Navigator.push(context, customPageRoute(const LoginPage()));
+      return;
+    }
+
     if (stock == 0) {
-      // Do nothing if stock is 0
       return;
     }
 
@@ -396,28 +432,34 @@ class __AddToCartButtonState extends State<_AddToCartButton> {
     final double? price = widget.data['price'] as double?;
     final String? imageUrl = widget.data['image_url'] as String?;
     final bool isBulk = widget.data['bulk'] as bool? ?? false;
-    // 1. EXTRACT FROM WIDGET DATA
     final String? typeSpecific = widget.data['type_specific'] as String?;
     final String? variante = widget.data['variante'] as String?;
 
     if (docId != null && name != null && price != null && imageUrl != null) {
       if (isBulk) {
-        _showBulkOrderDialog(); // Display the bulk order dialog if it's a bulk item
+        _showBulkOrderDialog();
       } else {
         setState(() {
           _showSwitchTile = true;
-          _quantity = 1; // Reset quantity to 1
+          _quantity = 1;
           _showAgregadoButton = false;
         });
 
-        // 2. PASS TO HELPER
-        _resetAndStartTimer(docId, name, price, imageUrl, cartProvider, isBulk, typeSpecific, variante);
+        _resetAndStartTimer(docId, name, price, imageUrl, cartProvider, isBulk,
+            typeSpecific, variante);
       }
     }
   }
 
-  void _resetAndStartTimer(String docId, String name, double price,
-      String imageUrl, CartProvider cartProvider, bool isBulk, String? typeSpecific, String? variante) { // <--- Update Args
+  void _resetAndStartTimer(
+      String docId,
+      String name,
+      double price,
+      String imageUrl,
+      CartProvider cartProvider,
+      bool isBulk,
+      String? typeSpecific,
+      String? variante) {
     _timer?.cancel();
 
     _timer = Timer(const Duration(seconds: 2), () {
@@ -431,15 +473,15 @@ class __AddToCartButtonState extends State<_AddToCartButton> {
               imageUrl,
               _quantity,
               isBulk: isBulk,
-              stock: stock, // Pass stock here
-              typeSpecific: typeSpecific, // <--- PASS HERE
+              stock: stock,
+              typeSpecific: typeSpecific,
               variante: variante,
             );
           } else {
             cartProvider.removeItemCompletely(docId);
           }
-          _showSwitchTile = false; // Hide the switch tile
-          _showAgregadoButton = true; // Show the "Agregado" button
+          _showSwitchTile = false;
+          _showAgregadoButton = true;
           if (kDebugMode) {
             print('Set quantity of $name to $_quantity in cart');
           }
@@ -450,7 +492,7 @@ class __AddToCartButtonState extends State<_AddToCartButton> {
 
   @override
   void dispose() {
-    _timer?.cancel(); // Cancel any timers
+    _timer?.cancel();
     cartProvider?.removeListener(_checkCartState);
     super.dispose();
   }
@@ -470,7 +512,8 @@ class __AddToCartButtonState extends State<_AddToCartButton> {
       final String? typeSpecific = widget.data['type_specific'] as String?;
       final String? variante = widget.data['variante'] as String?;
 
-      _resetAndStartTimer(docId!, name!, price!, imageUrl!, cartProvider, isBulk, typeSpecific, variante);
+      _resetAndStartTimer(docId!, name!, price!, imageUrl!, cartProvider,
+          isBulk, typeSpecific, variante);
     }
   }
 
@@ -489,7 +532,8 @@ class __AddToCartButtonState extends State<_AddToCartButton> {
       final String? typeSpecific = widget.data['type_specific'] as String?;
       final String? variante = widget.data['variante'] as String?;
 
-      _resetAndStartTimer(docId!, name!, price!, imageUrl!, cartProvider, isBulk, typeSpecific, variante);
+      _resetAndStartTimer(docId!, name!, price!, imageUrl!, cartProvider,
+          isBulk, typeSpecific, variante);
     }
   }
 
@@ -520,7 +564,7 @@ class __AddToCartButtonState extends State<_AddToCartButton> {
             _showAgregadoButton = false;
             if (widget.data['bulk'] == true) {
               _showBulkOrderDialog(
-                  prefill: true); // Prefill the dialog if it's bulk
+                  prefill: true);
             }
           });
         },
@@ -585,7 +629,6 @@ class __AddToCartButtonState extends State<_AddToCartButton> {
       '\$${(_quantity * pricePerKilo).toStringAsFixed(2)}';
     }
 
-    // Pre-fill the dialog with the current cart quantity
     final cartProvider = Provider.of<CartProvider>(context, listen: false);
     final cartItem = cartProvider.getItem(widget.data['docId']);
     final currentQuantity = cartItem?.quantity ?? 0.0;
@@ -758,7 +801,6 @@ class __AddToCartButtonState extends State<_AddToCartButton> {
                   onPressed: () {
                     final kilos = double.tryParse(kilosController.text) ?? 0.0;
                     if (kilos > stock) {
-                      // Optionally, show a snackbar or alert indicating insufficient stock
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
                           content: Text('No hay suficiente stock disponible'),
@@ -766,7 +808,8 @@ class __AddToCartButtonState extends State<_AddToCartButton> {
                       );
                     } else {
                       Navigator.of(context).pop();
-                      if (widget.data['docId'] != null && widget.data['nombre'] != null) {
+                      if (widget.data['docId'] != null &&
+                          widget.data['nombre'] != null) {
                         cartProvider.setItem(
                           widget.data['docId'],
                           widget.data['nombre'],
@@ -775,8 +818,9 @@ class __AddToCartButtonState extends State<_AddToCartButton> {
                           kilos,
                           isBulk: true,
                           stock: stock,
-                          typeSpecific: widget.data['type_specific'], // <--- ADD THIS
-                          variante: widget.data['variante'],          // <--- ADD THIS
+                          typeSpecific:
+                          widget.data['type_specific'],
+                          variante: widget.data['variante'],
                         );
                       }
                       if (kDebugMode) {

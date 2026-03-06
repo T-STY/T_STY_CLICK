@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-
 import '../constants/constants.dart';
 
 class IconWithBackground extends StatelessWidget {
@@ -26,7 +25,7 @@ class IconWithBackground extends StatelessWidget {
       padding: const EdgeInsets.all(8.0),
       child: Material(
         borderRadius: radius ?? const BorderRadius.all(Radius.circular(8.0)),
-        color: color ?? AppColors.primary.withOpacity(0.1),
+        color: color ?? AppColors.primary.withValues(alpha: 0.1),
         child: InkWell(
           onTap: onTap,
           borderRadius: AppDefaults.borderRadius,

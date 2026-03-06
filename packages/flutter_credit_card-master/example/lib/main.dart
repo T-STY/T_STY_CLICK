@@ -187,7 +187,7 @@ class MySampleState extends State<MySample> {
                                   Switch(
                                     value: useGlassMorphism,
                                     inactiveTrackColor: Colors.grey,
-                                    activeColor: Colors.white,
+                                    activeThumbColor: Colors.white,
                                     activeTrackColor: AppColors.colorE5D1B2,
                                     onChanged: (bool value) => setState(() {
                                       useGlassMorphism = value;
@@ -207,7 +207,7 @@ class MySampleState extends State<MySample> {
                                   Switch(
                                     value: useBackgroundImage,
                                     inactiveTrackColor: Colors.grey,
-                                    activeColor: Colors.white,
+                                    activeThumbColor: Colors.white,
                                     activeTrackColor: AppColors.colorE5D1B2,
                                     onChanged: (bool value) => setState(() {
                                       useBackgroundImage = value;
@@ -227,7 +227,7 @@ class MySampleState extends State<MySample> {
                                   Switch(
                                     value: useFloatingAnimation,
                                     inactiveTrackColor: Colors.grey,
-                                    activeColor: Colors.white,
+                                    activeThumbColor: Colors.white,
                                     activeTrackColor: AppColors.colorE5D1B2,
                                     onChanged: (bool value) => setState(() {
                                       useFloatingAnimation = value;

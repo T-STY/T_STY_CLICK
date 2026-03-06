@@ -1,5 +1,5 @@
 name: click
-description: "T_STY Click"
+description: "T_STY Beyond"
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
@@ -13,10 +13,10 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # Read more about Android versioning at https://developer.android.com/studio/publish/versioning
 # In iOS, build-name is used as CFBundleShortVersionString while build-number is used as CFBundleVersion.
 # Read more about iOS versioning at
-# https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
+# https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyRefeflutter pub getrence/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 1.0.0+4
+version: 1.0.1+11y
 
 environment:
   sdk: ^3.5.4
@@ -43,11 +43,10 @@ dependencies:
   algolia:
   iconly:
   vibration:
-  google_sign_in:
   cloud_firestore:
   animations:
   flutter_bloc:
-  flutter_staggered_grid_view: ^0.7.0
+  flutter_staggered_grid_view:
   flutter_image_compress:
   slide_to_act_reborn:
   google_maps_flutter:
@@ -55,11 +54,15 @@ dependencies:
   firebase_app_check:
   shared_preferences:
   shimmer:
+  firebase_remote_config:
+  package_info_plus:
+  url_launcher:
   flutter_credit_card:
     path: packages/flutter_credit_card-master
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
+  firebase_core: ^3.15.2
 
 dev_dependencies:
   flutter_test:

@@ -3,24 +3,36 @@ import 'package:flutter/material.dart';
 import '../../constants/app_images.dart';
 
 class CategoriesPage extends StatefulWidget {
+  const CategoriesPage({super.key});
+
   @override
-  _CategoriesPageState createState() => _CategoriesPageState();
+  CategoriesPageState createState() => CategoriesPageState();
 }
 
-class _CategoriesPageState extends State<CategoriesPage> {
-  // Define main categories and their respective subcategories in Spanish
+class CategoriesPageState extends State<CategoriesPage> {
+
   final Map<String, List<String>> mainCategories = {
     "Alimentos y Bebidas": [
       "Abarrotes",
-      "Botanería",
       "Carnes y Salchichonería",
-      "Congelados",
+      "Cereales",
       "Especies",
       "Jugos y Refrescos",
       "Lácteos",
+      "Mariscos",
       "Panadería y Tortillería",
-      "Papeleria",
       "Verdura/Fruta",
+    ],
+    "Bebés y Salud": [
+      "Bebés",
+      "Farmacia",
+    ],
+    "Botanería": [
+      "Dulces",
+      "Galletas",
+      "Helados",
+      "Pan Dulce",
+      "Papas",
     ],
     "Cuidado del Hogar": [
       "Cuidado de la Ropa",
@@ -29,46 +41,39 @@ class _CategoriesPageState extends State<CategoriesPage> {
     "Cuidado Personal": [
       "Higiene y Belleza",
     ],
-    "Bebés y Salud": [
-      "Bebés",
-      "Farmacia",
-    ],
     "Otros": [
       "Ferretería",
-    ],
+      "Mascotas",
+      "Papeleria",
+    ]
   };
 
-  // Current index to track the selected page
   int _selectedIndex = 0;
   String _selectedSubcategory = "";
 
-  // Method to update the index and navigate
   void _onCategorySelected(String subcategory) {
     setState(() {
-      _selectedIndex = 1; // Update index to show ProductDisplayPage
-      _selectedSubcategory = subcategory; // Set the selected subcategory
+      _selectedIndex = 1;
+      _selectedSubcategory = subcategory;
     });
   }
 
-  // Method to return to the CategoriesPage
   void _goBackToCategories() {
     setState(() {
-      _selectedIndex = 0; // Go back to CategoriesPage
+      _selectedIndex = 0;
     });
   }
 
-  // Build the list of pages
   List<Widget> _buildPages() {
     return [
       _buildCategoriesPage(),
       ProductDisplayPage(
         selectedCategory: _selectedSubcategory,
-        onBack: _goBackToCategories, // Pass the back function
+        onBack: _goBackToCategories,
       ),
     ];
   }
 
-  // Build the Categories Page
   Widget _buildCategoriesPage() {
     final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
@@ -95,12 +100,12 @@ class _CategoriesPageState extends State<CategoriesPage> {
       body: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
         child: ListView.builder(
-          itemCount: mainCategories.keys.length + 1, // Add 1 for the SizedBox
+          itemCount: mainCategories.keys.length + 1,
           itemBuilder: (context, index) {
             if (index == mainCategories.keys.length) {
               // Add SizedBox at the bottom
-              return SizedBox(
-                height: 100, // Adjust the height for your navigation bar or bottom padding
+              return const SizedBox(
+                height: 100,
               );
             }
 
@@ -115,10 +120,10 @@ class _CategoriesPageState extends State<CategoriesPage> {
                     borderRadius: BorderRadius.circular(15),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.grey.withOpacity(0.1),
+                        color: Colors.grey.withValues(alpha: 0.1),
                         spreadRadius: 5,
                         blurRadius: 10,
-                        offset: Offset(0, 4),
+                        offset: const Offset(0, 4),
                       ),
                     ],
                   ),
@@ -148,8 +153,6 @@ class _CategoriesPageState extends State<CategoriesPage> {
     );
   }
 
-
-  // Method to build the subcategories list
   Widget _buildSubcategories(String mainCategory) {
     final subcategories = mainCategories[mainCategory]!;
 
@@ -157,7 +160,7 @@ class _CategoriesPageState extends State<CategoriesPage> {
       children: subcategories.map((subcategory) {
         return GestureDetector(
           onTap: () {
-            _onCategorySelected(subcategory); // Handle category selection
+            _onCategorySelected(subcategory);
           },
           child: Container(
             decoration: BoxDecoration(
@@ -165,19 +168,19 @@ class _CategoriesPageState extends State<CategoriesPage> {
               borderRadius: BorderRadius.circular(10),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.grey.withOpacity(0.1),
+                  color: Colors.grey.withValues(alpha: 0.1),
                   spreadRadius: 3,
                   blurRadius: 5,
-                  offset: Offset(0, 3),
+                  offset: const Offset(0, 3),
                 ),
               ],
             ),
-            margin: EdgeInsets.symmetric(vertical: 8), // Space between subcategories
-            padding: EdgeInsets.all(12),
+            margin: const EdgeInsets.symmetric(vertical: 8),
+            padding: const EdgeInsets.all(12),
             child: Row(
               children: [
                 Icon(Icons.arrow_right, color: Colors.grey[600]),
-                SizedBox(width: 10),
+                const SizedBox(width: 10),
                 Text(
                   subcategory,
                   style: TextStyle(

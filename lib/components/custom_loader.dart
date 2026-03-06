@@ -10,7 +10,6 @@ class CustomLoader extends StatelessWidget {
       child: SizedBox(
         width: 150,
         height: 150,
-        // Ensure this file exists in your assets/animations folder
         child: Lottie.asset('assets/animations/animation.json'),
       ),
     );

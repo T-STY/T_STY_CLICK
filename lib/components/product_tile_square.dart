@@ -30,10 +30,8 @@ class ProductTileSquare extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Determine if we're currently in dark mode
     bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
-    // Adjust colors based on the theme mode
     Color currentBackgroundColor = isDarkMode ? Colors.grey[850]! : Colors.white;
     Color currentBorderColor = isDarkMode ? Colors.grey[800]! : Colors.grey[100]!;
 
@@ -136,4 +134,3 @@ class ProductTileSquare extends StatelessWidget {
     );
   }
 }
-

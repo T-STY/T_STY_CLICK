@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-
 import '../../constants/app_defaults.dart';
 
 class Skeleton extends StatelessWidget {
@@ -15,9 +14,9 @@ class Skeleton extends StatelessWidget {
       width: width,
       padding: const EdgeInsets.all(AppDefaults.padding / 2),
       decoration: BoxDecoration(
-          color: Colors.black.withOpacity(0.04 * layer),
+          color: Colors.black.withValues(alpha: 0.04 * layer),
           borderRadius:
-              const BorderRadius.all(Radius.circular(AppDefaults.radius))),
+          const BorderRadius.all(Radius.circular(AppDefaults.radius))),
     );
   }
 }
@@ -32,9 +31,8 @@ class CircleSkeleton extends StatelessWidget {
     return Container(
       height: size,
       width: size,
-      // padding: const EdgeInsets.all(defaultPadding),
       decoration: BoxDecoration(
-        color: Theme.of(context).primaryColor.withOpacity(0.04),
+        color: Theme.of(context).primaryColor.withValues(alpha: 0.04),
         shape: BoxShape.circle,
       ),
     );

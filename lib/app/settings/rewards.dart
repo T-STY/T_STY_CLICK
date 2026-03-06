@@ -4,14 +4,14 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../components/shimmer_placeholder.dart';
 import '../../constants/app_images.dart';
-import 'create_new_card.dart'; // Ensure this path is correct
+import 'create_new_card.dart';
 
 class RewardsCardPage extends StatefulWidget {
   final VoidCallback onBack;
   const RewardsCardPage({super.key, required this.onBack});
 
   @override
-  _RewardsCardPageState createState() => _RewardsCardPageState();
+  State<RewardsCardPage> createState() => _RewardsCardPageState();
 }
 
 class _RewardsCardPageState extends State<RewardsCardPage> {
@@ -19,7 +19,6 @@ class _RewardsCardPageState extends State<RewardsCardPage> {
   final _phoneNumberController = TextEditingController();
   final _existingCardNumberController = TextEditingController();
   final _cvvController = TextEditingController();
-  bool _isLoading = true;
   bool _isAddingExistingCard = false;
 
   @override
@@ -48,12 +47,7 @@ class _RewardsCardPageState extends State<RewardsCardPage> {
 
   Future<void> _fetchRewardsCardData() async {
     final userId = FirebaseAuth.instance.currentUser?.uid;
-    if (userId == null) {
-      setState(() {
-        _isLoading = false;
-      });
-      return;
-    }
+    if (userId == null) return;
 
     try {
       final userCardDoc = await FirebaseFirestore.instance
@@ -78,28 +72,25 @@ class _RewardsCardPageState extends State<RewardsCardPage> {
             double? saldo = rewardsData['saldo'] is String
                 ? double.tryParse(rewardsData['saldo'])
                 : (rewardsData['saldo'] is int)
-                    ? (rewardsData['saldo'] as int).toDouble()
-                    : rewardsData['saldo'];
+                ? (rewardsData['saldo'] as int).toDouble()
+                : rewardsData['saldo'];
 
-            setState(() {
-              _rewardsCardData = {
-                ..._rewardsCardData!,
-                'saldo': saldo ?? 0.0,
-              };
-              _isLoading = false;
-            });
+            if (mounted) {
+              setState(() {
+                _rewardsCardData = {
+                  ..._rewardsCardData!,
+                  'saldo': saldo ?? 0.0,
+                };
+              });
+            }
           }
         }
       }
     } catch (e) {
-      print('Error fetching card data: $e');
-      setState(() {
-        _isLoading = false;
-      });
+      debugPrint('Error fetching card data: $e');
     }
   }
 
-  // Method to show AlertDialog
   void _showAlertDialog(String title, String message) {
     showDialog(
       context: context,
@@ -111,7 +102,7 @@ class _RewardsCardPageState extends State<RewardsCardPage> {
             TextButton(
               child: const Text('Aceptar'),
               onPressed: () {
-                Navigator.of(context).pop(); // Close the dialog
+                Navigator.of(context).pop();
               },
             ),
           ],
@@ -129,7 +120,6 @@ class _RewardsCardPageState extends State<RewardsCardPage> {
       return;
     }
 
-    // Ensure the card number starts with the "T_STY-" prefix
     String prefixedCardNumber = 'T_STY-$cardNumber';
 
     try {
@@ -151,6 +141,7 @@ class _RewardsCardPageState extends State<RewardsCardPage> {
               .doc('cardInfo')
               .set(rewardsData);
 
+          if (!mounted) return;
           _showAlertDialog('Éxito', 'Monedero agregado a tu cuenta');
 
           setState(() {
@@ -171,14 +162,8 @@ class _RewardsCardPageState extends State<RewardsCardPage> {
   Future<void> _updateCVV() async {
     String cvv = _cvvController.text.trim();
 
-    // Ensure the CVV has exactly 4 digits before proceeding
     if (cvv.length != 4) {
       _showAlertDialog('Error', 'El NIP debe tener exactamente 4 dígitos');
-      return;
-    }
-
-    if (_cvvController.text.isEmpty) {
-      _showAlertDialog('Error', 'Por favor ingrese un NIP');
       return;
     }
 
@@ -189,7 +174,6 @@ class _RewardsCardPageState extends State<RewardsCardPage> {
     }
 
     try {
-      // Step 1: Update the CVV in the user's Firestore document
       final userDocRef = FirebaseFirestore.instance
           .collection('users')
           .doc(userId)
@@ -197,23 +181,22 @@ class _RewardsCardPageState extends State<RewardsCardPage> {
           .doc('cardInfo');
 
       await userDocRef.update({
-        'cvvCode': _cvvController.text,
+        'cvvCode': cvv,
       });
 
-      // Step 2: Find and update the matching document in the rewards collection
       final querySnapshot = await FirebaseFirestore.instance
           .collection('rewards')
           .where('cardNumber', isEqualTo: _rewardsCardData?['cardNumber'])
           .get();
 
       if (querySnapshot.docs.isNotEmpty) {
-        // Update the first matching document in the rewards collection
         final rewardsDocRef = querySnapshot.docs.first.reference;
 
         await rewardsDocRef.update({
-          'cvvCode': _cvvController.text, // Update with the new CVV
+          'cvvCode': cvv,
         });
 
+        if (!mounted) return;
         _showAlertDialog('Éxito', 'NIP actualizado con éxito');
       } else {
         _showAlertDialog('Error', 'No se encontró ningún monedero');
@@ -226,15 +209,9 @@ class _RewardsCardPageState extends State<RewardsCardPage> {
   Future<void> _updatePhoneNumber() async {
     String phoneNumber = _phoneNumberController.text.trim();
 
-    // Ensure the phone number has exactly 10 digits before proceeding
     if (phoneNumber.length != 10) {
       _showAlertDialog(
           'Error', 'El número de teléfono debe tener exactamente 10 dígitos');
-      return;
-    }
-
-    if (phoneNumber.isEmpty) {
-      _showAlertDialog('Error', 'Por favor, introduzca un número de teléfono');
       return;
     }
 
@@ -244,11 +221,9 @@ class _RewardsCardPageState extends State<RewardsCardPage> {
       return;
     }
 
-    // Add the "T_STY-" prefix to the phone number before updating
     String updatedPhoneNumber = "T_STY-$phoneNumber";
 
     try {
-      // Step 1: Update the card number in the user's Firestore document
       final userDocRef = FirebaseFirestore.instance
           .collection('users')
           .doc(userId)
@@ -256,27 +231,26 @@ class _RewardsCardPageState extends State<RewardsCardPage> {
           .doc('cardInfo');
 
       await userDocRef.update({
-        'cardNumber': updatedPhoneNumber, // Save the phone number with prefix
+        'cardNumber': updatedPhoneNumber,
       });
 
-      // Step 2: Find and update the matching document in the rewards collection
       final querySnapshot = await FirebaseFirestore.instance
           .collection('rewards')
           .where('cardNumber', isEqualTo: _rewardsCardData?['cardNumber'])
           .get();
 
       if (querySnapshot.docs.isNotEmpty) {
-        // Update the first matching document in the rewards collection
         final rewardsDocRef = querySnapshot.docs.first.reference;
 
         await rewardsDocRef.update({
           'cardNumber': updatedPhoneNumber,
         });
 
-        // Update local state with the new card number
-        setState(() {
-          _rewardsCardData?['cardNumber'] = updatedPhoneNumber;
-        });
+        if (mounted) {
+          setState(() {
+            _rewardsCardData?['cardNumber'] = updatedPhoneNumber;
+          });
+        }
 
         _showAlertDialog('Éxito', 'Número de teléfono actualizado');
       } else {
@@ -293,13 +267,12 @@ class _RewardsCardPageState extends State<RewardsCardPage> {
         .push(
       MaterialPageRoute(
         builder: (_) => CreateNewCard(onBack: () {
-          Navigator.of(context).pop(); // Handle back navigation
-          _fetchRewardsCardData(); // Refresh data when returning from CreateNewCard
+          Navigator.of(context).pop();
+          _fetchRewardsCardData();
         }),
       ),
     )
         .then((_) {
-      // Refresh data when returning from CreateNewCard
       _fetchRewardsCardData();
     });
   }
@@ -316,10 +289,11 @@ class _RewardsCardPageState extends State<RewardsCardPage> {
   Widget build(BuildContext context) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
-    return WillPopScope(
-      onWillPop: () async {
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (bool didPop, Object? result) {
+        if (didPop) return;
         widget.onBack();
-        return false;
       },
       child: Scaffold(
         appBar: AppBar(
@@ -347,13 +321,12 @@ class _RewardsCardPageState extends State<RewardsCardPage> {
             fontWeight: FontWeight.bold,
           ),
         ),
-        backgroundColor: isDarkMode ? Colors.white : Colors.white,
+        backgroundColor: Colors.white,
         body: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
           stream: _userCardStream(),
           builder: (context, userCardSnapshot) {
-            // LOADING STATE 1
             if (userCardSnapshot.connectionState == ConnectionState.waiting) {
-              return _buildShimmerLoading(); // <--- Replaced CircularProgressIndicator
+              return _buildShimmerLoading();
             }
 
             if (!userCardSnapshot.hasData || !userCardSnapshot.data!.exists) {
@@ -370,10 +343,9 @@ class _RewardsCardPageState extends State<RewardsCardPage> {
             return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
               stream: _rewardsCardStream(cardNumber),
               builder: (context, rewardsSnapshot) {
-                // LOADING STATE 2
                 if (rewardsSnapshot.connectionState ==
                     ConnectionState.waiting) {
-                  return _buildShimmerLoading(); // <--- Replaced CircularProgressIndicator
+                  return _buildShimmerLoading();
                 }
 
                 if (!rewardsSnapshot.hasData ||
@@ -391,13 +363,12 @@ class _RewardsCardPageState extends State<RewardsCardPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
-                      // Enhanced Credit Card Widget
                       CreditCardWidget(
-                        cardNumber: cardNumber ?? 'T_STY-0000000000',
+                        cardNumber: cardNumber,
                         obscureCardNumber: false,
                         expiryDate: userData?['customerSince'] ?? 'MM/YY',
                         cardHolderName:
-                            userData?['cardHolderName'] ?? 'Card Holder',
+                        userData?['cardHolderName'] ?? 'Card Holder',
                         cvvCode: userData?['cvvCode'] ?? '',
                         obscureCardCvv: false,
                         showBackView: false,
@@ -418,8 +389,6 @@ class _RewardsCardPageState extends State<RewardsCardPage> {
                         onCreditCardWidgetChange: (creditCardBrand) {},
                       ),
                       const SizedBox(height: 10),
-
-                      // Balance (Saldo) Display
                       Card(
                         color: Colors.black87,
                         elevation: 4,
@@ -449,18 +418,12 @@ class _RewardsCardPageState extends State<RewardsCardPage> {
                           ),
                         ),
                       ),
-
                       const SizedBox(height: 20),
-
-                      // Collapsible Phone Number Update Section
                       CustomExpansionTile(
                         title: 'Actualizar Teléfono',
                         children: [_buildPhoneNumberUpdateSection()],
                       ),
-
                       const SizedBox(height: 20),
-
-                      // Collapsible CVV/NIP Update Section
                       CustomExpansionTile(
                         title: 'Actualizar NIP',
                         children: [_buildCVVUpdateSection()],
@@ -496,7 +459,7 @@ class _RewardsCardPageState extends State<RewardsCardPage> {
                   filled: true,
                   fillColor: Colors.grey[100],
                   contentPadding:
-                      const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+                  const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                     borderSide: BorderSide.none,
@@ -549,7 +512,7 @@ class _RewardsCardPageState extends State<RewardsCardPage> {
                   filled: true,
                   fillColor: Colors.grey[100],
                   contentPadding:
-                      const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+                  const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                     borderSide: BorderSide.none,
@@ -590,40 +553,35 @@ class _RewardsCardPageState extends State<RewardsCardPage> {
   }
 
   Widget _buildShimmerLoading() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16.0),
+    return const SingleChildScrollView(
+      padding: EdgeInsets.all(16.0),
       child: Column(
         children: [
-          // 1. Credit Card Shimmer
-          const ShimmerPlaceholder(
+          ShimmerPlaceholder(
             height: 200,
             width: double.infinity,
             shapeBorder: RoundedRectangleBorder(
               borderRadius: BorderRadius.all(Radius.circular(16)),
             ),
           ),
-          const SizedBox(height: 10),
-
-          // 2. Balance Card Shimmer
-          const ShimmerPlaceholder(
+          SizedBox(height: 10),
+          ShimmerPlaceholder(
             height: 70,
             width: double.infinity,
             shapeBorder: RoundedRectangleBorder(
               borderRadius: BorderRadius.all(Radius.circular(12)),
             ),
           ),
-          const SizedBox(height: 20),
-
-          // 3. Settings Options Shimmer
-          const ShimmerPlaceholder(
+          SizedBox(height: 20),
+          ShimmerPlaceholder(
             height: 60,
             width: double.infinity,
             shapeBorder: RoundedRectangleBorder(
               borderRadius: BorderRadius.all(Radius.circular(16)),
             ),
           ),
-          const SizedBox(height: 10),
-          const ShimmerPlaceholder(
+          SizedBox(height: 10),
+          ShimmerPlaceholder(
             height: 60,
             width: double.infinity,
             shapeBorder: RoundedRectangleBorder(
@@ -641,7 +599,7 @@ class _RewardsCardPageState extends State<RewardsCardPage> {
     final backgroundColor = isDarkMode ? Colors.grey[800] : Colors.white;
     final cardColor = isDarkMode ? Colors.grey[900] : Colors.white;
     final shadowColor =
-        isDarkMode ? Colors.black54 : Colors.grey.withOpacity(0.5);
+    isDarkMode ? Colors.black54 : Colors.grey.withValues(alpha: 0.5);
 
     return Center(
       child: Padding(
@@ -664,13 +622,11 @@ class _RewardsCardPageState extends State<RewardsCardPage> {
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 20),
-
-            // First Button: Create Monedero
             ElevatedButton(
               onPressed: _navigateToCreateCard,
               style: ElevatedButton.styleFrom(
                 padding:
-                    const EdgeInsets.symmetric(vertical: 16, horizontal: 100),
+                const EdgeInsets.symmetric(vertical: 16, horizontal: 100),
                 backgroundColor: Colors.black,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(16),
@@ -686,10 +642,7 @@ class _RewardsCardPageState extends State<RewardsCardPage> {
                 ),
               ),
             ),
-
             const SizedBox(height: 10),
-
-            // Second Button: Link Monedero
             ElevatedButton(
               onPressed: () {
                 setState(() {
@@ -698,7 +651,7 @@ class _RewardsCardPageState extends State<RewardsCardPage> {
               },
               style: ElevatedButton.styleFrom(
                 padding:
-                    const EdgeInsets.symmetric(vertical: 16, horizontal: 100),
+                const EdgeInsets.symmetric(vertical: 16, horizontal: 100),
                 backgroundColor: Colors.black,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(16),
@@ -714,11 +667,8 @@ class _RewardsCardPageState extends State<RewardsCardPage> {
                 ),
               ),
             ),
-
             if (_isAddingExistingCard) ...[
               const SizedBox(height: 20),
-
-              // Phone Number Text Field
               Card(
                 color: cardColor,
                 shape: RoundedRectangleBorder(
@@ -744,10 +694,7 @@ class _RewardsCardPageState extends State<RewardsCardPage> {
                   ),
                 ),
               ),
-
               const SizedBox(height: 10),
-
-              // NIP Text Field
               Card(
                 color: cardColor,
                 shape: RoundedRectangleBorder(
@@ -774,15 +721,12 @@ class _RewardsCardPageState extends State<RewardsCardPage> {
                   ),
                 ),
               ),
-
               const SizedBox(height: 20),
-
-              // Add Monedero Button
               ElevatedButton(
                 onPressed: _addExistingCard,
                 style: ElevatedButton.styleFrom(
                   padding:
-                      const EdgeInsets.symmetric(vertical: 16, horizontal: 25),
+                  const EdgeInsets.symmetric(vertical: 16, horizontal: 25),
                   backgroundColor: Colors.black,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(16),
@@ -807,8 +751,6 @@ class _RewardsCardPageState extends State<RewardsCardPage> {
   }
 }
 
-
-// Custom ExpansionTile with animation
 class CustomExpansionTile extends StatefulWidget {
   final String title;
   final Widget? leading;

@@ -1,5 +1,3 @@
-// custom_page_route.dart
-
 import 'package:flutter/material.dart';
 
 PageRouteBuilder<T> customPageRoute<T>(Widget page) {

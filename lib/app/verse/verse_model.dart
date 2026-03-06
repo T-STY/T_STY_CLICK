@@ -1,5 +1,3 @@
-// lib/models/verse.dart
-
 class Verse {
   final String reference;
   final String text;

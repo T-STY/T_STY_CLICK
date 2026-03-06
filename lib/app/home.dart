@@ -1,24 +1,29 @@
+import 'dart:async';
+import 'dart:io';
 import 'dart:ui';
+
+import 'package:algolia/algolia.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:click/app/recipes.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:algolia/algolia.dart';
 import 'package:provider/provider.dart';
+
+import '../../auth/login_page.dart';
+import '../../custom_page_route.dart';
 import '../components/custom_loader.dart';
 import '../components/shimmer_placeholder.dart';
 import '../constants/app_images.dart';
 import 'cart/cart_provider.dart';
 import 'category/filter_dialog.dart';
 import 'constants/gridview.dart';
-import 'dart:io';
-import 'dart:async';
 
 void testNetworkAccess() async {
   try {
     final result =
-        await InternetAddress.lookup('pdtyztlt1bpdtyztlt1b-3.algolianet.com');
+    await InternetAddress.lookup('pdtyztlt1bpdtyztlt1b-3.algolianet.com');
     if (result.isNotEmpty && result[0].rawAddress.isNotEmpty) {
       if (kDebugMode) {
         print('Algolia host is reachable');
@@ -33,9 +38,8 @@ void testNetworkAccess() async {
 
 class AlgoliaService {
   static const Algolia _algolia = Algolia.init(
-    applicationId: '55OV27NTPC', // Replace with your Algolia Application ID
-    apiKey:
-        'c72bcb855854751e436dd24b54844233', // Replace with your Algolia Search-Only API Key
+    applicationId: '55OV27NTPC',
+    apiKey: 'c72bcb855854751e436dd24b54844233',
   );
 
   Algolia get algolia => _algolia;
@@ -45,7 +49,7 @@ class Home extends StatefulWidget {
   const Home({super.key});
 
   @override
-  _HomeState createState() => _HomeState();
+  State<Home> createState() => _HomeState();
 }
 
 class _HomeState extends State<Home> {
@@ -53,12 +57,11 @@ class _HomeState extends State<Home> {
   String _searchText = '';
   List<AlgoliaObjectSnapshot> _searchResults = [];
   bool _isSearching = false;
-  bool _showRecipeDetail = false; // Flag to show the recipe detail or grid
+  bool _showRecipeDetail = false;
   Map<String, dynamic> _selectedFilters = {};
   String? selectedRecipeId;
   List<DocumentSnapshot> _filteredProducts = [];
 
-  // PageController to manage page transitions
   final PageController _pageController = PageController();
 
   @override
@@ -71,7 +74,7 @@ class _HomeState extends State<Home> {
   void dispose() {
     _searchController.removeListener(_onSearchChanged);
     _searchController.dispose();
-    _pageController.dispose(); // Dispose of the page controller
+    _pageController.dispose();
     super.dispose();
   }
 
@@ -88,11 +91,10 @@ class _HomeState extends State<Home> {
 
   void _clearFilters() {
     setState(() {
-      _selectedFilters = {}; // Clear the filters
-      _filteredProducts = []; // Reset the filtered products
+      _selectedFilters = {};
+      _filteredProducts = [];
       _searchController.clear();
     });
-    // Removed fetching all products to allow grid view to display
   }
 
   void _applyFilters(Map<String, dynamic> filters) {
@@ -103,20 +105,16 @@ class _HomeState extends State<Home> {
     final subCategory = filters['subCategory'];
     final priceRange = filters['priceRange'] as RangeValues;
 
-    // Start a query using the 'category' field for subCategory filtering
     Query query = FirebaseFirestore.instance.collection('products');
 
-    // Apply the subCategory filter to the 'category' field in Firestore
     if (subCategory != null && subCategory.isNotEmpty) {
       query = query.where('category', isEqualTo: subCategory);
     }
 
-    // Apply the price range filter
     query = query
         .where('price', isGreaterThanOrEqualTo: priceRange.start)
         .where('price', isLessThanOrEqualTo: priceRange.end);
 
-    // Get the filtered products
     query.get().then((snapshot) {
       setState(() {
         _filteredProducts = snapshot.docs;
@@ -150,18 +148,16 @@ class _HomeState extends State<Home> {
     }
   }
 
-  // Function to handle navigation to recipe detail
   void _navigateToRecipeDetail(String recipeId) {
     setState(() {
       selectedRecipeId = recipeId;
-      _showRecipeDetail = true; // Set flag to show recipe detail
+      _showRecipeDetail = true;
     });
   }
 
-  // Function to navigate back to the recipe grid
   void _navigateBackToGrid() {
     setState(() {
-      _showRecipeDetail = false; // Set flag to show grid view
+      _showRecipeDetail = false;
     });
   }
 
@@ -169,13 +165,13 @@ class _HomeState extends State<Home> {
   Widget build(BuildContext context) {
     final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
-    return WillPopScope(
-      onWillPop: () async {
+    return PopScope(
+      canPop: !_showRecipeDetail,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
         if (_showRecipeDetail) {
           _navigateBackToGrid();
-          return false; // Prevent default behavior
         }
-        return true; // Allow default behavior if not showing recipe detail
       },
       child: Scaffold(
         appBar: AppBar(
@@ -199,89 +195,79 @@ class _HomeState extends State<Home> {
         ),
         body: _showRecipeDetail
             ? RecipeDetailPage(
-                recipeId: selectedRecipeId!,
-                onBackPressed: _navigateBackToGrid,
-              )
+          recipeId: selectedRecipeId!,
+          onBackPressed: _navigateBackToGrid,
+        )
             : Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: Row(
                 children: [
-                  Padding(
-                    padding: const EdgeInsets.all(8.0),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: TextField(
-                            controller: _searchController,
-                            decoration: InputDecoration(
-                              hintText: 'Buscar...',
-                              prefixIcon: const Icon(Icons.search),
-                              suffixIcon: _searchController.text.isNotEmpty
-                                  ? IconButton(
-                                      icon: const Icon(Icons.clear),
-                                      onPressed: () {
-                                        _searchController.clear();
-                                        _onSearchChanged(); // Clear search results
-                                      },
-                                    )
-                                  : null,
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(10),
-                                borderSide: BorderSide.none,
-                              ),
-                              filled: true,
-                              fillColor: isDarkMode
-                                  ? Colors.grey[850]
-                                  : Colors.grey[200],
-                            ),
-                          ),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.filter_list),
-                          onPressed: () async {
-                            final result = await showDialog(
-                              context: context,
-                              builder: (context) => FilterDialog(
-                                initialFilters:
-                                    _selectedFilters, // Pass the currently applied filters
-                              ),
-                            );
-
-                            if (result != null) {
-                              if (result['clear'] == true) {
-                                _clearFilters(); // Clear filters if 'clear' was pressed
-                              } else {
-                                setState(() {
-                                  _selectedFilters =
-                                      result; // Update the selected filters
-                                });
-                                _applyFilters(result); // Apply the new filters
-                              }
-                            }
+                  Expanded(
+                    child: TextField(
+                      controller: _searchController,
+                      decoration: InputDecoration(
+                        hintText: 'Buscar...',
+                        prefixIcon: const Icon(Icons.search),
+                        suffixIcon: _searchController.text.isNotEmpty
+                            ? IconButton(
+                          icon: const Icon(Icons.clear),
+                          onPressed: () {
+                            _searchController.clear();
+                            _onSearchChanged();
                           },
+                        )
+                            : null,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide.none,
                         ),
-                      ],
+                        filled: true,
+                        fillColor: isDarkMode
+                            ? Colors.grey[850]
+                            : Colors.grey[200],
+                      ),
                     ),
                   ),
-                  Expanded(
-                    child: _isSearching
-                        ? const CustomLoader() // <--- Replaced CircularProgressIndicator
-                        : (_searchText.isNotEmpty
-                        ? _buildSearchResults()
-                        : (_selectedFilters.isNotEmpty
-                        ? _buildFilteredProductList()
-                        : _buildProductGrids())),
+                  IconButton(
+                    icon: const Icon(Icons.filter_list),
+                    onPressed: () async {
+                      final result = await showDialog(
+                        context: context,
+                        builder: (context) => FilterDialog(
+                          initialFilters: _selectedFilters,
+                        ),
+                      );
+
+                      if (result != null) {
+                        if (result['clear'] == true) {
+                          _clearFilters();
+                        } else {
+                          setState(() {
+                            _selectedFilters = result;
+                          });
+                          _applyFilters(result);
+                        }
+                      }
+                    },
                   ),
                 ],
               ),
+            ),
+            Expanded(
+              child: _isSearching
+                  ? const CustomLoader()
+                  : (_searchText.isNotEmpty
+                  ? _buildSearchResults()
+                  : (_selectedFilters.isNotEmpty
+                  ? _buildFilteredProductList()
+                  : _buildProductGrids())),
+            ),
+          ],
+        ),
       ),
     );
-  }
-
-  Widget _buildSearchResultsOrFilteredProducts() {
-    if (_filteredProducts.isNotEmpty) {
-      return _buildFilteredProductList(); // If there are filtered products, show them
-    } else {
-      return _buildSearchResults(); // Otherwise, show search results
-    }
   }
 
   Widget _buildFilteredProductList() {
@@ -295,7 +281,7 @@ class _HomeState extends State<Home> {
       itemCount: _filteredProducts.length,
       itemBuilder: (context, index) {
         var product = _filteredProducts[index];
-        return _buildListItem(context, product); // Passing Firestore document
+        return _buildListItem(context, product);
       },
     );
   }
@@ -309,8 +295,7 @@ class _HomeState extends State<Home> {
             RecipeGrid(
               title: "Rincon de Recetas 🌞",
               query: FirebaseFirestore.instance.collection('recipes'),
-              onRecipeSelected:
-                  _navigateToRecipeDetail, // Add the appropriate query for recipes
+              onRecipeSelected: _navigateToRecipeDetail,
             ),
             FirestoreProductGrid(
               title: "¡Lo más top! 🔥",
@@ -336,9 +321,9 @@ class _HomeState extends State<Home> {
             Text(
               'Isaías 45:7–9 ',
               style: TextStyle(
-                fontSize: 14, // Smaller font size for subtlety
-                color: Colors.grey[600], // Subdued color for elegance
-                fontStyle: FontStyle.italic, // Italic style for emphasis
+                fontSize: 14,
+                color: Colors.grey[600],
+                fontStyle: FontStyle.italic,
               ),
             ),
             const SizedBox(height: 115),
@@ -348,7 +333,6 @@ class _HomeState extends State<Home> {
     );
   }
 
-  // Algolia-based search results
   Widget _buildSearchResults() {
     if (_searchResults.isEmpty) {
       return const Center(child: Text('No products found.'));
@@ -359,12 +343,11 @@ class _HomeState extends State<Home> {
       itemCount: _searchResults.length,
       itemBuilder: (context, index) {
         var product = _searchResults[index];
-        return _buildListItem(context, product); // Passing Algolia snapshot
+        return _buildListItem(context, product);
       },
     );
   }
 
-  // Updated method to handle both Algolia and Firestore objects
   Widget _buildListItem(BuildContext context, dynamic doc) {
     Map<String, dynamic> data;
     String? docId;
@@ -373,11 +356,9 @@ class _HomeState extends State<Home> {
     String? imageUrl;
     bool isBulk;
     double stock;
-    // New variables
     String? typeSpecific;
     String? variante;
 
-    // Handle Algolia snapshot
     if (doc is AlgoliaObjectSnapshot) {
       data = doc.data;
       docId = doc.objectID;
@@ -386,10 +367,8 @@ class _HomeState extends State<Home> {
       imageUrl = data['image_url'] as String?;
       isBulk = data['bulk'] as bool? ?? false;
       stock = (data['stock'] as num?)?.toDouble() ?? 0.0;
-      typeSpecific = data['type_specific'] as String?; // Extract
-      variante = data['variante'] as String?;          // Extract
-
-      // Handle Firestore snapshot
+      typeSpecific = data['type_specific'] as String?;
+      variante = data['variante'] as String?;
     } else if (doc is DocumentSnapshot) {
       data = doc.data() as Map<String, dynamic>;
       docId = doc.id;
@@ -398,14 +377,15 @@ class _HomeState extends State<Home> {
       imageUrl = data['image_url'] as String?;
       isBulk = data['bulk'] as bool? ?? false;
       stock = (data['stock'] as num?)?.toDouble() ?? 0.0;
-      typeSpecific = data['type_specific'] as String?; // Extract
-      variante = data['variante'] as String?;          // Extract
+      typeSpecific = data['type_specific'] as String?;
+      variante = data['variante'] as String?;
     } else {
       return const SizedBox.shrink();
     }
 
     final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
     final textColor = isDarkMode ? Colors.white : Colors.black;
+    final bool isGuest = FirebaseAuth.instance.currentUser == null;
 
     return Container(
       margin: const EdgeInsets.fromLTRB(8.0, 8.0, 5.0, 5.0),
@@ -414,7 +394,7 @@ class _HomeState extends State<Home> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.2),
+            color: Colors.black.withValues(alpha: 0.2),
             blurRadius: 10,
             offset: const Offset(4, 4),
           ),
@@ -422,8 +402,7 @@ class _HomeState extends State<Home> {
       ),
       child: ListTile(
         contentPadding:
-            const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
-        // Replace the existing ClipRRect with this:
+        const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
         leading: ClipRRect(
           borderRadius: BorderRadius.circular(8.0),
           child: CachedNetworkImage(
@@ -431,8 +410,8 @@ class _HomeState extends State<Home> {
             width: 50,
             height: 50,
             fit: BoxFit.contain,
-            // NEW: Shimmer Placeholder
-            placeholder: (context, url) => const ShimmerPlaceholder(width: 50, height: 50),
+            placeholder: (context, url) =>
+            const ShimmerPlaceholder(width: 50, height: 50),
             errorWidget: (context, url, error) => const Icon(Icons.error),
           ),
         ),
@@ -443,15 +422,20 @@ class _HomeState extends State<Home> {
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Display Variant and Type Specific in Search List
             if (variante != null && variante.isNotEmpty)
               Text(
                 variante,
                 style: TextStyle(color: textColor, fontSize: 12),
               ),
-            Text(
-              _formatPrice(price),
-              style: const TextStyle(color: Colors.green),
+            ImageFiltered(
+              imageFilter: ImageFilter.blur(
+                sigmaX: isGuest ? 6.0 : 0.0,
+                sigmaY: isGuest ? 6.0 : 0.0,
+              ),
+              child: Text(
+                _formatPrice(price),
+                style: const TextStyle(color: Colors.green),
+              ),
             ),
             if (typeSpecific != null && typeSpecific.isNotEmpty)
               Text(
@@ -470,8 +454,8 @@ class _HomeState extends State<Home> {
               'image_url': imageUrl,
               'bulk': isBulk,
               'stock': stock,
-              'type_specific': typeSpecific, // Pass to button
-              'variante': variante,          // Pass to button
+              'type_specific': typeSpecific,
+              'variante': variante,
             },
             textColor: textColor,
           ),
@@ -517,8 +501,8 @@ class FirestoreProductGrid extends StatelessWidget {
         child: Text(
           title,
           style: TextStyle(
-            fontSize: 20, // Change this value to adjust the text size
-            fontWeight: FontWeight.bold, // Optional: add font weight
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
             color: textColor,
           ),
         ),
@@ -550,65 +534,61 @@ class FirestoreProductGrid extends StatelessWidget {
   Widget _buildGridItem(BuildContext context, DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
 
-    // Ensure that objectID is retrieved correctly for grid view
-    final String? docId = doc.id;
+    final String docId = doc.id;
     final String? name = data['nombre'] as String?;
     final double? price = (data['price'] as num?)?.toDouble();
     final String? imageUrl = data['image_url'] as String?;
     final bool isBulk = data['bulk'] as bool? ?? false;
     final double stock = (data['stock'] as num?)?.toDouble() ?? 0.0;
-    // 1. EXTRACT NEW FIELDS
     final String? typeSpecific = data['type_specific'] as String?;
     final String? variante = data['variante'] as String?;
 
     final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
     final textColor = isDarkMode ? Colors.white : Colors.black;
+    final bool isGuest = FirebaseAuth.instance.currentUser == null;
 
     return SizedBox(
       width: 150,
       child: Container(
-        // Reduced bottom margin to 8.0 to pull rows closer
         margin: const EdgeInsets.fromLTRB(8.0, 8.0, 5.0, 8.0),
         decoration: BoxDecoration(
           color: isDarkMode ? Colors.grey[800] : Colors.white,
-          borderRadius: BorderRadius.circular(12), // Slightly reduced radius
+          borderRadius: BorderRadius.circular(12),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.15), // Softer shadow
+              color: Colors.black.withValues(alpha: 0.15),
               blurRadius: 6,
               offset: const Offset(2, 4),
             ),
           ],
         ),
         child: Column(
-          // 'spaceBetween' pushes the image to top and button to bottom,
-          // but without the aggressive gap of a Spacer() if the aspect ratio is tight.
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: <Widget>[
-            // 1. IMAGE SECTION
             Column(
               children: [
-                const SizedBox(height: 4), // Tiny top padding
+                const SizedBox(height: 4),
                 ClipRRect(
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+                  borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(12)),
                   child: SizedBox(
-                    height: 136, // Fixed height prevents images from taking over
+                    height: 136,
                     width: double.infinity,
                     child: CachedNetworkImage(
                       imageUrl: imageUrl ?? '',
-                      // BoxFit.contain ensures the whole image is seen.
-                      // Use BoxFit.cover if you prefer it to fill the box fully (but might crop).
                       fit: BoxFit.contain,
-                      placeholder: (context, url) => const ShimmerPlaceholder(height: 80),
-                      errorWidget: (context, url, error) => const Icon(Icons.error, size: 30),
+                      placeholder: (context, url) =>
+                      const ShimmerPlaceholder(height: 80),
+                      errorWidget: (context, url, error) =>
+                      const Icon(Icons.error, size: 30),
                     ),
                   ),
                 ),
               ],
             ),
-            // 2. TEXT SECTION (Tighter padding)
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 6.0, vertical: 6.0),
+              padding:
+              const EdgeInsets.symmetric(horizontal: 6.0, vertical: 6.0),
               child: Column(
                 children: [
                   Text(
@@ -616,32 +596,39 @@ class FirestoreProductGrid extends StatelessWidget {
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
                       color: textColor,
-                      fontSize: 13, // Slightly smaller font for compactness
+                      fontSize: 13,
                     ),
                     textAlign: TextAlign.center,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  if (variante != null && variante.isNotEmpty) // Only show if exists
+                  if (variante != null && variante.isNotEmpty)
                     Text(
                       variante,
-                      style: TextStyle(color: textColor.withOpacity(0.8), fontSize: 12),
+                      style: TextStyle(
+                          color: textColor.withValues(alpha: 0.8),
+                          fontSize: 12),
                       textAlign: TextAlign.center,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
-                  Text(
-                    _formatPrice(price),
-                    style: const TextStyle(
-                        color: Colors.green,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 12
+                  ImageFiltered(
+                    imageFilter: ImageFilter.blur(
+                      sigmaX: isGuest ? 6.0 : 0.0,
+                      sigmaY: isGuest ? 6.0 : 0.0,
                     ),
-                    textAlign: TextAlign.center,
-                    maxLines: 1,
+                    child: Text(
+                      _formatPrice(price),
+                      style: const TextStyle(
+                          color: Colors.green,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12),
+                      textAlign: TextAlign.center,
+                      maxLines: 1,
+                    ),
                   ),
                   Text(
-                    typeSpecific ?? '', // Simplified fallback
+                    typeSpecific ?? '',
                     style: const TextStyle(color: Colors.grey, fontSize: 10),
                     textAlign: TextAlign.center,
                     maxLines: 1,
@@ -650,14 +637,13 @@ class FirestoreProductGrid extends StatelessWidget {
                 ],
               ),
             ),
-            Spacer(),
-            // 3. BUTTON SECTION
+            const Spacer(),
             Padding(
-              // Reduced padding around button
-              padding: const EdgeInsets.only(left: 6.0, right: 6.0, bottom: 6.0),
+              padding:
+              const EdgeInsets.only(left: 6.0, right: 6.0, bottom: 6.0),
               child: SizedBox(
                 width: double.infinity,
-                height: 40, // Fixed small height for button
+                height: 40,
                 child: _AddToCartButton(
                   data: {
                     'docId': docId,
@@ -689,19 +675,18 @@ class _AddToCartButton extends StatefulWidget {
   final Map<String, dynamic> data;
   final Color textColor;
 
-  const _AddToCartButton(
-      {super.key, required this.data, required this.textColor});
+  const _AddToCartButton({required this.data, required this.textColor});
 
   @override
-  __AddToCartButtonState createState() => __AddToCartButtonState();
+  _AddToCartButtonState createState() => _AddToCartButtonState();
 }
 
-class __AddToCartButtonState extends State<_AddToCartButton> {
+class _AddToCartButtonState extends State<_AddToCartButton> {
   bool _showSwitchTile = false;
   bool _showAgregadoButton = false;
   double _quantity = 1;
   Timer? _timer;
-  late double stock; // Add stock as a state variable
+  late double stock;
   CartProvider? cartProvider;
 
   @override
@@ -712,7 +697,6 @@ class __AddToCartButtonState extends State<_AddToCartButton> {
     cartProvider = Provider.of<CartProvider>(context, listen: false);
     cartProvider!.addListener(_checkCartState);
 
-    // Initialize stock
     stock = widget.data['stock'] as double? ?? 0.0;
   }
 
@@ -733,9 +717,8 @@ class __AddToCartButtonState extends State<_AddToCartButton> {
     }
   }
 
-  // Method to continuously check the cart state
   void _checkCartState() {
-    if (!mounted) return; // Prevent execution if the widget is unmounted
+    if (!mounted) return;
 
     final cartProvider = Provider.of<CartProvider>(context, listen: false);
     final String? docId = widget.data['docId'] as String?;
@@ -759,8 +742,12 @@ class __AddToCartButtonState extends State<_AddToCartButton> {
   }
 
   void _onAddToCartPressed() {
+    if (FirebaseAuth.instance.currentUser == null) {
+      Navigator.push(context, customPageRoute(const LoginPage()));
+      return;
+    }
+
     if (stock == 0) {
-      // Do nothing if stock is 0
       return;
     }
 
@@ -771,8 +758,8 @@ class __AddToCartButtonState extends State<_AddToCartButton> {
     final double? price = widget.data['price'] as double?;
     final String? imageUrl = widget.data['image_url'] as String?;
     final bool isBulk = widget.data['bulk'] as bool? ?? false;
-    final String? typeSpecific = widget.data['type_specific'] as String?;
-    final String? variante = widget.data['variante'] as String?;
+    final String? typeSpecific = widget.data['type_specific'];
+    final String? variante = widget.data['variante'];
 
     if (docId != null && name != null && price != null && imageUrl != null) {
       if (isBulk) {
@@ -784,14 +771,21 @@ class __AddToCartButtonState extends State<_AddToCartButton> {
           _showAgregadoButton = false;
         });
 
-        // Update timer call to include new fields if needed, or pass via widget.data in closure
-        _resetAndStartTimer(docId, name, price, imageUrl, cartProvider, isBulk, typeSpecific, variante);
+        _resetAndStartTimer(docId, name, price, imageUrl, cartProvider, isBulk,
+            typeSpecific, variante);
       }
     }
   }
 
-  void _resetAndStartTimer(String docId, String name, double price,
-      String imageUrl, CartProvider cartProvider, bool isBulk, String? typeSpecific, String? variante) {
+  void _resetAndStartTimer(
+      String docId,
+      String name,
+      double price,
+      String imageUrl,
+      CartProvider cartProvider,
+      bool isBulk,
+      String? typeSpecific,
+      String? variante) {
     _timer?.cancel();
 
     _timer = Timer(const Duration(seconds: 2), () {
@@ -806,13 +800,17 @@ class __AddToCartButtonState extends State<_AddToCartButton> {
               _quantity,
               isBulk: isBulk,
               stock: stock,
-              typeSpecific: typeSpecific, // Pass new field
-              variante: variante,         // Pass new field
+              typeSpecific: typeSpecific,
+              variante: variante,
             );
           } else {
             cartProvider.removeItemCompletely(docId);
           }
-          // ... rest of logic
+          _showSwitchTile = false;
+          _showAgregadoButton = true;
+          if (kDebugMode) {
+            print('Set quantity of $name to $_quantity in cart');
+          }
         });
       }
     });
@@ -820,7 +818,7 @@ class __AddToCartButtonState extends State<_AddToCartButton> {
 
   @override
   void dispose() {
-    _timer?.cancel(); // Cancel any timers
+    _timer?.cancel();
     cartProvider?.removeListener(_checkCartState);
     super.dispose();
   }
@@ -836,15 +834,12 @@ class __AddToCartButtonState extends State<_AddToCartButton> {
       final double? price = widget.data['price'] as double?;
       final String? imageUrl = widget.data['image_url'] as String?;
       final bool isBulk = widget.data['bulk'] as bool? ?? false;
-
-      // Extract the new fields
-      final String? typeSpecific = widget.data['type_specific'] as String?;
-      final String? variante = widget.data['variante'] as String?;
-
       final cartProvider = Provider.of<CartProvider>(context, listen: false);
+      final String? typeSpecific = widget.data['type_specific'];
+      final String? variante = widget.data['variante'];
 
-      _resetAndStartTimer(
-          docId!, name!, price!, imageUrl!, cartProvider, isBulk, typeSpecific, variante);
+      _resetAndStartTimer(docId!, name!, price!, imageUrl!, cartProvider,
+          isBulk, typeSpecific, variante);
     }
   }
 
@@ -859,15 +854,12 @@ class __AddToCartButtonState extends State<_AddToCartButton> {
       final double? price = widget.data['price'] as double?;
       final String? imageUrl = widget.data['image_url'] as String?;
       final bool isBulk = widget.data['bulk'] as bool? ?? false;
-
-      // Extract the new fields
-      final String? typeSpecific = widget.data['type_specific'] as String?;
-      final String? variante = widget.data['variante'] as String?;
-
       final cartProvider = Provider.of<CartProvider>(context, listen: false);
+      final String? typeSpecific = widget.data['type_specific'];
+      final String? variante = widget.data['variante'];
 
-      _resetAndStartTimer(
-          docId!, name!, price!, imageUrl!, cartProvider, isBulk, typeSpecific, variante);
+      _resetAndStartTimer(docId!, name!, price!, imageUrl!, cartProvider,
+          isBulk, typeSpecific, variante);
     }
   }
 
@@ -897,8 +889,7 @@ class __AddToCartButtonState extends State<_AddToCartButton> {
             _showSwitchTile = true;
             _showAgregadoButton = false;
             if (widget.data['bulk'] == true) {
-              _showBulkOrderDialog(
-                  prefill: true); // Prefill the dialog if it's bulk
+              _showBulkOrderDialog(prefill: true);
             }
           });
         },
@@ -960,21 +951,20 @@ class __AddToCartButtonState extends State<_AddToCartButton> {
     if (prefill && _quantity > 0) {
       kilosController.text = _quantity.toStringAsFixed(3);
       pesosController.text =
-          '\$${(_quantity * pricePerKilo).toStringAsFixed(2)}';
+      '\$${(_quantity * pricePerKilo).toStringAsFixed(2)}';
     }
 
-    // Pre-fill the dialog with the current cart quantity
     final cartProvider = Provider.of<CartProvider>(context, listen: false);
     final cartItem = cartProvider.getItem(widget.data['docId']);
     final currentQuantity = cartItem?.quantity ?? 0.0;
     kilosController.text = currentQuantity.toStringAsFixed(3);
     pesosController.text =
-        '\$${(currentQuantity * pricePerKilo).toStringAsFixed(2)}';
+    '\$${(currentQuantity * pricePerKilo).toStringAsFixed(2)}';
 
     pesosFocusNode.addListener(() {
       if (!pesosFocusNode.hasFocus) {
         final pesos =
-            double.tryParse(pesosController.text.replaceAll('\$', ''));
+        double.tryParse(pesosController.text.replaceAll('\$', ''));
         if (pesos != null && pricePerKilo != null) {
           kilosController.text = (pesos / pricePerKilo).toStringAsFixed(3);
           pesosController.text = '\$${pesos.toStringAsFixed(2)}';
@@ -987,7 +977,7 @@ class __AddToCartButtonState extends State<_AddToCartButton> {
         final kilos = double.tryParse(kilosController.text);
         if (kilos != null && pricePerKilo != null) {
           pesosController.text =
-              '\$${(kilos * pricePerKilo).toStringAsFixed(2)}';
+          '\$${(kilos * pricePerKilo).toStringAsFixed(2)}';
         }
       }
     });
@@ -1005,7 +995,6 @@ class __AddToCartButtonState extends State<_AddToCartButton> {
                   children: [
                     Row(
                       children: [
-                        // Inside the Row children:
                         ClipRRect(
                           borderRadius: BorderRadius.circular(8.0),
                           child: CachedNetworkImage(
@@ -1013,8 +1002,10 @@ class __AddToCartButtonState extends State<_AddToCartButton> {
                             width: 50,
                             height: 50,
                             fit: BoxFit.contain,
-                            placeholder: (context, url) => const ShimmerPlaceholder(width: 50, height: 50),
-                            errorWidget: (context, url, error) => const Icon(Icons.error),
+                            placeholder: (context, url) =>
+                            const ShimmerPlaceholder(width: 50, height: 50),
+                            errorWidget: (context, url, error) =>
+                            const Icon(Icons.error),
                           ),
                         ),
                         const SizedBox(width: 10),
@@ -1024,7 +1015,7 @@ class __AddToCartButtonState extends State<_AddToCartButton> {
                             Text(
                               widget.data['nombre'] ?? 'Unnamed',
                               style:
-                                  const TextStyle(fontWeight: FontWeight.bold),
+                              const TextStyle(fontWeight: FontWeight.bold),
                             ),
                             Text(widget.data['variante'] ?? 'No variant'),
                             Text(
@@ -1043,7 +1034,7 @@ class __AddToCartButtonState extends State<_AddToCartButton> {
                         children: [
                           TextSpan(
                             text:
-                                "Este producto se vende a granel, por favor indique la cantidad que desea recibir.\n",
+                            "Este producto se vende a granel, por favor indique la cantidad que desea recibir.\n",
                           ),
                         ],
                       ),
@@ -1124,7 +1115,7 @@ class __AddToCartButtonState extends State<_AddToCartButton> {
                         children: [
                           TextSpan(
                             text:
-                                "\n*Tenga en cuenta que la cantidad recibida puede variar ligeramente.",
+                            "\n*Tenga en cuenta que la cantidad recibida puede variar ligeramente.",
                             style: TextStyle(fontStyle: FontStyle.italic),
                           ),
                         ],
@@ -1138,7 +1129,6 @@ class __AddToCartButtonState extends State<_AddToCartButton> {
                   onPressed: () {
                     final kilos = double.tryParse(kilosController.text) ?? 0.0;
                     if (kilos > stock) {
-                      // Optionally, show a snackbar or alert indicating insufficient stock
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
                           content: Text('No hay suficiente stock disponible'),
@@ -1146,7 +1136,8 @@ class __AddToCartButtonState extends State<_AddToCartButton> {
                       );
                     } else {
                       Navigator.of(context).pop();
-                      if (widget.data['docId'] != null && widget.data['nombre'] != null) {
+                      if (widget.data['docId'] != null &&
+                          widget.data['nombre'] != null) {
                         cartProvider.setItem(
                           widget.data['docId'],
                           widget.data['nombre'],
@@ -1155,8 +1146,8 @@ class __AddToCartButtonState extends State<_AddToCartButton> {
                           kilos,
                           isBulk: true,
                           stock: stock,
-                          typeSpecific: widget.data['type_specific'], // Pass field
-                          variante: widget.data['variante'],          // Pass field
+                          typeSpecific: widget.data['type_specific'],
+                          variante: widget.data['variante'],
                         );
                       }
                       if (kDebugMode) {
