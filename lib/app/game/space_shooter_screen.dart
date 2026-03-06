@@ -36,7 +36,7 @@ class _Alien {
         hp = type == _AlienType.scatter
             ? 3
             : (type == _AlienType.burst ? 2 : 1),
-        fireTimer = 1.0 + Random().nextDouble() * 3.0,
+        fireTimer = 1.5 + Random().nextDouble() * 3.0,
         burstCount = 0,
         burstTimer = 0,
         vx = (Random().nextDouble() - 0.5) * 2.5,
@@ -95,6 +95,8 @@ class _SpaceShooterScreenState extends State<SpaceShooterScreen> {
   static const double kFireCooldown = 0.25;
   static const double kSpecialCooldown = 0.5;
   static const double kSpawnInterval = 0.65;
+  // Auto-advance to next wave after all aliens cleared
+  static const double kBetweenWaveDuration = 2.5;
 
   final _rng = Random();
 
@@ -108,6 +110,10 @@ class _SpaceShooterScreenState extends State<SpaceShooterScreen> {
   double _fireCooldown = 0;
   double _specialCooldown = 0;
 
+  // Saldo
+  late double _saldo;
+  bool _awardingPoints = false;
+
   // Entities
   List<_Bullet> _bullets = [];
   List<_Alien> _aliens = [];
@@ -118,16 +124,18 @@ class _SpaceShooterScreenState extends State<SpaceShooterScreen> {
   final List<_Alien> _spawnQueue = [];
   double _spawnTimer = 0;
 
-  // Misc timers
+  // Between-wave auto-transition (no pause/button press needed)
+  bool _betweenWaves = false;
+  double _betweenWaveTimer = 0;
+
+  // Asteroid timer
   double _asteroidSpawnTimer = 3.0;
 
   // Game state
   bool _isRunning = false;
   bool _isDead = false;
-  bool _isWaveComplete = false;
   int _score = 0;
   int _wave = 1;
-  late double _saldo;
 
   Timer? _ticker;
   DateTime? _lastTick;
@@ -158,10 +166,6 @@ class _SpaceShooterScreenState extends State<SpaceShooterScreen> {
       if (btn == ArcadeButton.a || btn == ArcadeButton.start) _restart();
       return;
     }
-    if (_isWaveComplete) {
-      if (btn == ArcadeButton.a || btn == ArcadeButton.start) _nextWave();
-      return;
-    }
     if (!_isRunning) {
       _startGame();
     }
@@ -180,13 +184,23 @@ class _SpaceShooterScreenState extends State<SpaceShooterScreen> {
     final dt =
         (now.difference(_lastTick!).inMicroseconds / 1e6).clamp(0.0, 0.05);
     _lastTick = now;
-    if (_isDead || _isWaveComplete) return;
+    if (_isDead) return;
     _update(dt);
     if (mounted) setState(() {});
   }
 
   void _update(double dt) {
-    // ── Ship movement ──────────────────────────────────────────────────────
+    // ── Between-wave countdown (auto-transition, no player input needed) ──────
+    if (_betweenWaves) {
+      _betweenWaveTimer -= dt;
+      if (_betweenWaveTimer <= 0) {
+        _betweenWaves = false;
+        _startNextWave();
+      }
+      return; // pause gameplay during transition
+    }
+
+    // ── Ship movement ──────────────────────────────────────────────────────────
     if (widget.controller.isHeld(ArcadeButton.left)) _sx -= kShipSpeed * dt;
     if (widget.controller.isHeld(ArcadeButton.right)) _sx += kShipSpeed * dt;
     if (widget.controller.isHeld(ArcadeButton.up)) _sy -= kShipSpeed * dt;
@@ -194,7 +208,7 @@ class _SpaceShooterScreenState extends State<SpaceShooterScreen> {
     _sx = _sx.clamp(0, kW - kShipW);
     _sy = _sy.clamp(kShipMinY, kH - kShipH - 0.2);
 
-    // ── Firing ──────────────────────────────────────────────────────────────
+    // ── Firing ──────────────────────────────────────────────────────────────────
     _fireCooldown -= dt;
     _specialCooldown -= dt;
     if (_fireCooldown < 0) _fireCooldown = 0;
@@ -209,18 +223,17 @@ class _SpaceShooterScreenState extends State<SpaceShooterScreen> {
       _fireSpecial();
     }
 
-    // ── Spawn queue ─────────────────────────────────────────────────────────
+    // ── Spawn queue ─────────────────────────────────────────────────────────────
     _spawnTimer -= dt;
     if (_spawnTimer <= 0 && _spawnQueue.isNotEmpty) {
       _spawnTimer = kSpawnInterval;
       _aliens.add(_spawnQueue.removeAt(0));
     }
 
-    // ── Bullet movement ─────────────────────────────────────────────────────
+    // ── Bullet movement ─────────────────────────────────────────────────────────
     for (final b in _bullets) {
       if (!b.alive) continue;
       if (b.isMissile) {
-        // Homing: steer toward player
         final dx = (_sx + kShipW / 2) - b.x;
         final dy = (_sy + kShipH / 2) - b.y;
         final dist = sqrt(dx * dx + dy * dy);
@@ -243,7 +256,6 @@ class _SpaceShooterScreenState extends State<SpaceShooterScreen> {
         b.y -= kBulletSpeed * dt;
         if (b.y < -1 || b.x < -1 || b.x > kW + 1) b.alive = false;
       } else {
-        // Scatter bullets use their own vx/vy
         b.x += b.vx * dt;
         b.y += (b.vy > 0 ? b.vy : kEnemyBulletSpeed) * dt;
         if (b.y > kH + 1 || b.x < -1 || b.x > kW + 1) b.alive = false;
@@ -251,7 +263,7 @@ class _SpaceShooterScreenState extends State<SpaceShooterScreen> {
     }
     _bullets.removeWhere((b) => !b.alive);
 
-    // ── Alien movement (independent, no group) ──────────────────────────────
+    // ── Alien movement (each alien moves independently) ─────────────────────────
     for (final a in _aliens) {
       if (!a.alive) continue;
 
@@ -265,7 +277,6 @@ class _SpaceShooterScreenState extends State<SpaceShooterScreen> {
       a.x += a.vx * dt;
       a.y += a.vy * dt;
 
-      // Wall bounce
       if (a.x < 0) {
         a.x = 0;
         a.vx = a.vx.abs();
@@ -276,7 +287,7 @@ class _SpaceShooterScreenState extends State<SpaceShooterScreen> {
       }
       if (a.y < 0.2) a.y = 0.2;
 
-      // Alien too close to player → game over
+      // Alien reaching player zone → game over
       if (a.y > kShipMinY - 1.2) {
         _triggerDeath();
         return;
@@ -290,7 +301,7 @@ class _SpaceShooterScreenState extends State<SpaceShooterScreen> {
           a.burstCount--;
           _bullets.add(_Bullet(a.x + 0.5, a.y + 0.8, isPlayer: false));
         }
-        continue; // skip normal fire while bursting
+        continue;
       }
 
       a.fireTimer -= dt;
@@ -300,13 +311,16 @@ class _SpaceShooterScreenState extends State<SpaceShooterScreen> {
       }
     }
 
-    // ── Asteroids ───────────────────────────────────────────────────────────
+    // ── Asteroids ───────────────────────────────────────────────────────────────
     _asteroidSpawnTimer -= dt;
     if (_asteroidSpawnTimer <= 0) {
       _asteroidSpawnTimer = 2.0 + _rng.nextDouble() * 3.0;
       final r = 0.3 + _rng.nextDouble() * 0.4;
       _asteroids.add(_Asteroid(
-          _rng.nextDouble() * (kW - r * 2) + r, -r, 2.0 + _rng.nextDouble() * 2.0, r));
+          _rng.nextDouble() * (kW - r * 2) + r,
+          -r,
+          2.0 + _rng.nextDouble() * 2.0,
+          r));
     }
     for (final ast in _asteroids) {
       if (!ast.alive) continue;
@@ -316,20 +330,20 @@ class _SpaceShooterScreenState extends State<SpaceShooterScreen> {
     }
     _asteroids.removeWhere((a) => !a.alive);
 
-    // ── Pickups ─────────────────────────────────────────────────────────────
+    // ── Pickups ─────────────────────────────────────────────────────────────────
     for (final p in _pickups) {
       if (!p.alive) continue;
       p.y += p.vy * dt;
       if (p.y > kH + 1) p.alive = false;
     }
 
-    // ── Invincibility ───────────────────────────────────────────────────────
+    // ── Invincibility ───────────────────────────────────────────────────────────
     if (_invincible) {
       _invTimer -= dt;
       if (_invTimer <= 0) _invincible = false;
     }
 
-    // ── Collisions: player bullets → aliens ─────────────────────────────────
+    // ── Collisions: player bullets → aliens ─────────────────────────────────────
     for (final b in _bullets.where((b) => b.alive && b.isPlayer)) {
       for (final a in _aliens.where((a) => a.alive)) {
         if (b.x > a.x &&
@@ -349,7 +363,7 @@ class _SpaceShooterScreenState extends State<SpaceShooterScreen> {
       }
     }
 
-    // ── Collisions: player bullets → asteroids ───────────────────────────────
+    // ── Collisions: player bullets → asteroids ───────────────────────────────────
     for (final b in _bullets.where((b) => b.alive && b.isPlayer)) {
       for (final ast in _asteroids.where((ast) => ast.alive)) {
         final dx = b.x - ast.x, dy = b.y - ast.y;
@@ -362,7 +376,7 @@ class _SpaceShooterScreenState extends State<SpaceShooterScreen> {
       }
     }
 
-    // ── Collisions: enemy projectiles → ship ────────────────────────────────
+    // ── Collisions: enemy projectiles → ship ────────────────────────────────────
     if (!_invincible) {
       for (final b in _bullets.where((b) => b.alive && !b.isPlayer)) {
         if (b.x > _sx &&
@@ -374,7 +388,6 @@ class _SpaceShooterScreenState extends State<SpaceShooterScreen> {
           if (_isDead) return;
         }
       }
-      // Asteroids → ship
       for (final ast in _asteroids.where((ast) => ast.alive)) {
         final dx = ast.x - (_sx + kShipW / 2), dy = ast.y - (_sy + kShipH / 2);
         if (sqrt(dx * dx + dy * dy) < ast.radius + 0.4) {
@@ -385,7 +398,7 @@ class _SpaceShooterScreenState extends State<SpaceShooterScreen> {
       }
     }
 
-    // ── Pickups → ship ───────────────────────────────────────────────────────
+    // ── Pickup collection ────────────────────────────────────────────────────────
     for (final p in _pickups.where((p) => p.alive)) {
       if (p.x + 0.6 > _sx &&
           p.x - 0.1 < _sx + kShipW &&
@@ -397,14 +410,16 @@ class _SpaceShooterScreenState extends State<SpaceShooterScreen> {
     }
     _pickups.removeWhere((p) => !p.alive);
 
-    // ── Wave complete? ───────────────────────────────────────────────────────
-    if (_spawnQueue.isEmpty && _aliens.every((a) => !a.alive)) {
-      _ticker?.cancel();
-      if (mounted) setState(() { _isWaveComplete = true; _isRunning = false; });
+    // ── Wave complete? → auto-advance, no pause required ─────────────────────────
+    // Guard: _aliens must be non-empty (vacuous true for empty list would false-trigger)
+    if (_spawnQueue.isEmpty &&
+        _aliens.isNotEmpty &&
+        _aliens.every((a) => !a.alive)) {
+      _waveComplete();
     }
   }
 
-  // ── Helpers ──────────────────────────────────────────────────────────────
+  // ── Helpers ──────────────────────────────────────────────────────────────────
 
   double _fireRateForWave() => (3.5 - _wave * 0.2).clamp(0.8, 3.5);
 
@@ -414,13 +429,11 @@ class _SpaceShooterScreenState extends State<SpaceShooterScreen> {
         _bullets.add(_Bullet(a.x + 0.5, a.y + 0.8, isPlayer: false));
         break;
       case _AlienType.burst:
-        // First shot now, 2 more via burstCount
         _bullets.add(_Bullet(a.x + 0.5, a.y + 0.8, isPlayer: false));
         a.burstCount = 2;
         a.burstTimer = 0.15;
         break;
       case _AlienType.scatter:
-        // 5-bullet spread
         for (int i = -2; i <= 2; i++) {
           final angle = pi / 2 + i * 0.28;
           _bullets.add(_Bullet(
@@ -432,9 +445,8 @@ class _SpaceShooterScreenState extends State<SpaceShooterScreen> {
         }
         break;
       case _AlienType.missile:
-        final m = _Bullet(a.x + 0.5, a.y + 0.8,
-            isPlayer: false, isMissile: true, vx: 0, vy: kMissileSpeed);
-        _bullets.add(m);
+        _bullets.add(_Bullet(a.x + 0.5, a.y + 0.8,
+            isPlayer: false, isMissile: true, vx: 0, vy: kMissileSpeed));
         break;
     }
   }
@@ -448,7 +460,6 @@ class _SpaceShooterScreenState extends State<SpaceShooterScreen> {
   void _fireSpecial() {
     _specialCooldown = kSpecialCooldown;
     _specialAmmo--;
-    // Wide 3-bullet spread
     for (int i = -1; i <= 1; i++) {
       _bullets.add(_Bullet(_sx + kShipW / 2, _sy,
           isPlayer: true, vx: i * 2.8, vy: 0));
@@ -477,6 +488,34 @@ class _SpaceShooterScreenState extends State<SpaceShooterScreen> {
   void _triggerDeath() {
     _ticker?.cancel();
     if (mounted) setState(() { _isDead = true; _isRunning = false; });
+  }
+
+  /// Called when all aliens in the current wave are defeated.
+  /// Awards saldo, then auto-starts the next wave after a short delay.
+  void _waveComplete() {
+    _score += 200;
+    _betweenWaves = true;
+    _betweenWaveTimer = kBetweenWaveDuration;
+    _awardWaveSaldo();
+  }
+
+  Future<void> _awardWaveSaldo() async {
+    if (_awardingPoints) return;
+    _awardingPoints = true;
+    final newSaldo = _saldo + 1.0;
+    await _updateFirestore(newSaldo);
+    if (mounted) setState(() => _saldo = newSaldo);
+    _awardingPoints = false;
+    widget.onSaldoChanged();
+  }
+
+  void _startNextWave() {
+    _wave++;
+    _buildSpawnQueue(_wave);
+    _bullets.clear();
+    _pickups.clear();
+    if (_wave == 3) _specialAmmo += 5;
+    else if (_wave > 3) _specialAmmo += 2;
   }
 
   void _maybeDropPickup(_Alien a) {
@@ -537,22 +576,6 @@ class _SpaceShooterScreenState extends State<SpaceShooterScreen> {
     _spawnTimer = 0;
   }
 
-  void _nextWave() {
-    _wave++;
-    _score += 200;
-    _buildSpawnQueue(_wave);
-    _bullets.clear();
-    _pickups.clear();
-    // Grant special ammo from wave 3 onward
-    if (_wave == 3) {
-      _specialAmmo += 5;
-    } else if (_wave > 3) {
-      _specialAmmo += 2;
-    }
-    setState(() { _isWaveComplete = false; _isRunning = false; });
-    _startGame();
-  }
-
   void _restart() {
     _wave = 1;
     _score = 0;
@@ -564,9 +587,26 @@ class _SpaceShooterScreenState extends State<SpaceShooterScreen> {
     _asteroids.clear();
     _pickups.clear();
     _invincible = false;
+    _betweenWaves = false;
     _buildSpawnQueue(1);
     setState(() { _isDead = false; _isRunning = false; });
     _startGame();
+  }
+
+  Future<void> _updateFirestore(double newSaldo) async {
+    try {
+      final userCardRef = FirebaseFirestore.instance
+          .collection('users')
+          .doc(widget.userId)
+          .collection('rewardsCard')
+          .doc('cardInfo');
+      final batch = FirebaseFirestore.instance.batch();
+      batch.update(userCardRef, {'saldo': newSaldo});
+      batch.update(widget.rewardsDocRef, {'saldo': newSaldo});
+      await batch.commit();
+    } catch (e) {
+      debugPrint('Shooter Firestore error: $e');
+    }
   }
 
   // ─── Build ─────────────────────────────────────────────────────────────────
@@ -603,9 +643,26 @@ class _SpaceShooterScreenState extends State<SpaceShooterScreen> {
             ],
           ),
         ),
-        if (!_isRunning && !_isDead && !_isWaveComplete) _buildStartOverlay(),
+        // Between-wave banner (non-blocking — game continues behind it)
+        if (_betweenWaves)
+          Positioned(
+            top: 0, left: 0, right: 0,
+            child: Container(
+              color: Colors.black54,
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              child: Text(
+                '✨ ¡Ola $_wave completada! +200 pts  •  Siguiente en ${_betweenWaveTimer.ceil()}s…',
+                style: const TextStyle(
+                  color: Colors.cyanAccent,
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ),
+        if (!_isRunning && !_isDead) _buildStartOverlay(),
         if (_isDead) _buildDeathOverlay(),
-        if (_isWaveComplete) _buildWaveCompleteOverlay(),
       ]);
     });
   }
@@ -644,6 +701,9 @@ class _SpaceShooterScreenState extends State<SpaceShooterScreen> {
                 Text('A: disparar  •  X: disparo especial',
                     style: TextStyle(color: Colors.white54, fontSize: 11)),
                 SizedBox(height: 4),
+                Text('+1 pto real por ola completada',
+                    style: TextStyle(color: Colors.white38, fontSize: 10)),
+                SizedBox(height: 2),
                 Text('SELECT para volver al menú',
                     style: TextStyle(color: Colors.white38, fontSize: 10)),
               ]),
@@ -662,6 +722,8 @@ class _SpaceShooterScreenState extends State<SpaceShooterScreen> {
             const SizedBox(height: 8),
             Text('Puntuación: $_score',
                 style: const TextStyle(color: Colors.white, fontSize: 16)),
+            Text('Ola alcanzada: $_wave',
+                style: const TextStyle(color: Colors.white70, fontSize: 13)),
             const SizedBox(height: 18),
             ElevatedButton(
               onPressed: _restart,
@@ -675,42 +737,6 @@ class _SpaceShooterScreenState extends State<SpaceShooterScreen> {
             const Text('SELECT para volver al menú',
                 style: TextStyle(color: Colors.white38, fontSize: 10)),
           ]),
-        ),
-      );
-
-  Widget _buildWaveCompleteOverlay() => Positioned.fill(
-        child: Container(
-          color: Colors.black.withOpacity(0.8),
-          child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Text('🌟', style: TextStyle(fontSize: 52)),
-                Text('¡OLA $_wave COMPLETADA!',
-                    style: const TextStyle(
-                        color: Colors.cyanAccent,
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold)),
-                Text('+200 pts  ·  Total: $_score',
-                    style:
-                        const TextStyle(color: Colors.white, fontSize: 14)),
-                const SizedBox(height: 6),
-                if (_wave >= 2)
-                  Text(
-                    _wave == 2
-                        ? '¡Munición especial desbloqueada! (botón X)'
-                        : '+2 disparos especiales',
-                    style: const TextStyle(color: Colors.orange, fontSize: 11),
-                  ),
-                const SizedBox(height: 16),
-                ElevatedButton(
-                  onPressed: _nextWave,
-                  style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.cyan.shade700,
-                      foregroundColor: Colors.white,
-                      shape: const StadiumBorder()),
-                  child: Text('Ola ${_wave + 1} →'),
-                ),
-              ]),
         ),
       );
 }
@@ -763,12 +789,9 @@ class _ShooterPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final cs = size.width / kW;
 
-    // Space background
-    canvas.drawRect(
-      Rect.fromLTWH(0, 0, size.width, size.height),
-      Paint()..color = const Color(0xFF020818),
-    );
-    // Nebula hint
+    // Background
+    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height),
+        Paint()..color = const Color(0xFF020818));
     canvas.drawCircle(
       Offset(size.width * 0.3, size.height * 0.4),
       size.width * 0.5,
@@ -779,11 +802,8 @@ class _ShooterPainter extends CustomPainter {
 
     // Stars
     for (final s in stars) {
-      canvas.drawCircle(
-        Offset(wx(s.x, cs), wy(s.y, cs)),
-        s.r * cs,
-        Paint()..color = Colors.white.withOpacity(s.opacity),
-      );
+      canvas.drawCircle(Offset(wx(s.x, cs), wy(s.y, cs)), s.r * cs,
+          Paint()..color = Colors.white.withOpacity(s.opacity));
     }
 
     // Pickups
@@ -795,12 +815,11 @@ class _ShooterPainter extends CustomPainter {
     final pBulletPaint = Paint()..color = const Color(0xFF00E5FF);
     for (final b in bullets.where((b) => b.alive && b.isPlayer)) {
       canvas.drawRect(
-        Rect.fromLTWH(wx(b.x - 0.07, cs), wy(b.y - 0.25, cs), cs * 0.14, cs * 0.5),
-        pBulletPaint,
-      );
+          Rect.fromLTWH(
+              wx(b.x - 0.07, cs), wy(b.y - 0.25, cs), cs * 0.14, cs * 0.5),
+          pBulletPaint);
       canvas.drawCircle(
-        Offset(wx(b.x, cs), wy(b.y, cs)),
-        cs * 0.12,
+        Offset(wx(b.x, cs), wy(b.y, cs)), cs * 0.12,
         Paint()
           ..color = const Color(0xFF00E5FF).withOpacity(0.4)
           ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4),
@@ -811,21 +830,20 @@ class _ShooterPainter extends CustomPainter {
     for (final b in bullets.where((b) => b.alive && !b.isPlayer)) {
       if (b.isMissile) {
         canvas.drawOval(
-          Rect.fromLTWH(wx(b.x - 0.12, cs), wy(b.y - 0.2, cs), cs * 0.24, cs * 0.45),
-          Paint()..color = const Color(0xFFFF6D00),
-        );
+            Rect.fromLTWH(wx(b.x - 0.12, cs), wy(b.y - 0.2, cs),
+                cs * 0.24, cs * 0.45),
+            Paint()..color = const Color(0xFFFF6D00));
         canvas.drawCircle(
-          Offset(wx(b.x, cs), wy(b.y, cs)),
-          cs * 0.18,
+          Offset(wx(b.x, cs), wy(b.y, cs)), cs * 0.18,
           Paint()
             ..color = const Color(0xFFFF6D00).withOpacity(0.4)
             ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4),
         );
       } else {
         canvas.drawOval(
-          Rect.fromLTWH(wx(b.x - 0.1, cs), wy(b.y - 0.15, cs), cs * 0.2, cs * 0.35),
-          Paint()..color = const Color(0xFFFF4444),
-        );
+            Rect.fromLTWH(wx(b.x - 0.1, cs), wy(b.y - 0.15, cs),
+                cs * 0.2, cs * 0.35),
+            Paint()..color = const Color(0xFFFF4444));
       }
     }
 
@@ -851,16 +869,14 @@ class _ShooterPainter extends CustomPainter {
     // Shield ring
     if (shieldHits > 0) {
       canvas.drawCircle(
-        Offset(wx(sx + kShipW / 2, cs), wy(sy + kShipH / 2, cs)),
-        cs * 0.85,
+        Offset(wx(sx + kShipW / 2, cs), wy(sy + kShipH / 2, cs)), cs * 0.85,
         Paint()
           ..color = Colors.cyanAccent.withOpacity(0.35)
           ..style = PaintingStyle.stroke
           ..strokeWidth = 3,
       );
       canvas.drawCircle(
-        Offset(wx(sx + kShipW / 2, cs), wy(sy + kShipH / 2, cs)),
-        cs * 0.85,
+        Offset(wx(sx + kShipW / 2, cs), wy(sy + kShipH / 2, cs)), cs * 0.85,
         Paint()
           ..color = Colors.cyanAccent.withOpacity(0.1)
           ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8),
@@ -868,10 +884,8 @@ class _ShooterPainter extends CustomPainter {
     }
 
     // Player zone separator
-    canvas.drawRect(
-      Rect.fromLTWH(0, wy(8.8, cs), size.width, 1),
-      Paint()..color = Colors.white12,
-    );
+    canvas.drawRect(Rect.fromLTWH(0, wy(8.8, cs), size.width, 1),
+        Paint()..color = Colors.white12);
   }
 
   void _drawPickup(Canvas canvas, double cs, _Pickup p) {
@@ -895,8 +909,7 @@ class _ShooterPainter extends CustomPainter {
         break;
     }
     canvas.drawCircle(
-      Offset(px + sz / 2, py + sz / 2),
-      sz * 0.7,
+      Offset(px + sz / 2, py + sz / 2), sz * 0.7,
       Paint()
         ..color = glowColor.withOpacity(0.3)
         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6),
@@ -914,16 +927,12 @@ class _ShooterPainter extends CustomPainter {
     final sw = kShipW * cs;
     final sh = kShipH * cs;
 
-    // Engine glow
     canvas.drawCircle(
-      Offset(shipX + sw / 2, shipY + sh),
-      cs * 0.28,
+      Offset(shipX + sw / 2, shipY + sh), cs * 0.28,
       Paint()
         ..color = const Color(0xFFFF8C00).withOpacity(0.7)
         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5),
     );
-
-    // Hull
     final hull = Path()
       ..moveTo(shipX + sw / 2, shipY)
       ..lineTo(shipX + sw, shipY + sh * 0.7)
@@ -932,14 +941,9 @@ class _ShooterPainter extends CustomPainter {
       ..lineTo(shipX, shipY + sh * 0.7)
       ..close();
     canvas.drawPath(hull, Paint()..color = const Color(0xFF1565C0));
-
-    // Cockpit
     canvas.drawOval(
-      Rect.fromLTWH(shipX + sw * 0.3, shipY + sh * 0.15, sw * 0.4, sh * 0.4),
-      Paint()..color = const Color(0xFF00E5FF).withOpacity(0.8),
-    );
-
-    // Wing accents
+        Rect.fromLTWH(shipX + sw * 0.3, shipY + sh * 0.15, sw * 0.4, sh * 0.4),
+        Paint()..color = const Color(0xFF00E5FF).withOpacity(0.8));
     canvas.drawRect(
         Rect.fromLTWH(shipX, shipY + sh * 0.6, sw * 0.3, sh * 0.15),
         Paint()..color = const Color(0xFF42A5F5));
@@ -956,32 +960,20 @@ class _ShooterPainter extends CustomPainter {
 
     Color color;
     switch (a.type) {
-      case _AlienType.basic:
-        color = const Color(0xFF69F0AE);
-        break;
-      case _AlienType.burst:
-        color = const Color(0xFFE040FB);
-        break;
-      case _AlienType.scatter:
-        color = const Color(0xFFFF6D00);
-        break;
-      case _AlienType.missile:
-        color = const Color(0xFFFF1744);
-        break;
+      case _AlienType.basic:   color = const Color(0xFF69F0AE); break;
+      case _AlienType.burst:   color = const Color(0xFFE040FB); break;
+      case _AlienType.scatter: color = const Color(0xFFFF6D00); break;
+      case _AlienType.missile: color = const Color(0xFFFF1744); break;
     }
 
-    // UFO body
     canvas.drawOval(
         Rect.fromLTWH(ax, ay + ah * 0.3, aw, ah * 0.7), Paint()..color = color);
-    // Dome
     canvas.drawOval(Rect.fromLTWH(ax + aw * 0.2, ay, aw * 0.6, ah * 0.6),
         Paint()..color = color.withOpacity(0.6));
-    // Eyes
     canvas.drawCircle(Offset(ax + aw * 0.35, ay + ah * 0.55), cs * 0.07,
         Paint()..color = Colors.black);
     canvas.drawCircle(Offset(ax + aw * 0.65, ay + ah * 0.55), cs * 0.07,
         Paint()..color = Colors.black);
-    // Glow outline
     canvas.drawOval(
       Rect.fromLTWH(ax - 1, ay + ah * 0.3 - 1, aw + 2, ah * 0.7 + 2),
       Paint()
@@ -989,7 +981,6 @@ class _ShooterPainter extends CustomPainter {
         ..style = PaintingStyle.stroke
         ..strokeWidth = 1.5,
     );
-    // HP dots for multi-hit aliens
     if (a.hp > 1) {
       for (int i = 0; i < a.hp; i++) {
         canvas.drawCircle(
@@ -1010,20 +1001,15 @@ class _ShooterPainter extends CustomPainter {
       final jitter = 0.7 + (i * 37 % 7) * 0.05;
       final x = cos(angle) * r * jitter;
       final y = sin(angle) * r * jitter;
-      if (i == 0)
-        path.moveTo(x, y);
-      else
-        path.lineTo(x, y);
+      if (i == 0) path.moveTo(x, y); else path.lineTo(x, y);
     }
     path.close();
     canvas.drawPath(path, Paint()..color = const Color(0xFF78909C));
-    canvas.drawPath(
-      path,
-      Paint()
-        ..color = const Color(0xFF90A4AE)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.5,
-    );
+    canvas.drawPath(path,
+        Paint()
+          ..color = const Color(0xFF90A4AE)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.5);
   }
 
   @override

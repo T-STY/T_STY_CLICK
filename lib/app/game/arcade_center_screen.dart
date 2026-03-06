@@ -2,7 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
 import 'arcade_input_controller.dart';
-import 'mario_game_screen.dart';
+import 'flappy_bird_screen.dart';
 import 'snake_game_screen.dart';
 import 'space_shooter_screen.dart';
 
@@ -56,13 +56,13 @@ final List<ArcadeGameDef> kArcadeGames = [
             currentSaldo: currentSaldo, controller: controller, onSaldoChanged: onSaldoChanged),
   ),
   ArcadeGameDef(
-    id: 'mario',
-    emoji: '🍄',
-    title: 'Super Arcade',
-    subtitle: 'Plataformas',
+    id: 'flappy',
+    emoji: '🐦',
+    title: 'Pájaro Veloz',
+    subtitle: 'Resistencia',
     builder: ({required userId, required rewardsDocRef, required currentSaldo,
         required controller, required onSaldoChanged}) =>
-        MarioGameScreen(userId: userId, rewardsDocRef: rewardsDocRef,
+        FlappyBirdScreen(userId: userId, rewardsDocRef: rewardsDocRef,
             currentSaldo: currentSaldo, controller: controller, onSaldoChanged: onSaldoChanged),
   ),
   ArcadeGameDef(

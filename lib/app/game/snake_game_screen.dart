@@ -199,7 +199,8 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> {
     _ticker?.cancel();
     _level++;
 
-    if (!_awardingPoints) {
+    // Award 1 saldo point every 10 levels
+    if (_level % 10 == 0 && !_awardingPoints) {
       _awardingPoints = true;
       final newSaldo = _saldo + 1.0;
       await _updateFirestore(newSaldo);
@@ -332,7 +333,12 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> {
             ),
             SizedBox(height: 8),
             Text(
-              'Come 5 frutas para subir de nivel (+1 pto)',
+              'Come 5 frutas para subir de nivel',
+              style: TextStyle(color: Colors.black38, fontSize: 12),
+              textAlign: TextAlign.center,
+            ),
+            Text(
+              '+1 pto real cada 10 niveles',
               style: TextStyle(color: Colors.black38, fontSize: 12),
               textAlign: TextAlign.center,
             ),
