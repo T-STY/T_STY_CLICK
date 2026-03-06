@@ -607,10 +607,16 @@ class _MarioGameScreenState extends State<MarioGameScreen> {
         Text('Puntuación: $_score', style: const TextStyle(color: Colors.white, fontSize: 16)),
         if (_lives > 0) Text('Vidas restantes: $_lives', style: const TextStyle(color: Colors.yellow, fontSize: 13)),
         const SizedBox(height: 18),
-        ElevatedButton(
-          onPressed: _tryRestart,
-          style: ElevatedButton.styleFrom(backgroundColor: Colors.red.shade700, foregroundColor: Colors.white, shape: const StadiumBorder()),
-          child: Text(_lives <= 0 ? 'Nueva partida' : 'Continuar'),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 32),
+          child: SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: _tryRestart,
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red.shade700, foregroundColor: Colors.white, shape: const StadiumBorder()),
+              child: Text(_lives <= 0 ? 'Nueva partida' : 'Continuar'),
+            ),
+          ),
         ),
         const SizedBox(height: 8),
         const Text('SELECT para volver al menú', style: TextStyle(color: Colors.white38, fontSize: 10)),
@@ -626,10 +632,16 @@ class _MarioGameScreenState extends State<MarioGameScreen> {
         const Text('¡NIVEL COMPLETADO!', style: TextStyle(color: Colors.yellow, fontSize: 18, fontWeight: FontWeight.bold)),
         Text('+500 puntos  ·  Total: $_score', style: const TextStyle(color: Colors.white, fontSize: 14)),
         const SizedBox(height: 20),
-        ElevatedButton(
-          onPressed: _nextLevel,
-          style: ElevatedButton.styleFrom(backgroundColor: Colors.green.shade700, foregroundColor: Colors.white, shape: const StadiumBorder()),
-          child: const Text('Siguiente nivel →'),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 32),
+          child: SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: _nextLevel,
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.green.shade700, foregroundColor: Colors.white, shape: const StadiumBorder()),
+              child: const Text('Siguiente nivel →'),
+            ),
+          ),
         ),
       ]),
     ),

@@ -384,16 +384,22 @@ class _FlappyBirdScreenState extends State<FlappyBirdScreen> {
                     style:
                         const TextStyle(color: Colors.white70, fontSize: 13)),
                 const SizedBox(height: 20),
-                ElevatedButton(
-                  onPressed: () {
-                    _resetGame();
-                    _startGame();
-                  },
-                  style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.orange.shade700,
-                      foregroundColor: Colors.white,
-                      shape: const StadiumBorder()),
-                  child: const Text('Intentar de nuevo'),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 32),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: () {
+                        _resetGame();
+                        _startGame();
+                      },
+                      style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.orange.shade700,
+                          foregroundColor: Colors.white,
+                          shape: const StadiumBorder()),
+                      child: const Text('Intentar de nuevo'),
+                    ),
+                  ),
                 ),
                 const SizedBox(height: 8),
                 const Text('SELECT para volver al menú',

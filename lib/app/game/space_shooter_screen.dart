@@ -287,10 +287,13 @@ class _SpaceShooterScreenState extends State<SpaceShooterScreen> {
       }
       if (a.y < 0.2) a.y = 0.2;
 
-      // Alien reaching player zone → game over
-      if (a.y > kShipMinY - 1.2) {
-        _triggerDeath();
-        return;
+      // Alien breaches the player zone → costs a life (not instant game-over)
+      if (a.y > kShipMinY - 0.3) {
+        a.alive = false;
+        HapticFeedback.heavyImpact();
+        _hitShip(); // handles invincibility, life deduction, and game-over when lives = 0
+        if (_isDead) return;
+        continue;
       }
 
       // Burst sub-shots
@@ -727,13 +730,19 @@ class _SpaceShooterScreenState extends State<SpaceShooterScreen> {
             Text('Ola alcanzada: $_wave',
                 style: const TextStyle(color: Colors.white70, fontSize: 13)),
             const SizedBox(height: 18),
-            ElevatedButton(
-              onPressed: _restart,
-              style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.red.shade700,
-                  foregroundColor: Colors.white,
-                  shape: const StadiumBorder()),
-              child: const Text('Nueva Partida'),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 32),
+              child: SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: _restart,
+                  style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.red.shade700,
+                      foregroundColor: Colors.white,
+                      shape: const StadiumBorder()),
+                  child: const Text('Nueva Partida'),
+                ),
+              ),
             ),
             const SizedBox(height: 8),
             const Text('SELECT para volver al menú',

@@ -368,20 +368,26 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> {
               style: const TextStyle(color: Colors.black54, fontSize: 18),
             ),
             const SizedBox(height: 32),
-            ElevatedButton(
-              onPressed: canRestart ? _restart : null,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.black,
-                foregroundColor: Colors.white,
-                disabledBackgroundColor: Colors.grey.shade300,
-                disabledForegroundColor: Colors.grey.shade500,
-                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 14),
-                shape: const StadiumBorder(),
-                elevation: 0,
-              ),
-              child: Text(
-                canRestart ? 'Reintentar  (−10 pts)' : 'Sin puntos suficientes',
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 32),
+              child: SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: canRestart ? _restart : null,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.black,
+                    foregroundColor: Colors.white,
+                    disabledBackgroundColor: Colors.grey.shade300,
+                    disabledForegroundColor: Colors.grey.shade500,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: const StadiumBorder(),
+                    elevation: 0,
+                  ),
+                  child: Text(
+                    canRestart ? 'Reintentar  (−10 pts)' : 'Sin puntos suficientes',
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                  ),
+                ),
               ),
             ),
             const SizedBox(height: 8),
