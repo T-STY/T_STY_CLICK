@@ -298,71 +298,64 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
         builder: (context, constraints) {
           final w = constraints.maxWidth;
           final h = constraints.maxHeight;
-          final cardW = (w * 0.78).clamp(160.0, 260.0);
-          final cardH = (h * 0.74).clamp(130.0, 210.0);
-          final gap = w * 0.05;
+          // Cards taller, centered on screen
+          final cardW = (w * 0.80).clamp(168.0, 268.0);
+          final cardH = (h * 0.88).clamp(160.0, 250.0);
+          final gap = w * 0.06;
           final centerX = (w - cardW) / 2;
 
-          return Column(children: [
-            const SizedBox(height: 8),
-            // Category badge row
-            Text(
-              _kCategoryLabels[_selectedIndex ~/ 2],
-              style: const TextStyle(color: Colors.white24, fontSize: 8,
-                  letterSpacing: 3, fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 6),
-
-            // Cards carousel
-            SizedBox(
-              height: cardH,
-              child: Stack(
-                clipBehavior: Clip.none,
-                children: List.generate(kArcadeGames.length, (i) {
-                  final offset = (i - _selectedIndex) * (cardW + gap);
-                  final isSelected = i == _selectedIndex;
-                  return AnimatedPositioned(
-                    duration: const Duration(milliseconds: 280),
-                    curve: Curves.easeOutCubic,
-                    left: centerX + offset,
-                    top: isSelected ? 0 : cardH * 0.06,
-                    child: AnimatedOpacity(
+          return Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              // Cards carousel — the focal point
+              SizedBox(
+                height: cardH,
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: List.generate(kArcadeGames.length, (i) {
+                    final offset = (i - _selectedIndex) * (cardW + gap);
+                    final isSelected = i == _selectedIndex;
+                    return AnimatedPositioned(
                       duration: const Duration(milliseconds: 280),
-                      opacity: (i - _selectedIndex).abs() <= 1 ? 1.0 : 0.0,
-                      child: _buildCarouselCard(
-                        kArcadeGames[i], i, isSelected, cardW, cardH),
+                      curve: Curves.easeOutCubic,
+                      left: centerX + offset,
+                      top: isSelected ? 0 : cardH * 0.05,
+                      child: AnimatedOpacity(
+                        duration: const Duration(milliseconds: 280),
+                        opacity: (i - _selectedIndex).abs() <= 1 ? 1.0 : 0.0,
+                        child: _buildCarouselCard(
+                          kArcadeGames[i], i, isSelected, cardW, cardH),
+                      ),
+                    );
+                  }),
+                ),
+              ),
+
+              const SizedBox(height: 10),
+
+              // Navigation dots
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(8, (i) {
+                  final sel = i == _selectedIndex;
+                  return AnimatedContainer(
+                    duration: const Duration(milliseconds: 220),
+                    margin: const EdgeInsets.symmetric(horizontal: 2),
+                    width: sel ? 18 : 5,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: sel ? Colors.white70 : Colors.white24,
+                      borderRadius: BorderRadius.circular(2),
                     ),
                   );
                 }),
               ),
-            ),
 
-            const SizedBox(height: 8),
-
-            // Navigation dots
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: List.generate(8, (i) {
-                final sel = i == _selectedIndex;
-                return AnimatedContainer(
-                  duration: const Duration(milliseconds: 220),
-                  margin: const EdgeInsets.symmetric(horizontal: 2),
-                  width: sel ? 16 : 5,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: sel ? Colors.white : Colors.white24,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                );
-              }),
-            ),
-
-            const SizedBox(height: 6),
-            const Text('◄ ► navegar  ·  A jugar  ·  SELECT salir',
-              style: TextStyle(color: Colors.white24, fontSize: 7)),
-            const Text('−10 pts por partida',
-              style: TextStyle(color: Colors.white12, fontSize: 7)),
-          ]);
+              const SizedBox(height: 6),
+              const Text('◄ ► navegar   A jugar   SELECT salir',
+                style: TextStyle(color: Colors.white24, fontSize: 7)),
+            ],
+          );
         },
       ),
     );
@@ -370,91 +363,97 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
 
   Widget _buildCarouselCard(
       ArcadeGameDef def, int index, bool selected, double w, double h) {
+    // Connector height at bottom of cartridge
+    const connH = 22.0;
+    // Label area starts below the top ridge
+    const ridgeH = 18.0;
+    final labelTop = ridgeH + 2.0;
+    final labelBot = h - connH - 4.0;
+
     return GestureDetector(
       onTap: selected ? _launchSelected : () => setState(() => _selectedIndex = index),
       child: AnimatedScale(
         duration: const Duration(milliseconds: 280),
-        scale: selected ? 1.0 : 0.88,
+        scale: selected ? 1.0 : 0.90,
         child: SizedBox(
           width: w,
           height: h,
           child: Stack(children: [
-            // Painted background with pixel art
-            ClipRRect(
-              borderRadius: BorderRadius.circular(14),
-              child: CustomPaint(
-                painter: _CardArtPainter(index: index, selected: selected),
-                child: const SizedBox.expand(),
-              ),
+            // ── Cartridge painting (shell + art + contacts) ─────────────────
+            CustomPaint(
+              painter: _CartridgePainter(index: index, selected: selected),
+              child: const SizedBox.expand(),
             ),
 
-            // Border glow for selected
+            // ── Selected glow border ─────────────────────────────────────────
             Container(
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: BorderRadius.circular(10),
                 border: Border.all(
                   color: selected
-                      ? Colors.white.withOpacity(0.50)
-                      : Colors.white.withOpacity(0.06),
-                  width: selected ? 2 : 1,
+                      ? Colors.white.withOpacity(0.55)
+                      : Colors.transparent,
+                  width: 2,
                 ),
               ),
             ),
 
-            // Content overlay
-            Padding(
-              padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+            // ── Label content overlay ────────────────────────────────────────
+            Positioned(
+              left: 8, right: 8,
+              top: labelTop, bottom: h - labelBot,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // Category chip
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                     decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.45),
-                      borderRadius: BorderRadius.circular(5),
+                      color: Colors.black.withOpacity(0.40),
+                      borderRadius: BorderRadius.circular(4),
                     ),
                     child: Text(
                       _kCategoryLabels[index ~/ 2],
                       style: const TextStyle(
-                        color: Colors.white54, fontSize: 7, letterSpacing: 2,
+                        color: Colors.white60, fontSize: 7, letterSpacing: 2,
                         fontWeight: FontWeight.w700),
                     ),
                   ),
                   const Spacer(),
                   // Emoji
-                  Text(def.emoji, style: const TextStyle(fontSize: 40)),
-                  const SizedBox(height: 6),
+                  Text(def.emoji, style: const TextStyle(fontSize: 36)),
+                  const SizedBox(height: 5),
                   // Title
                   Text(def.title,
-                    style: const TextStyle(color: Colors.white, fontSize: 15,
-                        fontWeight: FontWeight.bold, letterSpacing: 0.3),
+                    style: const TextStyle(color: Colors.white, fontSize: 13,
+                        fontWeight: FontWeight.bold, letterSpacing: 0.2,
+                        shadows: [Shadow(color: Colors.black87, blurRadius: 4)]),
                     maxLines: 2,
                   ),
-                  // High score
                   if (_highScores[index] > 0) ...[
-                    const SizedBox(height: 4),
-                    Text('⭐ Récord: ${_highScores[index]}',
+                    const SizedBox(height: 3),
+                    Text('⭐ ${_highScores[index]}',
                       style: const TextStyle(color: Colors.white54, fontSize: 9)),
                   ],
+                  const SizedBox(height: 2),
                 ],
               ),
             ),
 
-            // "JUGAR" badge bottom-right when selected
+            // ── JUGAR badge (selected) ────────────────────────────────────────
             if (selected)
               Positioned(
-                right: 12, bottom: 12,
+                right: 10, bottom: connH + 8,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.18),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: Colors.white38),
+                    color: Colors.white.withOpacity(0.20),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: Colors.white54),
                   ),
-                  child: const Text('A → JUGAR',
+                  child: const Text('A  JUGAR',
                     style: TextStyle(color: Colors.white, fontSize: 7,
-                        fontWeight: FontWeight.bold, letterSpacing: 1.2)),
+                        fontWeight: FontWeight.bold, letterSpacing: 1.5)),
                 ),
               ),
           ]),
@@ -563,26 +562,121 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
 
 // ─── Card Art Painter ─────────────────────────────────────────────────────────
 
-class _CardArtPainter extends CustomPainter {
+// ─── Cartridge Painter ────────────────────────────────────────────────────────
+
+class _CartridgePainter extends CustomPainter {
   final int index;
   final bool selected;
-  const _CardArtPainter({required this.index, required this.selected});
+  const _CartridgePainter({required this.index, required this.selected});
 
   @override
-  bool shouldRepaint(_CardArtPainter old) => old.selected != selected || old.index != index;
+  bool shouldRepaint(_CartridgePainter old) => old.selected != selected || old.index != index;
 
   @override
   void paint(Canvas canvas, Size size) {
-    final g = _kCardGradients[index];
-    // Background gradient
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(Rect.fromLTWH(0, 0, size.width, size.height), const Radius.circular(14)),
-      Paint()..shader = LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight,
-        colors: g).createShader(Rect.fromLTWH(0, 0, size.width, size.height)),
-    );
-
-    final p = Paint()..isAntiAlias = false;
     final w = size.width, h = size.height;
+    final p = Paint()..isAntiAlias = false;
+
+    // ── Cartridge shell body (SNES-style gray plastic) ────────────────────────
+    final shellRRect = RRect.fromRectAndRadius(
+        Rect.fromLTWH(0, 0, w, h), const Radius.circular(10));
+    canvas.drawRRect(shellRRect, Paint()
+      ..shader = const LinearGradient(
+        begin: Alignment.topLeft, end: Alignment.bottomRight,
+        colors: [Color(0xFF9292A0), Color(0xFF6A6A7A)],
+      ).createShader(Rect.fromLTWH(0, 0, w, h)));
+
+    // Edge highlight (top-left bright edge)
+    p.color = const Color(0xFFB0B0C0);
+    canvas.drawRect(Rect.fromLTWH(0, 0, w, 2), p);   // top edge
+    canvas.drawRect(Rect.fromLTWH(0, 0, 2, h), p);   // left edge
+    // Shadow edges (bottom-right)
+    p.color = const Color(0xFF444450);
+    canvas.drawRect(Rect.fromLTWH(0, h - 2, w, 2), p);
+    canvas.drawRect(Rect.fromLTWH(w - 2, 0, 2, h), p);
+
+    // ── Top ridge (embossed bar — SNES style) ─────────────────────────────────
+    p.color = const Color(0xFFA0A0B0); // ridge face
+    canvas.drawRect(Rect.fromLTWH(4, 4, w - 8, 14), p);
+    p.color = const Color(0xFF7A7A8A); // ridge bottom shadow
+    canvas.drawRect(Rect.fromLTWH(4, 17, w - 8, 2), p);
+    p.color = const Color(0xFFB8B8C8); // ridge top highlight
+    canvas.drawRect(Rect.fromLTWH(4, 4, w - 8, 2), p);
+    // Ridge center notch (SNES cartridge has a center tab recess)
+    p.color = const Color(0xFF8A8A9A);
+    canvas.drawRect(Rect.fromLTWH(w * 0.33, 4, w * 0.34, 14), p);
+    // Screw hole hints
+    p.color = const Color(0xFF686878);
+    canvas.drawRect(Rect.fromLTWH(10, 7, 5, 5), p);
+    canvas.drawRect(Rect.fromLTWH(w - 15, 7, 5, 5), p);
+
+    // ── Label area (game-colored inset rectangle) ─────────────────────────────
+    const labelX = 5.0, labelTop = 20.0, connH = 22.0;
+    final labelW = w - labelX * 2;
+    final labelH = h - labelTop - connH - 5;
+    final labelRRect = RRect.fromRectAndRadius(
+        Rect.fromLTWH(labelX, labelTop, labelW, labelH),
+        const Radius.circular(5));
+
+    // Label gradient background (per-game color)
+    final g = _kCardGradients[index];
+    canvas.drawRRect(labelRRect, Paint()
+      ..shader = LinearGradient(
+        begin: Alignment.topLeft, end: Alignment.bottomRight, colors: g,
+      ).createShader(Rect.fromLTWH(labelX, labelTop, labelW, labelH)));
+
+    // Label border
+    p.color = Colors.black.withOpacity(0.35);
+    p.style = PaintingStyle.stroke;
+    p.strokeWidth = 1.0;
+    canvas.drawRRect(labelRRect, p);
+    p.style = PaintingStyle.fill;
+
+    // ── Game art (clipped to label area) ─────────────────────────────────────
+    canvas.save();
+    canvas.clipRRect(labelRRect);
+    _drawGameArt(canvas, labelX, labelTop, labelW, labelH);
+    canvas.restore();
+
+    // ── Connector area + gold contacts ────────────────────────────────────────
+    final cY = h - connH - 4;
+    p.color = const Color(0xFF3A3A48);
+    canvas.drawRect(Rect.fromLTWH(4, cY, w - 8, connH + 2), p);
+    // Connector top groove
+    p.color = const Color(0xFF222230);
+    canvas.drawRect(Rect.fromLTWH(4, cY, w - 8, 2), p);
+    // Gold contacts (10 strips)
+    const nContacts = 10;
+    final contactTotalW = w - 16.0;
+    final contactW = contactTotalW / nContacts;
+    for (int i = 0; i < nContacts; i++) {
+      final cx = 8.0 + i * contactW + 1;
+      p.color = const Color(0xFFB8860B);
+      canvas.drawRect(Rect.fromLTWH(cx, cY + 4, contactW - 2, connH - 6), p);
+      // Contact shine
+      p.color = const Color(0xFFD4A820).withOpacity(0.6);
+      canvas.drawRect(Rect.fromLTWH(cx, cY + 4, contactW - 2, 3), p);
+      // Contact shadow
+      p.color = const Color(0xFF806010).withOpacity(0.5);
+      canvas.drawRect(Rect.fromLTWH(cx, cY + connH - 4, contactW - 2, 2), p);
+    }
+
+    // ── Selected highlight overlay ─────────────────────────────────────────────
+    if (selected) {
+      canvas.drawRRect(shellRRect,
+          Paint()..color = Colors.white.withOpacity(0.07)..isAntiAlias = false);
+    }
+  }
+
+  // ── Per-game art in label area ────────────────────────────────────────────────
+
+  void _drawGameArt(Canvas canvas, double ox, double oy, double lw, double lh) {
+    final p = Paint()..isAntiAlias = false;
+    // Remap helper: art uses w/h fractions but we apply to label coords
+    // Legacy art used full-card fractions; label ≈ right 60% of original w
+    // We'll scale to fit within label area directly
+    final w = lw + ox; // full card "virtual" w so fractions land in label
+    final h = lh + oy;
 
     switch (index) {
       // ── Víbora Neón ──────────────────────────────────────────────────────

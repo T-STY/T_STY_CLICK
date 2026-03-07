@@ -37,7 +37,7 @@ class _Alien {
         hp = type == _AlienType.scatter
             ? 3
             : (type == _AlienType.burst ? 2 : 1),
-        fireTimer = 1.5 + Random().nextDouble() * 3.0,
+        fireTimer = 0.3 + Random().nextDouble() * 0.8,
         burstCount = 0,
         burstTimer = 0,
         vx = (Random().nextDouble() - 0.5) * 2.5,
@@ -427,17 +427,21 @@ class _SpaceShooterScreenState extends State<SpaceShooterScreen> {
 
   // ── Helpers ──────────────────────────────────────────────────────────────────
 
-  double _fireRateForWave() => (3.5 - _wave * 0.2).clamp(0.8, 3.5);
+  // All enemy types now fire a burst of 3 every ~1 s, decreasing with wave
+  double _fireRateForWave() => (1.2 - _wave * 0.08).clamp(0.38, 1.2);
 
   void _alienFire(_Alien a) {
     switch (a.type) {
       case _AlienType.basic:
+        // Basic also does a burst of 3 with short reload
         _bullets.add(_Bullet(a.x + 0.5, a.y + 0.8, isPlayer: false));
+        a.burstCount = 2;
+        a.burstTimer = 0.12;
         break;
       case _AlienType.burst:
         _bullets.add(_Bullet(a.x + 0.5, a.y + 0.8, isPlayer: false));
         a.burstCount = 2;
-        a.burstTimer = 0.15;
+        a.burstTimer = 0.10;
         break;
       case _AlienType.scatter:
         for (int i = -2; i <= 2; i++) {
@@ -697,7 +701,7 @@ class _SpaceShooterScreenState extends State<SpaceShooterScreen> {
               children: [
                 Text('🚀', style: TextStyle(fontSize: 52)),
                 SizedBox(height: 10),
-                Text('INVASORES',
+                Text('ASALTO ESTELAR',
                     style: TextStyle(
                         color: Colors.cyanAccent,
                         fontSize: 20,

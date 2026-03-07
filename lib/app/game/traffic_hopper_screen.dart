@@ -247,7 +247,7 @@ class _TrafficHopperScreenState extends State<TrafficHopperScreen> {
     final frogCol = _frogX;
     for (final car in _cars) {
       if (car.row != _frogRow) continue;
-      if (frogCol + 0.4 > car.x && frogCol - 0.4 < car.x + car.len) {
+      if (frogCol + 0.3 > car.x && frogCol - 0.3 < car.x + car.len) {
         return car;
       }
     }
@@ -501,7 +501,7 @@ class _TrafficHopperScreenState extends State<TrafficHopperScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Text('TRAFFIC HOPPER 🐸',
+            const Text('CRUCE PELIGROSO 🐸',
                 style: TextStyle(color: Colors.greenAccent, fontSize: 22, fontWeight: FontWeight.bold, letterSpacing: 2)),
             const SizedBox(height: 20),
             const Text('D-pad: mover rana', style: TextStyle(color: Colors.white70, fontSize: 13)),

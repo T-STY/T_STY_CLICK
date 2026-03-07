@@ -349,7 +349,7 @@ class _FlappyBirdScreenState extends State<FlappyBirdScreen> {
               children: [
                 const Text('🐦', style: TextStyle(fontSize: 56)),
                 const SizedBox(height: 10),
-                const Text('PÁJARO VELOZ',
+                const Text('ALAS DE CROMO',
                     style: TextStyle(
                         color: Colors.yellow,
                         fontSize: 20,

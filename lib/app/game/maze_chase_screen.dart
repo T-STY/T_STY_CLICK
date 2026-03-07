@@ -573,7 +573,7 @@ class _MazeChasScreenState extends State<MazeChasScreen> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             const Text(
-              'MAZE CHASE',
+              'REINO FANTASMAL',
               style: TextStyle(
                 color: Color(0xFFFFFF00),
                 fontSize: 34,
