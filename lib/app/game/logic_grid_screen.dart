@@ -107,10 +107,12 @@ class _LogicGridScreenState extends State<LogicGridScreen> {
 
   // ─── Mine Placement ────────────────────────────────────────────────────────
 
+  static const int _kMineCount = 12; // was 10 — harder
+
   void _placeMines(int safeRow, int safeCol) {
     final rng = Random();
     int placed = 0;
-    while (placed < 10) {
+    while (placed < _kMineCount) {
       final r = rng.nextInt(9), c = rng.nextInt(9);
       if ((r - safeRow).abs() <= 1 && (c - safeCol).abs() <= 1) continue;
       if (_grid[r][c].hasMine) continue;
@@ -154,8 +156,8 @@ class _LogicGridScreenState extends State<LogicGridScreen> {
   // ─── Win / Loss ────────────────────────────────────────────────────────────
 
   void _checkWin() {
-    if (_revealedCount >= 71) {
-      // 81 - 10 mines
+    if (_revealedCount >= 81 - _kMineCount) {
+      // 81 - 12 mines = 69
       _isWon = true;
       _ticker?.cancel();
       _ticker = null;
@@ -167,6 +169,7 @@ class _LogicGridScreenState extends State<LogicGridScreen> {
   Future<void> _awardWin() async {
     if (_awardingPoints) return;
     _awardingPoints = true;
+    HapticFeedback.mediumImpact();
     final newSaldo = _saldo + 1;
     _saldo = newSaldo;
     widget.onSaldoChanged(newSaldo);
@@ -266,8 +269,10 @@ class _LogicGridScreenState extends State<LogicGridScreen> {
     }
 
     if (cell.hasMine) {
+      HapticFeedback.heavyImpact();
       _triggerLoss();
     } else {
+      HapticFeedback.lightImpact();
       _reveal(row, col);
       _checkWin();
     }
@@ -280,10 +285,12 @@ class _LogicGridScreenState extends State<LogicGridScreen> {
     if (cell.state == _CellState.flagged) {
       cell.state = _CellState.hidden;
       _flagCount--;
+      HapticFeedback.selectionClick();
     } else {
-      if (_flagCount >= 10) return;
+      if (_flagCount >= _kMineCount) return;
       cell.state = _CellState.flagged;
       _flagCount++;
+      HapticFeedback.selectionClick();
     }
   }
 
@@ -349,7 +356,7 @@ class _LogicGridScreenState extends State<LogicGridScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text('🔲 LOGIC GRID',
+              const Text('💣 BOMB GRID',
                   style: TextStyle(
                       fontSize: 22,
                       fontWeight: FontWeight.bold,
@@ -362,8 +369,11 @@ class _LogicGridScreenState extends State<LogicGridScreen> {
               const Text('A : revelar   B : bandera',
                   style: TextStyle(fontSize: 13, color: Color(0xFFCCCCCC))),
               const SizedBox(height: 6),
+              const Text('12 minas · Ganar: 1000−(t×5)+banderas×20',
+                  style: TextStyle(fontSize: 11, color: Color(0xFF00FFCC))),
+              const SizedBox(height: 4),
               const Text('+1 pto por tablero completado',
-                  style: TextStyle(fontSize: 12, color: Color(0xFF00FFCC))),
+                  style: TextStyle(fontSize: 11, color: Color(0xFF00FFCC))),
               const SizedBox(height: 20),
               const Text('Pulsa cualquier botón para empezar',
                   style: TextStyle(fontSize: 12, color: Color(0xFF888888))),
@@ -483,7 +493,7 @@ class _GridPainter extends CustomPainter {
 
   static const int kRows = 9;
   static const int kCols = 9;
-  static const int kMines = 10;
+  static const int kMines = 12;
 
   @override
   void paint(Canvas canvas, Size size) {

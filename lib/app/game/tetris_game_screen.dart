@@ -179,7 +179,7 @@ class _TetrisScreenState extends State<TetrisScreen> {
 
   // ─── Gravity ───────────────────────────────────────────────────────────────
 
-  int get _gravInterval => (800 - (_level - 1) * 50).clamp(80, 800);
+  int get _gravInterval => (750 - (_level - 1) * 60).clamp(70, 750);
 
   void _startGravity() {
     _gravTimer?.cancel();
@@ -355,7 +355,8 @@ class _TetrisScreenState extends State<TetrisScreen> {
   }
 
   void _tryRotate(int newRot) {
-    // Try kicks: 0, -1, +1, -2, +2 col offsets, then -1 row
+    // Try kicks: 0, -1, +1, -2, +2 col offsets only.
+    // No upward row kick — prevents exploiting infinite spin on the floor.
     const colKicks = [0, -1, 1, -2, 2];
     for (final dc in colKicks) {
       if (_isValid(_pieceRow, _pieceCol + dc, newRot)) {
@@ -365,13 +366,6 @@ class _TetrisScreenState extends State<TetrisScreen> {
         });
         return;
       }
-    }
-    // Try row kick
-    if (_isValid(_pieceRow - 1, _pieceCol, newRot)) {
-      setState(() {
-        _rot = newRot;
-        _pieceRow -= 1;
-      });
     }
   }
 
@@ -517,12 +511,12 @@ class _TetrisScreenState extends State<TetrisScreen> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Text(
-              'TETRIS',
+              'BLOCK SURGE',
               style: TextStyle(
                 color: Color(0xFF00E5FF),
-                fontSize: 48,
+                fontSize: 38,
                 fontWeight: FontWeight.bold,
-                letterSpacing: 8,
+                letterSpacing: 6,
               ),
             ),
             SizedBox(height: 32),
@@ -533,8 +527,9 @@ class _TetrisScreenState extends State<TetrisScreen> {
             ),
             SizedBox(height: 24),
             Text(
-              '+1 pto cada 10 líneas',
-              style: TextStyle(color: Color(0xFFFFD700), fontSize: 13, fontWeight: FontWeight.bold),
+              '1L=100  2L=300  3L=500  4L=800  ×nivel\n+1 pto cada 10 líneas',
+              style: TextStyle(color: Color(0xFFFFD700), fontSize: 12, fontWeight: FontWeight.bold),
+              textAlign: TextAlign.center,
             ),
             SizedBox(height: 32),
             Text(

@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'arcade_input_controller.dart';
 import 'flappy_bird_screen.dart';
@@ -63,14 +64,14 @@ class ArcadeGameDef {
 final List<ArcadeGameDef> kArcadeGames = [
   // Col 0 — GRID
   ArcadeGameDef(
-    id: 'snake', emoji: '🐍', title: 'Serpiente', subtitle: 'Col·come',
+    id: 'snake', emoji: '🐍', title: 'Neon Viper', subtitle: '+1 pto c/5 lvl',
     builder: ({required userId, required rewardsDocRef, required currentSaldo,
         required controller, required onSaldoChanged}) =>
         SnakeGameScreen(userId: userId, rewardsDocRef: rewardsDocRef,
             currentSaldo: currentSaldo, controller: controller, onSaldoChanged: onSaldoChanged),
   ),
   ArcadeGameDef(
-    id: 'maze', emoji: '👻', title: 'Laberinto', subtitle: 'Pac-Man',
+    id: 'maze', emoji: '👻', title: 'Ghost Realm', subtitle: '+1 pto c/nivel',
     builder: ({required userId, required rewardsDocRef, required currentSaldo,
         required controller, required onSaldoChanged}) =>
         MazeChasScreen(userId: userId, rewardsDocRef: rewardsDocRef,
@@ -78,14 +79,14 @@ final List<ArcadeGameDef> kArcadeGames = [
   ),
   // Col 1 — REFLEX
   ArcadeGameDef(
-    id: 'flappy', emoji: '🐦', title: 'Pájaro', subtitle: 'Esquiva',
+    id: 'flappy', emoji: '🐦', title: 'Chrome Wings', subtitle: '+1 pto c/10 tubos',
     builder: ({required userId, required rewardsDocRef, required currentSaldo,
         required controller, required onSaldoChanged}) =>
         FlappyBirdScreen(userId: userId, rewardsDocRef: rewardsDocRef,
             currentSaldo: currentSaldo, controller: controller, onSaldoChanged: onSaldoChanged),
   ),
   ArcadeGameDef(
-    id: 'hopper', emoji: '🐸', title: 'Tráfico', subtitle: 'Frogger',
+    id: 'hopper', emoji: '🐸', title: 'Street Dash', subtitle: '+1 pto c/nivel',
     builder: ({required userId, required rewardsDocRef, required currentSaldo,
         required controller, required onSaldoChanged}) =>
         TrafficHopperScreen(userId: userId, rewardsDocRef: rewardsDocRef,
@@ -93,14 +94,14 @@ final List<ArcadeGameDef> kArcadeGames = [
   ),
   // Col 2 — SHOOTER
   ArcadeGameDef(
-    id: 'shooter', emoji: '🚀', title: 'Invasores', subtitle: 'Acción',
+    id: 'shooter', emoji: '🚀', title: 'Void Blitz', subtitle: '+1 pto c/oleada',
     builder: ({required userId, required rewardsDocRef, required currentSaldo,
         required controller, required onSaldoChanged}) =>
         SpaceShooterScreen(userId: userId, rewardsDocRef: rewardsDocRef,
             currentSaldo: currentSaldo, controller: controller, onSaldoChanged: onSaldoChanged),
   ),
   ArcadeGameDef(
-    id: 'raycaster', emoji: '🔫', title: 'FPV Doom', subtitle: '3D retro',
+    id: 'raycaster', emoji: '🔥', title: 'Dungeon Blitz', subtitle: '+1 pto c/oleada',
     builder: ({required userId, required rewardsDocRef, required currentSaldo,
         required controller, required onSaldoChanged}) =>
         RaycasterScreen(userId: userId, rewardsDocRef: rewardsDocRef,
@@ -108,14 +109,14 @@ final List<ArcadeGameDef> kArcadeGames = [
   ),
   // Col 3 — PUZZLE
   ArcadeGameDef(
-    id: 'tetris', emoji: '🟦', title: 'Tetris', subtitle: 'Bloques',
+    id: 'tetris', emoji: '🟦', title: 'Block Surge', subtitle: '+1 pto c/10 líneas',
     builder: ({required userId, required rewardsDocRef, required currentSaldo,
         required controller, required onSaldoChanged}) =>
         TetrisScreen(userId: userId, rewardsDocRef: rewardsDocRef,
             currentSaldo: currentSaldo, controller: controller, onSaldoChanged: onSaldoChanged),
   ),
   ArcadeGameDef(
-    id: 'logic', emoji: '💣', title: 'Minas', subtitle: 'Lógica',
+    id: 'logic', emoji: '💣', title: 'Bomb Grid', subtitle: '+1 pto por ganar',
     builder: ({required userId, required rewardsDocRef, required currentSaldo,
         required controller, required onSaldoChanged}) =>
         LogicGridScreen(userId: userId, rewardsDocRef: rewardsDocRef,
@@ -408,7 +409,7 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
     final hs = _highScores[index];
     return SizedBox(
       width: 62,
-      height: 82,
+      height: 92,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 140),
         decoration: BoxDecoration(
@@ -430,6 +431,17 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
                 color: isSelected ? Colors.black : Colors.white,
                 fontSize: 9,
                 fontWeight: FontWeight.bold,
+              ),
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 2),
+            Text(
+              def.subtitle,
+              style: TextStyle(
+                color: isSelected ? Colors.black54 : const Color(0xFF4DD0E1),
+                fontSize: 7,
               ),
               textAlign: TextAlign.center,
               maxLines: 2,
@@ -586,7 +598,7 @@ class _ConsoleDPadArmState extends State<_ConsoleDPadArm> {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTapDown: (_) { setState(() => _pressed = true);  widget.controller.press(widget.btn); },
+      onTapDown: (_) { setState(() => _pressed = true);  HapticFeedback.lightImpact(); widget.controller.press(widget.btn); },
       onTapUp:   (_) { setState(() => _pressed = false); widget.controller.release(widget.btn); },
       onTapCancel: () { setState(() => _pressed = false); widget.controller.release(widget.btn); },
       child: AnimatedContainer(
@@ -625,7 +637,7 @@ class _ConsoleActionButtonState extends State<_ConsoleActionButton> {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTapDown: (_) { setState(() => _pressed = true);  widget.controller.press(widget.btn); },
+      onTapDown: (_) { setState(() => _pressed = true);  HapticFeedback.selectionClick(); widget.controller.press(widget.btn); },
       onTapUp:   (_) { setState(() => _pressed = false); widget.controller.release(widget.btn); },
       onTapCancel: () { setState(() => _pressed = false); widget.controller.release(widget.btn); },
       child: AnimatedContainer(
@@ -672,7 +684,7 @@ class _ConsoleMetaButtonState extends State<_ConsoleMetaButton> {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTapDown: (_) { setState(() => _pressed = true);  widget.controller.press(widget.btn); },
+      onTapDown: (_) { setState(() => _pressed = true);  HapticFeedback.selectionClick(); widget.controller.press(widget.btn); },
       onTapUp:   (_) { setState(() => _pressed = false); widget.controller.release(widget.btn); },
       onTapCancel: () { setState(() => _pressed = false); widget.controller.release(widget.btn); },
       child: AnimatedContainer(

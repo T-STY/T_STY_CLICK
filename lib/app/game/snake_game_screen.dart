@@ -37,8 +37,8 @@ class SnakeGameScreen extends StatefulWidget {
 class _SnakeGameScreenState extends State<SnakeGameScreen> {
   static const int kGridW = 18;
   static const int kGridH = 26;
-  static const int kFoodForLevel = 5;
-  static const double kStartTickMs = 250.0;
+  static const int kFoodForLevel = 4; // was 5 — harder
+  static const double kStartTickMs = 217.0; // 15% faster than 250
 
   final _rng = Random();
 
@@ -130,8 +130,8 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> {
 
   void _startTicker() {
     _ticker?.cancel();
-    // Gradual speed increase: ~250ms at lvl 1 down to ~130ms at lvl 12+
-    final ms = (250.0 / (1.0 + (_level - 1) * 0.10)).clamp(130.0, 250.0).round();
+    // Gradual speed increase: ~217ms at lvl 1 down to ~100ms at lvl 12+
+    final ms = (kStartTickMs / (1.0 + (_level - 1) * 0.12)).clamp(100.0, kStartTickMs).round();
     _ticker = Timer.periodic(Duration(milliseconds: ms), (_) => _tick());
   }
 
@@ -320,10 +320,10 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> {
             Text('🐍', style: TextStyle(fontSize: 64)),
             SizedBox(height: 16),
             Text(
-              'SNAKE',
+              'NEON VIPER',
               style: TextStyle(
                 color: Colors.black,
-                fontSize: 32,
+                fontSize: 28,
                 fontWeight: FontWeight.bold,
                 letterSpacing: 6,
               ),
@@ -342,7 +342,7 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> {
             ),
             SizedBox(height: 8),
             Text(
-              'Come 5 frutas para subir de nivel (+1 pto cada 5 niveles)',
+              '+1 pto cada 5 niveles  ·  Sube de nivel cada 4 frutas',
               style: TextStyle(color: Colors.black38, fontSize: 12),
               textAlign: TextAlign.center,
             ),
