@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'arcade_input_controller.dart';
+import 'high_score_service.dart';
 
 // ─── Direction ───────────────────────────────────────────────────────────────
 
@@ -54,6 +55,7 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> {
   Timer? _ticker;
   late double _saldo;
   bool _awardingPoints = false;
+  int _bestScore = 0;
 
   @override
   void initState() {
@@ -61,6 +63,7 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> {
     _saldo = widget.currentSaldo;
     _initGame();
     widget.controller.addListener(_onControllerEvent);
+    HighScoreService.load('snake').then((v) { if (mounted) setState(() => _bestScore = v); });
   }
 
   @override
@@ -192,6 +195,9 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> {
   void _triggerDeath() {
     _ticker?.cancel();
     HapticFeedback.heavyImpact();
+    HighScoreService.submit('snake', _score).then((isNew) {
+      if (isNew && mounted) setState(() => _bestScore = _score);
+    });
     if (mounted) setState(() => _isDead = true);
   }
 
@@ -367,6 +373,11 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> {
               'Puntuación: $_score',
               style: const TextStyle(color: Colors.black54, fontSize: 18),
             ),
+            if (_bestScore > 0)
+              Text(
+                'Mejor: $_bestScore',
+                style: const TextStyle(color: Color(0xFFFFB300), fontSize: 14, fontWeight: FontWeight.bold),
+              ),
             const SizedBox(height: 32),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 32),

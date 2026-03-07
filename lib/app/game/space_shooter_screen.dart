@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'arcade_input_controller.dart';
+import 'high_score_service.dart';
 
 // ─── Enums ────────────────────────────────────────────────────────────────────
 
@@ -136,6 +137,7 @@ class _SpaceShooterScreenState extends State<SpaceShooterScreen> {
   bool _isDead = false;
   int _score = 0;
   int _wave = 1;
+  int _bestScore = 0;
 
   Timer? _ticker;
   DateTime? _lastTick;
@@ -148,6 +150,7 @@ class _SpaceShooterScreenState extends State<SpaceShooterScreen> {
     _stars = List.generate(40, (_) => _Star(_rng));
     _buildSpawnQueue(_wave);
     widget.controller.addListener(_onControllerEvent);
+    HighScoreService.load('shooter').then((v) { if (mounted) setState(() => _bestScore = v); });
   }
 
   @override
@@ -490,6 +493,9 @@ class _SpaceShooterScreenState extends State<SpaceShooterScreen> {
 
   void _triggerDeath() {
     _ticker?.cancel();
+    HighScoreService.submit('shooter', _score).then((isNew) {
+      if (isNew && mounted) setState(() => _bestScore = _score);
+    });
     if (mounted) setState(() { _isDead = true; _isRunning = false; });
   }
 
@@ -729,6 +735,9 @@ class _SpaceShooterScreenState extends State<SpaceShooterScreen> {
                 style: const TextStyle(color: Colors.white, fontSize: 16)),
             Text('Ola alcanzada: $_wave',
                 style: const TextStyle(color: Colors.white70, fontSize: 13)),
+            if (_bestScore > 0)
+              Text('Mejor: $_bestScore',
+                  style: const TextStyle(color: Color(0xFFFFB300), fontSize: 13, fontWeight: FontWeight.bold)),
             const SizedBox(height: 18),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 32),

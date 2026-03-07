@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'arcade_input_controller.dart';
+import 'high_score_service.dart';
 
 // ─── Data ─────────────────────────────────────────────────────────────────────
 
@@ -88,6 +89,7 @@ class _FlappyBirdScreenState extends State<FlappyBirdScreen> {
   int _displayScore = 0; // pipesPassed ~/ 10 (shown as "pts in game")
   late double _saldo;
   bool _awardingPoints = false;
+  int _bestPipes = 0;
 
   // State
   bool _isRunning = false;
@@ -106,6 +108,7 @@ class _FlappyBirdScreenState extends State<FlappyBirdScreen> {
     _clouds = List.generate(5, (_) => _Cloud(_rng));
     _resetGame();
     widget.controller.addListener(_onControllerEvent);
+    HighScoreService.load('flappy').then((v) { if (mounted) setState(() => _bestPipes = v); });
   }
 
   @override
@@ -249,6 +252,9 @@ class _FlappyBirdScreenState extends State<FlappyBirdScreen> {
   void _triggerDeath() {
     _ticker?.cancel();
     HapticFeedback.heavyImpact();
+    HighScoreService.submit('flappy', _pipesPassed).then((isNew) {
+      if (isNew && mounted) setState(() => _bestPipes = _pipesPassed);
+    });
     if (mounted) setState(() { _isDead = true; _isRunning = false; });
   }
 
@@ -383,6 +389,9 @@ class _FlappyBirdScreenState extends State<FlappyBirdScreen> {
                 Text('Puntos reales: $_displayScore',
                     style:
                         const TextStyle(color: Colors.white70, fontSize: 13)),
+                if (_bestPipes > 0)
+                  Text('Mejor: $_bestPipes tubos',
+                      style: const TextStyle(color: Color(0xFFFFB300), fontSize: 13, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 20),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 32),

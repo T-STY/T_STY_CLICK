@@ -3,8 +3,14 @@ import 'package:flutter/material.dart';
 
 import 'arcade_input_controller.dart';
 import 'flappy_bird_screen.dart';
+import 'high_score_service.dart';
+import 'logic_grid_screen.dart';
+import 'maze_chase_screen.dart';
+import 'raycaster_screen.dart';
 import 'snake_game_screen.dart';
 import 'space_shooter_screen.dart';
+import 'tetris_game_screen.dart';
+import 'traffic_hopper_screen.dart';
 
 // ─── Palette — classic silver Game Boy (late 90s / early 2000s) ───────────────
 
@@ -19,7 +25,16 @@ const _kDpad     = Color(0xFF2E2E2E); // dark charcoal D-pad
 const _kMeta     = Color(0xFF9E9E9E); // gray meta buttons
 const _kBodyBdr  = Color(0xFF888888); // silver border
 
+// ─── Category column definitions ──────────────────────────────────────────────
+
+const _kCategories = ['GRID', 'REFLEX', 'SHOOTER', 'PUZZLE'];
+
 // ─── Game registry ────────────────────────────────────────────────────────────
+// Layout: 4 cols × 2 rows, index = col*2 + row
+// Col 0 GRID: Snake, Maze Chase
+// Col 1 REFLEX: Flappy Bird, Traffic Hopper
+// Col 2 SHOOTER: Space Shooter, Raycaster
+// Col 3 PUZZLE: Tetris, Logic Grid
 
 typedef ArcadeGameBuilder = Widget Function({
   required String userId,
@@ -34,7 +49,7 @@ class ArcadeGameDef {
   final String emoji;
   final String title;
   final String subtitle;
-  final ArcadeGameBuilder builder; // void Function(double) onSaldoChanged
+  final ArcadeGameBuilder builder;
 
   const ArcadeGameDef({
     required this.id,
@@ -46,34 +61,64 @@ class ArcadeGameDef {
 }
 
 final List<ArcadeGameDef> kArcadeGames = [
+  // Col 0 — GRID
   ArcadeGameDef(
-    id: 'snake',
-    emoji: '🐍',
-    title: 'Serpiente',
-    subtitle: 'Habilidad',
+    id: 'snake', emoji: '🐍', title: 'Serpiente', subtitle: 'Col·come',
     builder: ({required userId, required rewardsDocRef, required currentSaldo,
         required controller, required onSaldoChanged}) =>
         SnakeGameScreen(userId: userId, rewardsDocRef: rewardsDocRef,
             currentSaldo: currentSaldo, controller: controller, onSaldoChanged: onSaldoChanged),
   ),
   ArcadeGameDef(
-    id: 'flappy',
-    emoji: '🐦',
-    title: 'Pájaro Veloz',
-    subtitle: 'Resistencia',
+    id: 'maze', emoji: '👻', title: 'Laberinto', subtitle: 'Pac-Man',
+    builder: ({required userId, required rewardsDocRef, required currentSaldo,
+        required controller, required onSaldoChanged}) =>
+        MazeChasScreen(userId: userId, rewardsDocRef: rewardsDocRef,
+            currentSaldo: currentSaldo, controller: controller, onSaldoChanged: onSaldoChanged),
+  ),
+  // Col 1 — REFLEX
+  ArcadeGameDef(
+    id: 'flappy', emoji: '🐦', title: 'Pájaro', subtitle: 'Esquiva',
     builder: ({required userId, required rewardsDocRef, required currentSaldo,
         required controller, required onSaldoChanged}) =>
         FlappyBirdScreen(userId: userId, rewardsDocRef: rewardsDocRef,
             currentSaldo: currentSaldo, controller: controller, onSaldoChanged: onSaldoChanged),
   ),
   ArcadeGameDef(
-    id: 'shooter',
-    emoji: '🚀',
-    title: 'Invasores',
-    subtitle: 'Acción',
+    id: 'hopper', emoji: '🐸', title: 'Tráfico', subtitle: 'Frogger',
+    builder: ({required userId, required rewardsDocRef, required currentSaldo,
+        required controller, required onSaldoChanged}) =>
+        TrafficHopperScreen(userId: userId, rewardsDocRef: rewardsDocRef,
+            currentSaldo: currentSaldo, controller: controller, onSaldoChanged: onSaldoChanged),
+  ),
+  // Col 2 — SHOOTER
+  ArcadeGameDef(
+    id: 'shooter', emoji: '🚀', title: 'Invasores', subtitle: 'Acción',
     builder: ({required userId, required rewardsDocRef, required currentSaldo,
         required controller, required onSaldoChanged}) =>
         SpaceShooterScreen(userId: userId, rewardsDocRef: rewardsDocRef,
+            currentSaldo: currentSaldo, controller: controller, onSaldoChanged: onSaldoChanged),
+  ),
+  ArcadeGameDef(
+    id: 'raycaster', emoji: '🔫', title: 'FPV Doom', subtitle: '3D retro',
+    builder: ({required userId, required rewardsDocRef, required currentSaldo,
+        required controller, required onSaldoChanged}) =>
+        RaycasterScreen(userId: userId, rewardsDocRef: rewardsDocRef,
+            currentSaldo: currentSaldo, controller: controller, onSaldoChanged: onSaldoChanged),
+  ),
+  // Col 3 — PUZZLE
+  ArcadeGameDef(
+    id: 'tetris', emoji: '🟦', title: 'Tetris', subtitle: 'Bloques',
+    builder: ({required userId, required rewardsDocRef, required currentSaldo,
+        required controller, required onSaldoChanged}) =>
+        TetrisScreen(userId: userId, rewardsDocRef: rewardsDocRef,
+            currentSaldo: currentSaldo, controller: controller, onSaldoChanged: onSaldoChanged),
+  ),
+  ArcadeGameDef(
+    id: 'logic', emoji: '💣', title: 'Minas', subtitle: 'Lógica',
+    builder: ({required userId, required rewardsDocRef, required currentSaldo,
+        required controller, required onSaldoChanged}) =>
+        LogicGridScreen(userId: userId, rewardsDocRef: rewardsDocRef,
             currentSaldo: currentSaldo, controller: controller, onSaldoChanged: onSaldoChanged),
   ),
 ];
@@ -99,8 +144,17 @@ class ArcadeCenterScreen extends StatefulWidget {
 class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
   late final ArcadeInputController _ctrl;
   late double _saldo;
-  int _selectedIndex = 0;
+
+  // Grid selection: 4 cols × 2 rows
+  int _selCol = 0;
+  int _selRow = 0;
+
   ArcadeGameDef? _activeGame;
+
+  // Local high scores indexed same as kArcadeGames
+  final List<int> _highScores = List.filled(8, 0);
+
+  int get _selectedIndex => _selCol * 2 + _selRow;
 
   @override
   void initState() {
@@ -108,6 +162,16 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
     _ctrl = ArcadeInputController();
     _saldo = widget.currentSaldo;
     _ctrl.addListener(_handleShellEvent);
+    _loadHighScores();
+  }
+
+  Future<void> _loadHighScores() async {
+    final scores = await Future.wait(
+      kArcadeGames.map((g) => HighScoreService.load(g.id)),
+    );
+    if (mounted) setState(() {
+      for (int i = 0; i < scores.length; i++) _highScores[i] = scores[i];
+    });
   }
 
   @override
@@ -125,23 +189,27 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
     if (_activeGame == null) {
       switch (btn) {
         case ArcadeButton.left:
-          setState(() => _selectedIndex =
-              (_selectedIndex - 1 + kArcadeGames.length) % kArcadeGames.length);
+          setState(() => _selCol = (_selCol - 1 + 4) % 4);
         case ArcadeButton.right:
-          setState(() => _selectedIndex =
-              (_selectedIndex + 1) % kArcadeGames.length);
+          setState(() => _selCol = (_selCol + 1) % 4);
+        case ArcadeButton.up:
+          setState(() => _selRow = (_selRow - 1 + 2) % 2);
+        case ArcadeButton.down:
+          setState(() => _selRow = (_selRow + 1) % 2);
         case ArcadeButton.a:
         case ArcadeButton.start:
           _launchSelected();
         case ArcadeButton.select:
-          Navigator.pop(context); // exit arcade
+          Navigator.pop(context);
         default:
           break;
       }
     } else {
-      // SELECT returns to selector; B stays as an in-game button
       if (btn == ArcadeButton.select) {
-        setState(() => _activeGame = null);
+        setState(() {
+          _activeGame = null;
+          _loadHighScores(); // refresh after playing
+        });
       }
     }
   }
@@ -269,6 +337,8 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
     );
   }
 
+  // ── 4×2 Game selector grid ────────────────────────────────────────────────
+
   Widget _buildGameSelector() {
     return Container(
       color: const Color(0xFF080D1A),
@@ -279,72 +349,102 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
             'ELIGE TU JUEGO',
             style: TextStyle(color: Colors.white38, fontSize: 9, letterSpacing: 3),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 10),
+          // Category headers row
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              for (int i = 0; i < kArcadeGames.length; i++)
-                _buildSelectorCard(kArcadeGames[i], i == _selectedIndex),
+              for (int col = 0; col < 4; col++) ...[
+                SizedBox(
+                  width: 62,
+                  child: Text(
+                    _kCategories[col],
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: col == _selCol ? Colors.white70 : Colors.white24,
+                      fontSize: 7,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 1.5,
+                    ),
+                  ),
+                ),
+                if (col < 3) const SizedBox(width: 4),
+              ],
             ],
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 6),
+          // 2 rows of cards
+          for (int row = 0; row < 2; row++) ...[
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                for (int col = 0; col < 4; col++) ...[
+                  _buildSelectorCard(
+                    kArcadeGames[col * 2 + row],
+                    col * 2 + row,
+                    col == _selCol && row == _selRow,
+                  ),
+                  if (col < 3) const SizedBox(width: 4),
+                ],
+              ],
+            ),
+            if (row == 0) const SizedBox(height: 4),
+          ],
+          const SizedBox(height: 10),
           const Text(
-            '◄ ► para seleccionar  ·  A para jugar',
-            style: TextStyle(color: Colors.white24, fontSize: 8),
+            '◄ ► col  ·  ▲ ▼ fila  ·  A jugar  ·  SELECT salir',
+            style: TextStyle(color: Colors.white24, fontSize: 7),
           ),
-          const SizedBox(height: 3),
           const Text(
-            'SELECT para salir  ·  −10 pts por partida',
-            style: TextStyle(color: Colors.white24, fontSize: 8),
+            '−10 pts por partida',
+            style: TextStyle(color: Colors.white24, fontSize: 7),
           ),
         ],
       ),
     );
   }
 
-  // Fixed-size cards so all are identical regardless of label length
-  Widget _buildSelectorCard(ArcadeGameDef def, bool isSelected) {
+  Widget _buildSelectorCard(ArcadeGameDef def, int index, bool isSelected) {
+    final hs = _highScores[index];
     return SizedBox(
-      width: 78,
-      height: 105,
+      width: 62,
+      height: 82,
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        margin: const EdgeInsets.symmetric(horizontal: 4),
+        duration: const Duration(milliseconds: 140),
         decoration: BoxDecoration(
           color: isSelected ? Colors.white : const Color(0xFF111827),
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(8),
           border: Border.all(
             color: isSelected ? Colors.white : const Color(0xFF2D3748),
             width: isSelected ? 2 : 1,
           ),
-          boxShadow: isSelected
-              ? [const BoxShadow(color: Colors.white30, blurRadius: 8)]
-              : [],
         ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Text(def.emoji, style: const TextStyle(fontSize: 28)),
-            const SizedBox(height: 6),
+            Text(def.emoji, style: const TextStyle(fontSize: 22)),
+            const SizedBox(height: 4),
             Text(
               def.title,
               style: TextStyle(
                 color: isSelected ? Colors.black : Colors.white,
-                fontSize: 10,
+                fontSize: 9,
                 fontWeight: FontWeight.bold,
               ),
               textAlign: TextAlign.center,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
             ),
-            const SizedBox(height: 2),
-            Text(
-              def.subtitle,
-              style: TextStyle(
-                color: isSelected ? Colors.black54 : Colors.white38,
-                fontSize: 8,
+            if (hs > 0) ...[
+              const SizedBox(height: 2),
+              Text(
+                '⭐$hs',
+                style: TextStyle(
+                  color: isSelected ? Colors.black54 : const Color(0xFFFFB300),
+                  fontSize: 8,
+                ),
               ),
-            ),
+            ],
           ],
         ),
       ),
@@ -357,7 +457,6 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
       rewardsDocRef: widget.rewardsDocRef,
       currentSaldo: _saldo,
       controller: _ctrl,
-      // Games call this with their updated saldo so the top strip stays in sync
       onSaldoChanged: (newSaldo) => setState(() => _saldo = newSaldo),
     );
   }
@@ -428,7 +527,7 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
   Widget _buildABXYCluster() {
     const btnSize = 48.0;
     const gap     = 4.0;
-    const total   = btnSize * 3 + gap * 2; // 152
+    const total   = btnSize * 3 + gap * 2;
     return SizedBox(
       width: total,
       height: total,
