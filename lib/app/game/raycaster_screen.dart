@@ -1218,98 +1218,106 @@ class _RaycasterPainter extends CustomPainter {
     }
   }
 
-  // ── Double-barrel sawn-off shotgun ───────────────────────────────────────────
+  // ── Double-barrel shotgun – front-facing, same tilt as pistol ───────────────
 
   void _drawShotgun(Canvas canvas, Size size, bool firing) {
     canvas.save();
-    canvas.translate(size.width * 0.55, size.height * 0.80);
-    canvas.rotate(-0.18); // ~10° tilt — wider gun sits lower
+    // Same base position and tilt as pistol so both feel consistent
+    canvas.translate(size.width * 0.53, size.height * 0.92);
+    canvas.rotate(-0.087); // 5° left tilt – identical to pistol
 
     final p = Paint()..isAntiAlias = false;
 
-    // ── Muzzle flash (dual bloom) ─────────────────────────────────────────────
+    // ── Dual muzzle flash (above both barrels) ────────────────────────────────
     if (firing) {
       p.isAntiAlias = true;
       p.color = const Color(0xFFFF5500).withOpacity(0.88);
-      canvas.drawOval(const Rect.fromLTWH(-100, -38, 44, 26), p);
-      canvas.drawOval(const Rect.fromLTWH(-100, -14, 44, 26), p);
+      canvas.drawOval(const Rect.fromLTWH(-26, -120, 30, 24), p);
+      canvas.drawOval(const Rect.fromLTWH(2,  -120, 30, 24), p);
       p.color = const Color(0xFFFFDD00);
-      canvas.drawOval(const Rect.fromLTWH(-96, -33, 28, 18), p);
-      canvas.drawOval(const Rect.fromLTWH(-96, -9, 28, 18), p);
+      canvas.drawOval(const Rect.fromLTWH(-22, -117, 20, 16), p);
+      canvas.drawOval(const Rect.fromLTWH(6,  -117, 20, 16), p);
       p.color = Colors.white;
-      canvas.drawOval(const Rect.fromLTWH(-92, -29, 16, 12), p);
-      canvas.drawOval(const Rect.fromLTWH(-92, -5, 16, 12), p);
+      canvas.drawOval(const Rect.fromLTWH(-18, -114, 12, 11), p);
+      canvas.drawOval(const Rect.fromLTWH(10, -114, 12, 11), p);
+      p.isAntiAlias = false;
     }
 
-    p.isAntiAlias = false;
+    // ── Left barrel ───────────────────────────────────────────────────────────
+    p.color = const Color(0xFF888888); // left highlight
+    canvas.drawRect(const Rect.fromLTWH(-24, -108, 2, 62), p);
+    p.color = const Color(0xFF606060); // body
+    canvas.drawRect(const Rect.fromLTWH(-22, -108, 18, 62), p);
+    p.color = const Color(0xFF404040); // right shadow
+    canvas.drawRect(const Rect.fromLTWH(-4, -108, 2, 62), p);
+    p.color = const Color(0xFF111111); // bore
+    canvas.drawRect(const Rect.fromLTWH(-20, -109, 14, 8), p);
+    // Muzzle crown ring
+    p.color = const Color(0xFF555555);
+    canvas.drawRect(const Rect.fromLTWH(-24, -111, 22, 3), p);
 
-    // ── Top barrel ────────────────────────────────────────────────────────────
-    p.color = const Color(0xFF222222); // underside shadow
-    canvas.drawRect(const Rect.fromLTWH(-95, -26, 100, 6), p);
-    p.color = const Color(0xFF707070); // barrel body
-    canvas.drawRect(const Rect.fromLTWH(-95, -38, 100, 12), p);
-    p.color = const Color(0xFF999999); // top highlight
-    canvas.drawRect(const Rect.fromLTWH(-95, -38, 100, 2), p);
-    p.color = const Color(0xFF555555); // top front sight
-    canvas.drawRect(const Rect.fromLTWH(-88, -43, 6, 5), p);
-
-    // ── Bottom barrel ─────────────────────────────────────────────────────────
-    p.color = const Color(0xFF686868);
-    canvas.drawRect(const Rect.fromLTWH(-95, -24, 100, 12), p);
-    p.color = const Color(0xFF444444); // shadow under bottom barrel
-    canvas.drawRect(const Rect.fromLTWH(-95, -14, 100, 2), p);
-
-    // ── Barrel bores (dark ovals at muzzle) ───────────────────────────────────
+    // ── Right barrel ──────────────────────────────────────────────────────────
+    p.color = const Color(0xFF888888);
+    canvas.drawRect(const Rect.fromLTWH(2, -108, 2, 62), p);
+    p.color = const Color(0xFF606060);
+    canvas.drawRect(const Rect.fromLTWH(4, -108, 18, 62), p);
+    p.color = const Color(0xFF404040);
+    canvas.drawRect(const Rect.fromLTWH(22, -108, 2, 62), p);
     p.color = const Color(0xFF111111);
-    canvas.drawRect(const Rect.fromLTWH(-97, -36, 6, 10), p); // top bore
-    canvas.drawRect(const Rect.fromLTWH(-97, -22, 6, 10), p); // bottom bore
+    canvas.drawRect(const Rect.fromLTWH(6, -109, 14, 8), p);
+    p.color = const Color(0xFF555555);
+    canvas.drawRect(const Rect.fromLTWH(2, -111, 22, 3), p);
 
     // ── Rib between barrels ───────────────────────────────────────────────────
-    p.color = const Color(0xFF888888);
-    canvas.drawRect(const Rect.fromLTWH(-95, -28, 100, 4), p);
-
-    // ── Receiver / breech (wood-toned) ────────────────────────────────────────
-    p.color = const Color(0xFF4A3010);
-    canvas.drawRect(const Rect.fromLTWH(-5, -40, 52, 60), p);
-    p.color = const Color(0xFF5E3E16);
-    canvas.drawRect(const Rect.fromLTWH(-5, -40, 52, 4), p); // top highlight
-
-    // Metal breech plate
-    p.color = const Color(0xFF555555);
-    canvas.drawRect(const Rect.fromLTWH(-5, -40, 16, 60), p);
     p.color = const Color(0xFF777777);
-    canvas.drawRect(const Rect.fromLTWH(-5, -40, 16, 2), p);
+    canvas.drawRect(const Rect.fromLTWH(-2, -108, 4, 62), p);
 
-    // ── Pump foregrip ─────────────────────────────────────────────────────────
+    // ── Barrel band ───────────────────────────────────────────────────────────
+    p.color = const Color(0xFF555555);
+    canvas.drawRect(const Rect.fromLTWH(-24, -64, 48, 8), p);
+    p.color = const Color(0xFF777777);
+    canvas.drawRect(const Rect.fromLTWH(-24, -64, 48, 2), p);
+
+    // ── Wooden forestock ──────────────────────────────────────────────────────
     p.color = const Color(0xFF6B4520);
-    canvas.drawRect(const Rect.fromLTWH(-62, -24, 42, 18), p);
+    canvas.drawRect(const Rect.fromLTWH(-20, -56, 40, 30), p);
     p.color = const Color(0xFF7A5028);
-    for (int i = 0; i < 5; i++) {
-      canvas.drawRect(Rect.fromLTWH(-60.0 + i * 8, -22, 3, 14), p);
+    for (int i = 0; i < 4; i++) {
+      canvas.drawRect(Rect.fromLTWH(-18.0 + i * 9, -54, 6, 26), p);
     }
 
-    // ── Pistol grip / stock ───────────────────────────────────────────────────
-    p.color = const Color(0xFF5C3A12);
-    canvas.drawRect(const Rect.fromLTWH(12, 4, 34, 44), p);
-    p.color = const Color(0xFF6A4418);
-    for (int r = 0; r < 5; r++) {
-      canvas.drawRect(Rect.fromLTWH(15.0, 8.0 + r * 7, 26, 3), p);
-    }
-    p.color = const Color(0xFF3A2208);
-    canvas.drawRect(const Rect.fromLTWH(12, 46, 34, 4), p); // base plate
+    // ── Metal receiver ────────────────────────────────────────────────────────
+    p.color = const Color(0xFF404040);
+    canvas.drawRect(const Rect.fromLTWH(-22, -26, 44, 36), p);
+    p.color = const Color(0xFF555555); // top highlight
+    canvas.drawRect(const Rect.fromLTWH(-22, -26, 44, 3), p);
+    p.color = const Color(0xFF333333); // bottom shadow
+    canvas.drawRect(const Rect.fromLTWH(-22, 8,  44, 2), p);
+    // Ejection port
+    p.color = const Color(0xFF1A1A1A);
+    canvas.drawRect(const Rect.fromLTWH(10, -22, 8, 20), p);
 
     // ── Trigger guard ─────────────────────────────────────────────────────────
     p.color = const Color(0xFF444444);
-    canvas.drawRect(const Rect.fromLTWH(0, 8, 18, 3), p);
-    canvas.drawRect(const Rect.fromLTWH(0, 8, 3, 20), p);
-    canvas.drawRect(const Rect.fromLTWH(15, 8, 3, 20), p);
-    canvas.drawRect(const Rect.fromLTWH(0, 25, 18, 3), p);
+    canvas.drawRect(const Rect.fromLTWH(-18, 8,  36, 3), p);
+    canvas.drawRect(const Rect.fromLTWH(-18, 8,  3, 22), p);
+    canvas.drawRect(const Rect.fromLTWH(15,  8,  3, 22), p);
+    canvas.drawRect(const Rect.fromLTWH(-18, 28, 36, 3), p);
     p.color = const Color(0xFF888888);
-    canvas.drawRect(const Rect.fromLTWH(6, 12, 4, 12), p); // trigger
+    canvas.drawRect(const Rect.fromLTWH(-5, 11, 7, 14), p); // trigger
+
+    // ── Pistol grip (wood) ────────────────────────────────────────────────────
+    p.color = const Color(0xFF5C3A12);
+    canvas.drawRect(const Rect.fromLTWH(-12, 30, 32, 44), p);
+    p.color = const Color(0xFF6A4418);
+    for (int r = 0; r < 5; r++) {
+      canvas.drawRect(Rect.fromLTWH(-9.0, 34.0 + r * 7, 24, 4), p);
+    }
+    p.color = const Color(0xFF3A2208);
+    canvas.drawRect(const Rect.fromLTWH(-12, 72, 32, 4), p);
 
     canvas.restore();
 
-    // No-ammo warning
     if (shotgunAmmo == 0) {
       final tp = TextPainter(
         text: const TextSpan(text: '— SIN CARTUCHOS —',
@@ -1323,105 +1331,107 @@ class _RaycasterPainter extends CustomPainter {
     }
   }
 
-  // ── Forward-facing pistol (barrel points up, 5° left tilt) ──────────────────
+  // ── Semi-auto pistol – barrel points up, 5° left tilt ────────────────────────
 
   void _drawPistol(Canvas canvas, Size size, bool firing) {
     canvas.save();
-    // Bottom-center-right, barrel pointing toward screen top — 5° CCW tilt
-    canvas.translate(size.width * 0.60, size.height * 0.90);
-    canvas.rotate(-0.087); // 5° left tilt
+    canvas.translate(size.width * 0.62, size.height * 0.92);
+    canvas.rotate(-0.087); // 5° left tilt – matches shotgun
 
     final p = Paint()..isAntiAlias = false;
 
-    // ── Muzzle flash (above barrel tip) ──────────────────────────────────────
+    // ── Muzzle flash ──────────────────────────────────────────────────────────
     if (firing) {
       p.isAntiAlias = true;
       p.color = const Color(0xFFFF8800).withOpacity(0.88);
-      canvas.drawOval(const Rect.fromLTWH(-18, -112, 36, 26), p);
+      canvas.drawOval(const Rect.fromLTWH(-17, -110, 34, 26), p);
       p.color = const Color(0xFFFFEE00);
-      canvas.drawOval(const Rect.fromLTWH(-12, -109, 24, 18), p);
+      canvas.drawOval(const Rect.fromLTWH(-11, -107, 22, 17), p);
       p.color = Colors.white;
-      canvas.drawOval(const Rect.fromLTWH(-7, -107, 14, 13), p);
+      canvas.drawOval(const Rect.fromLTWH(-7, -104, 14, 13), p);
       p.isAntiAlias = false;
     }
 
-    // ── Barrel (narrow vertical tube pointing up) ─────────────────────────────
-    p.color = const Color(0xFF222222); // right-side shadow
-    canvas.drawRect(const Rect.fromLTWH(4, -100, 5, 55), p);
-    p.color = const Color(0xFF686868); // barrel body
-    canvas.drawRect(const Rect.fromLTWH(-4, -100, 8, 55), p);
-    p.color = const Color(0xFF999999); // left highlight
-    canvas.drawRect(const Rect.fromLTWH(-4, -100, 2, 55), p);
-    // Barrel bore (dark oval at muzzle tip)
-    p.color = const Color(0xFF111111);
-    canvas.drawRect(const Rect.fromLTWH(-2, -101, 4, 5), p);
-    // Front sight blade
-    p.color = const Color(0xFF555555);
-    canvas.drawRect(const Rect.fromLTWH(-6, -104, 12, 4), p);
+    // ── Barrel (vertical, pointing up) ────────────────────────────────────────
+    p.color = const Color(0xFF888888); // left highlight
+    canvas.drawRect(const Rect.fromLTWH(-7, -98, 2, 52), p);
+    p.color = const Color(0xFF606060); // body
+    canvas.drawRect(const Rect.fromLTWH(-5, -98, 14, 52), p);
+    p.color = const Color(0xFF404040); // right shadow
+    canvas.drawRect(const Rect.fromLTWH(9, -98, 3, 52), p);
+    p.color = const Color(0xFF111111); // bore
+    canvas.drawRect(const Rect.fromLTWH(-3, -99, 8, 6), p);
+    // Front sight (wider blade – easier to see)
+    p.color = const Color(0xFF666666);
+    canvas.drawRect(const Rect.fromLTWH(-9, -102, 24, 4), p);
+    p.color = Colors.white.withOpacity(0.30);
+    canvas.drawRect(const Rect.fromLTWH(-2, -99, 8, 2), p); // sight dot
 
-    // ── Slide ────────────────────────────────────────────────────────────────
-    p.color = const Color(0xFF444444); // slide body
-    canvas.drawRect(const Rect.fromLTWH(-12, -88, 24, 80), p);
-    p.color = const Color(0xFF666666); // left-face highlight
-    canvas.drawRect(const Rect.fromLTWH(-12, -88, 3, 80), p);
-    p.color = const Color(0xFF555555); // top face (we see the top edge)
-    canvas.drawRect(const Rect.fromLTWH(-12, -88, 24, 3), p);
-    // Serrations on back of slide (horizontal grooves in lower third)
+    // ── Slide (boxy top half of gun) ──────────────────────────────────────────
     p.color = const Color(0xFF333333);
-    for (int i = 0; i < 6; i++) {
-      canvas.drawRect(Rect.fromLTWH(-11, -30.0 + i * 6, 22, 2), p);
+    canvas.drawRect(const Rect.fromLTWH(-15, -86, 32, 82), p);
+    p.color = const Color(0xFF555555); // left highlight
+    canvas.drawRect(const Rect.fromLTWH(-15, -86, 3, 82), p);
+    p.color = const Color(0xFF484848); // top face
+    canvas.drawRect(const Rect.fromLTWH(-15, -86, 32, 3), p);
+    // Serrations (lower third of slide)
+    p.color = const Color(0xFF282828);
+    for (int i = 0; i < 7; i++) {
+      canvas.drawRect(Rect.fromLTWH(-13, -34.0 + i * 5, 28, 2), p);
     }
-    // Rear sight: two posts + notch
+    // Rear sight (two posts with gap)
     p.color = const Color(0xFF555555);
-    canvas.drawRect(const Rect.fromLTWH(-11, -92, 6, 5), p); // left post
-    canvas.drawRect(const Rect.fromLTWH(5, -92, 6, 5), p);   // right post
+    canvas.drawRect(const Rect.fromLTWH(-14, -90, 7, 5), p); // left post
+    canvas.drawRect(const Rect.fromLTWH(7,  -90, 7, 5), p);  // right post
     p.color = const Color(0xFF111111);
-    canvas.drawRect(const Rect.fromLTWH(-4, -92, 8, 5), p);  // notch
-    // Ejection port (right side)
+    canvas.drawRect(const Rect.fromLTWH(-6, -90, 13, 5), p); // notch gap
+    // Ejection port
     p.color = const Color(0xFF1A1A1A);
-    canvas.drawRect(const Rect.fromLTWH(9, -72, 4, 18), p);
-    // Brass
+    canvas.drawRect(const Rect.fromLTWH(11, -70, 5, 22), p);
     p.color = const Color(0xFFB8860B);
-    canvas.drawRect(const Rect.fromLTWH(10, -69, 3, 12), p);
+    canvas.drawRect(const Rect.fromLTWH(12, -67, 3, 15), p); // brass case
 
-    // ── Frame / receiver ─────────────────────────────────────────────────────
-    p.color = const Color(0xFF363636);
-    canvas.drawRect(const Rect.fromLTWH(-14, -8, 28, 22), p);
-    p.color = const Color(0xFF555555); // left-face highlight
-    canvas.drawRect(const Rect.fromLTWH(-14, -8, 3, 22), p);
+    // ── Frame / dust-cover ────────────────────────────────────────────────────
+    p.color = const Color(0xFF2E2E2E);
+    canvas.drawRect(const Rect.fromLTWH(-17, -6, 34, 24), p);
+    p.color = const Color(0xFF444444);
+    canvas.drawRect(const Rect.fromLTWH(-17, -6, 3, 24), p);
+    // Rail under frame
+    p.color = const Color(0xFF262626);
+    canvas.drawRect(const Rect.fromLTWH(-17, 14, 34, 4), p);
 
     // ── Trigger guard ─────────────────────────────────────────────────────────
-    p.color = const Color(0xFF3A3A3A);
-    canvas.drawRect(const Rect.fromLTWH(-11, 12, 22, 3), p);  // top bar
-    canvas.drawRect(const Rect.fromLTWH(-11, 12, 3, 18), p);  // left post
-    canvas.drawRect(const Rect.fromLTWH(8, 12, 3, 18), p);    // right post
-    canvas.drawRect(const Rect.fromLTWH(-11, 27, 22, 3), p);  // bottom bar
+    p.color = const Color(0xFF303030);
+    canvas.drawRect(const Rect.fromLTWH(-14, 16, 28, 3), p);  // top
+    canvas.drawRect(const Rect.fromLTWH(-14, 16, 3, 20), p);  // left
+    canvas.drawRect(const Rect.fromLTWH(11,  16, 3, 20), p);  // right
+    canvas.drawRect(const Rect.fromLTWH(-14, 33, 28, 3), p);  // bottom
     p.color = const Color(0xFF888888);
-    canvas.drawRect(const Rect.fromLTWH(-2, 15, 5, 10), p);   // trigger
+    canvas.drawRect(const Rect.fromLTWH(-4, 19, 7, 12), p);   // trigger
 
-    // ── Grip ─────────────────────────────────────────────────────────────────
-    p.color = const Color(0xFF2A2A2A);
-    canvas.drawRect(const Rect.fromLTWH(-12, 22, 28, 40), p);
-    p.color = const Color(0xFF3A3A3A); // stippling
-    for (int r = 0; r < 4; r++) {
+    // ── Grip ──────────────────────────────────────────────────────────────────
+    p.color = const Color(0xFF222222);
+    canvas.drawRect(const Rect.fromLTWH(-15, 25, 34, 46), p);
+    // Stippling texture
+    p.color = const Color(0xFF333333);
+    for (int r = 0; r < 5; r++) {
       for (int c = 0; c < 4; c++) {
-        canvas.drawRect(Rect.fromLTWH(-9.0 + c * 6, 26.0 + r * 7, 4, 2), p);
+        canvas.drawRect(Rect.fromLTWH(-11.0 + c*7, 29.0 + r*7, 4, 3), p);
       }
     }
-    p.color = const Color(0xFF222222); // grip base
-    canvas.drawRect(const Rect.fromLTWH(-12, 60, 28, 4), p);
-    p.color = const Color(0xFF444444); // mag plate
-    canvas.drawRect(const Rect.fromLTWH(-12, 62, 28, 3), p);
+    p.color = const Color(0xFF1A1A1A); // base
+    canvas.drawRect(const Rect.fromLTWH(-15, 69, 34, 5), p);
+    p.color = const Color(0xFF404040); // mag plate
+    canvas.drawRect(const Rect.fromLTWH(-13, 73, 30, 4), p);
 
-    // ── Hammer ────────────────────────────────────────────────────────────────
+    // ── Exposed hammer ────────────────────────────────────────────────────────
     p.color = const Color(0xFF777777);
-    canvas.drawRect(const Rect.fromLTWH(10, -16, 8, 9), p);
+    canvas.drawRect(const Rect.fromLTWH(13, -18, 10, 11), p);
     p.color = const Color(0xFF444444);
-    canvas.drawRect(const Rect.fromLTWH(12, -14, 4, 7), p);
+    canvas.drawRect(const Rect.fromLTWH(15, -16, 6, 8), p);
 
     canvas.restore();
 
-    // No-ammo warning
     if (ammo == 0) {
       final tp = TextPainter(
         text: const TextSpan(text: '— SIN BALAS —',

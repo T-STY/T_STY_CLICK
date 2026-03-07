@@ -28,23 +28,23 @@ const _kDpad     = Color(0xFF2E2E2E);
 const _kMeta     = Color(0xFF9E9E9E);
 const _kBodyBdr  = Color(0xFF888888);
 
-// ─── Card background gradients (per game) ─────────────────────────────────────
+// ─── Card background gradients (per game — colours match the actual game) ─────
 
 const _kCardGradients = <List<Color>>[
-  [Color(0xFF0B2B0B), Color(0xFF1B5E20)],   // Víbora Neón      – forest green
-  [Color(0xFF140033), Color(0xFF4A148C)],   // Reino Fantasmal   – deep purple
-  [Color(0xFF0D2137), Color(0xFF01579B)],   // Alas de Cromo     – steel blue
-  [Color(0xFF2D1B00), Color(0xFF6D4C00)],   // Cruce Peligroso   – amber
-  [Color(0xFF0A0A1E), Color(0xFF1A237E)],   // Asalto Estelar    – navy
-  [Color(0xFF1A0000), Color(0xFF7B0000)],   // Mazmorra Infernal  – blood red
-  [Color(0xFF001B2E), Color(0xFF0D47A1)],   // Cascada de Bloques – ocean blue
-  [Color(0xFF1A110A), Color(0xFF4E342E)],   // Campo Minado       – dark earth
-  [Color(0xFF1A0030), Color(0xFF6A0080)],   // Gemas del Abismo   – deep violet
+  [Color(0xFF001200), Color(0xFF005A00)],   // La Sierpe        – neon green
+  [Color(0xFF000A28), Color(0xFF001E8A)],   // Tragalaberinto   – royal blue
+  [Color(0xFF001018), Color(0xFF004D70)],   // Alas Locas       – sky blue
+  [Color(0xFF080C00), Color(0xFF254700)],   // Paso a Paso      – forest green
+  [Color(0xFF02040E), Color(0xFF060E38)],   // Astrocaza        – deep space navy
+  [Color(0xFF160000), Color(0xFF4D0000)],   // Inframundo 2D    – blood red
+  [Color(0xFF040414), Color(0xFF10104A)],   // Tetromuro        – dark navy
+  [Color(0xFF040C04), Color(0xFF0C2A0C)],   // Busca-Trampas    – dark forest
+  [Color(0xFF1A0018), Color(0xFF5A0038)],   // Dulce Racha      – candy pink
 ];
 
 // ─── Category labels ──────────────────────────────────────────────────────────
 
-const _kCategoryLabels = ['REJILLA', 'REFLEJOS', 'DISPAROS', 'PUZLE', 'GEMAS'];
+const _kCategoryLabels = ['REJILLA', 'REFLEJOS', 'DISPAROS', 'PUZLE', 'DULCE'];
 
 // ─── Game registry ─────────────────────────────────────────────────────────────
 
@@ -67,51 +67,51 @@ class ArcadeGameDef {
 
 final List<ArcadeGameDef> kArcadeGames = [
   // Col 0 — REJILLA
-  ArcadeGameDef(id: 'snake',    emoji: '🐍', title: 'Víbora Neón',
+  ArcadeGameDef(id: 'snake',    emoji: '🐍', title: 'La Sierpe',
     builder: ({required userId, required rewardsDocRef, required currentSaldo,
         required controller, required onSaldoChanged}) =>
       SnakeGameScreen(userId: userId, rewardsDocRef: rewardsDocRef,
         currentSaldo: currentSaldo, controller: controller, onSaldoChanged: onSaldoChanged)),
-  ArcadeGameDef(id: 'maze',     emoji: '👻', title: 'Reino Fantasmal',
+  ArcadeGameDef(id: 'maze',     emoji: '👻', title: 'Tragalaberinto',
     builder: ({required userId, required rewardsDocRef, required currentSaldo,
         required controller, required onSaldoChanged}) =>
       MazeChasScreen(userId: userId, rewardsDocRef: rewardsDocRef,
         currentSaldo: currentSaldo, controller: controller, onSaldoChanged: onSaldoChanged)),
   // Col 1 — REFLEJOS
-  ArcadeGameDef(id: 'flappy',   emoji: '🕊️', title: 'Alas de Cromo',
+  ArcadeGameDef(id: 'flappy',   emoji: '🕊️', title: 'Alas Locas',
     builder: ({required userId, required rewardsDocRef, required currentSaldo,
         required controller, required onSaldoChanged}) =>
       FlappyBirdScreen(userId: userId, rewardsDocRef: rewardsDocRef,
         currentSaldo: currentSaldo, controller: controller, onSaldoChanged: onSaldoChanged)),
-  ArcadeGameDef(id: 'hopper',   emoji: '🐸', title: 'Cruce Peligroso',
+  ArcadeGameDef(id: 'hopper',   emoji: '🐸', title: 'Paso a Paso',
     builder: ({required userId, required rewardsDocRef, required currentSaldo,
         required controller, required onSaldoChanged}) =>
       TrafficHopperScreen(userId: userId, rewardsDocRef: rewardsDocRef,
         currentSaldo: currentSaldo, controller: controller, onSaldoChanged: onSaldoChanged)),
   // Col 2 — DISPAROS
-  ArcadeGameDef(id: 'shooter',  emoji: '🚀', title: 'Asalto Estelar',
+  ArcadeGameDef(id: 'shooter',  emoji: '🚀', title: 'Astrocaza',
     builder: ({required userId, required rewardsDocRef, required currentSaldo,
         required controller, required onSaldoChanged}) =>
       SpaceShooterScreen(userId: userId, rewardsDocRef: rewardsDocRef,
         currentSaldo: currentSaldo, controller: controller, onSaldoChanged: onSaldoChanged)),
-  ArcadeGameDef(id: 'raycaster',emoji: '🔥', title: 'Mazmorra Infernal',
+  ArcadeGameDef(id: 'raycaster',emoji: '🔥', title: 'Inframundo 2D',
     builder: ({required userId, required rewardsDocRef, required currentSaldo,
         required controller, required onSaldoChanged}) =>
       RaycasterScreen(userId: userId, rewardsDocRef: rewardsDocRef,
         currentSaldo: currentSaldo, controller: controller, onSaldoChanged: onSaldoChanged)),
   // Col 3 — PUZLE
-  ArcadeGameDef(id: 'tetris',   emoji: '🟦', title: 'Cascada de Bloques',
+  ArcadeGameDef(id: 'tetris',   emoji: '🟦', title: 'Tetromuro',
     builder: ({required userId, required rewardsDocRef, required currentSaldo,
         required controller, required onSaldoChanged}) =>
       TetrisScreen(userId: userId, rewardsDocRef: rewardsDocRef,
         currentSaldo: currentSaldo, controller: controller, onSaldoChanged: onSaldoChanged)),
-  ArcadeGameDef(id: 'logic',    emoji: '💣', title: 'Campo Minado',
+  ArcadeGameDef(id: 'logic',    emoji: '💣', title: 'Busca-Trampas',
     builder: ({required userId, required rewardsDocRef, required currentSaldo,
         required controller, required onSaldoChanged}) =>
       LogicGridScreen(userId: userId, rewardsDocRef: rewardsDocRef,
         currentSaldo: currentSaldo, controller: controller, onSaldoChanged: onSaldoChanged)),
-  // Col 4 — GEMAS
-  ArcadeGameDef(id: 'match3',   emoji: '💎', title: 'Gemas del Abismo',
+  // Col 4 — DULCE
+  ArcadeGameDef(id: 'match3',   emoji: '🍬', title: 'Dulce Racha',
     builder: ({required userId, required rewardsDocRef, required currentSaldo,
         required controller, required onSaldoChanged}) =>
       Match3Screen(userId: userId, rewardsDocRef: rewardsDocRef,
@@ -315,6 +315,12 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
           return Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
+              // Collection title
+              const Text('THE RETRO 8 COLLECTION',
+                style: TextStyle(color: Colors.white24, fontSize: 7,
+                    letterSpacing: 3, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 8),
+
               // Cards carousel — the focal point
               SizedBox(
                 height: cardH,
@@ -371,97 +377,76 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
 
   Widget _buildCarouselCard(
       ArcadeGameDef def, int index, bool selected, double w, double h) {
-    // Connector height at bottom of cartridge
-    const connH = 22.0;
-    // Label area starts below the top ridge
-    const ridgeH = 18.0;
-    final labelTop = ridgeH + 2.0;
-    final labelBot = h - connH - 4.0;
-
     return GestureDetector(
       onTap: selected ? _launchSelected : () => setState(() => _selectedIndex = index),
       child: AnimatedScale(
         duration: const Duration(milliseconds: 280),
-        scale: selected ? 1.0 : 0.90,
+        scale: selected ? 1.0 : 0.88,
         child: SizedBox(
-          width: w,
-          height: h,
+          width: w, height: h,
           child: Stack(children: [
-            // ── Cartridge painting (shell + art + contacts) ─────────────────
+            // ── Full TCG-card art painting ──────────────────────────────────
             CustomPaint(
               painter: _CartridgePainter(index: index, selected: selected),
               child: const SizedBox.expand(),
             ),
 
-            // ── Selected glow border ─────────────────────────────────────────
-            Container(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(
-                  color: selected
-                      ? Colors.white.withOpacity(0.55)
-                      : Colors.transparent,
-                  width: 2,
-                ),
-              ),
-            ),
-
-            // ── Label content overlay ────────────────────────────────────────
+            // ── Footer: category + title + high score ───────────────────────
             Positioned(
-              left: 8, right: 8,
-              top: labelTop, bottom: h - labelBot,
+              left: 10, right: 10, bottom: 10,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  // Category chip
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.40),
-                      borderRadius: BorderRadius.circular(4),
+                  Row(children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withOpacity(0.60),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: Colors.white.withOpacity(0.22)),
+                      ),
+                      child: Text(_kCategoryLabels[index ~/ 2],
+                        style: const TextStyle(color: Colors.white60, fontSize: 7,
+                            letterSpacing: 1.5, fontWeight: FontWeight.w700)),
                     ),
-                    child: Text(
-                      _kCategoryLabels[index ~/ 2],
-                      style: const TextStyle(
-                        color: Colors.white60, fontSize: 7, letterSpacing: 2,
-                        fontWeight: FontWeight.w700),
-                    ),
-                  ),
-                  const Spacer(),
-                  // Emoji
-                  Text(def.emoji, style: const TextStyle(fontSize: 36)),
-                  const SizedBox(height: 5),
-                  // Title
+                    if (_highScores[index] > 0) ...[
+                      const Spacer(),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.60),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text('⭐ ${_highScores[index]}',
+                          style: const TextStyle(color: Colors.amber, fontSize: 7)),
+                      ),
+                    ],
+                  ]),
+                  const SizedBox(height: 4),
                   Text(def.title,
                     style: const TextStyle(color: Colors.white, fontSize: 13,
-                        fontWeight: FontWeight.bold, letterSpacing: 0.2,
-                        shadows: [Shadow(color: Colors.black87, blurRadius: 4)]),
-                    maxLines: 2,
-                  ),
-                  if (_highScores[index] > 0) ...[
-                    const SizedBox(height: 3),
-                    Text('⭐ ${_highScores[index]}',
-                      style: const TextStyle(color: Colors.white54, fontSize: 9)),
-                  ],
-                  const SizedBox(height: 2),
+                        fontWeight: FontWeight.bold, letterSpacing: 0.3,
+                        shadows: [Shadow(color: Colors.black, blurRadius: 8,
+                            offset: Offset(0, 1))]),
+                    maxLines: 1, overflow: TextOverflow.ellipsis),
                 ],
               ),
             ),
 
-            // ── JUGAR badge (selected) ────────────────────────────────────────
+            // ── JUGAR badge (selected only) ──────────────────────────────────
             if (selected)
-              Positioned(
-                right: 10, bottom: connH + 8,
+              Center(
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 9),
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.20),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: Colors.white54),
+                    color: Colors.black.withOpacity(0.68),
+                    borderRadius: BorderRadius.circular(22),
+                    border: Border.all(color: Colors.white.withOpacity(0.70), width: 1.5),
                   ),
-                  child: const Text('A  JUGAR',
-                    style: TextStyle(color: Colors.white, fontSize: 7,
-                        fontWeight: FontWeight.bold, letterSpacing: 1.5)),
+                  child: const Text('▶  JUGAR',
+                    style: TextStyle(color: Colors.white, fontSize: 12,
+                        fontWeight: FontWeight.bold, letterSpacing: 2.5)),
                 ),
               ),
           ]),
@@ -568,9 +553,7 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
   }
 }
 
-// ─── Card Art Painter ─────────────────────────────────────────────────────────
-
-// ─── Cartridge Painter ────────────────────────────────────────────────────────
+// ─── TCG-style Card Painter ───────────────────────────────────────────────────
 
 class _CartridgePainter extends CustomPainter {
   final int index;
@@ -583,315 +566,424 @@ class _CartridgePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final w = size.width, h = size.height;
-    final p = Paint()..isAntiAlias = false;
+    final rr = RRect.fromRectAndRadius(Rect.fromLTWH(0, 0, w, h), const Radius.circular(18));
 
-    // ── Cartridge shell body (SNES-style gray plastic) ────────────────────────
-    final shellRRect = RRect.fromRectAndRadius(
-        Rect.fromLTWH(0, 0, w, h), const Radius.circular(10));
-    canvas.drawRRect(shellRRect, Paint()
-      ..shader = const LinearGradient(
-        begin: Alignment.topLeft, end: Alignment.bottomRight,
-        colors: [Color(0xFF9292A0), Color(0xFF6A6A7A)],
+    // ── Base gradient ──────────────────────────────────────────────────────────
+    final g = _kCardGradients[index];
+    canvas.drawRRect(rr, Paint()
+      ..shader = LinearGradient(
+        begin: Alignment.topCenter, end: Alignment.bottomCenter,
+        colors: [g[0], g[1]],
       ).createShader(Rect.fromLTWH(0, 0, w, h)));
 
-    // Edge highlight (top-left bright edge)
-    p.color = const Color(0xFFB0B0C0);
-    canvas.drawRect(Rect.fromLTWH(0, 0, w, 2), p);   // top edge
-    canvas.drawRect(Rect.fromLTWH(0, 0, 2, h), p);   // left edge
-    // Shadow edges (bottom-right)
-    p.color = const Color(0xFF444450);
-    canvas.drawRect(Rect.fromLTWH(0, h - 2, w, 2), p);
-    canvas.drawRect(Rect.fromLTWH(w - 2, 0, 2, h), p);
-
-    // ── Top ridge (embossed bar — SNES style) ─────────────────────────────────
-    p.color = const Color(0xFFA0A0B0); // ridge face
-    canvas.drawRect(Rect.fromLTWH(4, 4, w - 8, 14), p);
-    p.color = const Color(0xFF7A7A8A); // ridge bottom shadow
-    canvas.drawRect(Rect.fromLTWH(4, 17, w - 8, 2), p);
-    p.color = const Color(0xFFB8B8C8); // ridge top highlight
-    canvas.drawRect(Rect.fromLTWH(4, 4, w - 8, 2), p);
-    // Ridge center notch (SNES cartridge has a center tab recess)
-    p.color = const Color(0xFF8A8A9A);
-    canvas.drawRect(Rect.fromLTWH(w * 0.33, 4, w * 0.34, 14), p);
-    // Screw hole hints
-    p.color = const Color(0xFF686878);
-    canvas.drawRect(Rect.fromLTWH(10, 7, 5, 5), p);
-    canvas.drawRect(Rect.fromLTWH(w - 15, 7, 5, 5), p);
-
-    // ── Label area (game-colored inset rectangle) ─────────────────────────────
-    const labelX = 5.0, labelTop = 20.0, connH = 22.0;
-    final labelW = w - labelX * 2;
-    final labelH = h - labelTop - connH - 5;
-    final labelRRect = RRect.fromRectAndRadius(
-        Rect.fromLTWH(labelX, labelTop, labelW, labelH),
-        const Radius.circular(5));
-
-    // Label gradient background (per-game color)
-    final g = _kCardGradients[index];
-    canvas.drawRRect(labelRRect, Paint()
-      ..shader = LinearGradient(
-        begin: Alignment.topLeft, end: Alignment.bottomRight, colors: g,
-      ).createShader(Rect.fromLTWH(labelX, labelTop, labelW, labelH)));
-
-    // Label border
-    p.color = Colors.black.withOpacity(0.35);
-    p.style = PaintingStyle.stroke;
-    p.strokeWidth = 1.0;
-    canvas.drawRRect(labelRRect, p);
-    p.style = PaintingStyle.fill;
-
-    // ── Game art (clipped to label area) ─────────────────────────────────────
+    // ── Game art (full bleed, clipped to card) ─────────────────────────────────
     canvas.save();
-    canvas.clipRRect(labelRRect);
-    _drawGameArt(canvas, labelX, labelTop, labelW, labelH);
+    canvas.clipRRect(rr);
+    _drawGameArt(canvas, w, h);
+
+    // Top vignette (darkens top so number badge is readable)
+    canvas.drawRect(Rect.fromLTWH(0, 0, w, h * 0.22),
+      Paint()..shader = LinearGradient(
+        begin: Alignment.topCenter, end: Alignment.bottomCenter,
+        colors: [Colors.black.withOpacity(0.60), Colors.black.withOpacity(0.0)],
+      ).createShader(Rect.fromLTWH(0, 0, w, h * 0.22)));
+
+    // Bottom vignette (darkens footer for text legibility)
+    canvas.drawRect(Rect.fromLTWH(0, h * 0.55, w, h * 0.45),
+      Paint()..shader = LinearGradient(
+        begin: Alignment.topCenter, end: Alignment.bottomCenter,
+        colors: [Colors.black.withOpacity(0.0), Colors.black.withOpacity(0.90)],
+      ).createShader(Rect.fromLTWH(0, h * 0.55, w, h * 0.45)));
+
     canvas.restore();
 
-    // ── Connector area + gold contacts ────────────────────────────────────────
-    final cY = h - connH - 4;
-    p.color = const Color(0xFF3A3A48);
-    canvas.drawRect(Rect.fromLTWH(4, cY, w - 8, connH + 2), p);
-    // Connector top groove
-    p.color = const Color(0xFF222230);
-    canvas.drawRect(Rect.fromLTWH(4, cY, w - 8, 2), p);
-    // Gold contacts (10 strips)
-    const nContacts = 10;
-    final contactTotalW = w - 16.0;
-    final contactW = contactTotalW / nContacts;
-    for (int i = 0; i < nContacts; i++) {
-      final cx = 8.0 + i * contactW + 1;
-      p.color = const Color(0xFFB8860B);
-      canvas.drawRect(Rect.fromLTWH(cx, cY + 4, contactW - 2, connH - 6), p);
-      // Contact shine
-      p.color = const Color(0xFFD4A820).withOpacity(0.6);
-      canvas.drawRect(Rect.fromLTWH(cx, cY + 4, contactW - 2, 3), p);
-      // Contact shadow
-      p.color = const Color(0xFF806010).withOpacity(0.5);
-      canvas.drawRect(Rect.fromLTWH(cx, cY + connH - 4, contactW - 2, 2), p);
-    }
+    // ── Outer border ───────────────────────────────────────────────────────────
+    canvas.drawRRect(rr, Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = selected ? 2.5 : 1.5
+      ..color = selected ? Colors.white.withOpacity(0.90) : Colors.white.withOpacity(0.25)
+      ..isAntiAlias = true);
 
-    // ── Selected highlight overlay ─────────────────────────────────────────────
+    // Inner accent border
+    canvas.save();
+    canvas.clipRRect(rr);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(Rect.fromLTWH(4, 4, w - 8, h - 8), const Radius.circular(14)),
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.0
+        ..color = Colors.white.withOpacity(0.12)
+        ..isAntiAlias = true);
+    canvas.restore();
+
+    // ── Number badge (top centre) ───────────────────────────────────────────────
+    final bx = w / 2, by = 22.0, br = 14.0;
+    canvas.drawCircle(Offset(bx, by + 1.5), br,
+        Paint()..color = Colors.black.withOpacity(0.45)..isAntiAlias = true);
+    canvas.drawCircle(Offset(bx, by), br,
+        Paint()..color = g[1].withOpacity(0.92)..isAntiAlias = true);
+    canvas.drawCircle(Offset(bx, by), br,
+        Paint()..style = PaintingStyle.stroke..strokeWidth = 1.5
+          ..color = Colors.white.withOpacity(0.55)..isAntiAlias = true);
+    final numTp = TextPainter(
+      text: TextSpan(text: '${index + 1}',
+        style: const TextStyle(color: Colors.white, fontSize: 13,
+            fontWeight: FontWeight.bold, fontFamily: 'monospace')),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    numTp.paint(canvas, Offset(bx - numTp.width / 2, by - numTp.height / 2));
+    numTp.dispose();
+
+    // ── Selected shimmer ────────────────────────────────────────────────────────
     if (selected) {
-      canvas.drawRRect(shellRRect,
-          Paint()..color = Colors.white.withOpacity(0.07)..isAntiAlias = false);
+      canvas.save();
+      canvas.clipRRect(rr);
+      canvas.drawRect(Rect.fromLTWH(0, 0, w, h),
+          Paint()..color = Colors.white.withOpacity(0.05));
+      canvas.restore();
     }
   }
 
-  // ── Per-game art in label area ────────────────────────────────────────────────
+  // ── Per-game full-bleed art ───────────────────────────────────────────────────
 
-  void _drawGameArt(Canvas canvas, double ox, double oy, double lw, double lh) {
+  void _drawGameArt(Canvas canvas, double w, double h) {
     final p = Paint()..isAntiAlias = false;
-    // Remap helper: art uses w/h fractions but we apply to label coords
-    // Legacy art used full-card fractions; label ≈ right 60% of original w
-    // We'll scale to fit within label area directly
-    final w = lw + ox; // full card "virtual" w so fractions land in label
-    final h = lh + oy;
 
     switch (index) {
-      // ── Víbora Neón ──────────────────────────────────────────────────────
+      // ── La Sierpe ─────────────────────────────────────────────────────────
       case 0:
-        // Snake body — winding dot trail
-        p.color = const Color(0xFF4CAF50).withOpacity(0.30);
-        final pts = [
-          Offset(w*0.62, h*0.20), Offset(w*0.82, h*0.28), Offset(w*0.88, h*0.42),
-          Offset(w*0.82, h*0.58), Offset(w*0.65, h*0.64), Offset(w*0.50, h*0.58),
-        ];
-        for (int i = 0; i < pts.length - 1; i++) {
-          canvas.drawLine(pts[i], pts[i + 1], p..strokeWidth = 10);
-        }
-        p.color = const Color(0xFF76FF03).withOpacity(0.55);
-        canvas.drawCircle(pts[0], 8, p); // head
-        p.color = const Color(0xFF00E676).withOpacity(0.20);
-        canvas.drawRect(Rect.fromLTWH(w*0.45, h*0.08, w*0.48, h*0.78), p); // field glow
-
-      // ── Reino Fantasmal ──────────────────────────────────────────────────
-      case 1:
-        // Maze grid
-        p.color = Colors.deepPurple.withOpacity(0.18);
-        for (int r = 0; r < 5; r++) {
+        // Grid dots
+        p.color = const Color(0xFF00FF00).withOpacity(0.06);
+        for (int r = 0; r < 10; r++) {
           for (int c = 0; c < 7; c++) {
-            if ((r + c) % 3 != 0) canvas.drawRect(Rect.fromLTWH(w*0.42 + c*13, h*0.08 + r*14, 12, 13), p);
+            canvas.drawRect(Rect.fromLTWH(c * (w/7), r * (h/10), w/7 - 1, h/10 - 1), p);
           }
         }
-        // Ghost
-        p.color = Colors.white.withOpacity(0.18);
-        canvas.drawOval(Rect.fromLTWH(w*0.60, h*0.55, 40, 32), p);
-        canvas.drawRect(Rect.fromLTWH(w*0.60, h*0.55+16, 40, 20), p);
-        // Eyes
-        p.color = const Color(0xFF1A0A4A).withOpacity(0.80);
-        canvas.drawCircle(Offset(w*0.66, h*0.62), 5, p);
-        canvas.drawCircle(Offset(w*0.78, h*0.62), 5, p);
-
-      // ── Alas de Cromo ────────────────────────────────────────────────────
-      case 2:
-        // Pipes
-        p.color = Colors.cyan.withOpacity(0.18);
-        canvas.drawRect(Rect.fromLTWH(w*0.52, 0, 22, h*0.36), p);
-        canvas.drawRect(Rect.fromLTWH(w*0.52, h*0.60, 22, h*0.40), p);
-        canvas.drawRect(Rect.fromLTWH(w*0.78, 0, 22, h*0.28), p);
-        canvas.drawRect(Rect.fromLTWH(w*0.78, h*0.66, 22, h*0.34), p);
-        // Bird
-        p.color = Colors.amberAccent.withOpacity(0.45);
-        canvas.drawOval(Rect.fromLTWH(w*0.35, h*0.44, 28, 18), p);
-        canvas.drawOval(Rect.fromLTWH(w*0.28, h*0.42, 12, 8), p); // wing
-
-      // ── Cruce Peligroso ──────────────────────────────────────────────────
-      case 3:
-        // Road lanes
-        p.color = Colors.white.withOpacity(0.06);
-        for (int i = 0; i < 4; i++) canvas.drawRect(Rect.fromLTWH(0, h*(0.20 + i*0.16), w, h*0.10), p);
-        // Dashed center lines
-        p.color = Colors.yellow.withOpacity(0.12);
-        for (int i = 0; i < 6; i++) canvas.drawRect(Rect.fromLTWH(w*0.42 + i*14, h*0.24, 8, h*0.07), p);
-        // Cars
-        p.color = Colors.red.withOpacity(0.30);
-        canvas.drawRect(Rect.fromLTWH(w*0.52, h*0.21, 32, 14), p);
-        p.color = Colors.blue.withOpacity(0.25);
-        canvas.drawRect(Rect.fromLTWH(w*0.70, h*0.37, 28, 13), p);
-        // Frog
-        p.color = Colors.green.withOpacity(0.45);
-        canvas.drawOval(Rect.fromLTWH(w*0.60, h*0.66, 20, 16), p);
-        p.color = Colors.white.withOpacity(0.60);
-        canvas.drawCircle(Offset(w*0.63, h*0.65), 3, p);
-        canvas.drawCircle(Offset(w*0.69, h*0.65), 3, p);
-
-      // ── Asalto Estelar ────────────────────────────────────────────────────
-      case 4:
-        // Stars
-        p.color = Colors.white.withOpacity(0.35);
-        final stars = [Offset(w*0.50,h*0.10),Offset(w*0.65,h*0.18),Offset(w*0.80,h*0.12),
-          Offset(w*0.55,h*0.32),Offset(w*0.72,h*0.40),Offset(w*0.88,h*0.28),
-          Offset(w*0.48,h*0.52),Offset(w*0.78,h*0.58),Offset(w*0.92,h*0.48)];
-        for (final s in stars) canvas.drawRect(Rect.fromLTWH(s.dx-1,s.dy-1,3,3), p);
-        // Ship
-        p.color = Colors.cyanAccent.withOpacity(0.35);
-        final path = Path()
-          ..moveTo(w*0.68, h*0.70)..lineTo(w*0.60, h*0.84)..lineTo(w*0.76, h*0.84)..close();
-        canvas.drawPath(path, p..isAntiAlias = true);
+        // Snake body
+        final segs = [
+          Offset(w*0.50, h*0.45), Offset(w*0.68, h*0.36), Offset(w*0.80, h*0.28),
+          Offset(w*0.80, h*0.48), Offset(w*0.65, h*0.58), Offset(w*0.50, h*0.68),
+          Offset(w*0.32, h*0.60), Offset(w*0.20, h*0.50),
+        ];
+        final segP = Paint()..isAntiAlias = true..strokeWidth = 13
+          ..strokeCap = StrokeCap.round..color = const Color(0xFF009900).withOpacity(0.80);
+        for (int i = 0; i < segs.length - 1; i++) canvas.drawLine(segs[i], segs[i+1], segP);
+        // Head
+        segP.color = const Color(0xFF22EE22);
+        canvas.drawCircle(segs[0], 10, segP..style = PaintingStyle.fill);
+        p.color = Colors.black;
+        canvas.drawRect(Rect.fromLTWH(segs[0].dx - 5, segs[0].dy - 3, 3, 3), p);
+        canvas.drawRect(Rect.fromLTWH(segs[0].dx + 2, segs[0].dy - 3, 3, 3), p);
+        // Food
+        p.isAntiAlias = true;
+        p.color = const Color(0xFFFF2222).withOpacity(0.90);
+        canvas.drawCircle(Offset(w*0.22, h*0.33), 8, p);
+        p.color = Colors.white.withOpacity(0.65);
+        canvas.drawCircle(Offset(w*0.20, h*0.31), 3, p);
         p.isAntiAlias = false;
-        // Exhaust
-        p.color = Colors.orange.withOpacity(0.35);
-        canvas.drawRect(Rect.fromLTWH(w*0.65, h*0.84, 6, 8), p);
-        // Enemy row
-        p.color = Colors.redAccent.withOpacity(0.28);
-        for (int i = 0; i < 4; i++) canvas.drawRect(Rect.fromLTWH(w*0.50+i*15, h*0.14, 11, 8), p);
-
-      // ── Mazmorra Infernal ────────────────────────────────────────────────
-      case 5:
-        // Brick pattern
-        p.color = Colors.red.withOpacity(0.10);
-        for (int r = 0; r < 7; r++) {
-          for (int c = 0; c < 5; c++) {
-            final ox = (r % 2) * 12.0;
-            canvas.drawRect(Rect.fromLTWH(w*0.40 + c*22 + ox, h*0.04 + r*12, 20, 10), p);
-          }
-        }
-        // Demon eye (large)
-        p.color = const Color(0xFFCC1100).withOpacity(0.50);
-        canvas.drawCircle(Offset(w*0.72, h*0.62), 24, p..isAntiAlias = true);
-        p.color = const Color(0xFF110000).withOpacity(0.60);
-        canvas.drawCircle(Offset(w*0.72, h*0.62), 11, p);
-        p.color = const Color(0xFFFF2200).withOpacity(0.85);
-        canvas.drawCircle(Offset(w*0.72, h*0.62), 5, p);
-        p.isAntiAlias = false;
-        // Flames
-        p.color = Colors.orange.withOpacity(0.22);
-        canvas.drawOval(Rect.fromLTWH(w*0.53, h*0.76, 14, 22), p);
-        canvas.drawOval(Rect.fromLTWH(w*0.62, h*0.78, 12, 18), p);
-        canvas.drawOval(Rect.fromLTWH(w*0.80, h*0.75, 14, 22), p);
-        p.color = Colors.yellow.withOpacity(0.15);
-        canvas.drawOval(Rect.fromLTWH(w*0.55, h*0.80, 8, 14), p);
-        canvas.drawOval(Rect.fromLTWH(w*0.82, h*0.79, 8, 14), p);
-
-      // ── Cascada de Bloques ────────────────────────────────────────────────
-      case 6:
-        // I-piece (cyan)
-        p.color = Colors.cyanAccent.withOpacity(0.28);
-        for (int i = 0; i < 4; i++) canvas.drawRect(Rect.fromLTWH(w*0.48+i*14, h*0.12, 13, 13), p);
-        // L-piece (orange)
-        p.color = Colors.orange.withOpacity(0.28);
-        for (int i = 0; i < 3; i++) canvas.drawRect(Rect.fromLTWH(w*0.48, h*0.28+i*14, 13, 13), p);
-        canvas.drawRect(Rect.fromLTWH(w*0.62, h*0.28+2*14, 13, 13), p);
-        // S-piece (green)
-        p.color = Colors.greenAccent.withOpacity(0.25);
-        canvas.drawRect(Rect.fromLTWH(w*0.62, h*0.52, 13, 13), p);
-        canvas.drawRect(Rect.fromLTWH(w*0.76, h*0.52, 13, 13), p);
-        canvas.drawRect(Rect.fromLTWH(w*0.48, h*0.66, 13, 13), p);
-        canvas.drawRect(Rect.fromLTWH(w*0.62, h*0.66, 13, 13), p);
-        // T-piece (purple)
-        p.color = Colors.purpleAccent.withOpacity(0.25);
-        for (int i = 0; i < 3; i++) canvas.drawRect(Rect.fromLTWH(w*0.48+i*14, h*0.80, 13, 13), p);
-        canvas.drawRect(Rect.fromLTWH(w*0.62, h*0.66, 13, 13), p);
-
-      // ── Campo Minado ──────────────────────────────────────────────────────
-      case 7:
-        // Grid cells
-        p.color = Colors.white.withOpacity(0.07);
-        for (int r = 0; r < 6; r++) {
-          for (int c = 0; c < 6; c++) canvas.drawRect(Rect.fromLTWH(w*0.42+c*15, h*0.12+r*15, 14, 14), p);
-        }
-        // A few revealed cells
-        p.color = Colors.white.withOpacity(0.18);
-        canvas.drawRect(Rect.fromLTWH(w*0.42, h*0.12, 14, 14), p);
-        canvas.drawRect(Rect.fromLTWH(w*0.57, h*0.12, 14, 14), p);
-        canvas.drawRect(Rect.fromLTWH(w*0.42, h*0.27, 14, 14), p);
-        // Mine/bomb
-        p.color = Colors.orangeAccent.withOpacity(0.50);
-        canvas.drawCircle(Offset(w*0.74, h*0.62), 16, p..isAntiAlias = true);
-        p.color = Colors.red.withOpacity(0.50);
-        canvas.drawRect(Rect.fromLTWH(w*0.74-2, h*0.62-24, 4, 10), p..isAntiAlias = false);
-        // Spikes
-        p.color = Colors.orangeAccent.withOpacity(0.40);
-        for (int i = 0; i < 4; i++) {
-          final angle = i * 3.14159 / 2;
-          canvas.drawRect(Rect.fromLTWH(
-            w*0.74 + cos(angle) * 16 - 2, h*0.62 + sin(angle) * 16 - 2, 4, 4), p);
-        }
         break;
 
-      // ── Gemas del Abismo ──────────────────────────────────────────────────
-      case 8:
-        // Gem grid (3×4)
-        const gemColors = [
-          Color(0xFFE040FB), // purple
-          Color(0xFF40C4FF), // blue
-          Color(0xFF69F0AE), // green
-          Color(0xFFFFD740), // yellow
-          Color(0xFFFF5252), // red
+      // ── Tragalaberinto ────────────────────────────────────────────────────
+      case 1:
+        // Maze walls (BLUE)
+        p.color = const Color(0xFF1A4AFF).withOpacity(0.60);
+        final walls = [
+          Rect.fromLTWH(6, 6, w - 12, 10),
+          Rect.fromLTWH(6, h - 16, w - 12, 10),
+          Rect.fromLTWH(6, 6, 10, h - 12),
+          Rect.fromLTWH(w - 16, 6, 10, h - 12),
+          Rect.fromLTWH(6, h*0.28, w*0.42, 10),
+          Rect.fromLTWH(w*0.58, h*0.28, w*0.34, 10),
+          Rect.fromLTWH(w*0.28, h*0.50, 10, h*0.26),
+          Rect.fromLTWH(w*0.65, h*0.50, 10, h*0.26),
+          Rect.fromLTWH(6, h*0.70, w*0.52, 10),
+          Rect.fromLTWH(w*0.42, h*0.42, w*0.30, 10),
         ];
-        final gemW = lw * 0.22;
-        final gemH = lh * 0.18;
-        final gridCols = 3, gridRows = 4;
-        final startX = ox + lw * 0.25;
-        final startY = oy + lh * 0.08;
-        final gapX = (lw * 0.60) / gridCols;
-        final gapY = (lh * 0.80) / gridRows;
-        final gemPattern = [2,0,3, 1,4,0, 3,1,2, 0,3,4];
-        for (int r = 0; r < gridRows; r++) {
-          for (int c = 0; c < gridCols; c++) {
-            final ci = gemPattern[r * gridCols + c];
-            final gx = startX + c * gapX;
-            final gy = startY + r * gapY;
-            // Gem diamond shape
-            p.color = gemColors[ci].withOpacity(0.45);
-            p.isAntiAlias = true;
-            final path = Path()
-              ..moveTo(gx + gemW / 2, gy)
-              ..lineTo(gx + gemW, gy + gemH * 0.4)
-              ..lineTo(gx + gemW / 2, gy + gemH)
-              ..lineTo(gx, gy + gemH * 0.4)
-              ..close();
-            canvas.drawPath(path, p);
-            // Gem highlight
-            p.color = Colors.white.withOpacity(0.30);
-            canvas.drawRect(Rect.fromLTWH(gx + gemW * 0.25, gy + gemH * 0.05, gemW * 0.25, gemH * 0.20), p);
-            p.isAntiAlias = false;
+        for (final r in walls) canvas.drawRect(r, p);
+        // Dots trail (yellow)
+        p.color = const Color(0xFFFFFF88).withOpacity(0.65);
+        for (int i = 0; i < 5; i++) canvas.drawRect(Rect.fromLTWH(w*0.38 + i*11, h*0.62, 5, 5), p);
+        // Pac-Man (yellow)
+        p.color = const Color(0xFFFFDD00).withOpacity(0.95);
+        p.isAntiAlias = true;
+        final pac = Path()
+          ..moveTo(w*0.33, h*0.63)
+          ..arcTo(Rect.fromCenter(center: Offset(w*0.33, h*0.63), width: 28, height: 28), 0.5, 5.4, false)
+          ..close();
+        canvas.drawPath(pac, p);
+        // Ghost (blue)
+        p.color = const Color(0xFF3366FF).withOpacity(0.85);
+        canvas.drawOval(Rect.fromLTWH(w*0.60, h*0.35, 28, 22), p);
+        canvas.drawRect(Rect.fromLTWH(w*0.60, h*0.35 + 11, 28, 14), p);
+        p.color = Colors.white;
+        canvas.drawOval(Rect.fromLTWH(w*0.63, h*0.37, 8, 9), p);
+        canvas.drawOval(Rect.fromLTWH(w*0.73, h*0.37, 8, 9), p);
+        p.color = const Color(0xFF0000CC);
+        canvas.drawCircle(Offset(w*0.67, h*0.40), 3, p);
+        canvas.drawCircle(Offset(w*0.77, h*0.40), 3, p);
+        p.isAntiAlias = false;
+        break;
+
+      // ── Alas Locas ────────────────────────────────────────────────────────
+      case 2:
+        // Pipes (green)
+        p.color = const Color(0xFF228B22).withOpacity(0.80);
+        canvas.drawRect(Rect.fromLTWH(w*0.14, 0, 28, h*0.32), p);
+        canvas.drawRect(Rect.fromLTWH(w*0.14, h*0.46, 28, h*0.54), p);
+        p.color = const Color(0xFF33AA33).withOpacity(0.80);
+        canvas.drawRect(Rect.fromLTWH(w*0.10, h*0.29, 36, 10), p);
+        canvas.drawRect(Rect.fromLTWH(w*0.10, h*0.43, 36, 10), p);
+        p.color = const Color(0xFF228B22).withOpacity(0.55);
+        canvas.drawRect(Rect.fromLTWH(w*0.70, 0, 28, h*0.20), p);
+        canvas.drawRect(Rect.fromLTWH(w*0.70, h*0.34, 28, h*0.66), p);
+        p.color = const Color(0xFF33AA33).withOpacity(0.55);
+        canvas.drawRect(Rect.fromLTWH(w*0.66, h*0.17, 36, 10), p);
+        canvas.drawRect(Rect.fromLTWH(w*0.66, h*0.31, 36, 10), p);
+        // Cloud puffs
+        p.color = Colors.white.withOpacity(0.20);
+        canvas.drawOval(Rect.fromLTWH(w*0.35, h*0.10, 44, 18), p);
+        canvas.drawOval(Rect.fromLTWH(w*0.52, h*0.08, 30, 14), p);
+        canvas.drawOval(Rect.fromLTWH(w*0.54, h*0.74, 36, 16), p);
+        // Bird body
+        p.color = const Color(0xFFFFCC00).withOpacity(0.95);
+        p.isAntiAlias = true;
+        canvas.drawOval(Rect.fromLTWH(w*0.38, h*0.36, 36, 28), p);
+        p.color = const Color(0xFFFFAA00).withOpacity(0.85);
+        canvas.drawOval(Rect.fromLTWH(w*0.40, h*0.42, 18, 10), p); // wing
+        p.color = Colors.white;
+        canvas.drawCircle(Offset(w*0.52, h*0.38), 7, p);
+        p.color = Colors.black;
+        canvas.drawCircle(Offset(w*0.54, h*0.38), 3, p);
+        p.color = const Color(0xFFFF6600);
+        canvas.drawRect(Rect.fromLTWH(w*0.57, h*0.41, 9, 5), p);
+        p.isAntiAlias = false;
+        break;
+
+      // ── Paso a Paso ────────────────────────────────────────────────────────
+      case 3:
+        // Road strips
+        p.color = Colors.white.withOpacity(0.05);
+        for (int i = 0; i < 3; i++) canvas.drawRect(Rect.fromLTWH(0, h*(0.06+i*0.13), w, h*0.10), p);
+        // Dashed lines
+        p.color = Colors.yellow.withOpacity(0.14);
+        for (int i = 0; i < 8; i++) canvas.drawRect(Rect.fromLTWH(i*w/7, h*0.12, w/14, h*0.06), p);
+        // Cars
+        p.color = Colors.red.withOpacity(0.60);
+        canvas.drawRect(Rect.fromLTWH(w*0.05, h*0.07, 44, 14), p);
+        p.color = Colors.blue.withOpacity(0.50);
+        canvas.drawRect(Rect.fromLTWH(w*0.52, h*0.20, 38, 12), p);
+        p.color = Colors.orange.withOpacity(0.55);
+        canvas.drawRect(Rect.fromLTWH(w*0.20, h*0.32, 42, 13), p);
+        // River
+        p.color = const Color(0xFF004466).withOpacity(0.60);
+        canvas.drawRect(Rect.fromLTWH(0, h*0.44, w, h*0.22), p);
+        // Lily pads
+        p.isAntiAlias = true;
+        p.color = const Color(0xFF006600).withOpacity(0.65);
+        canvas.drawOval(Rect.fromLTWH(w*0.06, h*0.46, 34, 14), p);
+        canvas.drawOval(Rect.fromLTWH(w*0.48, h*0.49, 30, 12), p);
+        canvas.drawOval(Rect.fromLTWH(w*0.74, h*0.45, 26, 12), p);
+        // Frog body
+        p.color = const Color(0xFF22CC22).withOpacity(0.92);
+        canvas.drawOval(Rect.fromLTWH(w*0.34, h*0.63, 32, 24), p);
+        canvas.drawOval(Rect.fromLTWH(w*0.28, h*0.59, 18, 14), p); // left leg
+        canvas.drawOval(Rect.fromLTWH(w*0.54, h*0.59, 18, 14), p); // right leg
+        p.color = const Color(0xFF33EE33).withOpacity(0.90);
+        canvas.drawCircle(Offset(w*0.38, h*0.61), 7, p);
+        canvas.drawCircle(Offset(w*0.56, h*0.61), 7, p);
+        p.color = Colors.black;
+        canvas.drawCircle(Offset(w*0.38, h*0.61), 3, p);
+        canvas.drawCircle(Offset(w*0.56, h*0.61), 3, p);
+        p.isAntiAlias = false;
+        break;
+
+      // ── Astrocaza ─────────────────────────────────────────────────────────
+      case 4:
+        // Star field
+        final starPts = [
+          Offset(w*0.10,h*0.08), Offset(w*0.32,h*0.14), Offset(w*0.66,h*0.05),
+          Offset(w*0.84,h*0.20), Offset(w*0.20,h*0.34), Offset(w*0.88,h*0.38),
+          Offset(w*0.50,h*0.26), Offset(w*0.74,h*0.52), Offset(w*0.06,h*0.60),
+          Offset(w*0.40,h*0.52), Offset(w*0.60,h*0.70), Offset(w*0.16,h*0.78),
+        ];
+        for (final s in starPts) {
+          p.color = Colors.white.withOpacity(0.40 + (s.dx / w) * 0.40);
+          canvas.drawRect(Rect.fromLTWH(s.dx - 1.5, s.dy - 1.5, 3, 3), p);
+        }
+        // Enemy ships (red alien row)
+        p.color = const Color(0xFFCC1100).withOpacity(0.80);
+        for (int i = 0; i < 4; i++) {
+          final ex = w*0.10 + i * w*0.22;
+          final ey = h*0.12 + (i % 2) * h*0.07;
+          canvas.drawRect(Rect.fromLTWH(ex, ey, 20, 8), p);
+          canvas.drawRect(Rect.fromLTWH(ex - 4, ey + 8, 28, 6), p);
+          canvas.drawRect(Rect.fromLTWH(ex + 2, ey - 4, 6, 4), p);
+          canvas.drawRect(Rect.fromLTWH(ex + 12, ey - 4, 6, 4), p);
+        }
+        // Player ship (cyan)
+        p.isAntiAlias = true;
+        p.color = const Color(0xFF44FFFF).withOpacity(0.88);
+        final ship = Path()
+          ..moveTo(w*0.50, h*0.72)
+          ..lineTo(w*0.38, h*0.88)
+          ..lineTo(w*0.44, h*0.84)
+          ..lineTo(w*0.56, h*0.84)
+          ..lineTo(w*0.62, h*0.88)
+          ..close();
+        canvas.drawPath(ship, p);
+        p.color = Colors.white.withOpacity(0.55);
+        canvas.drawOval(Rect.fromLTWH(w*0.46, h*0.74, 8, 10), p); // cockpit
+        // Engine glow
+        p.color = const Color(0xFFFF8800).withOpacity(0.75);
+        canvas.drawOval(Rect.fromLTWH(w*0.45, h*0.86, 10, 8), p);
+        p.color = Colors.white.withOpacity(0.60);
+        canvas.drawOval(Rect.fromLTWH(w*0.47, h*0.87, 6, 5), p);
+        // Laser bolt
+        p.color = const Color(0xFF88FFFF).withOpacity(0.70);
+        canvas.drawRect(Rect.fromLTWH(w*0.49, h*0.42, 3, h*0.30), p);
+        p.isAntiAlias = false;
+        break;
+
+      // ── Inframundo 2D ─────────────────────────────────────────────────────
+      case 5:
+        // Stone bricks
+        p.color = const Color(0xFF550000).withOpacity(0.45);
+        for (int r = 0; r < 9; r++) {
+          final xOff = (r % 2) * 18.0;
+          for (int c = 0; c < 4; c++) {
+            canvas.drawRect(Rect.fromLTWH(c * 36.0 + xOff, r * 16.0, 34, 14), p);
           }
         }
-        // Sparkle accents
-        p.color = Colors.white.withOpacity(0.55);
-        canvas.drawRect(Rect.fromLTWH(ox + lw*0.75, oy + lh*0.15, 3, 3), p);
-        canvas.drawRect(Rect.fromLTWH(ox + lw*0.82, oy + lh*0.45, 2, 2), p);
-        canvas.drawRect(Rect.fromLTWH(ox + lw*0.70, oy + lh*0.72, 3, 3), p);
+        // Demon eye
+        p.isAntiAlias = true;
+        p.color = const Color(0xFFCC0000).withOpacity(0.20);
+        canvas.drawCircle(Offset(w*0.50, h*0.46), 52, p);
+        p.color = const Color(0xFF880000).withOpacity(0.75);
+        canvas.drawCircle(Offset(w*0.50, h*0.46), 36, p);
+        p.color = const Color(0xFFDD1100).withOpacity(0.92);
+        canvas.drawCircle(Offset(w*0.50, h*0.46), 26, p);
+        p.color = Colors.black;
+        canvas.drawOval(Rect.fromLTWH(w*0.47, h*0.40, 7, 24), p); // slit pupil
+        p.color = const Color(0xFFFF3311).withOpacity(0.90);
+        canvas.drawCircle(Offset(w*0.50, h*0.46), 12, p);
+        p.color = Colors.white.withOpacity(0.28);
+        canvas.drawCircle(Offset(w*0.46, h*0.42), 5, p);
+        // Flames
+        p.color = const Color(0xFFFF4400).withOpacity(0.60);
+        for (int i = 0; i < 5; i++) canvas.drawOval(Rect.fromLTWH(i*w/5, h*0.74, w/5, h*0.28), p);
+        p.color = const Color(0xFFFF8800).withOpacity(0.45);
+        for (int i = 0; i < 4; i++) canvas.drawOval(Rect.fromLTWH(w*0.10+i*w/4, h*0.80, w/5, h*0.22), p);
+        p.color = const Color(0xFFFFCC00).withOpacity(0.28);
+        for (int i = 0; i < 3; i++) canvas.drawOval(Rect.fromLTWH(w*0.15+i*w/3, h*0.86, w/4, h*0.14), p);
+        p.isAntiAlias = false;
+        break;
+
+      // ── Tetromuro ─────────────────────────────────────────────────────────
+      case 6:
+        const tetC = [
+          Color(0xFF00DDDD), Color(0xFFDD8800), Color(0xFF2222DD),
+          Color(0xFFDDDD00), Color(0xFF22DD22), Color(0xFFDD22DD), Color(0xFFDD2222),
+        ];
+        const cell = 15.0;
+        final sl = (w - cell * 7) / 2;
+        final rowPattern = [[0,1,2,3,4,5,6],[1,2,3,4,5,6],[0,2,3,5],[1,3,6],[0,4]];
+        for (int ri = 0; ri < rowPattern.length; ri++) {
+          final rowY = h - (ri + 1) * cell - 8;
+          for (final ci in rowPattern[ri]) {
+            p.color = tetC[(ri + ci) % tetC.length].withOpacity(0.75);
+            canvas.drawRect(Rect.fromLTWH(sl + ci*cell, rowY, cell-1, cell-1), p);
+            p.color = Colors.white.withOpacity(0.28);
+            canvas.drawRect(Rect.fromLTWH(sl + ci*cell, rowY, cell-1, 3), p);
+          }
+        }
+        // Falling T-piece
+        p.color = const Color(0xFFDD22DD).withOpacity(0.85);
+        final fx = sl + cell * 2, fy = h * 0.22;
+        for (int i = 0; i < 3; i++) canvas.drawRect(Rect.fromLTWH(fx+i*cell, fy, cell-1, cell-1), p);
+        canvas.drawRect(Rect.fromLTWH(fx+cell, fy+cell, cell-1, cell-1), p);
+        p.color = Colors.white.withOpacity(0.25);
+        for (int i = 0; i < 3; i++) canvas.drawRect(Rect.fromLTWH(fx+i*cell, fy, cell-1, 3), p);
+        // Ghost drop shadow
+        p.color = const Color(0xFFDD22DD).withOpacity(0.18);
+        final gy2 = h - 6*cell - 9;
+        for (int i = 0; i < 3; i++) canvas.drawRect(Rect.fromLTWH(fx+i*cell, gy2, cell-1, cell-1), p);
+        canvas.drawRect(Rect.fromLTWH(fx+cell, gy2+cell, cell-1, cell-1), p);
+        break;
+
+      // ── Busca-Trampas ─────────────────────────────────────────────────────
+      case 7:
+        final cw2 = w / 7, ch2 = h / 9;
+        for (int r = 0; r < 9; r++) {
+          for (int c = 0; c < 7; c++) {
+            final state = (r * 7 + c) % 4;
+            if (state == 0) {
+              p.color = const Color(0xFF1A5C1A).withOpacity(0.55);
+              canvas.drawRect(Rect.fromLTWH(c*cw2+1, r*ch2+1, cw2-2, ch2-2), p);
+              p.color = const Color(0xFF22AA22).withOpacity(0.28);
+              canvas.drawRect(Rect.fromLTWH(c*cw2+1, r*ch2+1, cw2-2, 2), p);
+            } else {
+              p.color = const Color(0xFF0A2A0A).withOpacity(0.45);
+              canvas.drawRect(Rect.fromLTWH(c*cw2+1, r*ch2+1, cw2-2, ch2-2), p);
+            }
+          }
+        }
+        p.color = Colors.black.withOpacity(0.25);
+        p.style = PaintingStyle.stroke; p.strokeWidth = 0.8;
+        for (int c = 0; c <= 7; c++) canvas.drawLine(Offset(c*cw2, 0), Offset(c*cw2, h), p);
+        for (int r = 0; r <= 9; r++) canvas.drawLine(Offset(0, r*ch2), Offset(w, r*ch2), p);
+        p.style = PaintingStyle.fill;
+        // Flag
+        p.color = const Color(0xFFFF2222).withOpacity(0.85);
+        canvas.drawRect(Rect.fromLTWH(w*0.58, h*0.18, 18, 13), p);
+        p.color = const Color(0xFF888888).withOpacity(0.75);
+        canvas.drawRect(Rect.fromLTWH(w*0.58+16, h*0.18, 3, 24), p);
+        // Mine
+        p.isAntiAlias = true;
+        p.color = Colors.black.withOpacity(0.88);
+        canvas.drawCircle(Offset(w*0.36, h*0.58), 16, p);
+        for (int i = 0; i < 8; i++) {
+          final angle = i * pi / 4;
+          canvas.drawRect(Rect.fromLTWH(
+            w*0.36 + cos(angle)*16 - 2, h*0.58 + sin(angle)*16 - 2, 4, 4), p);
+        }
+        p.color = Colors.white.withOpacity(0.40);
+        canvas.drawCircle(Offset(w*0.34, h*0.55), 4, p);
+        p.isAntiAlias = false;
+        break;
+
+      // ── Dulce Racha ───────────────────────────────────────────────────────
+      case 8:
+        const cc = [
+          Color(0xFFFF3388), Color(0xFFFF8800), Color(0xFFFFDD00),
+          Color(0xFF44CC44), Color(0xFF3388FF), Color(0xFFCC44FF),
+        ];
+        final cs = w / 5.5;
+        final gl = (w - cs*4.5) / 2, gt = h * 0.14;
+        final pat = [2,0,4,1, 3,5,1,2, 0,2,5,3, 4,1,0,5, 1,3,2,4];
+        p.isAntiAlias = true;
+        for (int i = 0; i < pat.length; i++) {
+          final r = i ~/ 4, c = i % 4;
+          final cx = gl + c*cs + cs/2, cy = gt + r*(cs+3) + cs/2;
+          final color = cc[pat[i]];
+          p.color = color.withOpacity(0.80);
+          canvas.drawCircle(Offset(cx, cy), cs*0.42, p);
+          // Shine
+          p.color = Colors.white.withOpacity(0.50);
+          canvas.drawOval(Rect.fromLTWH(cx-cs*0.28, cy-cs*0.36, cs*0.28, cs*0.18), p);
+          p.color = color.withOpacity(0.38);
+          canvas.drawOval(Rect.fromLTWH(cx-cs*0.22, cy+cs*0.10, cs*0.44, cs*0.18), p);
+        }
+        // Sparkles
+        p.color = Colors.white.withOpacity(0.72);
+        p.isAntiAlias = false;
+        canvas.drawRect(Rect.fromLTWH(w*0.06, h*0.17, 4, 4), p);
+        canvas.drawRect(Rect.fromLTWH(w*0.88, h*0.28, 3, 3), p);
+        canvas.drawRect(Rect.fromLTWH(w*0.10, h*0.72, 3, 3), p);
+        canvas.drawRect(Rect.fromLTWH(w*0.84, h*0.68, 4, 4), p);
+        p.color = Colors.yellow.withOpacity(0.60);
+        canvas.drawRect(Rect.fromLTWH(w*0.76, h*0.77, 5, 5), p);
+        canvas.drawRect(Rect.fromLTWH(w*0.74, h*0.79, 9, 1), p);
+        canvas.drawRect(Rect.fromLTWH(w*0.78, h*0.75, 1, 9), p);
         break;
     }
   }
