@@ -1357,9 +1357,9 @@ class _RaycasterPainter extends CustomPainter {
 
   void _drawShotgun(Canvas canvas, Size size, bool firing) {
     canvas.save();
-    // Anchor at bottom-right corner; rotate ~63° so barrel points upper-left (Doom-style side view)
-    canvas.translate(size.width * 0.80, size.height * 1.05);
-    canvas.rotate(-1.10);
+    // Anchor bottom-right; moderate tilt ~32° so barrel visible upper-left, grip clips off bottom
+    canvas.translate(size.width * 0.68, size.height * 0.95);
+    canvas.rotate(-0.55);
 
     final p = Paint()..isAntiAlias = false;
 
@@ -1470,9 +1470,9 @@ class _RaycasterPainter extends CustomPainter {
 
   void _drawPistol(Canvas canvas, Size size, bool firing) {
     canvas.save();
-    // Anchor at bottom-right; rotate ~75° so barrel points upper-left (classic FPS side angle)
-    canvas.translate(size.width * 0.88, size.height * 1.05);
-    canvas.rotate(-1.30);
+    // Anchor bottom-right; moderate tilt ~37° — barrel visible upper-left, grip clips off bottom
+    canvas.translate(size.width * 0.82, size.height * 0.95);
+    canvas.rotate(-0.65);
 
     final p = Paint()..isAntiAlias = false;
 

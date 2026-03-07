@@ -738,10 +738,11 @@ class _GridPainter extends CustomPainter {
     final contentH = size.height - contentTop - 4;
     if (contentH < 20) return;
 
-    // Central mine graphic (large)
+    // Central mine graphic — use absolute layout so mine and text never overlap
     final cx = size.width / 2;
-    final cy = contentTop + contentH * 0.42;
-    final mineR = (contentH * 0.3).clamp(12.0, 40.0);
+    final mineR = (contentH * 0.22).clamp(12.0, 28.0); // capped smaller
+    // Title sits at top, mine centered after it, stats below mine
+    final cy = contentTop + 20 + mineR * 1.6; // 20px for title row
 
     // Glow rings
     for (int i = 3; i >= 1; i--) {
@@ -818,8 +819,8 @@ class _GridPainter extends CustomPainter {
     titlePainter.layout(maxWidth: size.width);
     titlePainter.paint(canvas, Offset((size.width - titlePainter.width) / 2, textY));
 
-    // Stats text below mine
-    final statsY = contentTop + contentH * 0.75;
+    // Stats text below mine — always placed below mine spikes
+    final statsY = cy + mineR * 1.6 + 6;
     final statsPainter = TextPainter(
       text: const TextSpan(
         children: [
