@@ -356,7 +356,7 @@ class _LogicGridScreenState extends State<LogicGridScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text('💣 BOMB GRID',
+              const Text('💣 CAMPO MINADO',
                   style: TextStyle(
                       fontSize: 22,
                       fontWeight: FontWeight.bold,

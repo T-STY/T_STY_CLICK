@@ -320,7 +320,7 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> {
             Text('🐍', style: TextStyle(fontSize: 64)),
             SizedBox(height: 16),
             Text(
-              'NEON VIPER',
+              'VÍBORA NEÓN',
               style: TextStyle(
                 color: Colors.black,
                 fontSize: 28,

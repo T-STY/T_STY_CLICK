@@ -511,7 +511,7 @@ class _TetrisScreenState extends State<TetrisScreen> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Text(
-              'BLOCK SURGE',
+              'CASCADA DE BLOQUES',
               style: TextStyle(
                 color: Color(0xFF00E5FF),
                 fontSize: 38,

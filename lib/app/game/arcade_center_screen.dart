@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -13,29 +14,37 @@ import 'space_shooter_screen.dart';
 import 'tetris_game_screen.dart';
 import 'traffic_hopper_screen.dart';
 
-// ─── Palette — classic silver Game Boy (late 90s / early 2000s) ───────────────
+// ─── Palette ──────────────────────────────────────────────────────────────────
 
-const _kBodyTop  = Color(0xFFD4D4D4); // light silver
-const _kBodyBot  = Color(0xFFAAAAAA); // medium silver/gray
-const _kBezel    = Color(0xFF101010); // near-black screen bezel
-const _kBtnA     = Color(0xFFE53935); // red
-const _kBtnB     = Color(0xFFFFB300); // amber
-const _kBtnX     = Color(0xFF1E88E5); // blue
-const _kBtnY     = Color(0xFF43A047); // green
-const _kDpad     = Color(0xFF2E2E2E); // dark charcoal D-pad
-const _kMeta     = Color(0xFF9E9E9E); // gray meta buttons
-const _kBodyBdr  = Color(0xFF888888); // silver border
+const _kBodyTop  = Color(0xFFD4D4D4);
+const _kBodyBot  = Color(0xFFAAAAAA);
+const _kBezel    = Color(0xFF101010);
+const _kBtnA     = Color(0xFFE53935);
+const _kBtnB     = Color(0xFFFFB300);
+const _kBtnX     = Color(0xFF1E88E5);
+const _kBtnY     = Color(0xFF43A047);
+const _kDpad     = Color(0xFF2E2E2E);
+const _kMeta     = Color(0xFF9E9E9E);
+const _kBodyBdr  = Color(0xFF888888);
 
-// ─── Category column definitions ──────────────────────────────────────────────
+// ─── Card background gradients (per game) ─────────────────────────────────────
 
-const _kCategories = ['GRID', 'REFLEX', 'SHOOTER', 'PUZZLE'];
+const _kCardGradients = <List<Color>>[
+  [Color(0xFF0B2B0B), Color(0xFF1B5E20)],   // Víbora Neón    – forest green
+  [Color(0xFF140033), Color(0xFF4A148C)],   // Reino Fantasmal – deep purple
+  [Color(0xFF0D2137), Color(0xFF01579B)],   // Alas de Cromo   – steel blue
+  [Color(0xFF2D1B00), Color(0xFF6D4C00)],   // Cruce Peligroso – amber
+  [Color(0xFF0A0A1E), Color(0xFF1A237E)],   // Asalto Estelar  – navy
+  [Color(0xFF1A0000), Color(0xFF7B0000)],   // Mazmorra Infernal – blood red
+  [Color(0xFF001B2E), Color(0xFF0D47A1)],   // Cascada de Bloques – ocean blue
+  [Color(0xFF1A110A), Color(0xFF4E342E)],   // Campo Minado    – dark earth
+];
 
-// ─── Game registry ────────────────────────────────────────────────────────────
-// Layout: 4 cols × 2 rows, index = col*2 + row
-// Col 0 GRID: Snake, Maze Chase
-// Col 1 REFLEX: Flappy Bird, Traffic Hopper
-// Col 2 SHOOTER: Space Shooter, Raycaster
-// Col 3 PUZZLE: Tetris, Logic Grid
+// ─── Category labels (index = gameIndex ~/ 2) ─────────────────────────────────
+
+const _kCategoryLabels = ['REJILLA', 'REFLEJOS', 'DISPAROS', 'PUZLE'];
+
+// ─── Game registry ─────────────────────────────────────────────────────────────
 
 typedef ArcadeGameBuilder = Widget Function({
   required String userId,
@@ -49,79 +58,56 @@ class ArcadeGameDef {
   final String id;
   final String emoji;
   final String title;
-  final String subtitle;
   final ArcadeGameBuilder builder;
-
-  const ArcadeGameDef({
-    required this.id,
-    required this.emoji,
-    required this.title,
-    required this.subtitle,
-    required this.builder,
-  });
+  const ArcadeGameDef({required this.id, required this.emoji,
+      required this.title, required this.builder});
 }
 
 final List<ArcadeGameDef> kArcadeGames = [
-  // Col 0 — GRID
-  ArcadeGameDef(
-    id: 'snake', emoji: '🐍', title: 'Neon Viper', subtitle: '+1 pto c/5 lvl',
+  // Col 0 — REJILLA
+  ArcadeGameDef(id: 'snake',    emoji: '🐍', title: 'Víbora Neón',
     builder: ({required userId, required rewardsDocRef, required currentSaldo,
         required controller, required onSaldoChanged}) =>
-        SnakeGameScreen(userId: userId, rewardsDocRef: rewardsDocRef,
-            currentSaldo: currentSaldo, controller: controller, onSaldoChanged: onSaldoChanged),
-  ),
-  ArcadeGameDef(
-    id: 'maze', emoji: '👻', title: 'Ghost Realm', subtitle: '+1 pto c/nivel',
+      SnakeGameScreen(userId: userId, rewardsDocRef: rewardsDocRef,
+        currentSaldo: currentSaldo, controller: controller, onSaldoChanged: onSaldoChanged)),
+  ArcadeGameDef(id: 'maze',     emoji: '👻', title: 'Reino Fantasmal',
     builder: ({required userId, required rewardsDocRef, required currentSaldo,
         required controller, required onSaldoChanged}) =>
-        MazeChasScreen(userId: userId, rewardsDocRef: rewardsDocRef,
-            currentSaldo: currentSaldo, controller: controller, onSaldoChanged: onSaldoChanged),
-  ),
-  // Col 1 — REFLEX
-  ArcadeGameDef(
-    id: 'flappy', emoji: '🐦', title: 'Chrome Wings', subtitle: '+1 pto c/10 tubos',
+      MazeChasScreen(userId: userId, rewardsDocRef: rewardsDocRef,
+        currentSaldo: currentSaldo, controller: controller, onSaldoChanged: onSaldoChanged)),
+  // Col 1 — REFLEJOS
+  ArcadeGameDef(id: 'flappy',   emoji: '🕊️', title: 'Alas de Cromo',
     builder: ({required userId, required rewardsDocRef, required currentSaldo,
         required controller, required onSaldoChanged}) =>
-        FlappyBirdScreen(userId: userId, rewardsDocRef: rewardsDocRef,
-            currentSaldo: currentSaldo, controller: controller, onSaldoChanged: onSaldoChanged),
-  ),
-  ArcadeGameDef(
-    id: 'hopper', emoji: '🐸', title: 'Street Dash', subtitle: '+1 pto c/nivel',
+      FlappyBirdScreen(userId: userId, rewardsDocRef: rewardsDocRef,
+        currentSaldo: currentSaldo, controller: controller, onSaldoChanged: onSaldoChanged)),
+  ArcadeGameDef(id: 'hopper',   emoji: '🐸', title: 'Cruce Peligroso',
     builder: ({required userId, required rewardsDocRef, required currentSaldo,
         required controller, required onSaldoChanged}) =>
-        TrafficHopperScreen(userId: userId, rewardsDocRef: rewardsDocRef,
-            currentSaldo: currentSaldo, controller: controller, onSaldoChanged: onSaldoChanged),
-  ),
-  // Col 2 — SHOOTER
-  ArcadeGameDef(
-    id: 'shooter', emoji: '🚀', title: 'Void Blitz', subtitle: '+1 pto c/oleada',
+      TrafficHopperScreen(userId: userId, rewardsDocRef: rewardsDocRef,
+        currentSaldo: currentSaldo, controller: controller, onSaldoChanged: onSaldoChanged)),
+  // Col 2 — DISPAROS
+  ArcadeGameDef(id: 'shooter',  emoji: '🚀', title: 'Asalto Estelar',
     builder: ({required userId, required rewardsDocRef, required currentSaldo,
         required controller, required onSaldoChanged}) =>
-        SpaceShooterScreen(userId: userId, rewardsDocRef: rewardsDocRef,
-            currentSaldo: currentSaldo, controller: controller, onSaldoChanged: onSaldoChanged),
-  ),
-  ArcadeGameDef(
-    id: 'raycaster', emoji: '🔥', title: 'Dungeon Blitz', subtitle: '+1 pto c/oleada',
+      SpaceShooterScreen(userId: userId, rewardsDocRef: rewardsDocRef,
+        currentSaldo: currentSaldo, controller: controller, onSaldoChanged: onSaldoChanged)),
+  ArcadeGameDef(id: 'raycaster',emoji: '🔥', title: 'Mazmorra Infernal',
     builder: ({required userId, required rewardsDocRef, required currentSaldo,
         required controller, required onSaldoChanged}) =>
-        RaycasterScreen(userId: userId, rewardsDocRef: rewardsDocRef,
-            currentSaldo: currentSaldo, controller: controller, onSaldoChanged: onSaldoChanged),
-  ),
-  // Col 3 — PUZZLE
-  ArcadeGameDef(
-    id: 'tetris', emoji: '🟦', title: 'Block Surge', subtitle: '+1 pto c/10 líneas',
+      RaycasterScreen(userId: userId, rewardsDocRef: rewardsDocRef,
+        currentSaldo: currentSaldo, controller: controller, onSaldoChanged: onSaldoChanged)),
+  // Col 3 — PUZLE
+  ArcadeGameDef(id: 'tetris',   emoji: '🟦', title: 'Cascada de Bloques',
     builder: ({required userId, required rewardsDocRef, required currentSaldo,
         required controller, required onSaldoChanged}) =>
-        TetrisScreen(userId: userId, rewardsDocRef: rewardsDocRef,
-            currentSaldo: currentSaldo, controller: controller, onSaldoChanged: onSaldoChanged),
-  ),
-  ArcadeGameDef(
-    id: 'logic', emoji: '💣', title: 'Bomb Grid', subtitle: '+1 pto por ganar',
+      TetrisScreen(userId: userId, rewardsDocRef: rewardsDocRef,
+        currentSaldo: currentSaldo, controller: controller, onSaldoChanged: onSaldoChanged)),
+  ArcadeGameDef(id: 'logic',    emoji: '💣', title: 'Campo Minado',
     builder: ({required userId, required rewardsDocRef, required currentSaldo,
         required controller, required onSaldoChanged}) =>
-        LogicGridScreen(userId: userId, rewardsDocRef: rewardsDocRef,
-            currentSaldo: currentSaldo, controller: controller, onSaldoChanged: onSaldoChanged),
-  ),
+      LogicGridScreen(userId: userId, rewardsDocRef: rewardsDocRef,
+        currentSaldo: currentSaldo, controller: controller, onSaldoChanged: onSaldoChanged)),
 ];
 
 // ─── Shell ────────────────────────────────────────────────────────────────────
@@ -131,12 +117,8 @@ class ArcadeCenterScreen extends StatefulWidget {
   final DocumentReference rewardsDocRef;
   final double currentSaldo;
 
-  const ArcadeCenterScreen({
-    super.key,
-    required this.userId,
-    required this.rewardsDocRef,
-    required this.currentSaldo,
-  });
+  const ArcadeCenterScreen({super.key, required this.userId,
+      required this.rewardsDocRef, required this.currentSaldo});
 
   @override
   State<ArcadeCenterScreen> createState() => _ArcadeCenterScreenState();
@@ -145,17 +127,9 @@ class ArcadeCenterScreen extends StatefulWidget {
 class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
   late final ArcadeInputController _ctrl;
   late double _saldo;
-
-  // Grid selection: 4 cols × 2 rows
-  int _selCol = 0;
-  int _selRow = 0;
-
+  int _selectedIndex = 0;
   ArcadeGameDef? _activeGame;
-
-  // Local high scores indexed same as kArcadeGames
   final List<int> _highScores = List.filled(8, 0);
-
-  int get _selectedIndex => _selCol * 2 + _selRow;
 
   @override
   void initState() {
@@ -167,9 +141,7 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
   }
 
   Future<void> _loadHighScores() async {
-    final scores = await Future.wait(
-      kArcadeGames.map((g) => HighScoreService.load(g.id)),
-    );
+    final scores = await Future.wait(kArcadeGames.map((g) => HighScoreService.load(g.id)));
     if (mounted) setState(() {
       for (int i = 0; i < scores.length; i++) _highScores[i] = scores[i];
     });
@@ -190,13 +162,9 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
     if (_activeGame == null) {
       switch (btn) {
         case ArcadeButton.left:
-          setState(() => _selCol = (_selCol - 1 + 4) % 4);
+          setState(() => _selectedIndex = (_selectedIndex - 1 + 8) % 8);
         case ArcadeButton.right:
-          setState(() => _selCol = (_selCol + 1) % 4);
-        case ArcadeButton.up:
-          setState(() => _selRow = (_selRow - 1 + 2) % 2);
-        case ArcadeButton.down:
-          setState(() => _selRow = (_selRow + 1) % 2);
+          setState(() => _selectedIndex = (_selectedIndex + 1) % 8);
         case ArcadeButton.a:
         case ArcadeButton.start:
           _launchSelected();
@@ -207,10 +175,7 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
       }
     } else {
       if (btn == ArcadeButton.select) {
-        setState(() {
-          _activeGame = null;
-          _loadHighScores(); // refresh after playing
-        });
+        setState(() { _activeGame = null; _loadHighScores(); });
       }
     }
   }
@@ -232,7 +197,7 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
     setState(() { _saldo = newSaldo; _activeGame = game; });
   }
 
-  // ─── Build ─────────────────────────────────────────────────────────────────
+  // ─── Build ──────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
@@ -251,36 +216,27 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
     return Container(
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
+          begin: Alignment.topLeft, end: Alignment.bottomRight,
           colors: [_kBodyTop, _kBodyBot],
         ),
         borderRadius: BorderRadius.circular(28),
         border: Border.all(color: _kBodyBdr, width: 1.5),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.30),
-            blurRadius: 20,
-            spreadRadius: 1,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.30),
+            blurRadius: 20, spreadRadius: 1, offset: const Offset(0, 4))],
       ),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
-        child: Column(
-          children: [
-            _buildTopStrip(),
-            const SizedBox(height: 8),
-            Expanded(child: _buildScreenBezel()),
-            const SizedBox(height: 6),
-            _buildSelectStartStrip(),
-            const SizedBox(height: 10),
-            _buildControlsRow(),
-            const SizedBox(height: 8),
-            _buildSpeakerDots(),
-          ],
-        ),
+        child: Column(children: [
+          _buildTopStrip(),
+          const SizedBox(height: 8),
+          Expanded(child: _buildScreenBezel()),
+          const SizedBox(height: 6),
+          _buildSelectStartStrip(),
+          const SizedBox(height: 10),
+          _buildControlsRow(),
+          const SizedBox(height: 8),
+          _buildSpeakerDots(),
+        ]),
       ),
     );
   }
@@ -288,36 +244,31 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
   // ── Top strip ─────────────────────────────────────────────────────────────
 
   Widget _buildTopStrip() {
-    return Row(
-      children: [
-        Container(
-          width: 7, height: 7,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: const Color(0xFF69F0AE),
-            boxShadow: [BoxShadow(color: const Color(0xFF69F0AE).withOpacity(0.8), blurRadius: 6)],
-          ),
+    return Row(children: [
+      Container(
+        width: 7, height: 7,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: const Color(0xFF69F0AE),
+          boxShadow: [BoxShadow(color: const Color(0xFF69F0AE).withOpacity(0.8), blurRadius: 6)],
         ),
-        const SizedBox(width: 8),
-        const Text(
-          'ARCADE CENTER',
-          style: TextStyle(color: Color(0xFF555555), fontSize: 9, fontWeight: FontWeight.w700, letterSpacing: 3),
+      ),
+      const SizedBox(width: 8),
+      const Text('ARCADE CENTER',
+        style: TextStyle(color: Color(0xFF555555), fontSize: 9,
+            fontWeight: FontWeight.w700, letterSpacing: 3)),
+      const Spacer(),
+      Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        decoration: BoxDecoration(
+          color: Colors.black.withOpacity(0.10),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: Colors.black26),
         ),
-        const Spacer(),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-          decoration: BoxDecoration(
-            color: Colors.black.withOpacity(0.10),
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: Colors.black26),
-          ),
-          child: Text(
-            '💰 ${_saldo.toStringAsFixed(0)} pts',
-            style: const TextStyle(color: Color(0xFF333333), fontSize: 9, fontWeight: FontWeight.w600),
-          ),
-        ),
-      ],
-    );
+        child: Text('💰 ${_saldo.toStringAsFixed(0)} pts',
+          style: const TextStyle(color: Color(0xFF333333), fontSize: 9, fontWeight: FontWeight.w600)),
+      ),
+    ]);
   }
 
   // ── Screen bezel ──────────────────────────────────────────────────────────
@@ -333,131 +284,180 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
       padding: const EdgeInsets.all(8),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(10),
-        child: _activeGame == null ? _buildGameSelector() : _buildActiveGame(),
+        child: _activeGame == null ? _buildCarousel() : _buildActiveGame(),
       ),
     );
   }
 
-  // ── 4×2 Game selector grid ────────────────────────────────────────────────
+  // ── Carousel ──────────────────────────────────────────────────────────────
 
-  Widget _buildGameSelector() {
+  Widget _buildCarousel() {
     return Container(
-      color: const Color(0xFF080D1A),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Text(
-            'ELIGE TU JUEGO',
-            style: TextStyle(color: Colors.white38, fontSize: 9, letterSpacing: 3),
-          ),
-          const SizedBox(height: 10),
-          // Category headers row
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              for (int col = 0; col < 4; col++) ...[
-                SizedBox(
-                  width: 62,
-                  child: Text(
-                    _kCategories[col],
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: col == _selCol ? Colors.white70 : Colors.white24,
-                      fontSize: 7,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 1.5,
+      color: const Color(0xFF060A14),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final w = constraints.maxWidth;
+          final h = constraints.maxHeight;
+          final cardW = (w * 0.78).clamp(160.0, 260.0);
+          final cardH = (h * 0.74).clamp(130.0, 210.0);
+          final gap = w * 0.05;
+          final centerX = (w - cardW) / 2;
+
+          return Column(children: [
+            const SizedBox(height: 8),
+            // Category badge row
+            Text(
+              _kCategoryLabels[_selectedIndex ~/ 2],
+              style: const TextStyle(color: Colors.white24, fontSize: 8,
+                  letterSpacing: 3, fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 6),
+
+            // Cards carousel
+            SizedBox(
+              height: cardH,
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: List.generate(kArcadeGames.length, (i) {
+                  final offset = (i - _selectedIndex) * (cardW + gap);
+                  final isSelected = i == _selectedIndex;
+                  return AnimatedPositioned(
+                    duration: const Duration(milliseconds: 280),
+                    curve: Curves.easeOutCubic,
+                    left: centerX + offset,
+                    top: isSelected ? 0 : cardH * 0.06,
+                    child: AnimatedOpacity(
+                      duration: const Duration(milliseconds: 280),
+                      opacity: (i - _selectedIndex).abs() <= 1 ? 1.0 : 0.0,
+                      child: _buildCarouselCard(
+                        kArcadeGames[i], i, isSelected, cardW, cardH),
                     ),
-                  ),
-                ),
-                if (col < 3) const SizedBox(width: 4),
-              ],
-            ],
-          ),
-          const SizedBox(height: 6),
-          // 2 rows of cards
-          for (int row = 0; row < 2; row++) ...[
+                  );
+                }),
+              ),
+            ),
+
+            const SizedBox(height: 8),
+
+            // Navigation dots
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                for (int col = 0; col < 4; col++) ...[
-                  _buildSelectorCard(
-                    kArcadeGames[col * 2 + row],
-                    col * 2 + row,
-                    col == _selCol && row == _selRow,
+              children: List.generate(8, (i) {
+                final sel = i == _selectedIndex;
+                return AnimatedContainer(
+                  duration: const Duration(milliseconds: 220),
+                  margin: const EdgeInsets.symmetric(horizontal: 2),
+                  width: sel ? 16 : 5,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: sel ? Colors.white : Colors.white24,
+                    borderRadius: BorderRadius.circular(2),
                   ),
-                  if (col < 3) const SizedBox(width: 4),
-                ],
-              ],
+                );
+              }),
             ),
-            if (row == 0) const SizedBox(height: 4),
-          ],
-          const SizedBox(height: 10),
-          const Text(
-            '◄ ► col  ·  ▲ ▼ fila  ·  A jugar  ·  SELECT salir',
-            style: TextStyle(color: Colors.white24, fontSize: 7),
-          ),
-          const Text(
-            '−10 pts por partida',
-            style: TextStyle(color: Colors.white24, fontSize: 7),
-          ),
-        ],
+
+            const SizedBox(height: 6),
+            const Text('◄ ► navegar  ·  A jugar  ·  SELECT salir',
+              style: TextStyle(color: Colors.white24, fontSize: 7)),
+            const Text('−10 pts por partida',
+              style: TextStyle(color: Colors.white12, fontSize: 7)),
+          ]);
+        },
       ),
     );
   }
 
-  Widget _buildSelectorCard(ArcadeGameDef def, int index, bool isSelected) {
-    final hs = _highScores[index];
-    return SizedBox(
-      width: 62,
-      height: 92,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 140),
-        decoration: BoxDecoration(
-          color: isSelected ? Colors.white : const Color(0xFF111827),
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-            color: isSelected ? Colors.white : const Color(0xFF2D3748),
-            width: isSelected ? 2 : 1,
-          ),
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(def.emoji, style: const TextStyle(fontSize: 22)),
-            const SizedBox(height: 4),
-            Text(
-              def.title,
-              style: TextStyle(
-                color: isSelected ? Colors.black : Colors.white,
-                fontSize: 9,
-                fontWeight: FontWeight.bold,
+  Widget _buildCarouselCard(
+      ArcadeGameDef def, int index, bool selected, double w, double h) {
+    return GestureDetector(
+      onTap: selected ? _launchSelected : () => setState(() => _selectedIndex = index),
+      child: AnimatedScale(
+        duration: const Duration(milliseconds: 280),
+        scale: selected ? 1.0 : 0.88,
+        child: SizedBox(
+          width: w,
+          height: h,
+          child: Stack(children: [
+            // Painted background with pixel art
+            ClipRRect(
+              borderRadius: BorderRadius.circular(14),
+              child: CustomPaint(
+                painter: _CardArtPainter(index: index, selected: selected),
+                child: const SizedBox.expand(),
               ),
-              textAlign: TextAlign.center,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
             ),
-            const SizedBox(height: 2),
-            Text(
-              def.subtitle,
-              style: TextStyle(
-                color: isSelected ? Colors.black54 : const Color(0xFF4DD0E1),
-                fontSize: 7,
-              ),
-              textAlign: TextAlign.center,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-            if (hs > 0) ...[
-              const SizedBox(height: 2),
-              Text(
-                '⭐$hs',
-                style: TextStyle(
-                  color: isSelected ? Colors.black54 : const Color(0xFFFFB300),
-                  fontSize: 8,
+
+            // Border glow for selected
+            Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: selected
+                      ? Colors.white.withOpacity(0.50)
+                      : Colors.white.withOpacity(0.06),
+                  width: selected ? 2 : 1,
                 ),
               ),
-            ],
-          ],
+            ),
+
+            // Content overlay
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Category chip
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withOpacity(0.45),
+                      borderRadius: BorderRadius.circular(5),
+                    ),
+                    child: Text(
+                      _kCategoryLabels[index ~/ 2],
+                      style: const TextStyle(
+                        color: Colors.white54, fontSize: 7, letterSpacing: 2,
+                        fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                  const Spacer(),
+                  // Emoji
+                  Text(def.emoji, style: const TextStyle(fontSize: 40)),
+                  const SizedBox(height: 6),
+                  // Title
+                  Text(def.title,
+                    style: const TextStyle(color: Colors.white, fontSize: 15,
+                        fontWeight: FontWeight.bold, letterSpacing: 0.3),
+                    maxLines: 2,
+                  ),
+                  // High score
+                  if (_highScores[index] > 0) ...[
+                    const SizedBox(height: 4),
+                    Text('⭐ Récord: ${_highScores[index]}',
+                      style: const TextStyle(color: Colors.white54, fontSize: 9)),
+                  ],
+                ],
+              ),
+            ),
+
+            // "JUGAR" badge bottom-right when selected
+            if (selected)
+              Positioned(
+                right: 12, bottom: 12,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.18),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: Colors.white38),
+                  ),
+                  child: const Text('A → JUGAR',
+                    style: TextStyle(color: Colors.white, fontSize: 7,
+                        fontWeight: FontWeight.bold, letterSpacing: 1.2)),
+                ),
+              ),
+          ]),
         ),
       ),
     );
@@ -476,23 +476,15 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
   // ── SELECT / START strip ──────────────────────────────────────────────────
 
   Widget _buildSelectStartStrip() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        _ConsoleMetaButton(label: 'SELECT', btn: ArcadeButton.select, controller: _ctrl),
-        const SizedBox(width: 16),
-        Container(
-          width: 8, height: 8,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: Colors.white12,
-            border: Border.all(color: Colors.white24),
-          ),
-        ),
-        const SizedBox(width: 16),
-        _ConsoleMetaButton(label: 'START', btn: ArcadeButton.start, controller: _ctrl),
-      ],
-    );
+    return Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+      _ConsoleMetaButton(label: 'SELECT', btn: ArcadeButton.select, controller: _ctrl),
+      const SizedBox(width: 16),
+      Container(width: 8, height: 8,
+        decoration: BoxDecoration(shape: BoxShape.circle,
+            color: Colors.white12, border: Border.all(color: Colors.white24))),
+      const SizedBox(width: 16),
+      _ConsoleMetaButton(label: 'START', btn: ArcadeButton.start, controller: _ctrl),
+    ]);
   }
 
   // ── Controls row ──────────────────────────────────────────────────────────
@@ -501,61 +493,53 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        _buildDPad(),
-        _buildABXYCluster(),
-      ],
+      children: [_buildDPad(), _buildABXYCluster()],
     );
   }
 
   Widget _buildDPad() {
     return SizedBox(
-      width: 144,
-      height: 144,
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-            _ConsoleDPadArm(icon: Icons.keyboard_arrow_up_rounded, btn: ArcadeButton.up, controller: _ctrl,
-                radius: const BorderRadius.vertical(top: Radius.circular(6))),
-          ]),
-          Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-            _ConsoleDPadArm(icon: Icons.keyboard_arrow_left_rounded, btn: ArcadeButton.left, controller: _ctrl,
-                radius: const BorderRadius.horizontal(left: Radius.circular(6))),
-            Container(width: 48, height: 48, decoration: const BoxDecoration(color: _kDpad)),
-            _ConsoleDPadArm(icon: Icons.keyboard_arrow_right_rounded, btn: ArcadeButton.right, controller: _ctrl,
-                radius: const BorderRadius.horizontal(right: Radius.circular(6))),
-          ]),
-          Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-            _ConsoleDPadArm(icon: Icons.keyboard_arrow_down_rounded, btn: ArcadeButton.down, controller: _ctrl,
-                radius: const BorderRadius.vertical(bottom: Radius.circular(6))),
-          ]),
-        ],
-      ),
+      width: 144, height: 144,
+      child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+        Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+          _ConsoleDPadArm(icon: Icons.keyboard_arrow_up_rounded, btn: ArcadeButton.up,
+              controller: _ctrl, radius: const BorderRadius.vertical(top: Radius.circular(6))),
+        ]),
+        Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+          _ConsoleDPadArm(icon: Icons.keyboard_arrow_left_rounded, btn: ArcadeButton.left,
+              controller: _ctrl, radius: const BorderRadius.horizontal(left: Radius.circular(6))),
+          Container(width: 48, height: 48, decoration: const BoxDecoration(color: _kDpad)),
+          _ConsoleDPadArm(icon: Icons.keyboard_arrow_right_rounded, btn: ArcadeButton.right,
+              controller: _ctrl, radius: const BorderRadius.horizontal(right: Radius.circular(6))),
+        ]),
+        Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+          _ConsoleDPadArm(icon: Icons.keyboard_arrow_down_rounded, btn: ArcadeButton.down,
+              controller: _ctrl, radius: const BorderRadius.vertical(bottom: Radius.circular(6))),
+        ]),
+      ]),
     );
   }
 
-  // ABXY diamond: X top, Y left, A right, B bottom
   Widget _buildABXYCluster() {
     const btnSize = 48.0;
     const gap     = 4.0;
     const total   = btnSize * 3 + gap * 2;
     return SizedBox(
-      width: total,
-      height: total,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          Positioned(top: 0, left: total / 2 - btnSize / 2,
-              child: _ConsoleActionButton(label: 'X', btn: ArcadeButton.x, color: _kBtnX, controller: _ctrl, size: btnSize)),
-          Positioned(left: 0, top: total / 2 - btnSize / 2,
-              child: _ConsoleActionButton(label: 'Y', btn: ArcadeButton.y, color: _kBtnY, controller: _ctrl, size: btnSize)),
-          Positioned(right: 0, top: total / 2 - btnSize / 2,
-              child: _ConsoleActionButton(label: 'A', btn: ArcadeButton.a, color: _kBtnA, controller: _ctrl, size: btnSize)),
-          Positioned(bottom: 0, left: total / 2 - btnSize / 2,
-              child: _ConsoleActionButton(label: 'B', btn: ArcadeButton.b, color: _kBtnB, controller: _ctrl, size: btnSize)),
-        ],
-      ),
+      width: total, height: total,
+      child: Stack(alignment: Alignment.center, children: [
+        Positioned(top: 0, left: total / 2 - btnSize / 2,
+            child: _ConsoleActionButton(label: 'X', btn: ArcadeButton.x,
+                color: _kBtnX, controller: _ctrl, size: btnSize)),
+        Positioned(left: 0, top: total / 2 - btnSize / 2,
+            child: _ConsoleActionButton(label: 'Y', btn: ArcadeButton.y,
+                color: _kBtnY, controller: _ctrl, size: btnSize)),
+        Positioned(right: 0, top: total / 2 - btnSize / 2,
+            child: _ConsoleActionButton(label: 'A', btn: ArcadeButton.a,
+                color: _kBtnA, controller: _ctrl, size: btnSize)),
+        Positioned(bottom: 0, left: total / 2 - btnSize / 2,
+            child: _ConsoleActionButton(label: 'B', btn: ArcadeButton.b,
+                color: _kBtnB, controller: _ctrl, size: btnSize)),
+      ]),
     );
   }
 
@@ -577,6 +561,194 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
   }
 }
 
+// ─── Card Art Painter ─────────────────────────────────────────────────────────
+
+class _CardArtPainter extends CustomPainter {
+  final int index;
+  final bool selected;
+  const _CardArtPainter({required this.index, required this.selected});
+
+  @override
+  bool shouldRepaint(_CardArtPainter old) => old.selected != selected || old.index != index;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final g = _kCardGradients[index];
+    // Background gradient
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(Rect.fromLTWH(0, 0, size.width, size.height), const Radius.circular(14)),
+      Paint()..shader = LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight,
+        colors: g).createShader(Rect.fromLTWH(0, 0, size.width, size.height)),
+    );
+
+    final p = Paint()..isAntiAlias = false;
+    final w = size.width, h = size.height;
+
+    switch (index) {
+      // ── Víbora Neón ──────────────────────────────────────────────────────
+      case 0:
+        // Snake body — winding dot trail
+        p.color = const Color(0xFF4CAF50).withOpacity(0.30);
+        final pts = [
+          Offset(w*0.62, h*0.20), Offset(w*0.82, h*0.28), Offset(w*0.88, h*0.42),
+          Offset(w*0.82, h*0.58), Offset(w*0.65, h*0.64), Offset(w*0.50, h*0.58),
+        ];
+        for (int i = 0; i < pts.length - 1; i++) {
+          canvas.drawLine(pts[i], pts[i + 1], p..strokeWidth = 10);
+        }
+        p.color = const Color(0xFF76FF03).withOpacity(0.55);
+        canvas.drawCircle(pts[0], 8, p); // head
+        p.color = const Color(0xFF00E676).withOpacity(0.20);
+        canvas.drawRect(Rect.fromLTWH(w*0.45, h*0.08, w*0.48, h*0.78), p); // field glow
+
+      // ── Reino Fantasmal ──────────────────────────────────────────────────
+      case 1:
+        // Maze grid
+        p.color = Colors.deepPurple.withOpacity(0.18);
+        for (int r = 0; r < 5; r++) {
+          for (int c = 0; c < 7; c++) {
+            if ((r + c) % 3 != 0) canvas.drawRect(Rect.fromLTWH(w*0.42 + c*13, h*0.08 + r*14, 12, 13), p);
+          }
+        }
+        // Ghost
+        p.color = Colors.white.withOpacity(0.18);
+        canvas.drawOval(Rect.fromLTWH(w*0.60, h*0.55, 40, 32), p);
+        canvas.drawRect(Rect.fromLTWH(w*0.60, h*0.55+16, 40, 20), p);
+        // Eyes
+        p.color = const Color(0xFF1A0A4A).withOpacity(0.80);
+        canvas.drawCircle(Offset(w*0.66, h*0.62), 5, p);
+        canvas.drawCircle(Offset(w*0.78, h*0.62), 5, p);
+
+      // ── Alas de Cromo ────────────────────────────────────────────────────
+      case 2:
+        // Pipes
+        p.color = Colors.cyan.withOpacity(0.18);
+        canvas.drawRect(Rect.fromLTWH(w*0.52, 0, 22, h*0.36), p);
+        canvas.drawRect(Rect.fromLTWH(w*0.52, h*0.60, 22, h*0.40), p);
+        canvas.drawRect(Rect.fromLTWH(w*0.78, 0, 22, h*0.28), p);
+        canvas.drawRect(Rect.fromLTWH(w*0.78, h*0.66, 22, h*0.34), p);
+        // Bird
+        p.color = Colors.amberAccent.withOpacity(0.45);
+        canvas.drawOval(Rect.fromLTWH(w*0.35, h*0.44, 28, 18), p);
+        canvas.drawOval(Rect.fromLTWH(w*0.28, h*0.42, 12, 8), p); // wing
+
+      // ── Cruce Peligroso ──────────────────────────────────────────────────
+      case 3:
+        // Road lanes
+        p.color = Colors.white.withOpacity(0.06);
+        for (int i = 0; i < 4; i++) canvas.drawRect(Rect.fromLTWH(0, h*(0.20 + i*0.16), w, h*0.10), p);
+        // Dashed center lines
+        p.color = Colors.yellow.withOpacity(0.12);
+        for (int i = 0; i < 6; i++) canvas.drawRect(Rect.fromLTWH(w*0.42 + i*14, h*0.24, 8, h*0.07), p);
+        // Cars
+        p.color = Colors.red.withOpacity(0.30);
+        canvas.drawRect(Rect.fromLTWH(w*0.52, h*0.21, 32, 14), p);
+        p.color = Colors.blue.withOpacity(0.25);
+        canvas.drawRect(Rect.fromLTWH(w*0.70, h*0.37, 28, 13), p);
+        // Frog
+        p.color = Colors.green.withOpacity(0.45);
+        canvas.drawOval(Rect.fromLTWH(w*0.60, h*0.66, 20, 16), p);
+        p.color = Colors.white.withOpacity(0.60);
+        canvas.drawCircle(Offset(w*0.63, h*0.65), 3, p);
+        canvas.drawCircle(Offset(w*0.69, h*0.65), 3, p);
+
+      // ── Asalto Estelar ────────────────────────────────────────────────────
+      case 4:
+        // Stars
+        p.color = Colors.white.withOpacity(0.35);
+        final stars = [Offset(w*0.50,h*0.10),Offset(w*0.65,h*0.18),Offset(w*0.80,h*0.12),
+          Offset(w*0.55,h*0.32),Offset(w*0.72,h*0.40),Offset(w*0.88,h*0.28),
+          Offset(w*0.48,h*0.52),Offset(w*0.78,h*0.58),Offset(w*0.92,h*0.48)];
+        for (final s in stars) canvas.drawRect(Rect.fromLTWH(s.dx-1,s.dy-1,3,3), p);
+        // Ship
+        p.color = Colors.cyanAccent.withOpacity(0.35);
+        final path = Path()
+          ..moveTo(w*0.68, h*0.70)..lineTo(w*0.60, h*0.84)..lineTo(w*0.76, h*0.84)..close();
+        canvas.drawPath(path, p..isAntiAlias = true);
+        p.isAntiAlias = false;
+        // Exhaust
+        p.color = Colors.orange.withOpacity(0.35);
+        canvas.drawRect(Rect.fromLTWH(w*0.65, h*0.84, 6, 8), p);
+        // Enemy row
+        p.color = Colors.redAccent.withOpacity(0.28);
+        for (int i = 0; i < 4; i++) canvas.drawRect(Rect.fromLTWH(w*0.50+i*15, h*0.14, 11, 8), p);
+
+      // ── Mazmorra Infernal ────────────────────────────────────────────────
+      case 5:
+        // Brick pattern
+        p.color = Colors.red.withOpacity(0.10);
+        for (int r = 0; r < 7; r++) {
+          for (int c = 0; c < 5; c++) {
+            final ox = (r % 2) * 12.0;
+            canvas.drawRect(Rect.fromLTWH(w*0.40 + c*22 + ox, h*0.04 + r*12, 20, 10), p);
+          }
+        }
+        // Demon eye (large)
+        p.color = const Color(0xFFCC1100).withOpacity(0.50);
+        canvas.drawCircle(Offset(w*0.72, h*0.62), 24, p..isAntiAlias = true);
+        p.color = const Color(0xFF110000).withOpacity(0.60);
+        canvas.drawCircle(Offset(w*0.72, h*0.62), 11, p);
+        p.color = const Color(0xFFFF2200).withOpacity(0.85);
+        canvas.drawCircle(Offset(w*0.72, h*0.62), 5, p);
+        p.isAntiAlias = false;
+        // Flames
+        p.color = Colors.orange.withOpacity(0.22);
+        canvas.drawOval(Rect.fromLTWH(w*0.53, h*0.76, 14, 22), p);
+        canvas.drawOval(Rect.fromLTWH(w*0.62, h*0.78, 12, 18), p);
+        canvas.drawOval(Rect.fromLTWH(w*0.80, h*0.75, 14, 22), p);
+        p.color = Colors.yellow.withOpacity(0.15);
+        canvas.drawOval(Rect.fromLTWH(w*0.55, h*0.80, 8, 14), p);
+        canvas.drawOval(Rect.fromLTWH(w*0.82, h*0.79, 8, 14), p);
+
+      // ── Cascada de Bloques ────────────────────────────────────────────────
+      case 6:
+        // I-piece (cyan)
+        p.color = Colors.cyanAccent.withOpacity(0.28);
+        for (int i = 0; i < 4; i++) canvas.drawRect(Rect.fromLTWH(w*0.48+i*14, h*0.12, 13, 13), p);
+        // L-piece (orange)
+        p.color = Colors.orange.withOpacity(0.28);
+        for (int i = 0; i < 3; i++) canvas.drawRect(Rect.fromLTWH(w*0.48, h*0.28+i*14, 13, 13), p);
+        canvas.drawRect(Rect.fromLTWH(w*0.62, h*0.28+2*14, 13, 13), p);
+        // S-piece (green)
+        p.color = Colors.greenAccent.withOpacity(0.25);
+        canvas.drawRect(Rect.fromLTWH(w*0.62, h*0.52, 13, 13), p);
+        canvas.drawRect(Rect.fromLTWH(w*0.76, h*0.52, 13, 13), p);
+        canvas.drawRect(Rect.fromLTWH(w*0.48, h*0.66, 13, 13), p);
+        canvas.drawRect(Rect.fromLTWH(w*0.62, h*0.66, 13, 13), p);
+        // T-piece (purple)
+        p.color = Colors.purpleAccent.withOpacity(0.25);
+        for (int i = 0; i < 3; i++) canvas.drawRect(Rect.fromLTWH(w*0.48+i*14, h*0.80, 13, 13), p);
+        canvas.drawRect(Rect.fromLTWH(w*0.62, h*0.66, 13, 13), p);
+
+      // ── Campo Minado ──────────────────────────────────────────────────────
+      case 7:
+        // Grid cells
+        p.color = Colors.white.withOpacity(0.07);
+        for (int r = 0; r < 6; r++) {
+          for (int c = 0; c < 6; c++) canvas.drawRect(Rect.fromLTWH(w*0.42+c*15, h*0.12+r*15, 14, 14), p);
+        }
+        // A few revealed cells
+        p.color = Colors.white.withOpacity(0.18);
+        canvas.drawRect(Rect.fromLTWH(w*0.42, h*0.12, 14, 14), p);
+        canvas.drawRect(Rect.fromLTWH(w*0.57, h*0.12, 14, 14), p);
+        canvas.drawRect(Rect.fromLTWH(w*0.42, h*0.27, 14, 14), p);
+        // Mine/bomb
+        p.color = Colors.orangeAccent.withOpacity(0.50);
+        canvas.drawCircle(Offset(w*0.74, h*0.62), 16, p..isAntiAlias = true);
+        p.color = Colors.red.withOpacity(0.50);
+        canvas.drawRect(Rect.fromLTWH(w*0.74-2, h*0.62-24, 4, 10), p..isAntiAlias = false);
+        // Spikes
+        p.color = Colors.orangeAccent.withOpacity(0.40);
+        for (int i = 0; i < 4; i++) {
+          final angle = i * 3.14159 / 2;
+          canvas.drawRect(Rect.fromLTWH(
+            w*0.74 + cos(angle) * 16 - 2, h*0.62 + sin(angle) * 16 - 2, 4, 4), p);
+        }
+        break;
+    }
+  }
+}
+
 // ─── D-Pad arm ────────────────────────────────────────────────────────────────
 
 class _ConsoleDPadArm extends StatefulWidget {
@@ -584,21 +756,17 @@ class _ConsoleDPadArm extends StatefulWidget {
   final ArcadeButton btn;
   final ArcadeInputController controller;
   final BorderRadius radius;
-
   const _ConsoleDPadArm({required this.icon, required this.btn,
       required this.controller, required this.radius});
-
-  @override
-  State<_ConsoleDPadArm> createState() => _ConsoleDPadArmState();
+  @override State<_ConsoleDPadArm> createState() => _ConsoleDPadArmState();
 }
 
 class _ConsoleDPadArmState extends State<_ConsoleDPadArm> {
   bool _pressed = false;
-
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTapDown: (_) { setState(() => _pressed = true);  HapticFeedback.lightImpact(); widget.controller.press(widget.btn); },
+      onTapDown: (_) { setState(() => _pressed = true); HapticFeedback.lightImpact(); widget.controller.press(widget.btn); },
       onTapUp:   (_) { setState(() => _pressed = false); widget.controller.release(widget.btn); },
       onTapCancel: () { setState(() => _pressed = false); widget.controller.release(widget.btn); },
       child: AnimatedContainer(
@@ -615,7 +783,7 @@ class _ConsoleDPadArmState extends State<_ConsoleDPadArm> {
   }
 }
 
-// ─── Action button (A / B / X / Y) ───────────────────────────────────────────
+// ─── Action button ────────────────────────────────────────────────────────────
 
 class _ConsoleActionButton extends StatefulWidget {
   final String label;
@@ -623,21 +791,17 @@ class _ConsoleActionButton extends StatefulWidget {
   final Color color;
   final ArcadeInputController controller;
   final double size;
-
   const _ConsoleActionButton({required this.label, required this.btn,
       required this.color, required this.controller, required this.size});
-
-  @override
-  State<_ConsoleActionButton> createState() => _ConsoleActionButtonState();
+  @override State<_ConsoleActionButton> createState() => _ConsoleActionButtonState();
 }
 
 class _ConsoleActionButtonState extends State<_ConsoleActionButton> {
   bool _pressed = false;
-
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTapDown: (_) { setState(() => _pressed = true);  HapticFeedback.selectionClick(); widget.controller.press(widget.btn); },
+      onTapDown: (_) { setState(() => _pressed = true); HapticFeedback.selectionClick(); widget.controller.press(widget.btn); },
       onTapUp:   (_) { setState(() => _pressed = false); widget.controller.release(widget.btn); },
       onTapCancel: () { setState(() => _pressed = false); widget.controller.release(widget.btn); },
       child: AnimatedContainer(
@@ -652,14 +816,9 @@ class _ConsoleActionButtonState extends State<_ConsoleActionButton> {
           ],
         ),
         alignment: Alignment.center,
-        child: Text(
-          widget.label,
-          style: TextStyle(
-            color: _pressed ? Colors.white70 : Colors.white,
-            fontWeight: FontWeight.bold,
-            fontSize: 15,
-          ),
-        ),
+        child: Text(widget.label,
+          style: TextStyle(color: _pressed ? Colors.white70 : Colors.white,
+              fontWeight: FontWeight.bold, fontSize: 15)),
       ),
     );
   }
@@ -671,20 +830,16 @@ class _ConsoleMetaButton extends StatefulWidget {
   final String label;
   final ArcadeButton btn;
   final ArcadeInputController controller;
-
   const _ConsoleMetaButton({required this.label, required this.btn, required this.controller});
-
-  @override
-  State<_ConsoleMetaButton> createState() => _ConsoleMetaButtonState();
+  @override State<_ConsoleMetaButton> createState() => _ConsoleMetaButtonState();
 }
 
 class _ConsoleMetaButtonState extends State<_ConsoleMetaButton> {
   bool _pressed = false;
-
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTapDown: (_) { setState(() => _pressed = true);  HapticFeedback.selectionClick(); widget.controller.press(widget.btn); },
+      onTapDown: (_) { setState(() => _pressed = true); HapticFeedback.selectionClick(); widget.controller.press(widget.btn); },
       onTapUp:   (_) { setState(() => _pressed = false); widget.controller.release(widget.btn); },
       onTapCancel: () { setState(() => _pressed = false); widget.controller.release(widget.btn); },
       child: AnimatedContainer(
@@ -698,15 +853,10 @@ class _ConsoleMetaButtonState extends State<_ConsoleMetaButton> {
             BoxShadow(color: Colors.black.withOpacity(0.25), blurRadius: 4, offset: const Offset(0, 2)),
           ],
         ),
-        child: Text(
-          widget.label,
+        child: Text(widget.label,
           style: TextStyle(
             color: _pressed ? Colors.white : const Color(0xFF222222),
-            fontSize: 9,
-            fontWeight: FontWeight.bold,
-            letterSpacing: 1.5,
-          ),
-        ),
+            fontSize: 9, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
       ),
     );
   }

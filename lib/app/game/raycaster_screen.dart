@@ -28,13 +28,48 @@ const _kMap = <List<int>>[
   [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
 ];
 
-// ─── Enemy ────────────────────────────────────────────────────────────────────
+// Lava pool positions (map cells that glow orange on floor)
+const _kLavaCells = <List<int>>[
+  [7, 7], [7, 8], [8, 7], [8, 8],
+  [3, 12], [4, 12],
+  [11, 3], [11, 4],
+  [13, 10], [13, 11],
+];
+
+// ─── Enemy types ──────────────────────────────────────────────────────────────
+
+enum _EnemyType { demon, cacodemon, skeleton }
 
 class _Enemy {
-  double x, y, hp;
+  double x, y;
+  double hp;
   bool alive;
-  double hitFlash; // 0–1, flashes white when hit
-  _Enemy(this.x, this.y) : hp = 3, alive = true, hitFlash = 0;
+  double hitFlash;
+  _EnemyType type;
+
+  _Enemy(this.x, this.y, {this.type = _EnemyType.demon})
+      : hp = _baseHp(type).toDouble(),
+        alive = true,
+        hitFlash = 0;
+
+  static int _baseHp(_EnemyType t) {
+    switch (t) {
+      case _EnemyType.demon: return 3;
+      case _EnemyType.cacodemon: return 2;
+      case _EnemyType.skeleton: return 2;
+    }
+  }
+
+  double get spriteScale {
+    switch (type) {
+      case _EnemyType.demon: return 0.72;
+      case _EnemyType.cacodemon: return 0.60;
+      case _EnemyType.skeleton: return 0.75;
+    }
+  }
+
+  double get speed => type == _EnemyType.skeleton ? 0.65 : (type == _EnemyType.cacodemon ? 1.1 : 1.0);
+  double get damage => type == _EnemyType.skeleton ? 15.0 : (type == _EnemyType.cacodemon ? 7.0 : 10.0);
 }
 
 // ─── Game state ───────────────────────────────────────────────────────────────
@@ -49,51 +84,47 @@ class RaycasterScreen extends StatefulWidget {
   final double currentSaldo;
   final ArcadeInputController controller;
   final void Function(double) onSaldoChanged;
-  const RaycasterScreen({super.key, required this.userId, required this.rewardsDocRef,
-      required this.currentSaldo, required this.controller, required this.onSaldoChanged});
-  @override State<RaycasterScreen> createState() => _RaycasterScreenState();
+
+  const RaycasterScreen({
+    super.key,
+    required this.userId,
+    required this.rewardsDocRef,
+    required this.currentSaldo,
+    required this.controller,
+    required this.onSaldoChanged,
+  });
+
+  @override
+  State<RaycasterScreen> createState() => _RaycasterScreenState();
 }
 
 // ─── State ────────────────────────────────────────────────────────────────────
 
 class _RaycasterScreenState extends State<RaycasterScreen> {
-  // Player
   double _posX = 2.5, _posY = 2.5;
   double _dirX = 1.0, _dirY = 0.0;
   double _planeX = 0.0, _planeY = 0.66;
-  int _health = 100;
+  double _health = 100.0; // double so fractional damage accumulates correctly
   int _kills = 0;
   int _wave = 1;
   int _ammo = 30;
   double _fireTimer = 0;
+  double _time = 0; // for animations (flames, bobbing)
+  double _damageCooldown = 0; // haptic cooldown when taking damage
 
-  // Saldo
   late double _saldo;
-
-  // High score
   int _hiScore = 0;
 
-  // Game state
   _GameState _state = _GameState.start;
   Timer? _gameTimer;
   DateTime? _lastTick;
 
-  // Hit flash (player was hit)
   double _hitFlash = 0;
-
-  // Shoot flash (player fired)
   double _shootFlash = 0;
-
-  // Wave banner
   double _waveBannerTimer = 0;
 
-  // Enemies
   final List<_Enemy> _enemies = [];
-
-  // Z-buffer (120 columns)
   final List<double> _zBuf = List<double>.filled(120, 0);
-
-  // Random
   final Random _rng = Random();
 
   static const double _moveSpeed = 3.2;
@@ -114,8 +145,6 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
     super.dispose();
   }
 
-  // ─── Controller event (one-shot actions) ─────────────────────────────────
-
   void _onControllerEvent() {
     final event = widget.controller.lastEvent;
     if (event == null) return;
@@ -126,32 +155,29 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
       }
       return;
     }
-
     if (_state == _GameState.dead) {
       if (event.isDown && (event.button == ArcadeButton.start || event.button == ArcadeButton.a)) {
         _restart();
       }
       return;
     }
-
-    // Playing — one-shot: fire
     if (event.isDown && event.button == ArcadeButton.a) {
       _fire();
     }
   }
-
-  // ─── Start / restart ──────────────────────────────────────────────────────
 
   void _startGame() {
     setState(() {
       _posX = 2.5; _posY = 2.5;
       _dirX = 1.0; _dirY = 0.0;
       _planeX = 0.0; _planeY = 0.66;
-      _health = 100;
+      _health = 100.0;
       _kills = 0;
       _wave = 1;
       _ammo = 30;
       _fireTimer = 0;
+      _time = 0;
+      _damageCooldown = 0;
       _hitFlash = 0;
       _shootFlash = 0;
       _waveBannerTimer = 0;
@@ -165,51 +191,48 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
 
   void _restart() => _startGame();
 
-  // ─── Spawn enemies ────────────────────────────────────────────────────────
+  _EnemyType _randomType(int wave) {
+    if (wave == 1) return _EnemyType.demon;
+    if (wave == 2) return _rng.nextBool() ? _EnemyType.demon : _EnemyType.cacodemon;
+    final r = _rng.nextInt(3);
+    return _EnemyType.values[r];
+  }
 
   void _spawnWave(int wave) {
     _enemies.clear();
-    final count = wave + 3; // wave 1 = 4 enemies (was 3)
     if (wave == 1) {
       _enemies.addAll([
-        _Enemy(8.5, 8.5),
-        _Enemy(12.5, 3.5),
-        _Enemy(4.5, 12.5),
-        _Enemy(10.5, 12.5),
+        _Enemy(8.5, 8.5, type: _EnemyType.demon),
+        _Enemy(12.5, 3.5, type: _EnemyType.cacodemon),
+        _Enemy(4.5, 12.5, type: _EnemyType.demon),
+        _Enemy(10.5, 12.5, type: _EnemyType.skeleton),
       ]);
       return;
     }
-    int spawned = 0;
-    int tries = 0;
+    final count = wave + 3;
+    int spawned = 0, tries = 0;
     while (spawned < count && tries < 500) {
       tries++;
       final cx = 1 + _rng.nextInt(_kMapW - 2);
       final cy = 1 + _rng.nextInt(_kMapH - 2);
       if (_kMap[cy][cx] == 1) continue;
-      final ex = cx + 0.5;
-      final ey = cy + 0.5;
+      final ex = cx + 0.5, ey = cy + 0.5;
       final dx = ex - _posX, dy = ey - _posY;
       if (dx * dx + dy * dy < 9) continue;
-      _enemies.add(_Enemy(ex, ey));
+      _enemies.add(_Enemy(ex, ey, type: _randomType(wave)));
       spawned++;
     }
   }
 
-  // ─── Fire ─────────────────────────────────────────────────────────────────
-
   void _fire() {
     if (_fireTimer > 0) return;
-    if (_ammo <= 0) {
-      HapticFeedback.lightImpact(); // dry-fire click
-      return;
-    }
+    if (_ammo <= 0) { HapticFeedback.lightImpact(); return; }
     _ammo--;
     _fireTimer = 0.25;
     _shootFlash = 1.0;
-    HapticFeedback.lightImpact(); // fire feedback
+    HapticFeedback.lightImpact();
 
-    // Cast a ray forward, check enemy hits
-    double bestDist = 10.0;
+    double bestDist = 12.0;
     _Enemy? target;
     for (final e in _enemies) {
       if (!e.alive) continue;
@@ -217,10 +240,7 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
       final dot = dx * _dirX + dy * _dirY;
       if (dot <= 0 || dot > bestDist) continue;
       final perp = (dx * _dirY - dy * _dirX).abs();
-      if (perp < 0.55) {
-        bestDist = dot;
-        target = e;
-      }
+      if (perp < 0.60) { bestDist = dot; target = e; }
     }
     if (target != null) {
       target.hp--;
@@ -228,120 +248,101 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
       if (target.hp <= 0) {
         target.alive = false;
         _kills++;
-        HapticFeedback.mediumImpact(); // kill feedback
+        HapticFeedback.mediumImpact();
         _checkWaveComplete();
       }
     }
   }
 
-  // ─── Wave complete check ──────────────────────────────────────────────────
-
   void _checkWaveComplete() {
     if (_enemies.any((e) => e.alive)) return;
     _wave++;
-    _ammo += 20;
-    _health = (_health + 20).clamp(0, 100); // partial heal on wave clear
+    _ammo += 25;
+    _health = (_health + 20).clamp(0, 100.0);
     _saldo += 1;
     widget.onSaldoChanged(_saldo);
     _updateFirestore(_saldo);
-    _waveBannerTimer = 2.0;
-    HapticFeedback.heavyImpact(); // wave clear feedback
+    _waveBannerTimer = 2.5;
+    HapticFeedback.heavyImpact();
     _spawnWave(_wave);
   }
 
-  // ─── Game tick ────────────────────────────────────────────────────────────
-
   void _tick(Timer t) {
     if (_state != _GameState.playing) return;
-
     final now = DateTime.now();
     final dt = _lastTick == null ? 0.016 : now.difference(_lastTick!).inMicroseconds / 1e6;
     _lastTick = now;
     final dts = dt.clamp(0.001, 0.1);
-
+    _time += dts;
     _processMovement(dts);
     _updateEnemies(dts);
     _updateTimers(dts);
-
     setState(() {});
   }
 
   void _processMovement(double dt) {
     final c = widget.controller;
-
     if (c.isHeld(ArcadeButton.up)) {
       final nx = _posX + _dirX * _moveSpeed * dt;
       final ny = _posY + _dirY * _moveSpeed * dt;
       if (_kMap[_posY.floor()][nx.floor()] == 0) _posX = nx;
       if (_kMap[ny.floor()][_posX.floor()] == 0) _posY = ny;
     }
-
     if (c.isHeld(ArcadeButton.down)) {
       final nx = _posX - _dirX * _moveSpeed * dt;
       final ny = _posY - _dirY * _moveSpeed * dt;
       if (_kMap[_posY.floor()][nx.floor()] == 0) _posX = nx;
       if (_kMap[ny.floor()][_posX.floor()] == 0) _posY = ny;
     }
-
-    // LEFT = turn left (negative angle in screen space)
-    if (c.isHeld(ArcadeButton.left)) {
-      _rotate(-_rotSpeed * dt);
-    }
-
-    // RIGHT = turn right (positive angle in screen space)
-    if (c.isHeld(ArcadeButton.right)) {
-      _rotate(_rotSpeed * dt);
-    }
+    if (c.isHeld(ArcadeButton.left)) _rotate(-_rotSpeed * dt);
+    if (c.isHeld(ArcadeButton.right)) _rotate(_rotSpeed * dt);
   }
 
   void _rotate(double angle) {
     final cosA = cos(angle), sinA = sin(angle);
-    final newDirX = _dirX * cosA - _dirY * sinA;
-    final newDirY = _dirX * sinA + _dirY * cosA;
-    _dirX = newDirX; _dirY = newDirY;
-    final newPlaneX = _planeX * cosA - _planeY * sinA;
-    final newPlaneY = _planeX * sinA + _planeY * cosA;
-    _planeX = newPlaneX; _planeY = newPlaneY;
+    final ndx = _dirX * cosA - _dirY * sinA;
+    final ndy = _dirX * sinA + _dirY * cosA;
+    _dirX = ndx; _dirY = ndy;
+    final npx = _planeX * cosA - _planeY * sinA;
+    final npy = _planeX * sinA + _planeY * cosA;
+    _planeX = npx; _planeY = npy;
   }
 
   void _updateEnemies(double dt) {
-    // Enemy speed scales faster with wave now
-    final eSpeed = 0.7 + _wave * 0.15;
+    final eBaseSpeed = 0.7 + _wave * 0.15;
     for (final e in _enemies) {
       if (!e.alive) continue;
       final dx = _posX - e.x, dy = _posY - e.y;
       final dist = sqrt(dx * dx + dy * dy);
-
       if (dist < 0.5) {
-        _health -= (12 * dt).round();
-        _hitFlash = (_hitFlash + dt * 2.5).clamp(0, 1);
-        if (_health <= 0) {
-          _health = 0;
-          _gameOver();
-          return;
+        // Accumulate fractional damage — no rounding so it always applies
+        _health -= e.damage * dt;
+        _hitFlash = (_hitFlash + dt * 3).clamp(0, 1);
+        if (_damageCooldown <= 0) {
+          HapticFeedback.lightImpact();
+          _damageCooldown = 0.35;
         }
+        if (_health <= 0) { _health = 0; _gameOver(); return; }
         continue;
       }
-
-      final nx = e.x + (dx / dist) * eSpeed * dt;
-      final ny = e.y + (dy / dist) * eSpeed * dt;
-
+      final spd = eBaseSpeed * e.speed;
+      final nx = e.x + (dx / dist) * spd * dt;
+      final ny = e.y + (dy / dist) * spd * dt;
       if (_kMap[e.y.floor()][nx.floor()] == 0) e.x = nx;
       if (_kMap[ny.floor()][e.x.floor()] == 0) e.y = ny;
     }
   }
 
   void _updateTimers(double dt) {
+    if (_damageCooldown > 0) _damageCooldown -= dt;
     if (_fireTimer > 0) _fireTimer -= dt;
-    if (_hitFlash > 0) _hitFlash = (_hitFlash - dt * 2.0).clamp(0, 1);
-    if (_shootFlash > 0) _shootFlash = (_shootFlash - dt * 8.0).clamp(0, 1);
+    if (_hitFlash > 0) _hitFlash = (_hitFlash - dt * 2.5).clamp(0, 1);
+    if (_shootFlash > 0) _shootFlash = (_shootFlash - dt * 10.0).clamp(0, 1);
     if (_waveBannerTimer > 0) _waveBannerTimer -= dt;
     for (final e in _enemies) {
-      if (e.hitFlash > 0) e.hitFlash = (e.hitFlash - dt * 6.0).clamp(0, 1);
+      if (e.hitFlash > 0) e.hitFlash = (e.hitFlash - dt * 7.0).clamp(0, 1);
     }
   }
-
-  // ─── Game over ────────────────────────────────────────────────────────────
 
   void _gameOver() {
     _gameTimer?.cancel();
@@ -351,57 +352,47 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
     HighScoreService.load('raycaster').then((v) => setState(() => _hiScore = v));
   }
 
-  // ─── Firestore ────────────────────────────────────────────────────────────
-
   Future<void> _updateFirestore(double newSaldo) async {
     try {
       final userCardRef = FirebaseFirestore.instance
-          .collection('users')
-          .doc(widget.userId)
-          .collection('rewardsCard')
-          .doc('cardInfo');
+          .collection('users').doc(widget.userId)
+          .collection('rewardsCard').doc('cardInfo');
       final batch = FirebaseFirestore.instance.batch();
       batch.update(userCardRef, {'saldo': newSaldo});
       batch.update(widget.rewardsDocRef, {'saldo': newSaldo});
       await batch.commit();
-    } catch (e) { debugPrint('DungeonBlitz Firestore: $e'); }
+    } catch (e) { debugPrint('MazmorraInfernal Firestore: $e'); }
   }
-
-  // ─── Build ────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
-      body: Stack(
-        children: [
-          SizedBox.expand(
-            child: CustomPaint(
-              painter: _RaycasterPainter(
-                posX: _posX, posY: _posY,
-                dirX: _dirX, dirY: _dirY,
-                planeX: _planeX, planeY: _planeY,
-                enemies: _enemies,
-                zBuf: _zBuf,
-                health: _health,
-                kills: _kills,
-                ammo: _ammo,
-                wave: _wave,
-                hitFlash: _hitFlash,
-                shootFlash: _shootFlash,
-                isFiring: _fireTimer > 0,
-                showHud: _state == _GameState.playing || _state == _GameState.dead,
-              ),
+      body: Stack(children: [
+        SizedBox.expand(
+          child: CustomPaint(
+            painter: _RaycasterPainter(
+              posX: _posX, posY: _posY,
+              dirX: _dirX, dirY: _dirY,
+              planeX: _planeX, planeY: _planeY,
+              enemies: _enemies,
+              zBuf: _zBuf,
+              health: _health.round().clamp(0, 100),
+              kills: _kills,
+              ammo: _ammo,
+              wave: _wave,
+              hitFlash: _hitFlash,
+              shootFlash: _shootFlash,
+              isFiring: _fireTimer > 0,
+              showHud: _state == _GameState.playing || _state == _GameState.dead,
+              time: _time,
             ),
           ),
-          if (_state == _GameState.playing && _waveBannerTimer > 0)
-            _buildWaveBanner(),
-          if (_state == _GameState.start)
-            _buildStartOverlay(),
-          if (_state == _GameState.dead)
-            _buildDeathOverlay(),
-        ],
-      ),
+        ),
+        if (_state == _GameState.playing && _waveBannerTimer > 0) _buildWaveBanner(),
+        if (_state == _GameState.start) _buildStartOverlay(),
+        if (_state == _GameState.dead) _buildDeathOverlay(),
+      ]),
     );
   }
 
@@ -410,129 +401,101 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
         decoration: BoxDecoration(
-          color: Colors.black.withOpacity(0.75),
-          border: Border.all(color: Colors.red.shade700, width: 2),
+          color: Colors.black.withOpacity(0.80),
+          border: Border.all(color: const Color(0xFFCC2200), width: 2),
           borderRadius: BorderRadius.circular(8),
         ),
-        child: Text(
-          '¡OLEADA $_wave!',
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 36,
-            fontWeight: FontWeight.bold,
-            fontFamily: 'monospace',
-            letterSpacing: 4,
-          ),
-        ),
+        child: Text('¡OLEADA $_wave!',
+          style: const TextStyle(color: Colors.white, fontSize: 36,
+            fontWeight: FontWeight.bold, fontFamily: 'monospace', letterSpacing: 4)),
       ),
     );
   }
 
   Widget _buildStartOverlay() {
     return Container(
-      color: Colors.black.withOpacity(0.88),
+      color: Colors.black.withOpacity(0.90),
       child: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text('DUNGEON BLITZ 🔥',
-              style: TextStyle(color: Colors.white, fontSize: 28,
-                fontWeight: FontWeight.bold, fontFamily: 'monospace', letterSpacing: 3)),
-            const SizedBox(height: 8),
-            const Text('Demonios acechan en la oscuridad',
-              style: TextStyle(color: Colors.redAccent, fontSize: 12, fontFamily: 'monospace')),
-            const SizedBox(height: 24),
-            const Text('↑↓: mover   ←→: girar   A: disparar',
-              style: TextStyle(color: Colors.green, fontSize: 13, fontFamily: 'monospace')),
-            const SizedBox(height: 8),
-            const Text('+1 pto por oleada  ·  3 disparos por enemigo',
-              style: TextStyle(color: Colors.yellow, fontSize: 12, fontFamily: 'monospace')),
-            const SizedBox(height: 32),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 32),
-              child: SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: _startGame,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.red.shade900,
-                    foregroundColor: Colors.white,
-                    shape: const StadiumBorder(),
-                  ),
-                  child: const Text('Iniciar'),
-                ),
-              ),
-            ),
-          ],
-        ),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          const Text('MAZMORRA INFERNAL 🔥',
+            style: TextStyle(color: Colors.white, fontSize: 24,
+              fontWeight: FontWeight.bold, fontFamily: 'monospace', letterSpacing: 2)),
+          const SizedBox(height: 6),
+          const Text('Demonios acechan en la oscuridad…',
+            style: TextStyle(color: Color(0xFFCC4400), fontSize: 12, fontFamily: 'monospace')),
+          const SizedBox(height: 24),
+          const Text('↑↓ mover   ←→ girar   A disparar',
+            style: TextStyle(color: Colors.green, fontSize: 13, fontFamily: 'monospace')),
+          const SizedBox(height: 28),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 32),
+            child: SizedBox(width: double.infinity,
+              child: ElevatedButton(
+                onPressed: _startGame,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF7B0000),
+                  foregroundColor: Colors.white, shape: const StadiumBorder()),
+                child: const Text('Entrar'),
+              )),
+          ),
+        ]),
       ),
     );
   }
 
   Widget _buildDeathOverlay() {
     return Container(
-      color: Colors.black.withOpacity(0.88),
+      color: Colors.black.withOpacity(0.90),
       child: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text('CAÍDO EN COMBATE 💀',
-              style: TextStyle(color: Colors.red, fontSize: 26,
-                fontWeight: FontWeight.bold, fontFamily: 'monospace', letterSpacing: 2)),
-            const SizedBox(height: 16),
-            Text('Bajas: $_kills',
-              style: const TextStyle(color: Colors.white, fontSize: 18, fontFamily: 'monospace')),
-            Text('Oleada alcanzada: $_wave',
-              style: const TextStyle(color: Colors.white, fontSize: 16, fontFamily: 'monospace')),
-            Text('Récord: $_hiScore bajas',
-              style: const TextStyle(color: Colors.yellow, fontSize: 14, fontFamily: 'monospace')),
-            const SizedBox(height: 32),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 32),
-              child: SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: _restart,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.red.shade900,
-                    foregroundColor: Colors.white,
-                    shape: const StadiumBorder(),
-                  ),
-                  child: const Text('Nueva Partida'),
-                ),
-              ),
-            ),
-          ],
-        ),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          const Text('HAS CAÍDO 💀',
+            style: TextStyle(color: Color(0xFFFF2200), fontSize: 28,
+              fontWeight: FontWeight.bold, fontFamily: 'monospace', letterSpacing: 2)),
+          const SizedBox(height: 16),
+          Text('Bajas: $_kills',
+            style: const TextStyle(color: Colors.white, fontSize: 18, fontFamily: 'monospace')),
+          Text('Oleada alcanzada: $_wave',
+            style: const TextStyle(color: Colors.white70, fontSize: 14, fontFamily: 'monospace')),
+          Text('Récord: $_hiScore bajas',
+            style: const TextStyle(color: Colors.yellow, fontSize: 12, fontFamily: 'monospace')),
+          const SizedBox(height: 28),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 32),
+            child: SizedBox(width: double.infinity,
+              child: ElevatedButton(
+                onPressed: _restart,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF7B0000),
+                  foregroundColor: Colors.white, shape: const StadiumBorder()),
+                child: const Text('Nueva Partida'),
+              )),
+          ),
+        ]),
       ),
     );
   }
 }
 
-// ─── Raycaster Painter ────────────────────────────────────────────────────────
+// ─── Painter ──────────────────────────────────────────────────────────────────
 
 class _RaycasterPainter extends CustomPainter {
   final double posX, posY, dirX, dirY, planeX, planeY;
   final List<_Enemy> enemies;
   final List<double> zBuf;
   final int health, kills, ammo, wave;
-  final double hitFlash, shootFlash;
+  final double hitFlash, shootFlash, time;
   final bool isFiring, showHud;
 
-  _RaycasterPainter({
+  const _RaycasterPainter({
     required this.posX, required this.posY,
     required this.dirX, required this.dirY,
     required this.planeX, required this.planeY,
-    required this.enemies,
-    required this.zBuf,
-    required this.health,
-    required this.kills,
-    required this.ammo,
-    required this.wave,
-    required this.hitFlash,
-    required this.shootFlash,
-    required this.isFiring,
-    required this.showHud,
+    required this.enemies, required this.zBuf,
+    required this.health, required this.kills,
+    required this.ammo, required this.wave,
+    required this.hitFlash, required this.shootFlash,
+    required this.isFiring, required this.showHud,
+    required this.time,
   });
 
   @override
@@ -543,15 +506,68 @@ class _RaycasterPainter extends CustomPainter {
     final pxW = size.width / 120.0;
     final pxH = size.height / 80.0;
 
-    // ── Ceiling ──────────────────────────────────────────────────────────────
-    final ceilPaint = Paint()..isAntiAlias = false..color = const Color(0xFF1A0A0A);
-    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height / 2), ceilPaint);
+    _drawCeilingAndFloor(canvas, size, pxW, pxH);
+    _castWalls(canvas, size, pxW, pxH);
+    _drawEnemySprites(canvas, size, pxW, pxH);
+    _drawScreenFx(canvas, size);
+    if (showHud) {
+      _drawHud(canvas, size);
+      _drawCrosshair(canvas, size);
+      _drawPistol(canvas, size, isFiring);
+    }
+  }
 
-    // ── Floor ────────────────────────────────────────────────────────────────
-    final floorPaint = Paint()..isAntiAlias = false..color = const Color(0xFF0D0505);
-    canvas.drawRect(Rect.fromLTWH(0, size.height / 2, size.width, size.height / 2), floorPaint);
+  // ── Ceiling & lava floor ────────────────────────────────────────────────────
 
-    // ── Wall columns ─────────────────────────────────────────────────────────
+  void _drawCeilingAndFloor(Canvas canvas, Size size, double pxW, double pxH) {
+    final p = Paint()..isAntiAlias = false;
+
+    // Ceiling — dark reddish stone
+    p.color = const Color(0xFF110808);
+    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height / 2), p);
+
+    // Floor — dark lava ground
+    p.color = const Color(0xFF180A00);
+    canvas.drawRect(Rect.fromLTWH(0, size.height / 2, size.width, size.height / 2), p);
+
+    // Lava glow strips across the floor (near camera = bottom of screen)
+    for (int col = 0; col < 60; col++) {
+      final fx = (col / 60.0) * size.width;
+      final phase = col * 0.8 + time * 3.5;
+      final flameH = (sin(phase) * 0.05 + 0.09) * size.height;
+      final brightness = (sin(phase + 1.2) + 1) / 2;
+
+      // Lava base
+      p.color = Color.fromRGBO(
+        (200 + 55 * brightness).round(), (40 + 40 * brightness).round(), 0, 0.55);
+      canvas.drawRect(
+        Rect.fromLTWH(fx, size.height - flameH, size.width / 60 + 1, flameH), p);
+
+      // Bright flame tip
+      p.color = Color.fromRGBO(255, (180 + 75 * brightness).round(), 0, 0.7);
+      canvas.drawRect(
+        Rect.fromLTWH(fx, size.height - flameH, size.width / 60 + 1, flameH * 0.28), p);
+    }
+
+    // Screen-edge infernal glow (vignette)
+    final vPaint = Paint()
+      ..shader = LinearGradient(
+        colors: [const Color(0x44CC1100), Colors.transparent],
+      ).createShader(Rect.fromLTWH(0, 0, size.width * 0.18, size.height));
+    canvas.drawRect(Rect.fromLTWH(0, 0, size.width * 0.18, size.height), vPaint);
+
+    final vPaint2 = Paint()
+      ..shader = LinearGradient(
+        begin: Alignment.centerRight,
+        end: Alignment.centerLeft,
+        colors: [const Color(0x44CC1100), Colors.transparent],
+      ).createShader(Rect.fromLTWH(size.width * 0.82, 0, size.width * 0.18, size.height));
+    canvas.drawRect(Rect.fromLTWH(size.width * 0.82, 0, size.width * 0.18, size.height), vPaint2);
+  }
+
+  // ── Wall raycasting ─────────────────────────────────────────────────────────
+
+  void _castWalls(Canvas canvas, Size size, double pxW, double pxH) {
     final wallPaint = Paint()..isAntiAlias = false;
 
     for (int x = 0; x < 120; x++) {
@@ -561,8 +577,8 @@ class _RaycasterPainter extends CustomPainter {
 
       int mapX = posX.floor(), mapY = posY.floor();
 
-      final deltaDistX = rayDirX.abs() < 1e-20 ? 1e30 : (1.0 / rayDirX.abs());
-      final deltaDistY = rayDirY.abs() < 1e-20 ? 1e30 : (1.0 / rayDirY.abs());
+      final deltaDistX = rayDirX.abs() < 1e-20 ? 1e30 : 1.0 / rayDirX.abs();
+      final deltaDistY = rayDirY.abs() < 1e-20 ? 1e30 : 1.0 / rayDirY.abs();
 
       int stepX, stepY;
       double sideDistX, sideDistY;
@@ -580,8 +596,7 @@ class _RaycasterPainter extends CustomPainter {
 
       int side = 0;
       int safety = 0;
-      while (safety < 64) {
-        safety++;
+      while (safety++ < 64) {
         if (sideDistX < sideDistY) {
           sideDistX += deltaDistX; mapX += stepX; side = 0;
         } else {
@@ -594,248 +609,454 @@ class _RaycasterPainter extends CustomPainter {
       final perpWallDist = side == 0 ? sideDistX - deltaDistX : sideDistY - deltaDistY;
       zBuf[x] = perpWallDist;
 
-      final lineHeight = (80 / perpWallDist).round().clamp(1, 80);
-      final drawStart = (40 - lineHeight ~/ 2).clamp(0, 79);
-      final drawEnd = (40 + lineHeight ~/ 2).clamp(0, 79);
+      final lineH = (80 / perpWallDist).round().clamp(1, 80);
+      final ds = (40 - lineH ~/ 2).clamp(0, 79);
+      final de = (40 + lineH ~/ 2).clamp(0, 79);
 
-      // Dark red brick-like walls
+      // Dark red brick walls — side walls slightly darker
       final int baseR = side == 0 ? 0x7A : 0x55;
-      final int baseG = side == 0 ? 0x20 : 0x16;
-      final int baseB = side == 0 ? 0x20 : 0x16;
+      final int baseG = side == 0 ? 0x18 : 0x10;
+      final int baseB = side == 0 ? 0x08 : 0x05;
 
-      final brightness = (1.0 / (1.0 + perpWallDist * 0.35)).clamp(0.15, 1.0);
+      final br = (1.0 / (1.0 + perpWallDist * 0.30)).clamp(0.1, 1.0);
       wallPaint.color = Color.fromRGBO(
-        (baseR * brightness).round(),
-        (baseG * brightness).round(),
-        (baseB * brightness).round(),
-        1,
-      );
-
+        (baseR * br).round(), (baseG * br).round(), (baseB * br).round(), 1);
       canvas.drawRect(
-        Rect.fromLTWH(x * pxW, drawStart * pxH, pxW + 0.5, (drawEnd - drawStart) * pxH + 0.5),
-        wallPaint,
-      );
+        Rect.fromLTWH(x * pxW, ds * pxH, pxW + 0.5, (de - ds) * pxH + 0.5), wallPaint);
     }
+  }
 
-    // ── Enemy sprites (demon-style pixel art) ─────────────────────────────
-    final aliveEnemies = enemies.where((e) => e.alive).toList();
-    aliveEnemies.sort((a, b) {
+  // ── Enemy sprites ───────────────────────────────────────────────────────────
+
+  void _drawEnemySprites(Canvas canvas, Size size, double pxW, double pxH) {
+    final alive = enemies.where((e) => e.alive).toList();
+    alive.sort((a, b) {
       final da = (a.x - posX) * (a.x - posX) + (a.y - posY) * (a.y - posY);
       final db = (b.x - posX) * (b.x - posX) + (b.y - posY) * (b.y - posY);
       return db.compareTo(da);
     });
 
-    final spritePaint = Paint()..isAntiAlias = false;
-    for (final e in aliveEnemies) {
+    final sp = Paint()..isAntiAlias = false;
+
+    for (final e in alive) {
       final dx = e.x - posX, dy = e.y - posY;
       final invDet = 1.0 / (planeX * dirY - dirX * planeY);
       final transformX = invDet * (dirY * dx - dirX * dy);
       final transformY = invDet * (-planeY * dx + planeX * dy);
-
       if (transformY <= 0.1) continue;
 
-      final spriteScreenX = (60 * (1 + transformX / transformY)).round();
-      final spriteH = (80 / transformY).abs().round().clamp(2, 80);
+      final screenX = (60 * (1 + transformX / transformY)).round();
+      final baseH = (80 / transformY).abs();
+
+      // Scale: 3/4 height max, type-specific scale
+      final spriteH = (baseH * e.spriteScale).round().clamp(2, 60);
       final spriteW = spriteH;
 
-      final drawStartX = spriteScreenX - spriteW ~/ 2;
-      final drawStartY = (40 - spriteH ~/ 2).clamp(0, 79);
-      final drawEndY = (40 + spriteH ~/ 2).clamp(0, 79);
+      // Cacodemon floats/bobs vertically
+      final bobOffset = e.type == _EnemyType.cacodemon
+          ? (sin(time * 2.8 + e.x * 1.3) * 3).round()
+          : 0;
 
-      // Hit flash: white when recently hit
-      final flash = e.hitFlash;
+      final drawStartX = screenX - spriteW ~/ 2;
+      final drawStartY = ((40 - spriteH ~/ 2) + bobOffset).clamp(0, 79);
+      final drawEndY = ((40 + spriteH ~/ 2) + bobOffset).clamp(0, 79);
 
-      // Demon color scheme based on HP
-      final Color bodyColor;
-      final Color detailColor;
-      final Color eyeColor;
-      if (e.hp >= 3) {
-        bodyColor = Color.fromARGB(255, (0x8B * (1 - flash) + 255 * flash).round(), (0x20 * (1 - flash)).round(), (0x20 * (1 - flash)).round());
-        detailColor = const Color(0xFF4A0A0A);
-        eyeColor = const Color(0xFFFF2200);
-      } else if (e.hp == 2) {
-        bodyColor = Color.fromARGB(255, (0xCC * (1 - flash) + 255 * flash).round(), (0x55 * (1 - flash)).round(), 0);
-        detailColor = const Color(0xFF663300);
-        eyeColor = const Color(0xFFFFAA00);
-      } else {
-        bodyColor = Color.fromARGB(255, (0xFF * (1 - flash) + 255 * flash).round(), (0x22 * (1 - flash)).round(), (0x88 * (1 - flash)).round());
-        detailColor = const Color(0xFF880055);
-        eyeColor = const Color(0xFFFF00FF);
-      }
-
-      // Draw demon sprite using relative coordinates within sprite bounds
-      // Unit = spriteW/16 pixels wide
-      final u = spriteW / 16.0;
-      final v = spriteH / 20.0;
-      final bx = drawStartX * pxW;
       final by = drawStartY * pxH;
+      final sh = (drawEndY - drawStartY) * pxH;
+      final v = sh / 20.0; // vertical unit within sprite
+      final flash = e.hitFlash;
 
       for (int sx = drawStartX; sx < drawStartX + spriteW; sx++) {
         if (sx < 0 || sx >= 120) continue;
         if (transformY >= zBuf[sx]) continue;
 
-        // Only draw demon body pixels for visible columns
-        final localX = sx - drawStartX; // 0..spriteW-1
-        final frac = localX / spriteW.toDouble(); // 0..1
+        final localX = sx - drawStartX;
+        final frac = localX / spriteW.toDouble();
 
-        spritePaint.color = bodyColor;
-        // Main body column (center ~60% width = cols 3-13 out of 16)
-        if (frac >= 0.19 && frac <= 0.81) {
-          canvas.drawRect(
-            Rect.fromLTWH(sx * pxW, by + v * 4, pxW, (drawEndY - drawStartY) * pxH - v * 5),
-            spritePaint,
-          );
-        }
-
-        // Head (cols 4-12, rows 1-5)
-        if (frac >= 0.25 && frac <= 0.75) {
-          canvas.drawRect(
-            Rect.fromLTWH(sx * pxW, by + v * 1, pxW, v * 4),
-            spritePaint,
-          );
-        }
-
-        // Horns (cols 2-4 and 12-14, rows 0-2)
-        if ((frac >= 0.13 && frac <= 0.31) || (frac >= 0.69 && frac <= 0.87)) {
-          spritePaint.color = detailColor;
-          canvas.drawRect(
-            Rect.fromLTWH(sx * pxW, by, pxW, v * 2.5),
-            spritePaint,
-          );
-        }
-
-        // Eyes (cols 5-6 and 10-11, row 2-3)
-        if ((frac >= 0.31 && frac <= 0.44) || (frac >= 0.56 && frac <= 0.69)) {
-          spritePaint.color = eyeColor;
-          canvas.drawRect(
-            Rect.fromLTWH(sx * pxW, by + v * 2, pxW, v * 1.5),
-            spritePaint,
-          );
-        }
-
-        // Arm outlines (cols 1-2 and 14-15, rows 5-12)
-        if ((frac >= 0.06 && frac <= 0.19) || (frac >= 0.81 && frac <= 0.94)) {
-          spritePaint.color = detailColor;
-          canvas.drawRect(
-            Rect.fromLTWH(sx * pxW, by + v * 5, pxW, v * 7),
-            spritePaint,
-          );
-        }
-
-        // Legs (cols 4-6 and 10-12, rows 14-20)
-        if ((frac >= 0.25 && frac <= 0.44) || (frac >= 0.56 && frac <= 0.75)) {
-          spritePaint.color = bodyColor;
-          canvas.drawRect(
-            Rect.fromLTWH(sx * pxW, by + v * 14, pxW, v * 6),
-            spritePaint,
-          );
+        switch (e.type) {
+          case _EnemyType.demon:
+            _drawDemonColumn(canvas, sp, sx, pxW, by, sh, v, frac, e.hp, flash);
+          case _EnemyType.cacodemon:
+            _drawCacoDemonColumn(canvas, sp, sx, pxW, by, sh, v, frac, e.hp, flash);
+          case _EnemyType.skeleton:
+            _drawSkeletonColumn(canvas, sp, sx, pxW, by, sh, v, frac, e.hp, flash);
         }
       }
 
-      // Hit mark: bright cross when hitFlash > 0.5
+      // Hit-mark cross
       if (flash > 0.5) {
-        final cx = spriteScreenX * pxW;
+        final cx = screenX * pxW;
         final cy = (drawStartY + (drawEndY - drawStartY) / 2.0) * pxH;
-        final markPaint = Paint()..color = Colors.white..isAntiAlias = false;
-        canvas.drawRect(Rect.fromLTWH(cx - 4, cy - 1, 8, 2), markPaint);
-        canvas.drawRect(Rect.fromLTWH(cx - 1, cy - 4, 2, 8), markPaint);
+        sp.color = Colors.white;
+        canvas.drawRect(Rect.fromLTWH(cx - 5, cy - 1, 10, 2), sp);
+        canvas.drawRect(Rect.fromLTWH(cx - 1, cy - 5, 2, 10), sp);
       }
-    }
-
-    // ── Shoot flash overlay ─────────────────────────────────────────────────
-    if (shootFlash > 0) {
-      final sfPaint = Paint()
-        ..isAntiAlias = false
-        ..color = Colors.orange.withOpacity(shootFlash * 0.25);
-      canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), sfPaint);
-    }
-
-    // ── Hit flash overlay ────────────────────────────────────────────────────
-    if (hitFlash > 0) {
-      final flashPaint = Paint()
-        ..isAntiAlias = false
-        ..color = Colors.red.withOpacity(hitFlash * 0.55);
-      canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), flashPaint);
-    }
-
-    // ── HUD ─────────────────────────────────────────────────────────────────
-    if (showHud) {
-      // Top bar
-      final hudBgPaint = Paint()..isAntiAlias = false..color = Colors.black.withOpacity(0.65);
-      canvas.drawRect(Rect.fromLTWH(0, 0, size.width, 22), hudBgPaint);
-
-      final hudText = '❤ $health%   💀 $kills   🔫 $ammo   OLA $wave';
-      final tp = TextPainter(
-        text: TextSpan(text: hudText,
-          style: const TextStyle(color: Colors.white, fontSize: 11,
-            fontFamily: 'monospace', fontWeight: FontWeight.bold)),
-        textDirection: TextDirection.ltr,
-      );
-      tp.layout();
-      tp.paint(canvas, const Offset(6, 5));
-      tp.dispose();
-
-      // Crosshair
-      final crossPaint = Paint()..isAntiAlias = false..color = Colors.white;
-      final cx = size.width / 2, cy = size.height / 2;
-      canvas.drawRect(Rect.fromLTWH(cx - 1, cy - 4, 2, 8), crossPaint);
-      canvas.drawRect(Rect.fromLTWH(cx - 4, cy - 1, 8, 2), crossPaint);
-
-      // Weapon sprite at bottom center
-      _drawWeapon(canvas, size, isFiring);
     }
   }
 
-  void _drawWeapon(Canvas canvas, Size size, bool firing) {
-    final cx = size.width / 2;
-    final cy = size.height;
-    final p = Paint()..isAntiAlias = false;
+  // ─── Demon (bipedal humanoid) ───────────────────────────────────────────────
 
-    // Gun body offset (bob down slightly when not firing)
-    final yOff = firing ? 0.0 : size.height * 0.02;
-
-    // Muzzle flash
-    if (firing) {
-      p.color = const Color(0xFFFFCC00);
-      canvas.drawRect(Rect.fromLTWH(cx - 6, cy - size.height * 0.35 + yOff, 12, 8), p);
-      p.color = Colors.white;
-      canvas.drawRect(Rect.fromLTWH(cx - 3, cy - size.height * 0.38 + yOff, 6, 5), p);
+  void _drawDemonColumn(Canvas canvas, Paint sp, int sx, double pxW,
+      double by, double sh, double v, double frac, double hp, double flash) {
+    final Color body, detail, eye;
+    if (hp >= 3) {
+      body = Color.fromARGB(255, (0x8B + (255 - 0x8B) * flash).round(), (0x18 * (1 - flash)).round(), (0x18 * (1 - flash)).round());
+      detail = const Color(0xFF3A0808);
+      eye = const Color(0xFFFF1100);
+    } else if (hp >= 2) {
+      body = Color.fromARGB(255, (0xBB + (255 - 0xBB) * flash).round(), (0x44 * (1 - flash)).round(), 0);
+      detail = const Color(0xFF552200);
+      eye = const Color(0xFFFFAA00);
+    } else {
+      body = Color.fromARGB(255, 255, (0x22 * (1 - flash)).round(), (0x99 * (1 - flash)).round());
+      detail = const Color(0xFF770044);
+      eye = const Color(0xFFFF00FF);
     }
 
-    // Barrel
-    p.color = const Color(0xFF555555);
-    canvas.drawRect(Rect.fromLTWH(cx - 4, cy - size.height * 0.30 + yOff, 8, size.height * 0.12), p);
+    final x = sx * pxW;
 
-    // Barrel highlight
-    p.color = const Color(0xFF888888);
-    canvas.drawRect(Rect.fromLTWH(cx - 4, cy - size.height * 0.30 + yOff, 2, size.height * 0.12), p);
+    // Body center 20-80%
+    if (frac >= 0.20 && frac <= 0.80) {
+      sp.color = body;
+      canvas.drawRect(Rect.fromLTWH(x, by + v * 4, pxW, sh - v * 5), sp);
+    }
+    // Head 25-75%, rows 1-5
+    if (frac >= 0.25 && frac <= 0.75) {
+      sp.color = body;
+      canvas.drawRect(Rect.fromLTWH(x, by + v * 1, pxW, v * 3.5), sp);
+    }
+    // Horns 10-30% and 70-90%, rows 0-2
+    if ((frac >= 0.10 && frac <= 0.30) || (frac >= 0.70 && frac <= 0.90)) {
+      sp.color = detail;
+      canvas.drawRect(Rect.fromLTWH(x, by, pxW, v * 2.0), sp);
+    }
+    // Eyes 32-44% and 56-68%, rows 2-3.5
+    if ((frac >= 0.32 && frac <= 0.44) || (frac >= 0.56 && frac <= 0.68)) {
+      sp.color = eye;
+      canvas.drawRect(Rect.fromLTWH(x, by + v * 2.0, pxW, v * 1.5), sp);
+    }
+    // Arms 5-20% and 80-95%, rows 5-12
+    if ((frac >= 0.05 && frac <= 0.20) || (frac >= 0.80 && frac <= 0.95)) {
+      sp.color = detail;
+      canvas.drawRect(Rect.fromLTWH(x, by + v * 4.5, pxW, v * 7), sp);
+    }
+    // Legs 28-44% and 56-72%, rows 15-20
+    if ((frac >= 0.28 && frac <= 0.44) || (frac >= 0.56 && frac <= 0.72)) {
+      sp.color = body;
+      canvas.drawRect(Rect.fromLTWH(x, by + v * 15, pxW, v * 5), sp);
+    }
+  }
 
-    // Gun body
-    p.color = const Color(0xFF333333);
-    canvas.drawRect(Rect.fromLTWH(cx - 18, cy - size.height * 0.22 + yOff, 36, size.height * 0.25), p);
+  // ─── Cacodemon (floating sphere with eye) ──────────────────────────────────
 
-    // Body highlight
-    p.color = const Color(0xFF666666);
-    canvas.drawRect(Rect.fromLTWH(cx - 18, cy - size.height * 0.22 + yOff, 36, 3), p);
+  void _drawCacoDemonColumn(Canvas canvas, Paint sp, int sx, double pxW,
+      double by, double sh, double v, double frac, double hp, double flash) {
+    final xFrac = frac - 0.5; // -0.5 to 0.5
+    if (xFrac.abs() >= 0.5) return;
 
-    // Grip
+    final sphereRadius = sqrt(0.25 - xFrac * xFrac);
+    final sphereTop = by + sh * (0.5 - sphereRadius);
+    final sphereBot = by + sh * (0.5 + sphereRadius);
+    final spriteH = (sphereBot - sphereTop);
+    final x = sx * pxW;
+
+    // Sphere body color (blue-green tones, HP-based)
+    final Color body;
+    final Color eyeColor;
+    if (hp >= 2) {
+      body = Color.fromARGB(255, (0x22 + (255 - 0x22) * flash).round(), (0x66 * (1 - flash)).round(), (0x88 * (1 - flash)).round());
+      eyeColor = const Color(0xFFFF3300);
+    } else {
+      body = Color.fromARGB(255, (0x44 + (255 - 0x44) * flash).round(), (0x11 * (1 - flash)).round(), (0x44 * (1 - flash)).round());
+      eyeColor = const Color(0xFFFF00AA);
+    }
+
+    // Sphere body (shade darker toward edges for 3D look)
+    final edgeFactor = xFrac.abs() * 2; // 0 at center, 1 at edge
+    final shade = (1 - edgeFactor * 0.5);
+    sp.color = Color.fromARGB(
+      255,
+      (Color.fromARGB(255, (0x22 * (1 - flash) + 255 * flash).round(), 0, 0).red * shade).round(),
+      ((body.green) * shade).round(),
+      ((body.blue) * shade).round(),
+    );
+    // Simpler: just body color, slightly darkened at edge
+    sp.color = Color.fromARGB(255, (body.red * shade).round().clamp(0, 255),
+        (body.green * shade).round().clamp(0, 255), (body.blue * shade).round().clamp(0, 255));
+    canvas.drawRect(Rect.fromLTWH(x, sphereTop, pxW, sphereBot - sphereTop), sp);
+
+    // Central eye (ellipse in center 50% horizontally, center 30% vertically)
+    if (xFrac.abs() < 0.28) {
+      final eyeXFrac = xFrac / 0.28; // -1 to 1
+      final eyeHalfH = sqrt(1 - eyeXFrac * eyeXFrac) * 0.22 * spriteH;
+      final eyeCenterY = sphereTop + spriteH * 0.45;
+      sp.color = eyeColor;
+      canvas.drawRect(Rect.fromLTWH(x, eyeCenterY - eyeHalfH, pxW, eyeHalfH * 2), sp);
+      // Pupil
+      if (xFrac.abs() < 0.12) {
+        sp.color = const Color(0xFF110000);
+        canvas.drawRect(Rect.fromLTWH(x, eyeCenterY - eyeHalfH * 0.5, pxW, eyeHalfH), sp);
+      }
+      // Eye highlight
+      if (xFrac < -0.04 && xFrac > -0.16) {
+        sp.color = Colors.white.withOpacity(0.6);
+        canvas.drawRect(Rect.fromLTWH(x, eyeCenterY - eyeHalfH * 0.9, pxW, eyeHalfH * 0.5), sp);
+      }
+    }
+
+    // Spines/horns at top of sphere (outer edges)
+    if (xFrac.abs() > 0.30 && xFrac.abs() < 0.48) {
+      sp.color = const Color(0xFF004455);
+      canvas.drawRect(Rect.fromLTWH(x, sphereTop - 5, pxW, 5), sp);
+    }
+    // Small teeth at bottom
+    if (xFrac.abs() < 0.3) {
+      sp.color = Colors.white.withOpacity(0.5);
+      final toothY = sphereBot - spriteH * 0.15;
+      if ((xFrac + 0.15).abs() < 0.06 || (xFrac - 0.05).abs() < 0.06) {
+        canvas.drawRect(Rect.fromLTWH(x, toothY, pxW, spriteH * 0.12), sp);
+      }
+    }
+  }
+
+  // ─── Skeleton ──────────────────────────────────────────────────────────────
+
+  void _drawSkeletonColumn(Canvas canvas, Paint sp, int sx, double pxW,
+      double by, double sh, double v, double frac, double hp, double flash) {
+    final x = sx * pxW;
+    final bone = Color.fromARGB(255, (0xE8 * (1 - flash) + 255 * flash).round(),
+        (0xE4 * (1 - flash) + 255 * flash).round(), (0xCC * (1 - flash)).round());
+    const dark = Color(0xFF111111);
+
+    // Skull: rows 0.5-4.5, cols 28-72%
+    if (frac >= 0.28 && frac <= 0.72) {
+      sp.color = bone;
+      canvas.drawRect(Rect.fromLTWH(x, by + v * 0.5, pxW, v * 4), sp);
+      // Eye sockets
+      if ((frac >= 0.32 && frac <= 0.44) || (frac >= 0.56 && frac <= 0.68)) {
+        sp.color = dark;
+        canvas.drawRect(Rect.fromLTWH(x, by + v * 1.5, pxW, v * 1.8), sp);
+      }
+      // Nasal cavity
+      if (frac >= 0.45 && frac <= 0.55) {
+        sp.color = dark;
+        canvas.drawRect(Rect.fromLTWH(x, by + v * 2.8, pxW, v * 1.2), sp);
+      }
+      // Teeth
+      if (frac >= 0.34 && frac <= 0.66) {
+        sp.color = bone;
+        canvas.drawRect(Rect.fromLTWH(x, by + v * 4.0, pxW, v * 0.5), sp);
+        if ((frac + 0.04).round() % 2 == 0) {
+          sp.color = dark;
+          canvas.drawRect(Rect.fromLTWH(x, by + v * 4.0, pxW, v * 0.5), sp);
+        }
+      }
+    }
+
+    // Neck: rows 4.5-5.5, cols 44-56%
+    if (frac >= 0.44 && frac <= 0.56) {
+      sp.color = bone;
+      canvas.drawRect(Rect.fromLTWH(x, by + v * 4.5, pxW, v * 1), sp);
+    }
+
+    // Spine (center): rows 5.5-14, cols 47-53%
+    if (frac >= 0.47 && frac <= 0.53) {
+      sp.color = bone;
+      canvas.drawRect(Rect.fromLTWH(x, by + v * 5.5, pxW, v * 8.5), sp);
+    }
+
+    // Ribs: rows 6-12, cols 28-72% — alternating bars
+    if (frac >= 0.28 && frac <= 0.72) {
+      for (int rib = 0; rib < 5; rib++) {
+        sp.color = bone;
+        canvas.drawRect(Rect.fromLTWH(x, by + v * (6 + rib * 1.4), pxW, v * 0.6), sp);
+      }
+    }
+
+    // Shoulder collar: rows 5.5-6.5, cols 15-85%
+    if (frac >= 0.15 && frac <= 0.85) {
+      sp.color = bone;
+      canvas.drawRect(Rect.fromLTWH(x, by + v * 5.5, pxW, v * 1), sp);
+    }
+
+    // Arms: rows 6-12, cols 12-26% and 74-88%
+    if ((frac >= 0.12 && frac <= 0.26) || (frac >= 0.74 && frac <= 0.88)) {
+      sp.color = bone;
+      canvas.drawRect(Rect.fromLTWH(x, by + v * 6, pxW, v * 6), sp);
+    }
+
+    // Pelvis: rows 14-15.5, cols 28-72%
+    if (frac >= 0.28 && frac <= 0.72) {
+      sp.color = bone;
+      canvas.drawRect(Rect.fromLTWH(x, by + v * 14, pxW, v * 1.5), sp);
+    }
+
+    // Legs: rows 15.5-20, cols 32-46% and 54-68%
+    if ((frac >= 0.32 && frac <= 0.46) || (frac >= 0.54 && frac <= 0.68)) {
+      sp.color = bone;
+      canvas.drawRect(Rect.fromLTWH(x, by + v * 15.5, pxW, v * 4.5), sp);
+    }
+  }
+
+  // ── Screen effects ──────────────────────────────────────────────────────────
+
+  void _drawScreenFx(Canvas canvas, Size size) {
+    if (shootFlash > 0) {
+      canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height),
+        Paint()..color = Colors.orange.withOpacity(shootFlash * 0.22)..isAntiAlias = false);
+    }
+    if (hitFlash > 0) {
+      canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height),
+        Paint()..color = Colors.red.withOpacity(hitFlash * 0.50)..isAntiAlias = false);
+    }
+  }
+
+  // ── HUD ─────────────────────────────────────────────────────────────────────
+
+  void _drawHud(Canvas canvas, Size size) {
+    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, 20),
+      Paint()..color = Colors.black.withOpacity(0.70)..isAntiAlias = false);
+    final tp = TextPainter(
+      text: TextSpan(text: '❤ $health%   💀 $kills   🔫 $ammo   OLA $wave',
+        style: const TextStyle(color: Colors.white, fontSize: 10,
+          fontFamily: 'monospace', fontWeight: FontWeight.bold)),
+      textDirection: TextDirection.ltr,
+    );
+    tp.layout();
+    tp.paint(canvas, const Offset(6, 4));
+    tp.dispose();
+  }
+
+  void _drawCrosshair(Canvas canvas, Size size) {
+    final cx = size.width / 2, cy = size.height / 2;
+    final p = Paint()..color = Colors.white..isAntiAlias = false;
+    canvas.drawRect(Rect.fromLTWH(cx - 1, cy - 5, 2, 10), p);
+    canvas.drawRect(Rect.fromLTWH(cx - 5, cy - 1, 10, 2), p);
+    // Gap center
+    final gap = Paint()..color = Colors.black..isAntiAlias = false;
+    canvas.drawRect(Rect.fromLTWH(cx - 1, cy - 1, 2, 2), gap);
+  }
+
+  // ── Angled perspective pistol ───────────────────────────────────────────────
+
+  void _drawPistol(Canvas canvas, Size size, bool firing) {
+    canvas.save();
+
+    // Position: bottom-right area, angled toward upper-left
+    canvas.translate(size.width * 0.62, size.height * 0.82);
+    canvas.rotate(-0.32); // ~18° tilt — 3/4 perspective angle
+
+    final p = Paint();
+
+    // ── Muzzle flash ──────────────────────────────────────────────────────────
+    if (firing) {
+      // Outer bloom
+      p.color = const Color(0xFFFF8800).withOpacity(0.85);
+      p.isAntiAlias = true;
+      canvas.drawOval(const Rect.fromLTWH(-92, -28, 30, 20), p);
+      // Bright core
+      p.color = const Color(0xFFFFEE00);
+      canvas.drawOval(const Rect.fromLTWH(-89, -24, 18, 12), p);
+      // White hot center
+      p.color = Colors.white;
+      canvas.drawOval(const Rect.fromLTWH(-86, -22, 10, 8), p);
+    }
+
+    p.isAntiAlias = false;
+
+    // ── Barrel (long, extends upper-left) ────────────────────────────────────
+    // Shadow underside of barrel
     p.color = const Color(0xFF222222);
-    canvas.drawRect(Rect.fromLTWH(cx + 6, cy - size.height * 0.15 + yOff, 14, size.height * 0.20), p);
+    canvas.drawRect(const Rect.fromLTWH(-85, -8, 90, 6), p);
+    // Main barrel tube
+    p.color = const Color(0xFF686868);
+    canvas.drawRect(const Rect.fromLTWH(-85, -16, 90, 8), p);
+    // Barrel top highlight
+    p.color = const Color(0xFF999999);
+    canvas.drawRect(const Rect.fromLTWH(-85, -16, 90, 2), p);
+    // Barrel bore (dark circle at muzzle)
+    p.color = const Color(0xFF111111);
+    canvas.drawRect(const Rect.fromLTWH(-86, -14, 4, 6), p);
+    // Front sight blade
+    p.color = const Color(0xFF555555);
+    canvas.drawRect(const Rect.fromLTWH(-80, -20, 5, 4), p);
 
-    // Trigger guard
+    // ── Slide (top of frame) ─────────────────────────────────────────────────
+    // Slide body (slightly taller than barrel, starts behind barrel)
     p.color = const Color(0xFF444444);
-    canvas.drawRect(Rect.fromLTWH(cx + 2, cy - size.height * 0.13 + yOff, 6, 4), p);
+    canvas.drawRect(const Rect.fromLTWH(-55, -22, 65, 14), p);
+    // Slide top face highlight
+    p.color = const Color(0xFF666666);
+    canvas.drawRect(const Rect.fromLTWH(-55, -22, 65, 3), p);
+    // Slide serrations (diagonal grooves)
+    p.color = const Color(0xFF333333);
+    for (int i = 0; i < 5; i++) {
+      canvas.drawRect(Rect.fromLTWH(-40.0 + i * 5, -20, 2, 10), p);
+    }
+    // Rear sight (two posts with notch)
+    p.color = const Color(0xFF555555);
+    canvas.drawRect(const Rect.fromLTWH(2, -26, 16, 6), p);
+    p.color = const Color(0xFF111111);
+    canvas.drawRect(const Rect.fromLTWH(8, -26, 5, 6), p); // notch
 
-    // No ammo indicator
+    // ── Frame / receiver ─────────────────────────────────────────────────────
+    p.color = const Color(0xFF363636);
+    canvas.drawRect(const Rect.fromLTWH(-40, -8, 55, 26), p);
+    // Frame rail highlights
+    p.color = const Color(0xFF555555);
+    canvas.drawRect(const Rect.fromLTWH(-40, -8, 55, 2), p);
+    // Ejection port
+    p.color = const Color(0xFF1A1A1A);
+    canvas.drawRect(const Rect.fromLTWH(-20, -20, 18, 8), p);
+    // Brass cartridge peeking (brass gold)
+    p.color = const Color(0xFFB8860B);
+    canvas.drawRect(const Rect.fromLTWH(-14, -20, 8, 6), p);
+
+    // ── Trigger guard ─────────────────────────────────────────────────────────
+    p.color = const Color(0xFF3A3A3A);
+    canvas.drawRect(const Rect.fromLTWH(-30, 10, 24, 3), p);   // top bar
+    canvas.drawRect(const Rect.fromLTWH(-30, 10, 3, 16), p);   // left post
+    canvas.drawRect(const Rect.fromLTWH(-9, 10, 3, 16), p);    // right post
+    canvas.drawRect(const Rect.fromLTWH(-30, 23, 24, 3), p);   // bottom bar
+    // Trigger
+    p.color = const Color(0xFF888888);
+    canvas.drawRect(const Rect.fromLTWH(-20, 12, 4, 10), p);
+
+    // ── Grip ─────────────────────────────────────────────────────────────────
+    p.color = const Color(0xFF2A2A2A);
+    canvas.drawRect(const Rect.fromLTWH(-5, 4, 24, 36), p);
+    // Grip texture stippling
+    p.color = const Color(0xFF3A3A3A);
+    for (int r = 0; r < 5; r++) {
+      for (int c = 0; c < 3; c++) {
+        canvas.drawRect(Rect.fromLTWH(-2.0 + c * 7, 8.0 + r * 6, 4, 2), p);
+      }
+    }
+    // Grip frame bottom
+    p.color = const Color(0xFF222222);
+    canvas.drawRect(const Rect.fromLTWH(-5, 38, 24, 4), p);
+    // Magazine base plate
+    p.color = const Color(0xFF444444);
+    canvas.drawRect(const Rect.fromLTWH(-5, 40, 24, 3), p);
+
+    // ── Hammer ────────────────────────────────────────────────────────────────
+    p.color = const Color(0xFF777777);
+    canvas.drawRect(const Rect.fromLTWH(12, -28, 8, 8), p);
+    p.color = const Color(0xFF444444);
+    canvas.drawRect(const Rect.fromLTWH(14, -26, 4, 6), p);
+
+    canvas.restore();
+
+    // "SIN BALAS" warning
     if (ammo == 0) {
       final tp = TextPainter(
-        text: const TextSpan(text: 'SIN BALA',
+        text: const TextSpan(text: '— SIN BALAS —',
           style: TextStyle(color: Colors.red, fontSize: 10,
             fontFamily: 'monospace', fontWeight: FontWeight.bold)),
         textDirection: TextDirection.ltr,
       );
       tp.layout();
-      tp.paint(canvas, Offset(cx - tp.width / 2, cy - size.height * 0.38));
+      tp.paint(canvas, Offset(size.width / 2 - tp.width / 2, size.height * 0.60));
       tp.dispose();
     }
   }
