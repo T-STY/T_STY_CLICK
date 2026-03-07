@@ -865,44 +865,67 @@ class _RaycasterPainter extends CustomPainter {
       sp.color = body;
       canvas.drawRect(Rect.fromLTWH(x, by + v * 15, pxW, v * 5), sp);
     }
-    // Pectoral muscles (light highlight strips, frac 22-38% and 62-78%, rows 4-6)
+    // Pectoral muscles — bright slab across upper chest, high contrast
     if ((frac >= 0.22 && frac <= 0.38) || (frac >= 0.62 && frac <= 0.78)) {
+      // Top pec highlight (very bright)
       sp.color = Color.fromARGB(255,
-        (body.red * 1.25).clamp(0, 255).round(),
+        (body.red * 1.65).clamp(0, 255).round(),
         (body.green * 1.1).clamp(0, 255).round(),
         (body.blue * 1.1).clamp(0, 255).round(),
       );
-      canvas.drawRect(Rect.fromLTWH(x, by + v * 4.0, pxW, v * 1.5), sp);
+      canvas.drawRect(Rect.fromLTWH(x, by + v * 4.0, pxW, v * 0.8), sp);
+      // Bottom pec shadow (very dark)
+      sp.color = Color.fromARGB(255,
+        (body.red * 0.30).clamp(0, 255).round(),
+        (body.green * 0.30).clamp(0, 255).round(),
+        (body.blue * 0.30).clamp(0, 255).round(),
+      );
+      canvas.drawRect(Rect.fromLTWH(x, by + v * 4.8, pxW, v * 0.8), sp);
     }
-    // Abdominal ridges (alternating strips, frac 30-70%, rows 7-14)
+    // Sternum division line — dark groove between pecs
+    if (frac >= 0.47 && frac <= 0.53) {
+      sp.color = Color.fromARGB(255,
+        (body.red * 0.20).clamp(0, 255).round(), 0, 0);
+      canvas.drawRect(Rect.fromLTWH(x, by + v * 4.0, pxW, v * 2.0), sp);
+    }
+    // Abdominal ridges — strong contrast: bright light / near-black shadow
     if (frac >= 0.30 && frac <= 0.70) {
       for (int ab = 0; ab < 4; ab++) {
         final isLight = ab % 2 == 0;
         sp.color = isLight
             ? Color.fromARGB(255,
-                (body.red * 1.20).clamp(0, 255).round(),
+                (body.red * 1.70).clamp(0, 255).round(),
                 (body.green * 1.0).clamp(0, 255).round(),
                 (body.blue * 1.0).clamp(0, 255).round())
             : Color.fromARGB(255,
-                (body.red * 0.65).clamp(0, 255).round(),
-                (body.green * 0.65).clamp(0, 255).round(),
-                (body.blue * 0.65).clamp(0, 255).round());
-        canvas.drawRect(Rect.fromLTWH(x, by + v * (7.5 + ab * 1.6), pxW, v * 0.9), sp);
+                (body.red * 0.22).clamp(0, 255).round(),
+                0, 0);
+        canvas.drawRect(Rect.fromLTWH(x, by + v * (7.0 + ab * 1.8), pxW, v * 1.1), sp);
       }
     }
-    // Bulging arm highlight (outer third of arm column, rows 5-10)
-    if ((frac >= 0.05 && frac <= 0.13) || (frac >= 0.87 && frac <= 0.95)) {
+    // Arm outer bulge highlight — bright outer edge on each arm
+    if ((frac >= 0.05 && frac <= 0.14) || (frac >= 0.86 && frac <= 0.95)) {
       sp.color = Color.fromARGB(255,
-        (body.red * 1.15).clamp(0, 255).round(),
+        (body.red * 1.55).clamp(0, 255).round(),
         (body.green * 1.0).clamp(0, 255).round(),
         (body.blue * 1.0).clamp(0, 255).round(),
       );
-      canvas.drawRect(Rect.fromLTWH(x, by + v * 5.0, pxW, v * 5), sp);
+      canvas.drawRect(Rect.fromLTWH(x, by + v * 4.5, pxW, v * 3.5), sp);
     }
-    // Thick neck (frac 40-60%, rows 3-4.5)
-    if (frac >= 0.40 && frac <= 0.60) {
-      sp.color = body;
-      canvas.drawRect(Rect.fromLTWH(x, by + v * 3.0, pxW, v * 1.5), sp);
+    // Arm inner shadow — dark groove where arm meets body
+    if ((frac >= 0.17 && frac <= 0.21) || (frac >= 0.79 && frac <= 0.83)) {
+      sp.color = Color.fromARGB(255,
+        (body.red * 0.18).clamp(0, 255).round(), 0, 0);
+      canvas.drawRect(Rect.fromLTWH(x, by + v * 4.5, pxW, v * 7.0), sp);
+    }
+    // Thick neck (frac 42-58%, rows 3-4)
+    if (frac >= 0.42 && frac <= 0.58) {
+      sp.color = Color.fromARGB(255,
+        (body.red * 1.20).clamp(0, 255).round(),
+        (body.green * 1.0).clamp(0, 255).round(),
+        (body.blue * 1.0).clamp(0, 255).round(),
+      );
+      canvas.drawRect(Rect.fromLTWH(x, by + v * 3.2, pxW, v * 1.2), sp);
     }
   }
 
@@ -1334,9 +1357,9 @@ class _RaycasterPainter extends CustomPainter {
 
   void _drawShotgun(Canvas canvas, Size size, bool firing) {
     canvas.save();
-    // Same base position and tilt as pistol so both feel consistent
-    canvas.translate(size.width * 0.60, size.height * 0.94);
-    canvas.rotate(-0.25); // 5° left tilt – identical to pistol
+    // Anchor at bottom-right corner; rotate ~63° so barrel points upper-left (Doom-style side view)
+    canvas.translate(size.width * 0.80, size.height * 1.05);
+    canvas.rotate(-1.10);
 
     final p = Paint()..isAntiAlias = false;
 
@@ -1447,8 +1470,9 @@ class _RaycasterPainter extends CustomPainter {
 
   void _drawPistol(Canvas canvas, Size size, bool firing) {
     canvas.save();
-    canvas.translate(size.width * 0.78, size.height * 0.94);
-    canvas.rotate(-0.35); // 5° left tilt – matches shotgun
+    // Anchor at bottom-right; rotate ~75° so barrel points upper-left (classic FPS side angle)
+    canvas.translate(size.width * 0.88, size.height * 1.05);
+    canvas.rotate(-1.30);
 
     final p = Paint()..isAntiAlias = false;
 
