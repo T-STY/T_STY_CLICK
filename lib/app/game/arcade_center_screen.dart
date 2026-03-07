@@ -7,6 +7,7 @@ import 'arcade_input_controller.dart';
 import 'flappy_bird_screen.dart';
 import 'high_score_service.dart';
 import 'logic_grid_screen.dart';
+import 'match3_screen.dart';
 import 'maze_chase_screen.dart';
 import 'raycaster_screen.dart';
 import 'snake_game_screen.dart';
@@ -30,19 +31,20 @@ const _kBodyBdr  = Color(0xFF888888);
 // ─── Card background gradients (per game) ─────────────────────────────────────
 
 const _kCardGradients = <List<Color>>[
-  [Color(0xFF0B2B0B), Color(0xFF1B5E20)],   // Víbora Neón    – forest green
-  [Color(0xFF140033), Color(0xFF4A148C)],   // Reino Fantasmal – deep purple
-  [Color(0xFF0D2137), Color(0xFF01579B)],   // Alas de Cromo   – steel blue
-  [Color(0xFF2D1B00), Color(0xFF6D4C00)],   // Cruce Peligroso – amber
-  [Color(0xFF0A0A1E), Color(0xFF1A237E)],   // Asalto Estelar  – navy
-  [Color(0xFF1A0000), Color(0xFF7B0000)],   // Mazmorra Infernal – blood red
+  [Color(0xFF0B2B0B), Color(0xFF1B5E20)],   // Víbora Neón      – forest green
+  [Color(0xFF140033), Color(0xFF4A148C)],   // Reino Fantasmal   – deep purple
+  [Color(0xFF0D2137), Color(0xFF01579B)],   // Alas de Cromo     – steel blue
+  [Color(0xFF2D1B00), Color(0xFF6D4C00)],   // Cruce Peligroso   – amber
+  [Color(0xFF0A0A1E), Color(0xFF1A237E)],   // Asalto Estelar    – navy
+  [Color(0xFF1A0000), Color(0xFF7B0000)],   // Mazmorra Infernal  – blood red
   [Color(0xFF001B2E), Color(0xFF0D47A1)],   // Cascada de Bloques – ocean blue
-  [Color(0xFF1A110A), Color(0xFF4E342E)],   // Campo Minado    – dark earth
+  [Color(0xFF1A110A), Color(0xFF4E342E)],   // Campo Minado       – dark earth
+  [Color(0xFF1A0030), Color(0xFF6A0080)],   // Gemas del Abismo   – deep violet
 ];
 
-// ─── Category labels (index = gameIndex ~/ 2) ─────────────────────────────────
+// ─── Category labels ──────────────────────────────────────────────────────────
 
-const _kCategoryLabels = ['REJILLA', 'REFLEJOS', 'DISPAROS', 'PUZLE'];
+const _kCategoryLabels = ['REJILLA', 'REFLEJOS', 'DISPAROS', 'PUZLE', 'GEMAS'];
 
 // ─── Game registry ─────────────────────────────────────────────────────────────
 
@@ -108,6 +110,12 @@ final List<ArcadeGameDef> kArcadeGames = [
         required controller, required onSaldoChanged}) =>
       LogicGridScreen(userId: userId, rewardsDocRef: rewardsDocRef,
         currentSaldo: currentSaldo, controller: controller, onSaldoChanged: onSaldoChanged)),
+  // Col 4 — GEMAS
+  ArcadeGameDef(id: 'match3',   emoji: '💎', title: 'Gemas del Abismo',
+    builder: ({required userId, required rewardsDocRef, required currentSaldo,
+        required controller, required onSaldoChanged}) =>
+      Match3Screen(userId: userId, rewardsDocRef: rewardsDocRef,
+        currentSaldo: currentSaldo, controller: controller, onSaldoChanged: onSaldoChanged)),
 ];
 
 // ─── Shell ────────────────────────────────────────────────────────────────────
@@ -129,7 +137,7 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
   late double _saldo;
   int _selectedIndex = 0;
   ArcadeGameDef? _activeGame;
-  final List<int> _highScores = List.filled(8, 0);
+  final List<int> _highScores = List.filled(9, 0);
 
   @override
   void initState() {
@@ -162,9 +170,9 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
     if (_activeGame == null) {
       switch (btn) {
         case ArcadeButton.left:
-          setState(() => _selectedIndex = (_selectedIndex - 1 + 8) % 8);
+          setState(() => _selectedIndex = (_selectedIndex - 1 + 9) % 9);
         case ArcadeButton.right:
-          setState(() => _selectedIndex = (_selectedIndex + 1) % 8);
+          setState(() => _selectedIndex = (_selectedIndex + 1) % 9);
         case ArcadeButton.a:
         case ArcadeButton.start:
           _launchSelected();
@@ -336,7 +344,7 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
               // Navigation dots
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
-                children: List.generate(8, (i) {
+                children: List.generate(9, (i) {
                   final sel = i == _selectedIndex;
                   return AnimatedContainer(
                     duration: const Duration(milliseconds: 220),
@@ -838,6 +846,52 @@ class _CartridgePainter extends CustomPainter {
           canvas.drawRect(Rect.fromLTWH(
             w*0.74 + cos(angle) * 16 - 2, h*0.62 + sin(angle) * 16 - 2, 4, 4), p);
         }
+        break;
+
+      // ── Gemas del Abismo ──────────────────────────────────────────────────
+      case 8:
+        // Gem grid (3×4)
+        const gemColors = [
+          Color(0xFFE040FB), // purple
+          Color(0xFF40C4FF), // blue
+          Color(0xFF69F0AE), // green
+          Color(0xFFFFD740), // yellow
+          Color(0xFFFF5252), // red
+        ];
+        final gemW = lw * 0.22;
+        final gemH = lh * 0.18;
+        final gridCols = 3, gridRows = 4;
+        final startX = ox + lw * 0.25;
+        final startY = oy + lh * 0.08;
+        final gapX = (lw * 0.60) / gridCols;
+        final gapY = (lh * 0.80) / gridRows;
+        final gemPattern = [2,0,3, 1,4,0, 3,1,2, 0,3,4];
+        for (int r = 0; r < gridRows; r++) {
+          for (int c = 0; c < gridCols; c++) {
+            final ci = gemPattern[r * gridCols + c];
+            final gx = startX + c * gapX;
+            final gy = startY + r * gapY;
+            // Gem diamond shape
+            p.color = gemColors[ci].withOpacity(0.45);
+            p.isAntiAlias = true;
+            final path = Path()
+              ..moveTo(gx + gemW / 2, gy)
+              ..lineTo(gx + gemW, gy + gemH * 0.4)
+              ..lineTo(gx + gemW / 2, gy + gemH)
+              ..lineTo(gx, gy + gemH * 0.4)
+              ..close();
+            canvas.drawPath(path, p);
+            // Gem highlight
+            p.color = Colors.white.withOpacity(0.30);
+            canvas.drawRect(Rect.fromLTWH(gx + gemW * 0.25, gy + gemH * 0.05, gemW * 0.25, gemH * 0.20), p);
+            p.isAntiAlias = false;
+          }
+        }
+        // Sparkle accents
+        p.color = Colors.white.withOpacity(0.55);
+        canvas.drawRect(Rect.fromLTWH(ox + lw*0.75, oy + lh*0.15, 3, 3), p);
+        canvas.drawRect(Rect.fromLTWH(ox + lw*0.82, oy + lh*0.45, 2, 2), p);
+        canvas.drawRect(Rect.fromLTWH(ox + lw*0.70, oy + lh*0.72, 3, 3), p);
         break;
     }
   }

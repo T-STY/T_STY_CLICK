@@ -129,6 +129,8 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
   double _hitFlash = 0;
   double _shootFlash = 0;
   double _waveBannerTimer = 0;
+  double _dimFlash = 0;       // atmospheric darkness pulse (0=normal, 1=fully dimmed)
+  double _dimTimer = 0;       // countdown to next dim event
 
   final List<_Enemy> _enemies = [];
   final List<double> _zBuf = List<double>.filled(120, 0);
@@ -195,6 +197,8 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
       _hitFlash = 0;
       _shootFlash = 0;
       _waveBannerTimer = 0;
+      _dimFlash = 0;
+      _dimTimer = 4.0 + _rng.nextDouble() * 6.0;
       _state = _GameState.playing;
     });
     _spawnWave(1);
@@ -394,6 +398,13 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
     if (_hitFlash > 0) _hitFlash = (_hitFlash - dt * 2.5).clamp(0, 1);
     if (_shootFlash > 0) _shootFlash = (_shootFlash - dt * 10.0).clamp(0, 1);
     if (_waveBannerTimer > 0) _waveBannerTimer -= dt;
+    if (_dimFlash > 0) _dimFlash = (_dimFlash - dt * 1.8).clamp(0, 1);
+    // Atmospheric dim: random darkness pulses every 4-10 seconds
+    _dimTimer -= dt;
+    if (_dimTimer <= 0) {
+      _dimFlash = 0.55 + _rng.nextDouble() * 0.35; // 55-90% darkness
+      _dimTimer = 4.0 + _rng.nextDouble() * 6.0;   // next event in 4-10 s
+    }
     for (final e in _enemies) {
       if (e.hitFlash > 0) e.hitFlash = (e.hitFlash - dt * 7.0).clamp(0, 1);
     }
@@ -441,6 +452,7 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
               wave: _wave,
               hitFlash: _hitFlash,
               shootFlash: _shootFlash,
+              dimFlash: _dimFlash,
               isFiring: _fireTimer > 0,
               showHud: _state == _GameState.playing || _state == _GameState.dead,
               time: _time,
@@ -543,7 +555,7 @@ class _RaycasterPainter extends CustomPainter {
   final int health, kills, ammo, shotgunAmmo, wave;
   final bool shotgunUnlocked;
   final _WeaponType weapon;
-  final double hitFlash, shootFlash, time;
+  final double hitFlash, shootFlash, dimFlash, time;
   final bool isFiring, showHud;
 
   const _RaycasterPainter({
@@ -556,6 +568,7 @@ class _RaycasterPainter extends CustomPainter {
     required this.shotgunUnlocked, required this.weapon,
     required this.wave,
     required this.hitFlash, required this.shootFlash,
+    required this.dimFlash,
     required this.isFiring, required this.showHud,
     required this.time,
   });
@@ -810,7 +823,7 @@ class _RaycasterPainter extends CustomPainter {
     }
   }
 
-  // ─── Cacodemon (floating sphere with eye) ──────────────────────────────────
+  // ─── Cacodemon (demonic floating crimson sphere) ───────────────────────────
 
   void _drawCacoDemonColumn(Canvas canvas, Paint sp, int sx, double pxW,
       double by, double sh, double v, double frac, double hp, double flash) {
@@ -820,65 +833,116 @@ class _RaycasterPainter extends CustomPainter {
     final sphereRadius = sqrt(0.25 - xFrac * xFrac);
     final sphereTop = by + sh * (0.5 - sphereRadius);
     final sphereBot = by + sh * (0.5 + sphereRadius);
-    final spriteH = (sphereBot - sphereTop);
+    final spriteH = sphereBot - sphereTop;
     final x = sx * pxW;
 
-    // Sphere body color (blue-green tones, HP-based)
-    final Color body;
-    final Color eyeColor;
+    // ── Sphere body — crimson/blood-red ───────────────────────────────────────
+    // Shading: dark at edges, brighter at center for 3-D illusion
+    final edgeFactor = xFrac.abs() * 2.0;     // 0=center, 1=edge
+    final shade = (1.0 - edgeFactor * 0.55).clamp(0.35, 1.0);
+
+    // Base colour shifts from deep crimson (full HP) to sickly purple-red (low HP)
+    final Color bodyBase;
     if (hp >= 2) {
-      body = Color.fromARGB(255, (0x22 + (255 - 0x22) * flash).round(), (0x66 * (1 - flash)).round(), (0x88 * (1 - flash)).round());
-      eyeColor = const Color(0xFFFF3300);
+      // Healthy: dark blood-red, brightens with flash
+      bodyBase = Color.fromARGB(255,
+          (0xAA + (255 - 0xAA) * flash).round().clamp(0, 255),
+          (0x0A * (1 - flash)).round().clamp(0, 255),
+          (0x0A * (1 - flash)).round().clamp(0, 255));
     } else {
-      body = Color.fromARGB(255, (0x44 + (255 - 0x44) * flash).round(), (0x11 * (1 - flash)).round(), (0x44 * (1 - flash)).round());
-      eyeColor = const Color(0xFFFF00AA);
+      // Damaged: sickly dark purple
+      bodyBase = Color.fromARGB(255,
+          (0x88 + (255 - 0x88) * flash).round().clamp(0, 255),
+          (0x04 * (1 - flash)).round().clamp(0, 255),
+          (0x22 * (1 - flash)).round().clamp(0, 255));
     }
 
-    // Sphere body (shade darker toward edges for 3D look)
-    final edgeFactor = xFrac.abs() * 2; // 0 at center, 1 at edge
-    final shade = (1 - edgeFactor * 0.5);
-    sp.color = Color.fromARGB(
-      255,
-      (Color.fromARGB(255, (0x22 * (1 - flash) + 255 * flash).round(), 0, 0).red * shade).round(),
-      ((body.green) * shade).round(),
-      ((body.blue) * shade).round(),
-    );
-    // Simpler: just body color, slightly darkened at edge
-    sp.color = Color.fromARGB(255, (body.red * shade).round().clamp(0, 255),
-        (body.green * shade).round().clamp(0, 255), (body.blue * shade).round().clamp(0, 255));
-    canvas.drawRect(Rect.fromLTWH(x, sphereTop, pxW, sphereBot - sphereTop), sp);
+    sp.color = Color.fromARGB(255,
+        (bodyBase.red   * shade).round().clamp(0, 255),
+        (bodyBase.green * shade).round().clamp(0, 255),
+        (bodyBase.blue  * shade).round().clamp(0, 255));
+    canvas.drawRect(Rect.fromLTWH(x, sphereTop, pxW, spriteH), sp);
 
-    // Central eye (ellipse in center 50% horizontally, center 30% vertically)
-    if (xFrac.abs() < 0.28) {
-      final eyeXFrac = xFrac / 0.28; // -1 to 1
-      final eyeHalfH = sqrt(1 - eyeXFrac * eyeXFrac) * 0.22 * spriteH;
-      final eyeCenterY = sphereTop + spriteH * 0.45;
-      sp.color = eyeColor;
+    // Dark veins / shadow band around equator
+    if (xFrac.abs() < 0.45) {
+      final veinY = sphereTop + spriteH * 0.60;
+      sp.color = const Color(0xFF3A0000).withOpacity(0.50);
+      canvas.drawRect(Rect.fromLTWH(x, veinY, pxW, spriteH * 0.06), sp);
+    }
+
+    // ── Large angry eye (central, yellow-orange sclera, black slit pupil) ────
+    if (xFrac.abs() < 0.32) {
+      final eyeXFrac = xFrac / 0.32;
+      final eyeHalfH = sqrt(1 - eyeXFrac * eyeXFrac) * 0.26 * spriteH;
+      final eyeCenterY = sphereTop + spriteH * 0.38; // slightly above center
+
+      // Sclera — angry yellow-orange
+      sp.color = hp >= 2
+          ? Color.fromARGB(255, (255 * (1 - flash * 0.3)).round(), (0xCC * (1 - flash * 0.5)).round(), 0)
+          : const Color(0xFFFF6600);
       canvas.drawRect(Rect.fromLTWH(x, eyeCenterY - eyeHalfH, pxW, eyeHalfH * 2), sp);
-      // Pupil
-      if (xFrac.abs() < 0.12) {
-        sp.color = const Color(0xFF110000);
-        canvas.drawRect(Rect.fromLTWH(x, eyeCenterY - eyeHalfH * 0.5, pxW, eyeHalfH), sp);
+
+      // Slit pupil (vertical black bar in center third)
+      if (xFrac.abs() < 0.10) {
+        sp.color = const Color(0xFF080000);
+        canvas.drawRect(Rect.fromLTWH(x, eyeCenterY - eyeHalfH * 1.1, pxW, eyeHalfH * 2.2), sp);
       }
-      // Eye highlight
-      if (xFrac < -0.04 && xFrac > -0.16) {
-        sp.color = Colors.white.withOpacity(0.6);
-        canvas.drawRect(Rect.fromLTWH(x, eyeCenterY - eyeHalfH * 0.9, pxW, eyeHalfH * 0.5), sp);
+      // Blood vessel lines radiating from eye (horizontal red streaks)
+      if (xFrac.abs() > 0.12 && xFrac.abs() < 0.28) {
+        sp.color = const Color(0xFFCC0000).withOpacity(0.70);
+        canvas.drawRect(Rect.fromLTWH(x, eyeCenterY - eyeHalfH * 0.25, pxW, eyeHalfH * 0.15), sp);
+        canvas.drawRect(Rect.fromLTWH(x, eyeCenterY + eyeHalfH * 0.18, pxW, eyeHalfH * 0.15), sp);
+      }
+      // Specular highlight (upper-left of eye)
+      if (xFrac < -0.06 && xFrac > -0.20) {
+        sp.color = Colors.white.withOpacity(0.65);
+        canvas.drawRect(Rect.fromLTWH(x, eyeCenterY - eyeHalfH * 0.85, pxW, eyeHalfH * 0.35), sp);
       }
     }
 
-    // Spines/horns at top of sphere (outer edges)
-    if (xFrac.abs() > 0.30 && xFrac.abs() < 0.48) {
-      sp.color = const Color(0xFF004455);
-      canvas.drawRect(Rect.fromLTWH(x, sphereTop - 5, pxW, 5), sp);
+    // ── Jagged horns (top of sphere) ──────────────────────────────────────────
+    // Two curved horns projecting above the sphere at ≈ ±35% width
+    if (xFrac > 0.28 && xFrac < 0.44) {
+      // Right horn: tapers upward
+      final hornH = spriteH * (0.42 - (xFrac - 0.28) * 1.5);
+      sp.color = const Color(0xFF220000);
+      canvas.drawRect(Rect.fromLTWH(x, sphereTop - hornH, pxW, hornH), sp);
+      sp.color = const Color(0xFF550000); // lighter tip
+      canvas.drawRect(Rect.fromLTWH(x, sphereTop - hornH, pxW, hornH * 0.3), sp);
     }
-    // Small teeth at bottom
-    if (xFrac.abs() < 0.3) {
-      sp.color = Colors.white.withOpacity(0.5);
-      final toothY = sphereBot - spriteH * 0.15;
-      if ((xFrac + 0.15).abs() < 0.06 || (xFrac - 0.05).abs() < 0.06) {
-        canvas.drawRect(Rect.fromLTWH(x, toothY, pxW, spriteH * 0.12), sp);
+    if (xFrac < -0.28 && xFrac > -0.44) {
+      final hornH = spriteH * (0.42 - (-xFrac - 0.28) * 1.5);
+      sp.color = const Color(0xFF220000);
+      canvas.drawRect(Rect.fromLTWH(x, sphereTop - hornH, pxW, hornH), sp);
+      sp.color = const Color(0xFF550000);
+      canvas.drawRect(Rect.fromLTWH(x, sphereTop - hornH, pxW, hornH * 0.3), sp);
+    }
+
+    // ── Jagged teeth (lower half) ─────────────────────────────────────────────
+    // Wide gaping maw in the bottom 30% of the sphere
+    if (xFrac.abs() < 0.38) {
+      final mawY = sphereTop + spriteH * 0.68;
+      final mawH = spriteH * 0.28;
+      // Dark mouth cavity
+      sp.color = const Color(0xFF0A0000);
+      canvas.drawRect(Rect.fromLTWH(x, mawY, pxW, mawH), sp);
+      // Upper teeth (jagged: alternate tall/short)
+      final toothPhase = ((xFrac + 0.38) / 0.76 * 7).floor();
+      sp.color = Colors.white.withOpacity(0.88);
+      if (toothPhase % 2 == 0) {
+        canvas.drawRect(Rect.fromLTWH(x, mawY, pxW, mawH * 0.45), sp);
+      } else {
+        canvas.drawRect(Rect.fromLTWH(x, mawY, pxW, mawH * 0.25), sp);
       }
+      // Lower teeth
+      if (toothPhase % 2 == 1) {
+        sp.color = Colors.white.withOpacity(0.75);
+        canvas.drawRect(Rect.fromLTWH(x, mawY + mawH - mawH * 0.40, pxW, mawH * 0.40), sp);
+      }
+      // Gum/blood at top and bottom of maw
+      sp.color = const Color(0xFF880000).withOpacity(0.60);
+      canvas.drawRect(Rect.fromLTWH(x, mawY - 1, pxW, 2), sp);
+      canvas.drawRect(Rect.fromLTWH(x, mawY + mawH, pxW, 2), sp);
     }
   }
 
@@ -964,6 +1028,11 @@ class _RaycasterPainter extends CustomPainter {
   // ── Screen effects ──────────────────────────────────────────────────────────
 
   void _drawScreenFx(Canvas canvas, Size size) {
+    // Atmospheric darkness pulse (scary random dim)
+    if (dimFlash > 0) {
+      canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height),
+        Paint()..color = const Color(0xFF0A0000).withOpacity(dimFlash * 0.82)..isAntiAlias = false);
+    }
     if (shootFlash > 0) {
       canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height),
         Paint()..color = Colors.orange.withOpacity(shootFlash * 0.22)..isAntiAlias = false);
