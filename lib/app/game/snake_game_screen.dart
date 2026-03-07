@@ -311,106 +311,112 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> {
   }
 
   Widget _buildStartOverlay() {
-    return Positioned.fill(
-      child: Container(
-        color: Colors.white.withOpacity(0.88),
-        child: const Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text('🐍', style: TextStyle(fontSize: 64)),
-            SizedBox(height: 16),
-            Text(
-              'VÍBORA NEÓN',
-              style: TextStyle(
-                color: Colors.black,
-                fontSize: 28,
-                fontWeight: FontWeight.bold,
-                letterSpacing: 6,
-              ),
+  return Positioned.fill(
+    child: Container(
+      color: const Color(0xEE0A1A0A),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Text('🐍', style: TextStyle(fontSize: 56)),
+          const SizedBox(height: 10),
+          const Text(
+            'LA SIERPE',
+            style: TextStyle(
+              color: Color(0xFF00FF44),
+              fontSize: 32,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 8,
             ),
-            SizedBox(height: 24),
-            Text(
-              'Presiona A o START para empezar',
-              style: TextStyle(color: Colors.black54, fontSize: 13),
-              textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 4),
+          const Text('VÍBORA NEÓN',
+            style: TextStyle(color: Color(0xFF44AA44), fontSize: 12, letterSpacing: 4)),
+          const SizedBox(height: 28),
+          const Text('D-pad para dirigir la serpiente',
+            style: TextStyle(color: Color(0xFF88CC88), fontSize: 12)),
+          const SizedBox(height: 4),
+          const Text('Desliza en pantalla para jugar sin control',
+            style: TextStyle(color: Color(0xFF557755), fontSize: 11)),
+          const SizedBox(height: 16),
+          Container(
+            margin: const EdgeInsets.symmetric(horizontal: 40),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            decoration: BoxDecoration(
+              border: Border.all(color: const Color(0x6600FF44), width: 1),
+              borderRadius: BorderRadius.circular(8),
             ),
-            SizedBox(height: 4),
-            Text(
-              'Usa el D-pad para dirigir',
-              style: TextStyle(color: Colors.black38, fontSize: 12),
-              textAlign: TextAlign.center,
-            ),
-            SizedBox(height: 8),
-            Text(
-              '+1 pto cada 5 niveles  ·  Sube de nivel cada 4 frutas',
-              style: TextStyle(color: Colors.black38, fontSize: 12),
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
+            child: const Column(children: [
+              Text('+1 pto cada 5 niveles', style: TextStyle(color: Color(0xFFFFD700), fontSize: 11, fontWeight: FontWeight.bold)),
+              Text('Sube de nivel cada 4 frutas', style: TextStyle(color: Color(0xFF88AA88), fontSize: 10)),
+            ]),
+          ),
+          const SizedBox(height: 28),
+          const Text('Desliza o pulsa A / START',
+            style: TextStyle(color: Color(0xFF336633), fontSize: 12)),
+        ],
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _buildGameOverOverlay() {
-    final canRestart = _saldo >= 10;
+  final canRestart = _saldo >= 10;
 
-    return Positioned.fill(
-      child: Container(
-        color: Colors.white.withOpacity(0.92),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Text(
-              'Game Over',
-              style: TextStyle(
-                  color: Colors.black,
-                  fontSize: 36,
-                  fontWeight: FontWeight.bold),
+  return Positioned.fill(
+    child: Container(
+      color: const Color(0xEE080808),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Text('☠', style: TextStyle(fontSize: 48, color: Color(0xFF880000))),
+          const SizedBox(height: 8),
+          const Text(
+            'GAME OVER',
+            style: TextStyle(
+              color: Color(0xFFFF3300),
+              fontSize: 34,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 4,
             ),
-            const SizedBox(height: 12),
-            Text(
-              'Puntuación: $_score',
-              style: const TextStyle(color: Colors.black54, fontSize: 18),
-            ),
-            if (_bestScore > 0)
-              Text(
-                'Mejor: $_bestScore',
-                style: const TextStyle(color: Color(0xFFFFB300), fontSize: 14, fontWeight: FontWeight.bold),
-              ),
-            const SizedBox(height: 32),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 32),
-              child: SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: canRestart ? _restart : null,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.black,
-                    foregroundColor: Colors.white,
-                    disabledBackgroundColor: Colors.grey.shade300,
-                    disabledForegroundColor: Colors.grey.shade500,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: const StadiumBorder(),
-                    elevation: 0,
-                  ),
-                  child: Text(
-                    canRestart ? 'Reintentar  (−10 pts)' : 'Sin puntos suficientes',
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                  ),
+          ),
+          const SizedBox(height: 4),
+          const Text('La serpiente ha mordido algo duro',
+            style: TextStyle(color: Color(0xFF884444), fontSize: 11)),
+          const SizedBox(height: 20),
+          Text('Puntuación: $_score',
+            style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
+          if (_bestScore > 0)
+            Text('Récord: $_bestScore',
+              style: const TextStyle(color: Color(0xFFFFD700), fontSize: 14, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 28),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 32),
+            child: SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: canRestart ? _restart : null,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: canRestart ? const Color(0xFF00AA33) : Colors.grey.shade800,
+                  foregroundColor: Colors.white,
+                  disabledForegroundColor: Colors.grey,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: const StadiumBorder(),
+                ),
+                child: Text(
+                  canRestart ? 'Reintentar  (−10 pts)' : 'Sin puntos suficientes',
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                 ),
               ),
             ),
-            const SizedBox(height: 8),
-            const Text(
-              'Presiona SELECT para volver al menú',
-              style: TextStyle(color: Colors.black38, fontSize: 11),
-            ),
-          ],
-        ),
+          ),
+          const SizedBox(height: 8),
+          const Text('SELECT para volver',
+            style: TextStyle(color: Color(0xFF334433), fontSize: 10)),
+        ],
       ),
-    );
-  }
+    ),
+  );
+}
 }
 
 // ─── Painter ─────────────────────────────────────────────────────────────────

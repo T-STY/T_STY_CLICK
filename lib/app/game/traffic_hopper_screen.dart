@@ -497,26 +497,67 @@ class _TrafficHopperScreenState extends State<TrafficHopperScreen> {
   Widget _buildStartOverlay() {
     return Positioned.fill(
       child: Container(
-        color: Colors.black.withOpacity(0.82),
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color(0xEE115500), Color(0xEE004488)],
+          ),
+        ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Text('CRUCE PELIGROSO 🐸',
-                style: TextStyle(color: Colors.greenAccent, fontSize: 22, fontWeight: FontWeight.bold, letterSpacing: 2)),
+            const Text('🐸', style: TextStyle(fontSize: 60)),
+            const SizedBox(height: 8),
+            const Text('PASO A PASO',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 26,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 4,
+                shadows: [Shadow(color: Color(0xFF004400), blurRadius: 8)],
+              )),
+            const SizedBox(height: 4),
+            const Text('Cruza el río y la carretera',
+              style: TextStyle(color: Color(0xFF88DDAA), fontSize: 12, letterSpacing: 1)),
+            const SizedBox(height: 22),
+            Container(
+              margin: const EdgeInsets.symmetric(horizontal: 28),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.35),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: Colors.green.withOpacity(0.4), width: 1),
+              ),
+              child: const Column(children: [
+                Text('D-pad: mover la rana', style: TextStyle(color: Colors.white, fontSize: 13)),
+                SizedBox(height: 5),
+                Text('Sube a los troncos para cruzar el río',
+                  style: TextStyle(color: Color(0xFF88DDAA), fontSize: 11),
+                  textAlign: TextAlign.center),
+                SizedBox(height: 5),
+                Text('Evita los coches en la carretera',
+                  style: TextStyle(color: Color(0xFFFFAA44), fontSize: 11),
+                  textAlign: TextAlign.center),
+                SizedBox(height: 8),
+                Text('+1 PTO REAL POR NIVEL',
+                  style: TextStyle(color: Color(0xFFFFDD44), fontSize: 12, fontWeight: FontWeight.bold)),
+              ]),
+            ),
             const SizedBox(height: 20),
-            const Text('D-pad: mover rana', style: TextStyle(color: Colors.white70, fontSize: 13)),
-            const SizedBox(height: 6),
-            const Text('Llega a las 5 ranas en la orilla', style: TextStyle(color: Colors.white54, fontSize: 12)),
-            const SizedBox(height: 6),
-            const Text('+1 pto por nivel', style: TextStyle(color: Colors.amber, fontSize: 12)),
-            const SizedBox(height: 28),
+            const Text('¡Lleva 5 ranas a la orilla para ganar!',
+              style: TextStyle(color: Color(0xFF44AA66), fontSize: 11)),
+            const SizedBox(height: 16),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 32),
               child: SizedBox(width: double.infinity,
                 child: ElevatedButton(
                   onPressed: _startGame,
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.green.shade700, foregroundColor: Colors.white, shape: const StadiumBorder()),
-                  child: const Text('Nueva Partida'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF22AA44),
+                    foregroundColor: Colors.white,
+                    shape: const StadiumBorder()),
+                  child: const Text('¡A Saltar!', style: TextStyle(fontWeight: FontWeight.bold)),
                 ),
               ),
             ),
@@ -529,23 +570,46 @@ class _TrafficHopperScreenState extends State<TrafficHopperScreen> {
   Widget _buildGameOverOverlay() {
     return Positioned.fill(
       child: Container(
-        color: Colors.black.withOpacity(0.88),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Colors.black.withOpacity(0.90), const Color(0xDD220800)],
+          ),
+        ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Text('GAME OVER', style: TextStyle(color: Colors.red, fontSize: 32, fontWeight: FontWeight.bold, letterSpacing: 4)),
-            const SizedBox(height: 16),
-            Text('Puntuación: $_score', style: const TextStyle(color: Colors.white, fontSize: 20)),
-            const SizedBox(height: 6),
-            Text('Mejor: $_hiScore', style: const TextStyle(color: Colors.white54, fontSize: 16)),
-            const SizedBox(height: 32),
+            const Text('🚗', style: TextStyle(fontSize: 40)),
+            const Text('💀', style: TextStyle(fontSize: 28)),
+            const SizedBox(height: 8),
+            const Text('¡APLASTADA!',
+              style: TextStyle(
+                color: Color(0xFFFF3300),
+                fontSize: 30,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 3,
+              )),
+            const SizedBox(height: 4),
+            const Text('La rana no logró cruzar',
+              style: TextStyle(color: Color(0xFF884433), fontSize: 11)),
+            const SizedBox(height: 18),
+            Text('Puntuación: $_score',
+              style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 4),
+            Text('Récord: $_hiScore',
+              style: const TextStyle(color: Color(0xFFFFD700), fontSize: 14)),
+            const SizedBox(height: 28),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 32),
               child: SizedBox(width: double.infinity,
                 child: ElevatedButton(
                   onPressed: _restart,
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.green.shade700, foregroundColor: Colors.white, shape: const StadiumBorder()),
-                  child: const Text('Nueva Partida'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF22AA44),
+                    foregroundColor: Colors.white,
+                    shape: const StadiumBorder()),
+                  child: const Text('Volver a Saltar', style: TextStyle(fontWeight: FontWeight.bold)),
                 ),
               ),
             ),
@@ -674,17 +738,49 @@ class _HopperPainter extends CustomPainter {
   }
 
   void _drawLogs(Canvas canvas, double ox, double oy, double cs) {
-    final logPaint = Paint()..color = const Color(0xFF8B4513);
-    final highlightPaint = Paint()..color = const Color(0xFFA0522D);
-
+    final p = Paint()..isAntiAlias = false;
     for (final log in logs) {
       final x = ox + log.x * cs;
       final y = oy + log.row * cs;
       final w = log.len * cs;
+      final logTop = y + cs * 0.10;
+      final logH = cs * 0.80;
 
-      canvas.drawRect(Rect.fromLTWH(x, y + cs * 0.1, w, cs * 0.8), logPaint);
-      // Pixel highlight on top
-      canvas.drawRect(Rect.fromLTWH(x, y + cs * 0.1, w, cs * 0.15), highlightPaint);
+      // Main bark body
+      p.color = const Color(0xFF7A3A10);
+      canvas.drawRect(Rect.fromLTWH(x, logTop, w, logH), p);
+
+      // Top highlight (lighter bark)
+      p.color = const Color(0xFFA05028);
+      canvas.drawRect(Rect.fromLTWH(x, logTop, w, logH * 0.18), p);
+
+      // Bottom shadow
+      p.color = const Color(0xFF4A2008);
+      canvas.drawRect(Rect.fromLTWH(x, logTop + logH * 0.82, w, logH * 0.18), p);
+
+      // Bark grain lines (horizontal wrinkles)
+      p.color = const Color(0xFF5A2808);
+      final grainCount = (logH / 5).floor().clamp(2, 6);
+      for (int i = 1; i < grainCount; i++) {
+        final lineY = logTop + (logH * i / grainCount);
+        canvas.drawRect(Rect.fromLTWH(x + 2, lineY, w - 4, 1.5), p);
+      }
+
+      // Vertical bark cracks (spaced every ~cs apart)
+      p.color = const Color(0xFF4A2008);
+      final crackSpacing = cs * 0.85;
+      for (double cx2 = x + crackSpacing; cx2 < x + w - cs * 0.3; cx2 += crackSpacing) {
+        canvas.drawRect(Rect.fromLTWH(cx2, logTop + logH * 0.2, 1.5, logH * 0.6), p);
+      }
+
+      // End caps (darker circles at log ends)
+      p.color = const Color(0xFF3A1A06);
+      canvas.drawRect(Rect.fromLTWH(x, logTop, cs * 0.18, logH), p);
+      canvas.drawRect(Rect.fromLTWH(x + w - cs * 0.18, logTop, cs * 0.18, logH), p);
+      // Ring on cap
+      p.color = const Color(0xFF6A3018);
+      canvas.drawRect(Rect.fromLTWH(x + cs * 0.06, logTop + logH * 0.25, cs * 0.06, logH * 0.50), p);
+      canvas.drawRect(Rect.fromLTWH(x + w - cs * 0.12, logTop + logH * 0.25, cs * 0.06, logH * 0.50), p);
     }
   }
 
@@ -708,38 +804,76 @@ class _HopperPainter extends CustomPainter {
   }
 
   void _drawFrog(Canvas canvas, double ox, double oy, double cs) {
-    final frogColor = deathFlash ? const Color(0xFFFF2200) : const Color(0xFF00AA00);
-    final frogPaint = Paint()..color = frogColor;
+    final isDead = deathFlash;
+    final bodyGreen = isDead ? const Color(0xFFFF2200) : const Color(0xFF22BB22);
+    final darkGreen = isDead ? const Color(0xFFAA1100) : const Color(0xFF148814);
+    final bellyColor = isDead ? const Color(0xFFFF6644) : const Color(0xFF88EE66);
 
+    final p = Paint()..isAntiAlias = false;
     final fx = ox + frogX * cs;
     final fy = oy + frogRow * cs;
-    final bodySize = cs * 0.7;
-    final bodyOffset = (cs - bodySize) / 2;
+    final u = cs / 10.0; // 1 unit = cs/10
 
-    canvas.drawRect(
-      Rect.fromLTWH(fx + bodyOffset, fy + bodyOffset, bodySize, bodySize),
-      frogPaint,
-    );
-
-    // Eyes (white 2px dots)
-    final eyePaint = Paint()..color = const Color(0xFFFFFFFF);
-    final eyeSize = 2.0;
-
-    // Eye positions depend on facing direction
+    // Determine rotation based on facing
+    canvas.save();
+    canvas.translate(fx + cs / 2, fy + cs / 2);
     switch (frogFacing) {
-      case _Facing.up:
-        canvas.drawRect(Rect.fromLTWH(fx + bodyOffset + bodySize * 0.2, fy + bodyOffset + bodySize * 0.1, eyeSize, eyeSize), eyePaint);
-        canvas.drawRect(Rect.fromLTWH(fx + bodyOffset + bodySize * 0.7, fy + bodyOffset + bodySize * 0.1, eyeSize, eyeSize), eyePaint);
-      case _Facing.down:
-        canvas.drawRect(Rect.fromLTWH(fx + bodyOffset + bodySize * 0.2, fy + bodyOffset + bodySize * 0.75, eyeSize, eyeSize), eyePaint);
-        canvas.drawRect(Rect.fromLTWH(fx + bodyOffset + bodySize * 0.7, fy + bodyOffset + bodySize * 0.75, eyeSize, eyeSize), eyePaint);
-      case _Facing.left:
-        canvas.drawRect(Rect.fromLTWH(fx + bodyOffset + bodySize * 0.1, fy + bodyOffset + bodySize * 0.2, eyeSize, eyeSize), eyePaint);
-        canvas.drawRect(Rect.fromLTWH(fx + bodyOffset + bodySize * 0.1, fy + bodyOffset + bodySize * 0.65, eyeSize, eyeSize), eyePaint);
-      case _Facing.right:
-        canvas.drawRect(Rect.fromLTWH(fx + bodyOffset + bodySize * 0.75, fy + bodyOffset + bodySize * 0.2, eyeSize, eyeSize), eyePaint);
-        canvas.drawRect(Rect.fromLTWH(fx + bodyOffset + bodySize * 0.75, fy + bodyOffset + bodySize * 0.65, eyeSize, eyeSize), eyePaint);
+      case _Facing.up:    break; // default
+      case _Facing.down:  canvas.rotate(3.14159); break;
+      case _Facing.left:  canvas.rotate(-1.5708); break;
+      case _Facing.right: canvas.rotate(1.5708); break;
     }
+
+    // ── Back legs (wide spread at bottom) ──────────────────────────────────
+    p.color = darkGreen;
+    // Left back leg
+    canvas.drawRect(Rect.fromLTWH(-4.5*u, 1.5*u, 2.5*u, 3.5*u), p);
+    canvas.drawRect(Rect.fromLTWH(-5.5*u, 3.5*u, 2*u, 1.5*u), p); // foot
+    // Right back leg
+    canvas.drawRect(Rect.fromLTWH(2*u, 1.5*u, 2.5*u, 3.5*u), p);
+    canvas.drawRect(Rect.fromLTWH(3.5*u, 3.5*u, 2*u, 1.5*u), p); // foot
+
+    // ── Body ───────────────────────────────────────────────────────────────
+    p.color = bodyGreen;
+    canvas.drawRect(Rect.fromLTWH(-3.5*u, -2*u, 7*u, 5*u), p);
+
+    // Belly
+    p.color = bellyColor;
+    canvas.drawRect(Rect.fromLTWH(-2*u, -0.5*u, 4*u, 3*u), p);
+
+    // Spots on back
+    p.color = darkGreen;
+    canvas.drawRect(Rect.fromLTWH(-2.5*u, -1.5*u, 1.5*u, 1.5*u), p);
+    canvas.drawRect(Rect.fromLTWH(1*u, -1.5*u, 1.5*u, 1.5*u), p);
+
+    // ── Front legs (smaller, at sides of head) ────────────────────────────
+    p.color = darkGreen;
+    canvas.drawRect(Rect.fromLTWH(-5*u, -3*u, 2*u, 2.5*u), p);
+    canvas.drawRect(Rect.fromLTWH(3*u, -3*u, 2*u, 2.5*u), p);
+
+    // ── Head (wider than body) ─────────────────────────────────────────────
+    p.color = bodyGreen;
+    canvas.drawRect(Rect.fromLTWH(-4*u, -5.5*u, 8*u, 4*u), p);
+
+    // Mouth line
+    p.color = darkGreen;
+    canvas.drawRect(Rect.fromLTWH(-3*u, -2.5*u, 6*u, 1*u), p);
+
+    // ── Bulging eyes (protruding bumps at top corners) ─────────────────────
+    // Eye whites
+    p.color = Colors.white;
+    canvas.drawRect(Rect.fromLTWH(-4.5*u, -7*u, 2.5*u, 2.5*u), p);
+    canvas.drawRect(Rect.fromLTWH(2*u, -7*u, 2.5*u, 2.5*u), p);
+    // Pupils (black)
+    p.color = Colors.black;
+    canvas.drawRect(Rect.fromLTWH(-3.8*u, -6.5*u, 1.2*u, 1.2*u), p);
+    canvas.drawRect(Rect.fromLTWH(2.6*u, -6.5*u, 1.2*u, 1.2*u), p);
+    // Pupil shine
+    p.color = Colors.white;
+    canvas.drawRect(Rect.fromLTWH(-3.5*u, -6.8*u, 0.6*u, 0.6*u), p);
+    canvas.drawRect(Rect.fromLTWH(2.9*u, -6.8*u, 0.6*u, 0.6*u), p);
+
+    canvas.restore();
   }
 
   @override

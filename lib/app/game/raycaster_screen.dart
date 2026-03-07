@@ -484,19 +484,50 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
 
   Widget _buildStartOverlay() {
     return Container(
-      color: Colors.black.withOpacity(0.90),
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color(0xF0100000), Color(0xF0200000)],
+        ),
+      ),
       child: Center(
         child: Column(mainAxisSize: MainAxisSize.min, children: [
-          const Text('MAZMORRA INFERNAL 🔥',
-            style: TextStyle(color: Colors.white, fontSize: 24,
-              fontWeight: FontWeight.bold, fontFamily: 'monospace', letterSpacing: 2)),
-          const SizedBox(height: 6),
+          const Text('🔥', style: TextStyle(fontSize: 48)),
+          const SizedBox(height: 8),
+          const Text('INFRAMUNDO 2D',
+            style: TextStyle(
+              color: Color(0xFFCC2200),
+              fontSize: 26,
+              fontWeight: FontWeight.bold,
+              fontFamily: 'monospace',
+              letterSpacing: 3,
+            )),
+          const SizedBox(height: 4),
           const Text('Demonios acechan en la oscuridad…',
-            style: TextStyle(color: Color(0xFFCC4400), fontSize: 12, fontFamily: 'monospace')),
-          const SizedBox(height: 24),
-          const Text('↑↓ mover   ←→ girar   A disparar',
-            style: TextStyle(color: Colors.green, fontSize: 13, fontFamily: 'monospace')),
-          const SizedBox(height: 28),
+            style: TextStyle(color: Color(0xFF882200), fontSize: 11, fontFamily: 'monospace')),
+          const SizedBox(height: 22),
+          Container(
+            margin: const EdgeInsets.symmetric(horizontal: 24),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              border: Border.all(color: const Color(0xFF660000), width: 1),
+              color: const Color(0x33110000),
+            ),
+            child: const Column(children: [
+              Text('↑↓ mover   ←→ girar   A disparar',
+                style: TextStyle(color: Color(0xFF44FF00), fontSize: 12, fontFamily: 'monospace')),
+              SizedBox(height: 6),
+              Text('X: escopeta (¡cuando la desbloquees!)',
+                style: TextStyle(color: Color(0xFF888888), fontSize: 10, fontFamily: 'monospace')),
+              SizedBox(height: 8),
+              Text('BAJAS × OLEADA = PUNTUACIÓN',
+                style: TextStyle(color: Color(0xFFCC8800), fontSize: 10, fontWeight: FontWeight.bold, fontFamily: 'monospace')),
+              Text('+1 PTO CADA 5 OLEADAS',
+                style: TextStyle(color: Color(0xFFFF4400), fontSize: 11, fontWeight: FontWeight.bold, fontFamily: 'monospace')),
+            ]),
+          ),
+          const SizedBox(height: 22),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 32),
             child: SizedBox(width: double.infinity,
@@ -504,8 +535,10 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
                 onPressed: _startGame,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF7B0000),
-                  foregroundColor: Colors.white, shape: const StadiumBorder()),
-                child: const Text('Entrar'),
+                  foregroundColor: Colors.white,
+                  shape: const StadiumBorder()),
+                child: const Text('⚔  Entrar a la Mazmorra',
+                  style: TextStyle(fontWeight: FontWeight.bold)),
               )),
           ),
         ]),
@@ -515,20 +548,36 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
 
   Widget _buildDeathOverlay() {
     return Container(
-      color: Colors.black.withOpacity(0.90),
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color(0xF0200000), Color(0xF0050000)],
+        ),
+      ),
       child: Center(
         child: Column(mainAxisSize: MainAxisSize.min, children: [
-          const Text('HAS CAÍDO 💀',
-            style: TextStyle(color: Color(0xFFFF2200), fontSize: 28,
-              fontWeight: FontWeight.bold, fontFamily: 'monospace', letterSpacing: 2)),
-          const SizedBox(height: 16),
+          const Text('💀', style: TextStyle(fontSize: 52)),
+          const SizedBox(height: 8),
+          const Text('HAS CAÍDO',
+            style: TextStyle(
+              color: Color(0xFFFF2200),
+              fontSize: 30,
+              fontWeight: FontWeight.bold,
+              fontFamily: 'monospace',
+              letterSpacing: 3,
+            )),
+          const SizedBox(height: 4),
+          const Text('Los demonios han terminado contigo',
+            style: TextStyle(color: Color(0xFF882200), fontSize: 11, fontFamily: 'monospace')),
+          const SizedBox(height: 20),
           Text('Bajas: $_kills',
-            style: const TextStyle(color: Colors.white, fontSize: 18, fontFamily: 'monospace')),
+            style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold, fontFamily: 'monospace')),
           Text('Oleada alcanzada: $_wave',
-            style: const TextStyle(color: Colors.white70, fontSize: 14, fontFamily: 'monospace')),
+            style: const TextStyle(color: Color(0xFFFF8800), fontSize: 14, fontFamily: 'monospace')),
           Text('Récord: $_hiScore bajas',
-            style: const TextStyle(color: Colors.yellow, fontSize: 12, fontFamily: 'monospace')),
-          const SizedBox(height: 28),
+            style: const TextStyle(color: Color(0xFFFFDD00), fontSize: 12, fontFamily: 'monospace')),
+          const SizedBox(height: 26),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 32),
             child: SizedBox(width: double.infinity,
@@ -536,8 +585,10 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
                 onPressed: _restart,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF7B0000),
-                  foregroundColor: Colors.white, shape: const StadiumBorder()),
-                child: const Text('Nueva Partida'),
+                  foregroundColor: Colors.white,
+                  shape: const StadiumBorder()),
+                child: const Text('⚔  Nueva Batalla',
+                  style: TextStyle(fontWeight: FontWeight.bold)),
               )),
           ),
         ]),
@@ -606,24 +657,17 @@ class _RaycasterPainter extends CustomPainter {
     p.color = const Color(0xFF180A00);
     canvas.drawRect(Rect.fromLTWH(0, size.height / 2, size.width, size.height / 2), p);
 
-    // Lava glow strips across the floor (near camera = bottom of screen)
-    for (int col = 0; col < 60; col++) {
-      final fx = (col / 60.0) * size.width;
-      final phase = col * 0.8 + time * 3.5;
-      final flameH = (sin(phase) * 0.05 + 0.09) * size.height;
-      final brightness = (sin(phase + 1.2) + 1) / 2;
-
-      // Lava base
-      p.color = Color.fromRGBO(
-        (200 + 55 * brightness).round(), (40 + 40 * brightness).round(), 0, 0.55);
-      canvas.drawRect(
-        Rect.fromLTWH(fx, size.height - flameH, size.width / 60 + 1, flameH), p);
-
-      // Bright flame tip
-      p.color = Color.fromRGBO(255, (180 + 75 * brightness).round(), 0, 0.7);
-      canvas.drawRect(
-        Rect.fromLTWH(fx, size.height - flameH, size.width / 60 + 1, flameH * 0.28), p);
+    // Atmospheric stone floor lines (distance shading)
+    p.color = const Color(0xFF200C00);
+    for (int i = 0; i < 10; i++) {
+      final lineY = size.height * 0.5 + size.height * 0.5 * (i + 0.5) / 10;
+      canvas.drawRect(Rect.fromLTWH(0, lineY, size.width, 1.0), p);
     }
+    // Blood pools (static dark splotches near ground)
+    p.color = const Color(0xFF2A0400);
+    canvas.drawRect(Rect.fromLTWH(0, size.height * 0.82, size.width * 0.12, size.height * 0.08), p);
+    canvas.drawRect(Rect.fromLTWH(size.width * 0.55, size.height * 0.88, size.width * 0.18, size.height * 0.06), p);
+    canvas.drawRect(Rect.fromLTWH(size.width * 0.78, size.height * 0.80, size.width * 0.10, size.height * 0.10), p);
 
     // Screen-edge infernal glow (vignette)
     final vPaint = Paint()
@@ -820,6 +864,45 @@ class _RaycasterPainter extends CustomPainter {
     if ((frac >= 0.28 && frac <= 0.44) || (frac >= 0.56 && frac <= 0.72)) {
       sp.color = body;
       canvas.drawRect(Rect.fromLTWH(x, by + v * 15, pxW, v * 5), sp);
+    }
+    // Pectoral muscles (light highlight strips, frac 22-38% and 62-78%, rows 4-6)
+    if ((frac >= 0.22 && frac <= 0.38) || (frac >= 0.62 && frac <= 0.78)) {
+      sp.color = Color.fromARGB(255,
+        (body.red * 1.25).clamp(0, 255).round(),
+        (body.green * 1.1).clamp(0, 255).round(),
+        (body.blue * 1.1).clamp(0, 255).round(),
+      );
+      canvas.drawRect(Rect.fromLTWH(x, by + v * 4.0, pxW, v * 1.5), sp);
+    }
+    // Abdominal ridges (alternating strips, frac 30-70%, rows 7-14)
+    if (frac >= 0.30 && frac <= 0.70) {
+      for (int ab = 0; ab < 4; ab++) {
+        final isLight = ab % 2 == 0;
+        sp.color = isLight
+            ? Color.fromARGB(255,
+                (body.red * 1.20).clamp(0, 255).round(),
+                (body.green * 1.0).clamp(0, 255).round(),
+                (body.blue * 1.0).clamp(0, 255).round())
+            : Color.fromARGB(255,
+                (body.red * 0.65).clamp(0, 255).round(),
+                (body.green * 0.65).clamp(0, 255).round(),
+                (body.blue * 0.65).clamp(0, 255).round());
+        canvas.drawRect(Rect.fromLTWH(x, by + v * (7.5 + ab * 1.6), pxW, v * 0.9), sp);
+      }
+    }
+    // Bulging arm highlight (outer third of arm column, rows 5-10)
+    if ((frac >= 0.05 && frac <= 0.13) || (frac >= 0.87 && frac <= 0.95)) {
+      sp.color = Color.fromARGB(255,
+        (body.red * 1.15).clamp(0, 255).round(),
+        (body.green * 1.0).clamp(0, 255).round(),
+        (body.blue * 1.0).clamp(0, 255).round(),
+      );
+      canvas.drawRect(Rect.fromLTWH(x, by + v * 5.0, pxW, v * 5), sp);
+    }
+    // Thick neck (frac 40-60%, rows 3-4.5)
+    if (frac >= 0.40 && frac <= 0.60) {
+      sp.color = body;
+      canvas.drawRect(Rect.fromLTWH(x, by + v * 3.0, pxW, v * 1.5), sp);
     }
   }
 
@@ -1164,25 +1247,54 @@ class _RaycasterPainter extends CustomPainter {
                cy - sin(playerAngle + fovHalf) * radarR), p);
     p.style = PaintingStyle.fill;
 
-    // Enemy dots (show even through walls — that's the point of the radar)
+    // Enemy icons — type-specific symbols matching enemy colors
     for (final e in enemies) {
       if (!e.alive) continue;
       final dx = e.x - posX, dy = e.y - posY;
       final rx = cx + dx * scale;
-      final ry = cy + dy * scale; // map-Y-down = radar-Y-down (consistent with FOV cone)
-      // Clamp dots to radar boundary
+      final ry = cy + dy * scale;
       if ((rx - cx) * (rx - cx) + (ry - cy) * (ry - cy) > (radarR - 3) * (radarR - 3)) continue;
-      p.color = e.type == _EnemyType.demon
-          ? const Color(0xFFFF3322)
-          : e.type == _EnemyType.cacodemon
-              ? const Color(0xFF44BBFF)
-              : Colors.white70;
-      canvas.drawCircle(Offset(rx, ry), 3.5, p);
-      p.color = Colors.black38;
-      p.style = PaintingStyle.stroke;
-      p.strokeWidth = 0.8;
-      canvas.drawCircle(Offset(rx, ry), 3.5, p);
-      p.style = PaintingStyle.fill;
+
+      if (e.type == _EnemyType.skeleton) {
+        // Skull: white circle + dark eye holes cross
+        p.color = Colors.white70;
+        canvas.drawCircle(Offset(rx, ry), 3.5, p);
+        p.color = Colors.black;
+        canvas.drawRect(Rect.fromLTWH(rx - 2, ry - 1, 1.5, 1.5), p); // left eye
+        canvas.drawRect(Rect.fromLTWH(rx + 0.5, ry - 1, 1.5, 1.5), p); // right eye
+        canvas.drawRect(Rect.fromLTWH(rx - 1, ry + 0.8, 2, 1), p); // nasal
+      } else if (e.type == _EnemyType.demon) {
+        // Red diamond + horn nubs above
+        p.color = const Color(0xFFFF3322);
+        // Diamond body
+        final path = Path()
+          ..moveTo(rx, ry - 4)
+          ..lineTo(rx + 3, ry)
+          ..lineTo(rx, ry + 3)
+          ..lineTo(rx - 3, ry)
+          ..close();
+        canvas.drawPath(path, p);
+        // Horn nubs
+        p.color = const Color(0xFFAA1100);
+        canvas.drawRect(Rect.fromLTWH(rx - 3.5, ry - 6, 1.5, 2.5), p);
+        canvas.drawRect(Rect.fromLTWH(rx + 2, ry - 6, 1.5, 2.5), p);
+      } else {
+        // Cacodemon: blue filled circle with tiny spike top
+        p.color = const Color(0xFF44BBFF);
+        canvas.drawCircle(Offset(rx, ry + 0.5), 3.5, p);
+        // Horn on top
+        final hornPath = Path()
+          ..moveTo(rx - 1.5, ry - 3)
+          ..lineTo(rx, ry - 6)
+          ..lineTo(rx + 1.5, ry - 3)
+          ..close();
+        canvas.drawPath(hornPath, p);
+        p.color = Colors.black38;
+        p.style = PaintingStyle.stroke;
+        p.strokeWidth = 0.8;
+        canvas.drawCircle(Offset(rx, ry + 0.5), 3.5, p);
+        p.style = PaintingStyle.fill;
+      }
     }
 
     // Player dot + forward arrow
@@ -1223,8 +1335,8 @@ class _RaycasterPainter extends CustomPainter {
   void _drawShotgun(Canvas canvas, Size size, bool firing) {
     canvas.save();
     // Same base position and tilt as pistol so both feel consistent
-    canvas.translate(size.width * 0.53, size.height * 0.92);
-    canvas.rotate(-0.087); // 5° left tilt – identical to pistol
+    canvas.translate(size.width * 0.60, size.height * 0.94);
+    canvas.rotate(-0.25); // 5° left tilt – identical to pistol
 
     final p = Paint()..isAntiAlias = false;
 
@@ -1335,8 +1447,8 @@ class _RaycasterPainter extends CustomPainter {
 
   void _drawPistol(Canvas canvas, Size size, bool firing) {
     canvas.save();
-    canvas.translate(size.width * 0.62, size.height * 0.92);
-    canvas.rotate(-0.087); // 5° left tilt – matches shotgun
+    canvas.translate(size.width * 0.78, size.height * 0.94);
+    canvas.rotate(-0.35); // 5° left tilt – matches shotgun
 
     final p = Paint()..isAntiAlias = false;
 

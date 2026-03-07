@@ -566,111 +566,106 @@ class _MazeChasScreenState extends State<MazeChasScreen> {
   // ── Start overlay ──────────────────────────────────────────────────────────
 
   Widget _buildStartOverlay() {
-    return Positioned.fill(
-      child: Container(
-        color: Colors.black.withOpacity(0.85),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Text(
-              'REINO FANTASMAL',
-              style: TextStyle(
-                color: Color(0xFFFFFF00),
-                fontSize: 34,
-                fontWeight: FontWeight.bold,
-                letterSpacing: 6,
-              ),
+  return Positioned.fill(
+    child: Container(
+      color: const Color(0xEE000018),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Text('TRAGALABERINTO',
+            style: TextStyle(
+              color: Color(0xFFFFFF00),
+              fontSize: 26,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 4,
+            )),
+          const SizedBox(height: 4),
+          const Text('● ● ● ● ● ● ● ● ●',
+            style: TextStyle(color: Color(0xFFFFFF00), fontSize: 8, letterSpacing: 4)),
+          const SizedBox(height: 20),
+          Container(
+            margin: const EdgeInsets.symmetric(horizontal: 28),
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              border: Border.all(color: const Color(0xFF0066FF), width: 2),
+              borderRadius: BorderRadius.circular(4),
+              color: const Color(0xFF000033),
             ),
-            const SizedBox(height: 24),
-            const Text(
-              'D-pad para mover',
-              style: TextStyle(color: Colors.white70, fontSize: 13),
-            ),
-            const SizedBox(height: 6),
-            const Text(
-              'Come todos los puntos para pasar de nivel',
-              style: TextStyle(color: Colors.white54, fontSize: 12),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 6),
-            const Text(
-              'Pastilla grande = fantasmas azules (comelos!)',
-              style: TextStyle(color: Colors.white54, fontSize: 12),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 12),
-            const Text(
-              '+1 pto por nivel',
-              style: TextStyle(
-                color: Color(0xFFFFFF00),
-                fontSize: 13,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 32),
-            const Text(
-              'Presiona A o START para jugar',
-              style: TextStyle(color: Colors.white38, fontSize: 12),
-            ),
-          ],
-        ),
+            child: const Column(children: [
+              Text('D-pad: mover por el laberinto',
+                style: TextStyle(color: Colors.white70, fontSize: 12)),
+              SizedBox(height: 6),
+              Text('Come todos los puntos para pasar de nivel',
+                style: TextStyle(color: Colors.white54, fontSize: 11),
+                textAlign: TextAlign.center),
+              SizedBox(height: 6),
+              Text('Pastilla grande → ¡Fantasmas comestibles!',
+                style: TextStyle(color: Color(0xFF00CCFF), fontSize: 11),
+                textAlign: TextAlign.center),
+              SizedBox(height: 8),
+              Text('+1 PTO REAL POR NIVEL',
+                style: TextStyle(color: Color(0xFFFFFF00), fontSize: 12, fontWeight: FontWeight.bold)),
+            ]),
+          ),
+          const SizedBox(height: 28),
+          const Text('👻  Cuidado con los fantasmas  👻',
+            style: TextStyle(color: Color(0xFFFF6699), fontSize: 12)),
+          const SizedBox(height: 16),
+          const Text('Presiona A o START para jugar',
+            style: TextStyle(color: Color(0xFF4444AA), fontSize: 12)),
+        ],
       ),
-    );
-  }
+    ),
+  );
+}
 
   // ── Game over overlay ──────────────────────────────────────────────────────
 
   Widget _buildGameOverOverlay() {
-    return Positioned.fill(
-      child: Container(
-        color: Colors.black.withOpacity(0.90),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Text(
-              'GAME OVER',
-              style: TextStyle(
-                color: Color(0xFFFF0000),
-                fontSize: 36,
-                fontWeight: FontWeight.bold,
-                letterSpacing: 4,
+  return Positioned.fill(
+    child: Container(
+      color: const Color(0xEE000018),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Text('👻', style: TextStyle(fontSize: 52)),
+          const SizedBox(height: 8),
+          const Text('ATRAPADO',
+            style: TextStyle(
+              color: Color(0xFFFF2266),
+              fontSize: 32,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 4,
+            )),
+          const SizedBox(height: 4),
+          const Text('Un fantasma te ha engullido',
+            style: TextStyle(color: Color(0xFF884466), fontSize: 11)),
+          const SizedBox(height: 20),
+          Text('Puntuación: $_score',
+            style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 4),
+          Text('Récord: $_hiScore',
+            style: const TextStyle(color: Color(0xFFFFFF00), fontSize: 14)),
+          const SizedBox(height: 28),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 32),
+            child: SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: _restart,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF0044BB),
+                  foregroundColor: Colors.white,
+                  shape: const StadiumBorder()),
+                child: const Text('Nueva Partida', style: TextStyle(fontWeight: FontWeight.bold)),
               ),
             ),
-            const SizedBox(height: 16),
-            Text(
-              'SCORE: $_score',
-              style: const TextStyle(color: Colors.white, fontSize: 18),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              'BEST: $_hiScore',
-              style: const TextStyle(color: Colors.white54, fontSize: 15),
-            ),
-            const SizedBox(height: 32),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 32),
-              child: SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: _restart,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.yellow.shade700,
-                    foregroundColor: Colors.black,
-                    shape: const StadiumBorder(),
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                  ),
-                  child: const Text(
-                    'Nueva Partida',
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
-    );
-  }
+    ),
+  );
+}
 
   // ── Level complete overlay ─────────────────────────────────────────────────
 

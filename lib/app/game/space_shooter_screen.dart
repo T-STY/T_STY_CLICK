@@ -433,14 +433,15 @@ class _SpaceShooterScreenState extends State<SpaceShooterScreen> {
   void _alienFire(_Alien a) {
     switch (a.type) {
       case _AlienType.basic:
-        // Basic also does a burst of 3 with short reload
+        // Basic: 50% single shot, 50% burst of 3
         _bullets.add(_Bullet(a.x + 0.5, a.y + 0.8, isPlayer: false));
-        a.burstCount = 2;
+        a.burstCount = _rng.nextDouble() < 0.5 ? 0 : 2;
         a.burstTimer = 0.12;
         break;
       case _AlienType.burst:
+        // Burst: 30% single shot, 70% burst of 3
         _bullets.add(_Bullet(a.x + 0.5, a.y + 0.8, isPlayer: false));
-        a.burstCount = 2;
+        a.burstCount = _rng.nextDouble() < 0.3 ? 0 : 2;
         a.burstTimer = 0.10;
         break;
       case _AlienType.scatter:
@@ -694,55 +695,100 @@ class _SpaceShooterScreenState extends State<SpaceShooterScreen> {
       );
 
   Widget _buildStartOverlay() => Positioned.fill(
-        child: Container(
-          color: Colors.black.withOpacity(0.75),
-          child: const Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text('🚀', style: TextStyle(fontSize: 52)),
-                SizedBox(height: 10),
-                Text('ASALTO ESTELAR',
-                    style: TextStyle(
-                        color: Colors.cyanAccent,
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 4)),
-                SizedBox(height: 18),
-                Text('Pulsa cualquier botón para empezar',
+      child: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color(0xFF020218), Color(0xFF04042A)],
+          ),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Text('🚀', style: TextStyle(fontSize: 60)),
+            const SizedBox(height: 8),
+            const Text('ASTROCAZA',
+                style: TextStyle(
+                    color: Color(0xFF44EEFF),
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 6,
+                    shadows: [Shadow(color: Color(0xFF0088FF), blurRadius: 12)])),
+            const SizedBox(height: 4),
+            const Text('★ ★ ★ ★ ★',
+                style: TextStyle(color: Color(0xFF224488), fontSize: 10, letterSpacing: 6)),
+            const SizedBox(height: 22),
+            Container(
+              margin: const EdgeInsets.symmetric(horizontal: 28),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.06),
+                border: Border.all(color: const Color(0xFF224488), width: 1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Column(children: [
+                Text('D-pad: mover nave',
                     style: TextStyle(color: Colors.white70, fontSize: 12)),
                 SizedBox(height: 4),
-                Text('D-pad: mover nave',
-                    style: TextStyle(color: Colors.white54, fontSize: 11)),
                 Text('A: disparar  •  X: disparo especial',
                     style: TextStyle(color: Colors.white54, fontSize: 11)),
-                SizedBox(height: 4),
-                Text('+1 pto real por ola completada',
-                    style: TextStyle(color: Colors.white38, fontSize: 10)),
-                SizedBox(height: 2),
-                Text('SELECT para volver al menú',
-                    style: TextStyle(color: Colors.white38, fontSize: 10)),
+                SizedBox(height: 6),
+                Text('+1 PTO REAL POR OLA COMPLETADA',
+                    style: TextStyle(
+                        color: Color(0xFFFFDD44),
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold)),
               ]),
+            ),
+            const SizedBox(height: 20),
+            const Text('Los enemigos también disparan — ¡esquívalos!',
+                style: TextStyle(color: Color(0xFF445577), fontSize: 10)),
+            const SizedBox(height: 4),
+            const Text('SELECT para volver al menú',
+                style: TextStyle(color: Color(0xFF223344), fontSize: 10)),
+          ],
         ),
-      );
+      ),
+    );
 
   Widget _buildDeathOverlay() => Positioned.fill(
-        child: Container(
-          color: Colors.black87,
-          child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-            const Text('💥 FIN DEL JUEGO',
+      child: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [const Color(0xDD020218), Colors.black.withOpacity(0.92)],
+          ),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Text('💥', style: TextStyle(fontSize: 56)),
+            const Text('NAVE DESTRUIDA',
                 style: TextStyle(
-                    color: Colors.red,
+                    color: Color(0xFFFF4400),
                     fontSize: 22,
-                    fontWeight: FontWeight.bold)),
-            const SizedBox(height: 8),
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 3)),
+            const SizedBox(height: 4),
+            const Text('Los alienígenas han ganado esta ronda',
+                style: TextStyle(color: Color(0xFF664422), fontSize: 10)),
+            const SizedBox(height: 16),
             Text('Puntuación: $_score',
-                style: const TextStyle(color: Colors.white, fontSize: 16)),
+                style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold)),
             Text('Ola alcanzada: $_wave',
-                style: const TextStyle(color: Colors.white70, fontSize: 13)),
+                style: const TextStyle(color: Color(0xFF44EEFF), fontSize: 13)),
             if (_bestScore > 0)
-              Text('Mejor: $_bestScore',
-                  style: const TextStyle(color: Color(0xFFFFB300), fontSize: 13, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 18),
+              Text('Récord: $_bestScore',
+                  style: const TextStyle(
+                      color: Color(0xFFFFD700),
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold)),
+            const SizedBox(height: 22),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 32),
               child: SizedBox(
@@ -750,19 +796,21 @@ class _SpaceShooterScreenState extends State<SpaceShooterScreen> {
                 child: ElevatedButton(
                   onPressed: _restart,
                   style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.red.shade700,
+                      backgroundColor: const Color(0xFF0066AA),
                       foregroundColor: Colors.white,
                       shape: const StadiumBorder()),
-                  child: const Text('Nueva Partida'),
+                  child: const Text('Relanzar nave',
+                      style: TextStyle(fontWeight: FontWeight.bold)),
                 ),
               ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 6),
             const Text('SELECT para volver al menú',
-                style: TextStyle(color: Colors.white38, fontSize: 10)),
-          ]),
+                style: TextStyle(color: Color(0xFF223344), fontSize: 10)),
+          ],
         ),
-      );
+      ),
+    );
 }
 
 // ─── Star helper ─────────────────────────────────────────────────────────────

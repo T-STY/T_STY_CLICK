@@ -342,80 +342,122 @@ class _FlappyBirdScreenState extends State<FlappyBirdScreen> {
       );
 
   Widget _buildStartOverlay() => Positioned.fill(
-        child: Container(
-          color: Colors.black.withOpacity(0.55),
-          child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Text('🐦', style: TextStyle(fontSize: 56)),
-                const SizedBox(height: 10),
-                const Text('ALAS DE CROMO',
-                    style: TextStyle(
-                        color: Colors.yellow,
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 3)),
-                const SizedBox(height: 18),
-                const Text('Pulsa A, B o ↑ para volar',
-                    style: TextStyle(color: Colors.white70, fontSize: 12)),
-                const SizedBox(height: 4),
-                const Text('Pasa entre los tubos sin chocar',
-                    style: TextStyle(color: Colors.white54, fontSize: 11)),
-                const SizedBox(height: 6),
-                const Text('+1 pto real cada 10 tubos',
-                    style: TextStyle(color: Colors.white38, fontSize: 10)),
-                const SizedBox(height: 2),
-                const Text('SELECT para volver al menú',
-                    style: TextStyle(color: Colors.white38, fontSize: 10)),
-              ]),
+      child: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color(0xCC5EC8E8), Color(0xCC70E080)],
+          ),
         ),
-      );
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Text('🐦', style: TextStyle(fontSize: 64)),
+            const SizedBox(height: 8),
+            const Text('ALAS LOCAS',
+                style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 26,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 4,
+                    shadows: [Shadow(color: Color(0xFF008822), blurRadius: 8)])),
+            const SizedBox(height: 4),
+            const Text('Alas de Cromo',
+                style: TextStyle(color: Colors.white70, fontSize: 12, letterSpacing: 2)),
+            const SizedBox(height: 22),
+            Container(
+              margin: const EdgeInsets.symmetric(horizontal: 32),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.35),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Column(children: [
+                Text('Pulsa A, B o ↑ para aletear',
+                    style: TextStyle(color: Colors.white, fontSize: 13)),
+                SizedBox(height: 4),
+                Text('Pasa entre los tubos sin chocar',
+                    style: TextStyle(color: Colors.white70, fontSize: 11)),
+                SizedBox(height: 4),
+                Text('+1 pto real cada 10 tubos',
+                    style: TextStyle(
+                        color: Color(0xFFFFEE44),
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold)),
+              ]),
+            ),
+            const SizedBox(height: 8),
+            const Text('SELECT para volver al menú',
+                style: TextStyle(color: Colors.white38, fontSize: 10)),
+          ],
+        ),
+      ),
+    );
 
   Widget _buildDeathOverlay() => Positioned.fill(
-        child: Container(
-          color: Colors.black.withOpacity(0.80),
-          child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Text('💥', style: TextStyle(fontSize: 52)),
-                const Text('¡CHOCASTE!',
-                    style: TextStyle(
-                        color: Colors.orangeAccent,
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold)),
-                const SizedBox(height: 10),
-                Text('Tubos pasados: $_pipesPassed',
-                    style: const TextStyle(color: Colors.white, fontSize: 15)),
-                Text('Puntos reales: $_displayScore',
-                    style:
-                        const TextStyle(color: Colors.white70, fontSize: 13)),
-                if (_bestPipes > 0)
-                  Text('Mejor: $_bestPipes tubos',
-                      style: const TextStyle(color: Color(0xFFFFB300), fontSize: 13, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 20),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 32),
-                  child: SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: () {
-                        _resetGame();
-                        _startGame();
-                      },
-                      style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.orange.shade700,
-                          foregroundColor: Colors.white,
-                          shape: const StadiumBorder()),
-                      child: const Text('Intentar de nuevo'),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                const Text('SELECT para volver al menú',
-                    style: TextStyle(color: Colors.white38, fontSize: 10)),
-              ]),
+      child: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Colors.black.withOpacity(0.85), const Color(0xCC441100)],
+          ),
         ),
-      );
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Text('💥', style: TextStyle(fontSize: 56)),
+            const Text('¡CHOCASTE!',
+                style: TextStyle(
+                    color: Color(0xFFFF8800),
+                    fontSize: 26,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 2)),
+            const SizedBox(height: 4),
+            const Text('El pájaro no pudo esquivar',
+                style: TextStyle(color: Color(0xFF886644), fontSize: 11)),
+            const SizedBox(height: 16),
+            Text('Tubos pasados: $_pipesPassed',
+                style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold)),
+            Text('Puntos reales: $_displayScore',
+                style:
+                    const TextStyle(color: Colors.white70, fontSize: 13)),
+            if (_bestPipes > 0)
+              Text('Récord: $_bestPipes tubos',
+                  style: const TextStyle(
+                      color: Color(0xFFFFD700),
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold)),
+            const SizedBox(height: 24),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 32),
+              child: SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () {
+                    _resetGame();
+                    _startGame();
+                  },
+                  style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF5EC8E8),
+                      foregroundColor: Colors.white,
+                      shape: const StadiumBorder()),
+                  child: const Text('Volar de nuevo',
+                      style: TextStyle(fontWeight: FontWeight.bold)),
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text('SELECT para volver al menú',
+                style: TextStyle(color: Colors.white38, fontSize: 10)),
+          ],
+        ),
+      ),
+    );
 }
 
 // ─── Painter ─────────────────────────────────────────────────────────────────
