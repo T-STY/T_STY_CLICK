@@ -50,7 +50,7 @@ class Match3Screen extends StatefulWidget {
 
 // ─── State ────────────────────────────────────────────────────────────────────
 
-class _Match3ScreenState extends State<Match3Screen> {
+class _Match3ScreenState extends State<Match3Screen> with SingleTickerProviderStateMixin {
   late List<List<int>> _board;
 
   int _cursorCol = 3, _cursorRow = 3;
@@ -67,12 +67,17 @@ class _Match3ScreenState extends State<Match3Screen> {
   bool _isDead = false;
   bool _roundComplete = false;
   bool _roundCompleteDelay = false;
-  bool _swapFlash = false;
   int _comboCount = 0;
 
   // Swipe state
   Offset? _swipeStartPos;
   int? _swipeStartCol, _swipeStartRow;
+
+  // Swap animation
+  late AnimationController _swapAnimCtrl;
+  int _animC1 = -1, _animR1 = -1, _animC2 = -1, _animR2 = -1;
+  bool _isAnimating = false;
+  bool _swapForward = true; // true = forward swap, false = reverse (invalid)
 
   Timer? _secondTicker;
   final Random _rng = Random();
@@ -81,6 +86,14 @@ class _Match3ScreenState extends State<Match3Screen> {
   void initState() {
     super.initState();
     _saldo = widget.currentSaldo;
+    _swapAnimCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 180),
+    );
+    _swapAnimCtrl.addListener(() => setState(() {}));
+    _swapAnimCtrl.addStatusListener((status) {
+      if (status == AnimationStatus.completed) _onSwapAnimDone();
+    });
     widget.controller.addListener(_onControllerEvent);
     HighScoreService.load('match3').then((v) => setState(() => _hiScore = v));
     _initBoard();
@@ -88,6 +101,7 @@ class _Match3ScreenState extends State<Match3Screen> {
 
   @override
   void dispose() {
+    _swapAnimCtrl.dispose();
     _secondTicker?.cancel();
     widget.controller.removeListener(_onControllerEvent);
     super.dispose();
@@ -158,6 +172,7 @@ class _Match3ScreenState extends State<Match3Screen> {
   }
 
   void _selectOrSwap() {
+    if (_isAnimating) return;
     if (_selCol == null) {
       setState(() { _selCol = _cursorCol; _selRow = _cursorRow; });
       HapticFeedback.mediumImpact();
@@ -183,7 +198,7 @@ class _Match3ScreenState extends State<Match3Screen> {
   }
 
   void _onBoardPanEnd(DragEndDetails d) {
-    if (_swipeStartPos == null || !_isPlaying || _roundCompleteDelay) return;
+    if (_swipeStartPos == null || !_isPlaying || _roundCompleteDelay || _isAnimating) return;
     final vel = d.velocity.pixelsPerSecond;
     final dx = vel.dx, dy = vel.dy;
     if (dx.abs() < 100 && dy.abs() < 100) { _swipeStartPos = null; return; }
@@ -207,21 +222,43 @@ class _Match3ScreenState extends State<Match3Screen> {
   // ── Match logic ────────────────────────────────────────────────────────────
 
   void _doSwap(int c1, int r1, int c2, int r2) {
-    final tmp = _board[r1][c1];
-    _board[r1][c1] = _board[r2][c2];
-    _board[r2][c2] = tmp;
+    if (_isAnimating) return;
+    _animC1 = c1; _animR1 = r1;
+    _animC2 = c2; _animR2 = r2;
+    _swapForward = true;
+    _isAnimating = true;
+    _swapAnimCtrl.forward(from: 0.0);
+  }
 
-    final matches = _findMatches();
-    if (matches.isEmpty) {
-      _board[r2][c2] = _board[r1][c1];
-      _board[r1][c1] = tmp;
-      HapticFeedback.lightImpact();
+  void _onSwapAnimDone() {
+    if (_swapForward) {
+      // Commit swap in board
+      final tmp = _board[_animR1][_animC1];
+      _board[_animR1][_animC1] = _board[_animR2][_animC2];
+      _board[_animR2][_animC2] = tmp;
+
+      final matches = _findMatches();
+      if (matches.isEmpty) {
+        // Invalid swap — reverse: swap back in board and animate back
+        final tmp2 = _board[_animR1][_animC1];
+        _board[_animR1][_animC1] = _board[_animR2][_animC2];
+        _board[_animR2][_animC2] = tmp2;
+        HapticFeedback.lightImpact();
+        _swapForward = false;
+        _swapAnimCtrl.forward(from: 0.0);
+      } else {
+        _isAnimating = false;
+        _animC1 = _animR1 = _animC2 = _animR2 = -1;
+        _selCol = null; _selRow = null;
+        _comboCount = 0;
+        _resolveMatches();
+      }
+    } else {
+      // Reverse animation done
+      _isAnimating = false;
+      _animC1 = _animR1 = _animC2 = _animR2 = -1;
       setState(() { _selCol = null; _selRow = null; });
-      return;
     }
-    _selCol = null; _selRow = null;
-    _comboCount = 0;
-    _resolveMatches();
   }
 
   void _resolveMatches() {
@@ -382,28 +419,57 @@ class _Match3ScreenState extends State<Match3Screen> {
             // ── Center: top bar + swipeable candy board ────────────────────
             SizedBox(
               width: boardW,
-              child: Column(children: [
-                // Top bar
-                SizedBox(
-                  height: topBarH,
-                  child: _buildTopBar(boardW, topBarH),
-                ),
-                // Swipeable board
-                Expanded(
-                  child: GestureDetector(
-                    onPanStart: _isPlaying
-                        ? (d) => _onBoardPanStart(d, cellW, cellH, 0)
-                        : null,
-                    onPanEnd: _isPlaying ? _onBoardPanEnd : null,
-                    child: CustomPaint(
-                      painter: _CandyBoardPainter(
-                        board: _board,
-                        cursorCol: _cursorCol, cursorRow: _cursorRow,
-                        selCol: _selCol, selRow: _selRow,
-                        comboCount: _comboCount,
-                        showCursor: _isPlaying,
+              child: Stack(children: [
+                Column(children: [
+                  // Top bar
+                  SizedBox(
+                    height: topBarH,
+                    child: _buildTopBar(boardW, topBarH),
+                  ),
+                  // Swipeable board
+                  Expanded(
+                    child: GestureDetector(
+                      onPanStart: _isPlaying
+                          ? (d) => _onBoardPanStart(d, cellW, cellH, 0)
+                          : null,
+                      onPanEnd: _isPlaying ? _onBoardPanEnd : null,
+                      child: CustomPaint(
+                        painter: _CandyBoardPainter(
+                          board: _board,
+                          cursorCol: _cursorCol, cursorRow: _cursorRow,
+                          selCol: _selCol, selRow: _selRow,
+                          comboCount: _comboCount,
+                          showCursor: _isPlaying,
+                          animProgress: _isAnimating ? _swapAnimCtrl.value : -1.0,
+                          animForward: _swapForward,
+                          animC1: _animC1, animR1: _animR1,
+                          animC2: _animC2, animR2: _animR2,
+                        ),
+                        child: const SizedBox.expand(),
                       ),
-                      child: const SizedBox.expand(),
+                    ),
+                  ),
+                ]),
+                // Glass frame overlay (top + bottom chrome rails)
+                Positioned(
+                  top: topBarH - 3, left: 0, right: 0,
+                  child: Container(height: 4,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(colors: [
+                        Colors.white.withOpacity(0.35),
+                        Colors.white.withOpacity(0.08),
+                      ], begin: Alignment.topCenter, end: Alignment.bottomCenter),
+                    ),
+                  ),
+                ),
+                Positioned(
+                  bottom: 0, left: 0, right: 0,
+                  child: Container(height: 4,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(colors: [
+                        Colors.white.withOpacity(0.08),
+                        Colors.white.withOpacity(0.30),
+                      ], begin: Alignment.topCenter, end: Alignment.bottomCenter),
                     ),
                   ),
                 ),
@@ -633,12 +699,20 @@ class _CandyBoardPainter extends CustomPainter {
   final int? selCol, selRow;
   final int comboCount;
   final bool showCursor;
+  // Swap animation: animProgress < 0 means no animation
+  final double animProgress;
+  final bool animForward;
+  final int animC1, animR1, animC2, animR2;
 
   const _CandyBoardPainter({
     required this.board,
     required this.cursorCol, required this.cursorRow,
     required this.selCol, required this.selRow,
     required this.comboCount, required this.showCursor,
+    this.animProgress = -1.0,
+    this.animForward = true,
+    this.animC1 = -1, this.animR1 = -1,
+    this.animC2 = -1, this.animR2 = -1,
   });
 
   @override
@@ -669,13 +743,44 @@ class _CandyBoardPainter extends CustomPainter {
     }
     p.style = PaintingStyle.fill;
 
-    // Candies
+    // Candies (with optional swap animation)
+    final bool hasAnim = animProgress >= 0 && animC1 >= 0;
     for (int r = 0; r < _kRows; r++) {
       for (int c = 0; c < _kCols; c++) {
         final candy = board[r][c];
         if (candy == -1) continue;
+
+        double baseX = 4 + c * cellW;
+        double baseY = r * cellH;
+
+        if (hasAnim) {
+          // t: 0→1 = moving toward target position (both forward and reverse phases)
+          final t = animProgress;
+          if (r == animR1 && c == animC1) {
+            final tx = 4 + animC2 * cellW;
+            final ty = animR2 * cellH;
+            if (animForward) {
+              baseX += (tx - baseX) * t;
+              baseY += (ty - baseY) * t;
+            } else {
+              baseX = tx + (baseX - tx) * t;
+              baseY = ty + (baseY - ty) * t;
+            }
+          } else if (r == animR2 && c == animC2) {
+            final tx = 4 + animC1 * cellW;
+            final ty = animR1 * cellH;
+            if (animForward) {
+              baseX += (tx - baseX) * t;
+              baseY += (ty - baseY) * t;
+            } else {
+              baseX = tx + (baseX - tx) * t;
+              baseY = ty + (baseY - ty) * t;
+            }
+          }
+        }
+
         _drawCandy(canvas, p, candy,
-          4 + c * cellW, r * cellH, cellW - 4, cellH,
+          baseX, baseY, cellW - 4, cellH,
           isSelected: selCol == c && selRow == r);
       }
     }
@@ -749,10 +854,10 @@ class _CandyBoardPainter extends CustomPainter {
   }
 }
 
-// ─── Side Panel Painter ────────────────────────────────────────────────────────
+// ─── Side Panel Painter (Chrome Vending Machine Pillars) ─────────────────────
 
 class _CandySidePainter extends CustomPainter {
-  final int side; // 0 = left strip, 1 = right mini
+  final int side; // 0 = left pillar, 1 = right pillar
   final double h;
   const _CandySidePainter({required this.side, required this.h});
 
@@ -762,46 +867,78 @@ class _CandySidePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final w = size.width;
-    final p = Paint()..isAntiAlias = false;
+    final p = Paint()..isAntiAlias = true;
 
-    // Dark background
-    p.color = const Color(0xFF120008);
+    // Chrome pillar gradient
+    final chromeShader = LinearGradient(
+      begin: Alignment.centerLeft,
+      end: Alignment.centerRight,
+      colors: side == 0
+          ? [const Color(0xFF5A3060), const Color(0xFF2A1030), const Color(0xFF1A000E)]
+          : [const Color(0xFF1A000E), const Color(0xFF2A1030), const Color(0xFF5A3060)],
+      stops: const [0.0, 0.5, 1.0],
+    ).createShader(Rect.fromLTWH(0, 0, w, h));
+    p.shader = chromeShader;
     canvas.drawRect(Rect.fromLTWH(0, 0, w, h), p);
+    p.shader = null;
 
-    if (side == 0) {
-      // Left panel: vertical candy-cane stripe
-      p.color = const Color(0xFFFF2266).withOpacity(0.18);
-      for (int i = 0; i < (h / 14).ceil(); i++) {
-        if (i % 2 == 0) canvas.drawRect(Rect.fromLTWH(0, i * 14.0, w, 7), p);
-      }
-      // Candy dots
-      final dotColors = [
-        const Color(0xFFFF2266), const Color(0xFFFF9900),
-        const Color(0xFF22CC44), const Color(0xFF3388FF),
-      ];
-      for (int i = 0; i < 6; i++) {
-        p.isAntiAlias = true;
-        p.color = dotColors[i % dotColors.length].withOpacity(0.55);
-        canvas.drawCircle(Offset(w / 2, 18.0 + i * (h / 6)), w * 0.32, p);
-        p.color = Colors.white.withOpacity(0.25);
-        canvas.drawCircle(Offset(w * 0.35, 14.0 + i * (h / 6)), w * 0.12, p);
-      }
-      p.isAntiAlias = false;
-    } else {
-      // Right mini: small candy row
-      final cc = [
-        const Color(0xFFFF2266), const Color(0xFFFFDD00),
-        const Color(0xFF22CC44), const Color(0xFF3388FF),
-      ];
-      p.isAntiAlias = true;
-      for (int i = 0; i < cc.length; i++) {
-        p.color = cc[i].withOpacity(0.75);
-        canvas.drawCircle(Offset(w / 2, 12.0 + i * (h / (cc.length + 1))), w * 0.35, p);
-        p.color = Colors.white.withOpacity(0.40);
-        canvas.drawOval(Rect.fromLTWH(
-          w * 0.25, 6.0 + i * (h / (cc.length + 1)), w * 0.25, h * 0.06), p);
-      }
-      p.isAntiAlias = false;
+    // Inner edge highlight (glass tube wall)
+    p.style = PaintingStyle.stroke;
+    p.strokeWidth = 1.5;
+    p.color = Colors.white.withOpacity(0.25);
+    final edgeX = side == 0 ? w - 2.0 : 2.0;
+    canvas.drawLine(Offset(edgeX, 0), Offset(edgeX, h), p);
+    p.style = PaintingStyle.fill;
+
+    // Candy spheres floating in the tube
+    final candyColors = [
+      const Color(0xFFFF2266),
+      const Color(0xFFFF7700),
+      const Color(0xFFFFDD00),
+      const Color(0xFF22CC44),
+      const Color(0xFF3388FF),
+      const Color(0xFFCC44FF),
+    ];
+    final ballR = (w * 0.38).clamp(4.0, 10.0);
+    final step = h / 7.5;
+    for (int i = 0; i < 7; i++) {
+      final cy = step * 0.5 + i * step;
+      final cx = w / 2 + (i.isEven ? 2.0 : -2.0);
+      final col = candyColors[i % candyColors.length];
+      // Shadow
+      p.color = Colors.black.withOpacity(0.30);
+      canvas.drawCircle(Offset(cx + 1, cy + 1), ballR, p);
+      // Body
+      p.color = col;
+      canvas.drawCircle(Offset(cx, cy), ballR, p);
+      // Stripe
+      p.color = Colors.white.withOpacity(0.18);
+      canvas.save();
+      canvas.clipRect(Rect.fromLTWH(cx - ballR, cy - ballR, ballR * 2, ballR * 2));
+      canvas.rotate(0.5);
+      canvas.drawRect(Rect.fromLTWH(cx - ballR * 0.8, cy - ballR * 0.2, ballR * 1.6, ballR * 0.4), p);
+      canvas.restore();
+      // Shine
+      p.color = Colors.white.withOpacity(0.50);
+      canvas.drawOval(Rect.fromLTWH(cx - ballR * 0.45, cy - ballR * 0.65, ballR * 0.45, ballR * 0.28), p);
+    }
+
+    if (side == 1) {
+      // Coin slot at bottom right pillar
+      final slotY = h - 28.0;
+      final slotX = w * 0.2;
+      final slotW = w * 0.6;
+      // Slot background
+      p.color = const Color(0xFF0A0005);
+      canvas.drawRRect(RRect.fromRectAndRadius(
+        Rect.fromLTWH(slotX, slotY, slotW, 6), const Radius.circular(3)), p);
+      // Slot highlight
+      p.color = Colors.white.withOpacity(0.15);
+      p.style = PaintingStyle.stroke;
+      p.strokeWidth = 1;
+      canvas.drawRRect(RRect.fromRectAndRadius(
+        Rect.fromLTWH(slotX, slotY, slotW, 6), const Radius.circular(3)), p);
+      p.style = PaintingStyle.fill;
     }
   }
 }

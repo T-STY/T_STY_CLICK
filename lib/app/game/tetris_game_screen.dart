@@ -76,7 +76,9 @@ const _kScoreTable = [0, 100, 300, 500, 800];
 
 // ─── Game state enum ──────────────────────────────────────────────────────────
 
-enum _GameState { start, playing, paused, dead }
+enum _GameState { start, playing, paused, dead, complete }
+
+const int _kMaxLines = 400; // 40-point cap
 
 // ─── Widget ───────────────────────────────────────────────────────────────────
 
@@ -240,6 +242,16 @@ class _TetrisScreenState extends State<TetrisScreen> {
 
     final prevLines = _totalLines;
     _totalLines += cleared;
+
+    // Cap at 400 lines (= 40 pts max)
+    if (_totalLines >= _kMaxLines) {
+      _totalLines = _kMaxLines;
+      final lineScore = _level * _kScoreTable[cleared.clamp(0, 4)];
+      setState(() => _score += lineScore);
+      _completeGame();
+      return;
+    }
+
     final newLevel = (_totalLines ~/ 10) + 1;
     final lineScore = _level * _kScoreTable[cleared.clamp(0, 4)];
     final levelChanged = newLevel > _level;
@@ -254,7 +266,7 @@ class _TetrisScreenState extends State<TetrisScreen> {
       _startGravity();
     }
 
-    // Saldo: +1 per 10 lines (cumulative)
+    // Saldo: +1 per 10 lines (cumulative), capped at 40 pts total (400 lines)
     final prevSaldoThreshold = prevLines ~/ 10;
     final newSaldoThreshold = _totalLines ~/ 10;
     if (newSaldoThreshold > prevSaldoThreshold) {
@@ -288,6 +300,14 @@ class _TetrisScreenState extends State<TetrisScreen> {
     _dasTimer?.cancel();
     _dasRepeat?.cancel();
     _startGame();
+  }
+
+  void _completeGame() {
+    _gravTimer?.cancel();
+    HapticFeedback.heavyImpact();
+    HighScoreService.submit('tetris', _score);
+    if (_score > _hiScore) setState(() => _hiScore = _score);
+    setState(() => _state = _GameState.complete);
   }
 
   void _triggerGameOver() {
@@ -408,13 +428,13 @@ class _TetrisScreenState extends State<TetrisScreen> {
     if (isDown) {
       switch (btn) {
         case ArcadeButton.start:
-          if (_state == _GameState.start || _state == _GameState.dead) {
+          if (_state == _GameState.start || _state == _GameState.dead || _state == _GameState.complete) {
             _restart();
           } else {
             _togglePause();
           }
         case ArcadeButton.a:
-          if (_state == _GameState.dead || _state == _GameState.start) {
+          if (_state == _GameState.dead || _state == _GameState.start || _state == _GameState.complete) {
             _restart();
           } else {
             _rotateCW();
@@ -499,6 +519,7 @@ class _TetrisScreenState extends State<TetrisScreen> {
         if (_state == _GameState.start) _buildStartOverlay(),
         if (_state == _GameState.dead) _buildDeathOverlay(),
         if (_state == _GameState.paused) _buildPauseOverlay(),
+        if (_state == _GameState.complete) _buildCompleteOverlay(),
       ],
     );
   }
@@ -511,7 +532,7 @@ class _TetrisScreenState extends State<TetrisScreen> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Text(
-              'CASCADA DE BLOQUES',
+              'TETROMURO',
               style: TextStyle(
                 color: Color(0xFF00E5FF),
                 fontSize: 38,
@@ -610,6 +631,69 @@ class _TetrisScreenState extends State<TetrisScreen> {
             Text(
               'Pulsa START para continuar',
               style: TextStyle(color: Colors.white54, fontSize: 14),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCompleteOverlay() {
+    return Positioned.fill(
+      child: Container(
+        color: const Color(0xEE000000),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Text(
+              '🏆',
+              style: TextStyle(fontSize: 56),
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              '¡COMPLETO!',
+              style: TextStyle(
+                color: Color(0xFFFFD700),
+                fontSize: 34,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 4,
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              '400 LÍNEAS ALCANZADAS',
+              style: TextStyle(color: Color(0xFF00E5FF), fontSize: 13, letterSpacing: 2),
+            ),
+            const SizedBox(height: 20),
+            Text(
+              'SCORE: $_score',
+              style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'BEST: $_hiScore',
+              style: const TextStyle(color: Color(0xFFFFD700), fontSize: 16),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              '+40 pts ganados',
+              style: TextStyle(color: Color(0xFF00E676), fontSize: 14, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 32),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 32),
+              child: SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: _restart,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFFFD700),
+                    foregroundColor: Colors.black,
+                    shape: const StadiumBorder(),
+                  ),
+                  child: const Text('Nueva Partida', style: TextStyle(fontWeight: FontWeight.bold)),
+                ),
+              ),
             ),
           ],
         ),

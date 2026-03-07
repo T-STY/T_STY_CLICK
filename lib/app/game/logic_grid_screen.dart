@@ -317,7 +317,7 @@ class _LogicGridScreenState extends State<LogicGridScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF1A1A2E),
+      backgroundColor: const Color(0xFF110E08),
       body: Stack(
         children: [
           // Main game painter
@@ -351,32 +351,35 @@ class _LogicGridScreenState extends State<LogicGridScreen> {
   Widget _buildStartOverlay() {
     return Positioned.fill(
       child: Container(
-        color: const Color(0xCC0D0D1E),
+        color: const Color(0xDD110E08),
         child: Center(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text('💣 CAMPO MINADO',
+              const Text('💣 BUSCA-TRAMPAS',
                   style: TextStyle(
                       fontSize: 22,
                       fontWeight: FontWeight.bold,
-                      color: Colors.white,
+                      color: Color(0xFFFF6600),
                       letterSpacing: 2)),
+              const SizedBox(height: 4),
+              const Text('ZONA PELIGROSA',
+                  style: TextStyle(fontSize: 11, color: Color(0xFFCCAA44), letterSpacing: 3)),
               const SizedBox(height: 20),
               const Text('← → ↑ ↓ : mover cursor',
-                  style: TextStyle(fontSize: 13, color: Color(0xFFCCCCCC))),
+                  style: TextStyle(fontSize: 13, color: Color(0xFFCCBB88))),
               const SizedBox(height: 6),
               const Text('A : revelar   B : bandera',
-                  style: TextStyle(fontSize: 13, color: Color(0xFFCCCCCC))),
+                  style: TextStyle(fontSize: 13, color: Color(0xFFCCBB88))),
               const SizedBox(height: 6),
-              const Text('12 minas · Ganar: 1000−(t×5)+banderas×20',
-                  style: TextStyle(fontSize: 11, color: Color(0xFF00FFCC))),
+              const Text('12 minas · 1000−(t×5)+banderas×20',
+                  style: TextStyle(fontSize: 11, color: Color(0xFFFFCC00))),
               const SizedBox(height: 4),
               const Text('+1 pto por tablero completado',
-                  style: TextStyle(fontSize: 11, color: Color(0xFF00FFCC))),
+                  style: TextStyle(fontSize: 11, color: Color(0xFFFFCC00))),
               const SizedBox(height: 20),
               const Text('Pulsa cualquier botón para empezar',
-                  style: TextStyle(fontSize: 12, color: Color(0xFF888888))),
+                  style: TextStyle(fontSize: 12, color: Color(0xFF887755))),
             ],
           ),
         ),
@@ -387,7 +390,7 @@ class _LogicGridScreenState extends State<LogicGridScreen> {
   Widget _buildWinOverlay() {
     return Positioned.fill(
       child: Container(
-        color: const Color(0xCC0D0D1E),
+        color: const Color(0xDD110E08),
         child: Center(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -396,11 +399,14 @@ class _LogicGridScreenState extends State<LogicGridScreen> {
                   style: TextStyle(
                       fontSize: 22,
                       fontWeight: FontWeight.bold,
-                      color: Color(0xFF44FF44),
+                      color: Color(0xFF88FF44),
                       letterSpacing: 1)),
+              const SizedBox(height: 4),
+              const Text('TODAS LAS MINAS NEUTRALIZADAS',
+                  style: TextStyle(fontSize: 10, color: Color(0xFFCCAA44), letterSpacing: 2)),
               const SizedBox(height: 12),
               Text('Tiempo: ${_elapsedSeconds}s',
-                  style: const TextStyle(fontSize: 14, color: Color(0xFFCCCCCC))),
+                  style: const TextStyle(fontSize: 14, color: Color(0xFFCCBB88))),
               const SizedBox(height: 6),
               Text('Puntuación: $_score',
                   style: const TextStyle(fontSize: 16, color: Colors.white, fontWeight: FontWeight.bold)),
@@ -412,10 +418,10 @@ class _LogicGridScreenState extends State<LogicGridScreen> {
                   child: ElevatedButton(
                     onPressed: _restart,
                     style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF1E88E5),
+                        backgroundColor: const Color(0xFFFF6600),
                         foregroundColor: Colors.white,
                         shape: const StadiumBorder()),
-                    child: const Text('Nueva Partida'),
+                    child: const Text('Nueva Partida', style: TextStyle(fontWeight: FontWeight.bold)),
                   ),
                 ),
               ),
@@ -429,23 +435,26 @@ class _LogicGridScreenState extends State<LogicGridScreen> {
   Widget _buildLossOverlay() {
     return Positioned.fill(
       child: Container(
-        color: const Color(0xCC0D0D1E),
+        color: const Color(0xDD110E08),
         child: Center(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text('💥 ¡MINA!',
+              const Text('💥 ¡EXPLOSIÓN!',
                   style: TextStyle(
-                      fontSize: 24,
+                      fontSize: 26,
                       fontWeight: FontWeight.bold,
-                      color: Color(0xFFFF4444),
+                      color: Color(0xFFFF3300),
                       letterSpacing: 2)),
-              const SizedBox(height: 12),
+              const SizedBox(height: 4),
+              const Text('HAS PISADO UNA MINA',
+                  style: TextStyle(fontSize: 11, color: Color(0xFFFF8844), letterSpacing: 2)),
+              const SizedBox(height: 16),
               Text('Puntuación: $_score',
                   style: const TextStyle(fontSize: 16, color: Colors.white, fontWeight: FontWeight.bold)),
               const SizedBox(height: 6),
               Text('Mejor: $_hiScore',
-                  style: const TextStyle(fontSize: 14, color: Color(0xFF00FFCC))),
+                  style: const TextStyle(fontSize: 14, color: Color(0xFFFFCC00))),
               const SizedBox(height: 20),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 32),
@@ -454,10 +463,10 @@ class _LogicGridScreenState extends State<LogicGridScreen> {
                   child: ElevatedButton(
                     onPressed: _restart,
                     style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF1E88E5),
+                        backgroundColor: const Color(0xFFFF3300),
                         foregroundColor: Colors.white,
                         shape: const StadiumBorder()),
-                    child: const Text('Nueva Partida'),
+                    child: const Text('Intentar de nuevo', style: TextStyle(fontWeight: FontWeight.bold)),
                   ),
                 ),
               ),
@@ -501,32 +510,58 @@ class _GridPainter extends CustomPainter {
     final bx = ((size.width - cs * kCols) / 2).floorToDouble();
     const by = 36.0;
 
+    // Full background
+    final fullBg = Paint()..color = const Color(0xFF110E08)..isAntiAlias = false;
+    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), fullBg);
+
     _paintHud(canvas, size);
     _paintGrid(canvas, cs, bx, by);
+
+    final gridBottom = by + cs * kRows;
+    if (gridBottom + 20 < size.height) {
+      _paintBottomArt(canvas, size, bx, gridBottom, cs * kCols);
+    }
   }
 
   void _paintHud(Canvas canvas, Size size) {
     final hudPaint = Paint()
-      ..color = const Color(0xFF0D0D1E)
+      ..color = const Color(0xFF1A1100)
       ..isAntiAlias = false;
     canvas.drawRect(Rect.fromLTWH(0, 0, size.width, 36), hudPaint);
 
+    // Danger stripe at bottom of HUD
+    final stripePaint = Paint()..color = const Color(0xFFFF6600)..isAntiAlias = false;
+    canvas.drawRect(Rect.fromLTWH(0, 34, size.width, 2), stripePaint);
+
     final remaining = kMines - flagCount;
-    final hudText = '💣 $remaining  ⏱ ${elapsedSeconds}s  ★ $score';
     final tp = TextPainter(
       text: TextSpan(
-          text: hudText,
-          style: const TextStyle(color: Colors.white, fontSize: 11, fontFamily: 'monospace')),
+        children: [
+          TextSpan(text: '💣 $remaining', style: const TextStyle(color: Color(0xFFFF6600), fontSize: 12, fontWeight: FontWeight.bold)),
+          const TextSpan(text: '   '),
+          TextSpan(text: '⏱ ${elapsedSeconds}s', style: const TextStyle(color: Color(0xFFCCBB88), fontSize: 12)),
+          const TextSpan(text: '   '),
+          TextSpan(text: '★ $score', style: const TextStyle(color: Color(0xFFFFDD44), fontSize: 12, fontWeight: FontWeight.bold)),
+        ],
+      ),
       textDirection: TextDirection.ltr,
     );
     tp.layout(maxWidth: size.width);
-    tp.paint(canvas, Offset((size.width - tp.width) / 2, (36 - tp.height) / 2));
+    tp.paint(canvas, Offset((size.width - tp.width) / 2, (34 - tp.height) / 2));
   }
 
   void _paintGrid(Canvas canvas, double cs, double bx, double by) {
+    // Board frame
+    final framePaint = Paint()
+      ..color = const Color(0xFF5A4A20)
+      ..isAntiAlias = false
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2;
+    canvas.drawRect(Rect.fromLTWH(bx - 1, by - 1, cs * kCols + 2, cs * kRows + 2), framePaint);
+
     // Background
     final bgPaint = Paint()
-      ..color = const Color(0xFF1A1A2E)
+      ..color = const Color(0xFF1E1A0E)
       ..isAntiAlias = false;
     canvas.drawRect(
         Rect.fromLTWH(bx, by, cs * kCols, cs * kRows), bgPaint);
@@ -544,7 +579,7 @@ class _GridPainter extends CustomPainter {
     final cx = bx + cursorCol * cs;
     final cy = by + cursorRow * cs;
     final cursorPaint = Paint()
-      ..color = const Color(0xFF00FFCC)
+      ..color = const Color(0xFFFF8C00)
       ..isAntiAlias = false
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2;
@@ -555,15 +590,15 @@ class _GridPainter extends CustomPainter {
     final rect = Rect.fromLTWH(x, y, cs, cs);
 
     if (cell.state == _CellState.hidden || cell.state == _CellState.flagged) {
-      // Hidden / flagged: embossed look
+      // Hidden / flagged: military embossed
       final basePaint = Paint()
-        ..color = const Color(0xFF3A3A5A)
+        ..color = const Color(0xFF3D3820)
         ..isAntiAlias = false;
       canvas.drawRect(rect, basePaint);
 
-      // Top edge bright
+      // Top edge bright (brass highlight)
       final brightPaint = Paint()
-        ..color = const Color(0xFF5A5A7A)
+        ..color = const Color(0xFF6B6030)
         ..isAntiAlias = false;
       canvas.drawRect(Rect.fromLTWH(x, y, cs, 1), brightPaint);
       // Left edge bright
@@ -571,7 +606,7 @@ class _GridPainter extends CustomPainter {
 
       // Bottom edge dark
       final darkPaint = Paint()
-        ..color = const Color(0xFF1A1A3A)
+        ..color = const Color(0xFF1A1600)
         ..isAntiAlias = false;
       canvas.drawRect(Rect.fromLTWH(x, y + cs - 1, cs, 1), darkPaint);
       // Right edge dark
@@ -598,13 +633,13 @@ class _GridPainter extends CustomPainter {
       } else {
         // Revealed empty / numbered
         final revealedPaint = Paint()
-          ..color = const Color(0xFF222238)
+          ..color = const Color(0xFF2A2610)
           ..isAntiAlias = false;
         canvas.drawRect(rect, revealedPaint);
 
         // Inner border (inset look)
         final innerBorderPaint = Paint()
-          ..color = const Color(0xFF1A1A2E)
+          ..color = const Color(0xFF1A1600)
           ..isAntiAlias = false;
         canvas.drawRect(Rect.fromLTWH(x, y, cs, 1), innerBorderPaint);
         canvas.drawRect(Rect.fromLTWH(x, y, 1, cs), innerBorderPaint);
@@ -669,6 +704,133 @@ class _GridPainter extends CustomPainter {
       ..color = const Color(0xFFFFFFFF)
       ..isAntiAlias = false;
     canvas.drawRect(Rect.fromLTWH(cx - 1, cy - 1, 1, 1), hlPaint);
+  }
+
+  void _paintBottomArt(Canvas canvas, Size size, double bx, double gridBottom, double boardW) {
+    final artTop = gridBottom + 8;
+    final artH = size.height - artTop - 4;
+    if (artH < 30) return;
+
+    // Hazard stripe bar at top
+    final stripeH = 8.0;
+    final stripeW = 14.0;
+    int stripeCount = (boardW / (stripeW * 2)).ceil() + 2;
+    for (int i = 0; i < stripeCount; i++) {
+      final sx = bx + i * stripeW * 2 - stripeW;
+      // Yellow stripe
+      canvas.drawRect(Rect.fromLTWH(sx, artTop, stripeW, stripeH),
+          Paint()..color = const Color(0xFFFFCC00)..isAntiAlias = false);
+      // Black stripe
+      canvas.drawRect(Rect.fromLTWH(sx + stripeW, artTop, stripeW, stripeH),
+          Paint()..color = const Color(0xFF1A1600)..isAntiAlias = false);
+    }
+    // Clip hazard stripes to board width
+    canvas.drawRect(
+      Rect.fromLTWH(0, artTop, bx, stripeH),
+      Paint()..color = const Color(0xFF110E08)..isAntiAlias = false,
+    );
+    canvas.drawRect(
+      Rect.fromLTWH(bx + boardW, artTop, size.width - bx - boardW, stripeH),
+      Paint()..color = const Color(0xFF110E08)..isAntiAlias = false,
+    );
+
+    final contentTop = artTop + stripeH + 6;
+    final contentH = size.height - contentTop - 4;
+    if (contentH < 20) return;
+
+    // Central mine graphic (large)
+    final cx = size.width / 2;
+    final cy = contentTop + contentH * 0.42;
+    final mineR = (contentH * 0.3).clamp(12.0, 40.0);
+
+    // Glow rings
+    for (int i = 3; i >= 1; i--) {
+      canvas.drawCircle(
+        Offset(cx, cy),
+        mineR + i * 4,
+        Paint()
+          ..color = Color.fromARGB((40 / i).round(), 255, 80, 0)
+          ..style = PaintingStyle.fill
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6),
+      );
+    }
+
+    // Mine body
+    final minePaint = Paint()..color = const Color(0xFF2A2A2A)..isAntiAlias = true;
+    canvas.drawCircle(Offset(cx, cy), mineR, minePaint);
+
+    // Shine on mine
+    final shinePaint = Paint()
+      ..color = const Color(0xFF555555)
+      ..isAntiAlias = true;
+    canvas.drawCircle(Offset(cx - mineR * 0.3, cy - mineR * 0.3), mineR * 0.25, shinePaint);
+
+    // Spikes (8 directions)
+    final spikeL = mineR * 0.55;
+    final spikeW = mineR * 0.12;
+    final spikePaint = Paint()..color = const Color(0xFF333333)..isAntiAlias = false;
+    for (int i = 0; i < 8; i++) {
+      final angle = i * pi / 4;
+      final tipX = cx + cos(angle) * (mineR + spikeL);
+      final tipY = cy + sin(angle) * (mineR + spikeL);
+      final baseX1 = cx + cos(angle + pi / 2) * spikeW + cos(angle) * mineR;
+      final baseY1 = cy + sin(angle + pi / 2) * spikeW + sin(angle) * mineR;
+      final baseX2 = cx + cos(angle - pi / 2) * spikeW + cos(angle) * mineR;
+      final baseY2 = cy + sin(angle - pi / 2) * spikeW + sin(angle) * mineR;
+      final path = Path()
+        ..moveTo(tipX, tipY)
+        ..lineTo(baseX1, baseY1)
+        ..lineTo(baseX2, baseY2)
+        ..close();
+      canvas.drawPath(path, spikePaint);
+    }
+
+    // Fuse
+    final fusePaint = Paint()
+      ..color = const Color(0xFF886633)
+      ..strokeWidth = 2
+      ..style = PaintingStyle.stroke
+      ..isAntiAlias = true;
+    final fusePath = Path()
+      ..moveTo(cx, cy - mineR)
+      ..cubicTo(cx + 8, cy - mineR - 10, cx + 14, cy - mineR - 6, cx + 10, cy - mineR - 18);
+    canvas.drawPath(fusePath, fusePaint);
+
+    // Spark at fuse tip
+    final sparkPaint = Paint()..color = const Color(0xFFFFAA00)..isAntiAlias = true;
+    canvas.drawCircle(Offset(cx + 10, cy - mineR - 18), 3, sparkPaint);
+    canvas.drawCircle(Offset(cx + 10, cy - mineR - 18), 2, Paint()..color = const Color(0xFFFFFFCC)..isAntiAlias = true);
+
+    // "ZONA PELIGROSA" text
+    final textY = contentTop + 2.0;
+    final titlePainter = TextPainter(
+      text: const TextSpan(
+        text: '⚠  ZONA PELIGROSA  ⚠',
+        style: TextStyle(
+          color: Color(0xFFFF6600),
+          fontSize: 11,
+          fontWeight: FontWeight.bold,
+          letterSpacing: 2,
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    );
+    titlePainter.layout(maxWidth: size.width);
+    titlePainter.paint(canvas, Offset((size.width - titlePainter.width) / 2, textY));
+
+    // Stats text below mine
+    final statsY = contentTop + contentH * 0.75;
+    final statsPainter = TextPainter(
+      text: const TextSpan(
+        children: [
+          TextSpan(text: '12 MINAS  •  ', style: TextStyle(color: Color(0xFFFF4400), fontSize: 10, fontWeight: FontWeight.bold)),
+          TextSpan(text: '+1 PTO POR TABLERO', style: TextStyle(color: Color(0xFFCCBB88), fontSize: 10)),
+        ],
+      ),
+      textDirection: TextDirection.ltr,
+    );
+    statsPainter.layout(maxWidth: size.width);
+    statsPainter.paint(canvas, Offset((size.width - statsPainter.width) / 2, statsY));
   }
 
   void _paintFlag(Canvas canvas, double x, double y, double cs) {
