@@ -72,6 +72,10 @@ class _Enemy {
   double get damage => type == _EnemyType.skeleton ? 15.0 : (type == _EnemyType.cacodemon ? 7.0 : 10.0);
 }
 
+// ─── Weapon ───────────────────────────────────────────────────────────────────
+
+enum _WeaponType { pistol, shotgun }
+
 // ─── Game state ───────────────────────────────────────────────────────────────
 
 enum _GameState { start, playing, dead }
@@ -107,7 +111,10 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
   double _health = 100.0; // double so fractional damage accumulates correctly
   int _kills = 0;
   int _wave = 1;
-  int _ammo = 30;
+  int _ammo = 30;         // pistol ammo
+  int _shotgunAmmo = 0;
+  bool _shotgunUnlocked = false;
+  _WeaponType _weapon = _WeaponType.pistol;
   double _fireTimer = 0;
   double _time = 0; // for animations (flames, bobbing)
   double _damageCooldown = 0; // haptic cooldown when taking damage
@@ -164,6 +171,10 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
     if (event.isDown && event.button == ArcadeButton.a) {
       _fire();
     }
+    if (event.isDown && event.button == ArcadeButton.b && _shotgunUnlocked) {
+      setState(() => _weapon = _weapon == _WeaponType.pistol ? _WeaponType.shotgun : _WeaponType.pistol);
+      HapticFeedback.selectionClick();
+    }
   }
 
   void _startGame() {
@@ -175,6 +186,9 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
       _kills = 0;
       _wave = 1;
       _ammo = 30;
+      _shotgunAmmo = 0;
+      _shotgunUnlocked = false;
+      _weapon = _WeaponType.pistol;
       _fireTimer = 0;
       _time = 0;
       _damageCooldown = 0;
@@ -225,25 +239,56 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
   }
 
   void _fire() {
+    if (_weapon == _WeaponType.shotgun) {
+      _fireShotgun();
+    } else {
+      _firePistol();
+    }
+  }
+
+  void _firePistol() {
     if (_fireTimer > 0) return;
     if (_ammo <= 0) { HapticFeedback.lightImpact(); return; }
     _ammo--;
     _fireTimer = 0.25;
     _shootFlash = 1.0;
     HapticFeedback.lightImpact();
+    _checkCenterHit(_dirX, _dirY, 12.0, damage: 1);
+  }
 
-    double bestDist = 12.0;
+  void _fireShotgun() {
+    if (_fireTimer > 0) return;
+    if (_shotgunAmmo <= 0) { HapticFeedback.lightImpact(); return; }
+    _shotgunAmmo--;
+    _fireTimer = 0.55; // slower
+    _shootFlash = 1.0;
+    HapticFeedback.heavyImpact(); // bigger kick
+
+    // 7 pellets spread ±22°
+    const pellets = 7;
+    const spread = 0.38; // radians total half-spread
+    for (int p = 0; p < pellets; p++) {
+      final angle = -spread + (p / (pellets - 1)) * 2 * spread;
+      final cosA = cos(angle), sinA = sin(angle);
+      final rDx = _dirX * cosA - _dirY * sinA;
+      final rDy = _dirX * sinA + _dirY * cosA;
+      _checkCenterHit(rDx, rDy, 7.0, damage: 1); // shorter range
+    }
+  }
+
+  void _checkCenterHit(double rayDirX, double rayDirY, double maxRange, {int damage = 1}) {
+    double bestDist = maxRange;
     _Enemy? target;
     for (final e in _enemies) {
       if (!e.alive) continue;
       final dx = e.x - _posX, dy = e.y - _posY;
-      final dot = dx * _dirX + dy * _dirY;
+      final dot = dx * rayDirX + dy * rayDirY;
       if (dot <= 0 || dot > bestDist) continue;
-      final perp = (dx * _dirY - dy * _dirX).abs();
+      final perp = (dx * rayDirY - dy * rayDirX).abs();
       if (perp < 0.60) { bestDist = dot; target = e; }
     }
     if (target != null) {
-      target.hp--;
+      target.hp -= damage;
       target.hitFlash = 1.0;
       if (target.hp <= 0) {
         target.alive = false;
@@ -259,6 +304,16 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
     _wave++;
     _ammo += 25;
     _health = (_health + 20).clamp(0, 100.0);
+
+    // Shotgun: unlock at wave 2, grant ammo every even wave (2, 4, 6…)
+    if (_wave == 2) {
+      _shotgunUnlocked = true;
+    }
+    if (_wave >= 2 && _wave % 2 == 0) {
+      final nextCount = _wave + 3; // enemies that will spawn
+      _shotgunAmmo += (nextCount * 0.75).round();
+    }
+
     _saldo += 1;
     widget.onSaldoChanged(_saldo);
     _updateFirestore(_saldo);
@@ -380,6 +435,9 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
               health: _health.round().clamp(0, 100),
               kills: _kills,
               ammo: _ammo,
+              shotgunAmmo: _shotgunAmmo,
+              shotgunUnlocked: _shotgunUnlocked,
+              weapon: _weapon,
               wave: _wave,
               hitFlash: _hitFlash,
               shootFlash: _shootFlash,
@@ -482,7 +540,9 @@ class _RaycasterPainter extends CustomPainter {
   final double posX, posY, dirX, dirY, planeX, planeY;
   final List<_Enemy> enemies;
   final List<double> zBuf;
-  final int health, kills, ammo, wave;
+  final int health, kills, ammo, shotgunAmmo, wave;
+  final bool shotgunUnlocked;
+  final _WeaponType weapon;
   final double hitFlash, shootFlash, time;
   final bool isFiring, showHud;
 
@@ -492,7 +552,9 @@ class _RaycasterPainter extends CustomPainter {
     required this.planeX, required this.planeY,
     required this.enemies, required this.zBuf,
     required this.health, required this.kills,
-    required this.ammo, required this.wave,
+    required this.ammo, required this.shotgunAmmo,
+    required this.shotgunUnlocked, required this.weapon,
+    required this.wave,
     required this.hitFlash, required this.shootFlash,
     required this.isFiring, required this.showHud,
     required this.time,
@@ -513,7 +575,8 @@ class _RaycasterPainter extends CustomPainter {
     if (showHud) {
       _drawHud(canvas, size);
       _drawCrosshair(canvas, size);
-      _drawPistol(canvas, size, isFiring);
+      _drawWeapon(canvas, size, isFiring);
+      _drawRadar(canvas, size);
     }
   }
 
@@ -914,16 +977,68 @@ class _RaycasterPainter extends CustomPainter {
   // ── HUD ─────────────────────────────────────────────────────────────────────
 
   void _drawHud(Canvas canvas, Size size) {
-    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, 20),
-      Paint()..color = Colors.black.withOpacity(0.70)..isAntiAlias = false);
+    final p = Paint()..isAntiAlias = false;
+
+    // HUD strip background
+    p.color = Colors.black.withOpacity(0.78);
+    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, 30), p);
+
+    // ── Health bar ────────────────────────────────────────────────────────────
+    const barX = 8.0, barY = 8.0, barW = 90.0, barH = 14.0;
+    final hFrac = (health / 100.0).clamp(0.0, 1.0);
+    final barFill = health > 60
+        ? const Color(0xFF22CC44)
+        : health > 30 ? const Color(0xFFFF8800) : const Color(0xFFCC1111);
+
+    p.color = const Color(0xFF222222);
+    canvas.drawRect(Rect.fromLTWH(barX, barY, barW, barH), p);
+    p.color = barFill;
+    canvas.drawRect(Rect.fromLTWH(barX, barY, barW * hFrac, barH), p);
+    p.color = Colors.white24;
+    p.style = PaintingStyle.stroke;
+    p.strokeWidth = 1.0;
+    canvas.drawRect(Rect.fromLTWH(barX, barY, barW, barH), p);
+    p.style = PaintingStyle.fill;
+
+    _hudText(canvas, '❤  $health%', barX + 4, barY + 2, color: Colors.white, size: 10);
+
+    // ── Kill counter ──────────────────────────────────────────────────────────
+    _hudText(canvas, '💀 $kills', 106, barY + 2, color: Colors.white, size: 10);
+
+    // ── Wave indicator ────────────────────────────────────────────────────────
+    _hudText(canvas, 'OLA $wave', size.width / 2 - 22, barY + 2,
+        color: const Color(0xFFFF8800), size: 10);
+
+    // ── Ammo display (right side) ─────────────────────────────────────────────
+    if (!shotgunUnlocked) {
+      _hudText(canvas, '🔫 $ammo', size.width - 62, barY + 2,
+          color: Colors.white, size: 10);
+    } else {
+      final pistolColor = weapon == _WeaponType.pistol
+          ? const Color(0xFFFFEE44) : Colors.white54;
+      final shotgunColor = weapon == _WeaponType.shotgun
+          ? const Color(0xFFFFEE44) : Colors.white54;
+      _hudText(canvas, '🔫 $ammo', size.width - 78, barY,
+          color: pistolColor, size: 9);
+      _hudText(canvas, '🟠 $shotgunAmmo', size.width - 78, barY + 13,
+          color: shotgunColor, size: 9);
+      // Active weapon indicator bar
+      final activeY = weapon == _WeaponType.pistol ? barY + 1.5 : barY + 14.5;
+      p.color = const Color(0xFFFFEE44);
+      canvas.drawRect(Rect.fromLTWH(size.width - 82, activeY, 2, 7), p);
+    }
+  }
+
+  void _hudText(Canvas canvas, String text, double x, double y,
+      {Color color = Colors.white, double size = 10}) {
     final tp = TextPainter(
-      text: TextSpan(text: '❤ $health%   💀 $kills   🔫 $ammo   OLA $wave',
-        style: const TextStyle(color: Colors.white, fontSize: 10,
-          fontFamily: 'monospace', fontWeight: FontWeight.bold)),
+      text: TextSpan(text: text,
+          style: TextStyle(color: color, fontSize: size,
+              fontFamily: 'monospace', fontWeight: FontWeight.bold)),
       textDirection: TextDirection.ltr,
     );
     tp.layout();
-    tp.paint(canvas, const Offset(6, 4));
+    tp.paint(canvas, Offset(x, y));
     tp.dispose();
   }
 
@@ -932,9 +1047,211 @@ class _RaycasterPainter extends CustomPainter {
     final p = Paint()..color = Colors.white..isAntiAlias = false;
     canvas.drawRect(Rect.fromLTWH(cx - 1, cy - 5, 2, 10), p);
     canvas.drawRect(Rect.fromLTWH(cx - 5, cy - 1, 10, 2), p);
-    // Gap center
     final gap = Paint()..color = Colors.black..isAntiAlias = false;
     canvas.drawRect(Rect.fromLTWH(cx - 1, cy - 1, 2, 2), gap);
+  }
+
+  // ── Radar (cone-of-vision mini-map) ─────────────────────────────────────────
+
+  void _drawRadar(Canvas canvas, Size size) {
+    const radarR = 44.0;
+    const cx = 55.0;
+    final cy = size.height - 62.0;
+    const scale = radarR / 7.0; // 7 map units → radarR px
+
+    final p = Paint()..isAntiAlias = true;
+
+    // Clip drawing to circle shape
+    canvas.save();
+    canvas.clipPath(Path()..addOval(
+        Rect.fromCircle(center: Offset(cx, cy), radius: radarR)));
+
+    // Background
+    p.color = Colors.black.withOpacity(0.72);
+    canvas.drawCircle(Offset(cx, cy), radarR, p);
+
+    // FOV cone fill
+    final fovHalf = atan(0.66); // camera plane / dir length ≈ 33.4°
+    final playerAngle = atan2(-dirY, dirX); // flip Y for screen coords
+    final conePath = Path()..moveTo(cx, cy);
+    const steps = 12;
+    for (int i = 0; i <= steps; i++) {
+      final a = (playerAngle - fovHalf) + (fovHalf * 2) * i / steps;
+      conePath.lineTo(cx + cos(a) * radarR, cy - sin(a) * radarR);
+    }
+    conePath.close();
+    p.color = const Color(0xFFFF6600).withOpacity(0.20);
+    canvas.drawPath(conePath, p);
+
+    // FOV edge lines
+    p.color = const Color(0xFFFF8800).withOpacity(0.70);
+    p.style = PaintingStyle.stroke;
+    p.strokeWidth = 1.0;
+    canvas.drawLine(Offset(cx, cy),
+        Offset(cx + cos(playerAngle - fovHalf) * radarR,
+               cy - sin(playerAngle - fovHalf) * radarR), p);
+    canvas.drawLine(Offset(cx, cy),
+        Offset(cx + cos(playerAngle + fovHalf) * radarR,
+               cy - sin(playerAngle + fovHalf) * radarR), p);
+    p.style = PaintingStyle.fill;
+
+    // Enemy dots (show even through walls — that's the point of the radar)
+    for (final e in enemies) {
+      if (!e.alive) continue;
+      final dx = e.x - posX, dy = e.y - posY;
+      final rx = cx + dx * scale;
+      final ry = cy - dy * scale; // negate: map-Y-down → radar-Y-up
+      // Clamp dots to radar boundary
+      if ((rx - cx) * (rx - cx) + (ry - cy) * (ry - cy) > (radarR - 3) * (radarR - 3)) continue;
+      p.color = e.type == _EnemyType.demon
+          ? const Color(0xFFFF3322)
+          : e.type == _EnemyType.cacodemon
+              ? const Color(0xFF44BBFF)
+              : Colors.white70;
+      canvas.drawCircle(Offset(rx, ry), 3.5, p);
+      p.color = Colors.black38;
+      p.style = PaintingStyle.stroke;
+      p.strokeWidth = 0.8;
+      canvas.drawCircle(Offset(rx, ry), 3.5, p);
+      p.style = PaintingStyle.fill;
+    }
+
+    // Player dot + forward arrow
+    p.color = const Color(0xFF44FF88);
+    canvas.drawCircle(Offset(cx, cy), 4.0, p);
+    p.style = PaintingStyle.stroke;
+    p.strokeWidth = 1.5;
+    canvas.drawLine(Offset(cx, cy),
+        Offset(cx + dirX * 10, cy - dirY * 10), p);
+    p.style = PaintingStyle.fill;
+
+    canvas.restore(); // restore clip
+
+    // Border (drawn outside clip so it's always crisp)
+    p.color = const Color(0xFF884400);
+    p.style = PaintingStyle.stroke;
+    p.strokeWidth = 1.5;
+    canvas.drawCircle(Offset(cx, cy), radarR, p);
+    p.style = PaintingStyle.fill;
+
+    // Label
+    _hudText(canvas, 'RADAR', cx - 14, cy + radarR + 3,
+        color: const Color(0xFFBB6622), size: 8);
+  }
+
+  // ── Weapon dispatcher ────────────────────────────────────────────────────────
+
+  void _drawWeapon(Canvas canvas, Size size, bool firing) {
+    if (weapon == _WeaponType.shotgun) {
+      _drawShotgun(canvas, size, firing);
+    } else {
+      _drawPistol(canvas, size, firing);
+    }
+  }
+
+  // ── Double-barrel sawn-off shotgun ───────────────────────────────────────────
+
+  void _drawShotgun(Canvas canvas, Size size, bool firing) {
+    canvas.save();
+    canvas.translate(size.width * 0.55, size.height * 0.80);
+    canvas.rotate(-0.18); // ~10° tilt — wider gun sits lower
+
+    final p = Paint()..isAntiAlias = false;
+
+    // ── Muzzle flash (dual bloom) ─────────────────────────────────────────────
+    if (firing) {
+      p.isAntiAlias = true;
+      p.color = const Color(0xFFFF5500).withOpacity(0.88);
+      canvas.drawOval(const Rect.fromLTWH(-100, -38, 44, 26), p);
+      canvas.drawOval(const Rect.fromLTWH(-100, -14, 44, 26), p);
+      p.color = const Color(0xFFFFDD00);
+      canvas.drawOval(const Rect.fromLTWH(-96, -33, 28, 18), p);
+      canvas.drawOval(const Rect.fromLTWH(-96, -9, 28, 18), p);
+      p.color = Colors.white;
+      canvas.drawOval(const Rect.fromLTWH(-92, -29, 16, 12), p);
+      canvas.drawOval(const Rect.fromLTWH(-92, -5, 16, 12), p);
+    }
+
+    p.isAntiAlias = false;
+
+    // ── Top barrel ────────────────────────────────────────────────────────────
+    p.color = const Color(0xFF222222); // underside shadow
+    canvas.drawRect(const Rect.fromLTWH(-95, -26, 100, 6), p);
+    p.color = const Color(0xFF707070); // barrel body
+    canvas.drawRect(const Rect.fromLTWH(-95, -38, 100, 12), p);
+    p.color = const Color(0xFF999999); // top highlight
+    canvas.drawRect(const Rect.fromLTWH(-95, -38, 100, 2), p);
+    p.color = const Color(0xFF555555); // top front sight
+    canvas.drawRect(const Rect.fromLTWH(-88, -43, 6, 5), p);
+
+    // ── Bottom barrel ─────────────────────────────────────────────────────────
+    p.color = const Color(0xFF686868);
+    canvas.drawRect(const Rect.fromLTWH(-95, -24, 100, 12), p);
+    p.color = const Color(0xFF444444); // shadow under bottom barrel
+    canvas.drawRect(const Rect.fromLTWH(-95, -14, 100, 2), p);
+
+    // ── Barrel bores (dark ovals at muzzle) ───────────────────────────────────
+    p.color = const Color(0xFF111111);
+    canvas.drawRect(const Rect.fromLTWH(-97, -36, 6, 10), p); // top bore
+    canvas.drawRect(const Rect.fromLTWH(-97, -22, 6, 10), p); // bottom bore
+
+    // ── Rib between barrels ───────────────────────────────────────────────────
+    p.color = const Color(0xFF888888);
+    canvas.drawRect(const Rect.fromLTWH(-95, -28, 100, 4), p);
+
+    // ── Receiver / breech (wood-toned) ────────────────────────────────────────
+    p.color = const Color(0xFF4A3010);
+    canvas.drawRect(const Rect.fromLTWH(-5, -40, 52, 60), p);
+    p.color = const Color(0xFF5E3E16);
+    canvas.drawRect(const Rect.fromLTWH(-5, -40, 52, 4), p); // top highlight
+
+    // Metal breech plate
+    p.color = const Color(0xFF555555);
+    canvas.drawRect(const Rect.fromLTWH(-5, -40, 16, 60), p);
+    p.color = const Color(0xFF777777);
+    canvas.drawRect(const Rect.fromLTWH(-5, -40, 16, 2), p);
+
+    // ── Pump foregrip ─────────────────────────────────────────────────────────
+    p.color = const Color(0xFF6B4520);
+    canvas.drawRect(const Rect.fromLTWH(-62, -24, 42, 18), p);
+    p.color = const Color(0xFF7A5028);
+    for (int i = 0; i < 5; i++) {
+      canvas.drawRect(Rect.fromLTWH(-60.0 + i * 8, -22, 3, 14), p);
+    }
+
+    // ── Pistol grip / stock ───────────────────────────────────────────────────
+    p.color = const Color(0xFF5C3A12);
+    canvas.drawRect(const Rect.fromLTWH(12, 4, 34, 44), p);
+    p.color = const Color(0xFF6A4418);
+    for (int r = 0; r < 5; r++) {
+      canvas.drawRect(Rect.fromLTWH(15.0, 8.0 + r * 7, 26, 3), p);
+    }
+    p.color = const Color(0xFF3A2208);
+    canvas.drawRect(const Rect.fromLTWH(12, 46, 34, 4), p); // base plate
+
+    // ── Trigger guard ─────────────────────────────────────────────────────────
+    p.color = const Color(0xFF444444);
+    canvas.drawRect(const Rect.fromLTWH(0, 8, 18, 3), p);
+    canvas.drawRect(const Rect.fromLTWH(0, 8, 3, 20), p);
+    canvas.drawRect(const Rect.fromLTWH(15, 8, 3, 20), p);
+    canvas.drawRect(const Rect.fromLTWH(0, 25, 18, 3), p);
+    p.color = const Color(0xFF888888);
+    canvas.drawRect(const Rect.fromLTWH(6, 12, 4, 12), p); // trigger
+
+    canvas.restore();
+
+    // No-ammo warning
+    if (shotgunAmmo == 0) {
+      final tp = TextPainter(
+        text: const TextSpan(text: '— SIN CARTUCHOS —',
+            style: TextStyle(color: Colors.orange, fontSize: 10,
+                fontFamily: 'monospace', fontWeight: FontWeight.bold)),
+        textDirection: TextDirection.ltr,
+      );
+      tp.layout();
+      tp.paint(canvas, Offset(size.width / 2 - tp.width / 2, size.height * 0.60));
+      tp.dispose();
+    }
   }
 
   // ── Angled perspective pistol ───────────────────────────────────────────────
