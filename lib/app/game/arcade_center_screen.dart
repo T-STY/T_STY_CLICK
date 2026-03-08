@@ -644,7 +644,7 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
   }
 
   Widget _buildActiveGame() {
-    return _activeGame!.builder(
+    return _activeGame!.builder!(
       userId: widget.userId,
       rewardsDocRef: widget.rewardsDocRef,
       currentSaldo: _saldo,
