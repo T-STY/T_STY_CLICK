@@ -22,7 +22,7 @@ double _kPaddleW(int level) => (24.0 - level * 1.6).clamp(11.0, 24.0);
 
 // Ball
 const _kBallR = 1.4;
-double _kBallSpd(int level) => (50.0 + level * 5.0).clamp(50.0, 100.0);
+double _kBallSpd(int level) => (72.0 + level * 8.0).clamp(72.0, 135.0);
 
 // Brick HP by row (top = hardest)
 const _kBrickHp = [3, 2, 1, 1, 1, 1];
@@ -69,6 +69,10 @@ class _BreakoutScreenState extends State<BreakoutScreen> {
   bool _launched = false;
   // Bricks: _bricks[row][col] = current HP (0 = gone)
   List<List<int>> _bricks = [];
+  // Combo — counts consecutive brick hits without touching paddle
+  int _combo = 0;
+  // Ball trail — last few positions for motion blur effect
+  final List<Offset> _trail = [];
   // Game state
   int _score = 0, _hiScore = 0, _lives = 3, _level = 0;
   late double _saldo;
@@ -106,6 +110,8 @@ class _BreakoutScreenState extends State<BreakoutScreen> {
     _bvx = 0;
     _bvy = 0;
     _launched = false;
+    _combo = 0;
+    _trail.clear();
   }
 
   void _onInput() {
@@ -204,6 +210,7 @@ class _BreakoutScreenState extends State<BreakoutScreen> {
         final ballSpd = sqrt(_bvx * _bvx + _bvy * _bvy);
         _bvx = ballSpd * sin(angle);
         _bvy = -ballSpd * cos(angle).abs(); // always go up
+        _combo = 0; // reset combo on paddle touch
         HapticFeedback.lightImpact();
       }
 
@@ -251,8 +258,10 @@ class _BreakoutScreenState extends State<BreakoutScreen> {
 
           _bricks[row][col]--;
           if (_bricks[row][col] <= 0) {
-            // Brick destroyed
-            final pts = ((_kBrickHp[row] * 10) + _level * 5);
+            // Brick destroyed — combo multiplier
+            _combo++;
+            final multiplier = _combo >= 5 ? 3 : _combo >= 3 ? 2 : 1;
+            final pts = ((_kBrickHp[row] * 10) + _level * 5) * multiplier;
             _score += pts;
             HapticFeedback.selectionClick();
           }
@@ -260,6 +269,10 @@ class _BreakoutScreenState extends State<BreakoutScreen> {
         }
       }
     }
+
+    // Update ball trail
+    _trail.add(Offset(_bx, _by));
+    if (_trail.length > 8) _trail.removeAt(0);
 
     // Check level clear
     final remaining = _bricks.expand((r) => r).where((hp) => hp > 0).length;
@@ -303,6 +316,8 @@ class _BreakoutScreenState extends State<BreakoutScreen> {
               bricks: _bricks,
               score: _score, hiScore: _hiScore,
               lives: _lives, level: _level,
+              combo: _combo,
+              trail: List.unmodifiable(_trail),
             ),
           ),
         ),
@@ -357,13 +372,16 @@ class _BreakoutScreenState extends State<BreakoutScreen> {
 class _BreakoutPainter extends CustomPainter {
   final double padX, bx, by;
   final List<List<int>> bricks;
-  final int score, hiScore, lives, level;
+  final int score, hiScore, lives, level, combo;
+  final List<Offset> trail;
 
   const _BreakoutPainter({
     required this.padX, required this.bx, required this.by,
     required this.bricks,
     required this.score, required this.hiScore,
     required this.lives, required this.level,
+    required this.combo,
+    required this.trail,
   });
 
   @override bool shouldRepaint(_BreakoutPainter o) => true;
@@ -377,7 +395,7 @@ class _BreakoutPainter extends CustomPainter {
     p.color = const Color(0xFF04000C);
     canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), p);
 
-    // Bricks
+    // Bricks — rounded 3D look
     for (int row = 0; row < _kRows; row++) {
       for (int col = 0; col < _kCols; col++) {
         final hp = bricks.length > row && bricks[row].length > col
@@ -386,32 +404,47 @@ class _BreakoutPainter extends CustomPainter {
         if (hp <= 0) continue;
         final bl = (_kBrickLeft + col * _kBrickW) * pw;
         final bt = (_kBrickTop + row * (_kBrickH + _kBrickGapH)) * ph;
-        final bw = _kBrickW * pw - 1;
-        final bh = _kBrickH * ph - 1;
+        final bw = _kBrickW * pw - 1.5;
+        final bh = _kBrickH * ph - 1.5;
+        final rr = const Radius.circular(3);
+        final rect = RRect.fromLTRBR(bl, bt, bl + bw, bt + bh, rr);
 
         final baseColor = _kBrickColors[row];
-        // Darker tint for damaged bricks
         final maxHp = _kBrickHp[row];
         final fade = maxHp > 1 ? hp / maxHp : 1.0;
-        final c = Color.lerp(baseColor.withOpacity(0.3), baseColor, fade)!;
+        final c = Color.lerp(baseColor.withOpacity(0.25), baseColor, fade)!;
 
-        // Glow
-        p..color = c.withOpacity(0.25)
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
-        canvas.drawRect(Rect.fromLTWH(bl - 1, bt - 1, bw + 2, bh + 2), p);
+        // Outer glow
+        p..color = c.withOpacity(0.22)
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+        canvas.drawRRect(
+            RRect.fromLTRBR(bl - 2, bt - 2, bl + bw + 2, bt + bh + 2, rr), p);
         p.maskFilter = null;
 
-        // Fill
-        p.color = c.withOpacity(0.55);
-        canvas.drawRect(Rect.fromLTWH(bl, bt, bw, bh), p);
+        // Dark shadow (bottom-right) for depth
+        p.color = Colors.black.withOpacity(0.45);
+        canvas.drawRRect(
+            RRect.fromLTRBR(bl + 2, bt + 2, bl + bw + 2, bt + bh + 2, rr), p);
 
-        // Top highlight
-        p.color = Colors.white.withOpacity(0.18);
-        canvas.drawRect(Rect.fromLTWH(bl, bt, bw, 2), p);
+        // Main fill — slightly darker
+        p.color = c.withOpacity(0.62);
+        canvas.drawRRect(rect, p);
+
+        // Lighter face top-left (3D raised look)
+        p.color = c.withOpacity(0.85);
+        canvas.drawRRect(
+            RRect.fromLTRBR(bl, bt, bl + bw - 2, bt + bh - 2, rr), p);
+
+        // Top highlight shine
+        p.color = Colors.white.withOpacity(0.28);
+        canvas.drawRRect(
+            RRect.fromLTRBR(bl + 2, bt + 1, bl + bw - 4, bt + bh * 0.35,
+                const Radius.circular(2)),
+            p);
 
         // Neon border
-        p..color = c..style = PaintingStyle.stroke..strokeWidth = 0.8;
-        canvas.drawRect(Rect.fromLTWH(bl, bt, bw, bh), p);
+        p..color = c..style = PaintingStyle.stroke..strokeWidth = 0.9;
+        canvas.drawRRect(rect, p);
         p.style = PaintingStyle.fill;
       }
     }
@@ -435,12 +468,20 @@ class _BreakoutPainter extends CustomPainter {
             const Radius.circular(2)),
         p);
 
+    // Ball trail
+    final br = _kBallR * min(pw, ph) * 1.5;
+    for (int i = 0; i < trail.length; i++) {
+      final t = (i + 1) / trail.length;
+      p..color = Colors.white.withOpacity(t * 0.18)..maskFilter = null;
+      canvas.drawCircle(Offset(trail[i].dx * pw, trail[i].dy * ph),
+          br * t * 0.9, p);
+    }
+
     // Ball
     final bscr = Offset(bx * pw, by * ph);
-    final br = _kBallR * min(pw, ph) * 1.5;
-    p..color = Colors.white.withOpacity(0.25)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5);
-    canvas.drawCircle(bscr, br * 1.8, p);
+    p..color = Colors.white.withOpacity(0.28)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6);
+    canvas.drawCircle(bscr, br * 2.0, p);
     p..color = Colors.white..maskFilter = null;
     canvas.drawCircle(bscr, br, p);
 
@@ -462,6 +503,13 @@ class _BreakoutPainter extends CustomPainter {
         Colors.white54, hfs * 0.9);
     txt('RÉC $hiScore', size.width * 0.68, size.height * 0.015 - 5,
         Colors.white24, hfs * 0.9);
+
+    // Combo indicator — shown when combo >= 2
+    if (combo >= 2) {
+      final comboColor = combo >= 5 ? Colors.amber : Colors.orange;
+      txt('×$combo COMBO!', size.width * 0.36, size.height * 0.90,
+          comboColor, hfs * 0.95);
+    }
 
     // Lives — small hearts so they read clearly as life indicators
     txt(List.filled(lives.clamp(0, 5), '♥').join(' '),

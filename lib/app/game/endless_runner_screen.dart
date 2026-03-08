@@ -648,25 +648,36 @@ class _RunnerPainter extends CustomPainter {
   static void _drawDino(Canvas canvas, double dx, double ux, double uy,
       {bool chomping = false, double legPhase = 0.0}) {
     final p = Paint()..isAntiAlias = true;
-    const clr = Color(0xFF1DAA55); // dino green
+    const clr = Color(0xFF1DAA55);
     const clrDark = Color(0xFF0E6633);
+    const clrLight = Color(0xFF3AE87A);
+
+    // Body bob — double-frequency, always positive (bounces up on each step)
+    final bob = chomping ? 0.0 : sin(legPhase * 2.0).abs() * 0.04;
+
+    // Key Y anchors in game units
+    final bodyTop = _kGroundY - 1.12 - bob;
+    final bodyBot = _kGroundY - 0.28 - bob;
+    const bodyLeft = -0.42; // relative to dx
+    const bodyRight = 0.33;
 
     // Glow
-    p..color = clr.withOpacity(0.20)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6);
+    p..color = clr.withOpacity(0.18)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 7);
     canvas.drawOval(
         Rect.fromCenter(
-            center: Offset(dx * ux, (_kGroundY - 0.55) * uy),
-            width: 1.5 * ux, height: 1.1 * uy),
+            center: Offset(dx * ux, (_kGroundY - 0.60 - bob * 0.5) * uy),
+            width: 1.7 * ux, height: 1.3 * uy),
         p);
     p.maskFilter = null;
 
-    // Tail (triangle pointing left)
+    // Tail — sways with cos(legPhase), tip drags behind body-left
+    final tailSway = chomping ? 0.0 : cos(legPhase) * 0.07;
     p.color = clrDark;
     final tailPath = Path()
-      ..moveTo((dx - 0.38) * ux, (_kGroundY - 0.55) * uy)
-      ..lineTo((dx - 0.85) * ux, (_kGroundY - 0.32) * uy)
-      ..lineTo((dx - 0.42) * ux, (_kGroundY - 0.90) * uy)
+      ..moveTo((dx + bodyLeft) * ux, (_kGroundY - 0.52 - bob) * uy)
+      ..lineTo((dx - 0.92) * ux, (_kGroundY - 0.26 + tailSway - bob) * uy)
+      ..lineTo((dx + bodyLeft) * ux, (_kGroundY - 0.88 - bob) * uy)
       ..close();
     canvas.drawPath(tailPath, p);
 
@@ -675,77 +686,143 @@ class _RunnerPainter extends CustomPainter {
     canvas.drawRRect(
         RRect.fromRectAndRadius(
             Rect.fromLTWH(
-                (dx - 0.38) * ux, (_kGroundY - 1.10) * uy,
-                0.75 * ux, 0.78 * uy),
+                (dx + bodyLeft) * ux, bodyTop * uy,
+                (bodyRight - bodyLeft) * ux, (bodyBot - bodyTop) * uy),
             const Radius.circular(4)),
         p);
 
-    // Head
-    final mouthDrop = chomping ? 0.18 : 0.0;
+    // Body highlight stripe (top-left)
+    p.color = clrLight.withOpacity(0.45);
     canvas.drawRRect(
         RRect.fromRectAndRadius(
             Rect.fromLTWH(
-                (dx + 0.10) * ux, (_kGroundY - 1.58 - mouthDrop) * uy,
-                0.52 * ux, (0.44 + mouthDrop) * uy),
+                (dx + bodyLeft + 0.05) * ux, (bodyTop + 0.05) * uy,
+                0.16 * ux, 0.22 * uy),
+            const Radius.circular(2)),
+        p);
+
+    // Head — bottom = bodyTop (seamless, no gap)
+    const headW = 0.54;
+    const headH = 0.48;
+    final headLeft = dx + 0.08;
+    final headTop = bodyTop - headH;
+    p.color = clr;
+    canvas.drawRRect(
+        RRect.fromRectAndRadius(
+            Rect.fromLTWH(headLeft * ux, headTop * uy, headW * ux, headH * uy),
             const Radius.circular(3)),
         p);
 
-    // Upper jaw tip (snout)
+    // Snout / jaw
+    final mouthDrop = chomping ? 0.14 : 0.0;
     canvas.drawRRect(
         RRect.fromRectAndRadius(
             Rect.fromLTWH(
-                (dx + 0.46) * ux, (_kGroundY - 1.42) * uy,
-                0.22 * ux, 0.20 * uy),
+                (headLeft + headW - 0.02) * ux, (headTop + 0.12 - mouthDrop) * uy,
+                0.24 * ux, (0.20 + mouthDrop) * uy),
             const Radius.circular(2)),
         p);
 
     // Teeth when chomping
     if (chomping) {
-      p.color = Colors.white.withOpacity(0.9);
+      p.color = Colors.white.withOpacity(0.92);
       for (int i = 0; i < 3; i++) {
         canvas.drawRect(Rect.fromLTWH(
-            (dx + 0.48 + i * 0.065) * ux,
-            (_kGroundY - 1.42 + 0.18) * uy,
-            0.04 * ux, 0.10 * uy), p);
+            (headLeft + headW + 0.01 + i * 0.07) * ux,
+            (headTop + 0.28) * uy,
+            0.045 * ux, 0.11 * uy), p);
       }
       p.color = clr;
     }
 
-    // Eye
-    p.color = Colors.white;
-    canvas.drawCircle(
-        Offset((dx + 0.44) * ux, (_kGroundY - 1.52) * uy), 3.0, p);
-    p.color = Colors.black;
-    canvas.drawCircle(
-        Offset((dx + 0.46) * ux, (_kGroundY - 1.52) * uy), 1.5, p);
+    // Angry eyebrow ridge (angled down toward snout = fierce look)
+    final eyeCx = (headLeft + 0.33) * ux;
+    final eyeCy = (headTop + 0.16) * uy;
+    p..color = clrDark
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.5;
+    canvas.drawLine(
+        Offset(eyeCx - 7, eyeCy + 4),
+        Offset(eyeCx + 4, eyeCy),
+        p);
+    p..style = PaintingStyle.fill..strokeWidth = 1.0;
 
-    // Tiny arm
+    // Eye — vertical reptile slit (yellow iris, black pupil)
+    p.color = Colors.yellowAccent.withOpacity(0.92);
+    canvas.drawOval(
+        Rect.fromCenter(center: Offset(eyeCx, eyeCy + 4),
+            width: 5.5, height: 8.5),
+        p);
+    p.color = Colors.black;
+    canvas.drawOval(
+        Rect.fromCenter(center: Offset(eyeCx, eyeCy + 4),
+            width: 2.0, height: 7.0),
+        p);
+    // Gleam
+    p.color = Colors.white.withOpacity(0.75);
+    canvas.drawCircle(Offset(eyeCx - 1.2, eyeCy + 1.5), 1.3, p);
+
+    // Tiny T-Rex arm + claw hints
     p.color = clrDark;
     canvas.drawRRect(
         RRect.fromRectAndRadius(
             Rect.fromLTWH(
-                (dx + 0.24) * ux, (_kGroundY - 0.88) * uy,
-                0.18 * ux, 0.16 * uy),
+                (dx + 0.22) * ux, (bodyTop + 0.10) * uy,
+                0.17 * ux, 0.13 * uy),
             const Radius.circular(2)),
         p);
+    p..style = PaintingStyle.stroke..strokeWidth = 1.0;
+    for (int i = 0; i < 2; i++) {
+      final fx = (dx + 0.39 + i * 0.04) * ux;
+      final fy = (bodyTop + 0.23) * uy;
+      canvas.drawLine(Offset(fx, fy - 3), Offset(fx + 3, fy), p);
+    }
+    p..style = PaintingStyle.fill;
 
-    // Legs — sinusoidal alternating run animation
+    // Legs — anchored at bodyBot; HEIGHT varies (no Y shift = no detachment)
     p.color = clr;
-    final legSin = chomping ? 0.0 : sin(legPhase);
-    final legSwingPx = legSin * 0.09; // game-unit swing amplitude
-    canvas.drawRRect(
-        RRect.fromRectAndRadius(
-            Rect.fromLTWH(
-                (dx - 0.25) * ux, (_kGroundY - 0.32 + legSwingPx) * uy,
-                0.18 * ux, 0.32 * uy),
-            const Radius.circular(2)),
-        p);
-    canvas.drawRRect(
-        RRect.fromRectAndRadius(
-            Rect.fromLTWH(
-                (dx + 0.07) * ux, (_kGroundY - 0.32 - legSwingPx) * uy,
-                0.18 * ux, 0.32 * uy),
-            const Radius.circular(2)),
-        p);
+    if (chomping) {
+      // Static wide stance
+      canvas.drawRRect(RRect.fromRectAndRadius(
+          Rect.fromLTWH((dx - 0.27) * ux, bodyBot * uy, 0.20 * ux, 0.28 * uy),
+          const Radius.circular(2)), p);
+      canvas.drawRRect(RRect.fromRectAndRadius(
+          Rect.fromLTWH((dx + 0.07) * ux, bodyBot * uy, 0.20 * ux, 0.28 * uy),
+          const Radius.circular(2)), p);
+    } else {
+      // Alternating lift: one leg shortens as foot rises off ground
+      final liftL = max(0.0, sin(legPhase)) * 0.15;
+      final liftR = max(0.0, -sin(legPhase)) * 0.15;
+      final legLH = (0.28 + bob - liftL).clamp(0.06, 0.40);
+      final legRH = (0.28 + bob - liftR).clamp(0.06, 0.40);
+
+      // Left leg
+      canvas.drawRRect(RRect.fromRectAndRadius(
+          Rect.fromLTWH((dx - 0.27) * ux, bodyBot * uy, 0.20 * ux, legLH * uy),
+          const Radius.circular(2)), p);
+      // Foot flat on ground when planted
+      if (liftL < 0.04) {
+        p.color = clrDark;
+        canvas.drawRRect(RRect.fromRectAndRadius(
+            Rect.fromLTWH((dx - 0.32) * ux, (bodyBot + legLH - 0.055) * uy,
+                0.30 * ux, 0.055 * uy),
+            const Radius.circular(1)), p);
+        p.color = clr;
+      }
+
+      // Right leg
+      canvas.drawRRect(RRect.fromRectAndRadius(
+          Rect.fromLTWH((dx + 0.07) * ux, bodyBot * uy, 0.20 * ux, legRH * uy),
+          const Radius.circular(2)), p);
+      // Foot flat on ground when planted
+      if (liftR < 0.04) {
+        p.color = clrDark;
+        canvas.drawRRect(RRect.fromRectAndRadius(
+            Rect.fromLTWH((dx + 0.02) * ux, (bodyBot + legRH - 0.055) * uy,
+                0.30 * ux, 0.055 * uy),
+            const Radius.circular(1)), p);
+        p.color = clr;
+      }
+    }
   }
 }

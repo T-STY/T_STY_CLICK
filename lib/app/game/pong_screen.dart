@@ -12,14 +12,16 @@ const _kPW = 120.0, _kPH = 80.0;
 const _kPaddleW = 2.5, _kPaddleH = 14.0;
 const _kPaddleSpd = 62.0;
 const _kBallR = 1.3;
-const _kBallSpdInit = 48.0;
-const _kBallSpdMax = 75.0;
-const _kBallSpdInc = 1.8; // speed added per paddle hit
+const _kBallSpdInit = 76.0;
+const _kBallSpdMax = 110.0;
+const _kBallSpdInc = 2.5; // speed added per paddle hit
 const _kWinScore = 7;
 // AI speed per round (gets faster each round)
-const _kAiSpeeds = [28.0, 38.0, 50.0, 60.0, 68.0, 75.0];
+const _kAiSpeeds = [46.0, 60.0, 72.0, 82.0, 90.0, 96.0];
 // AI prediction error (± units at target y) — shrinks each round
-const _kAiErrors = [8.0, 5.5, 3.5, 1.8, 0.6, 0.1];
+const _kAiErrors = [5.5, 3.2, 1.8, 0.8, 0.2, 0.0];
+// AI resamples target Y every this many ms (prevents jitter)
+const _kAiSampleMs = 180;
 
 enum _PongPhase { ready, playing, scored, gameOver }
 
@@ -65,6 +67,13 @@ class _PongScreenState extends State<PongScreen> {
   DateTime? _lastTick;
   final Random _rng = Random();
 
+  // AI smoothing — resample target every _kAiSampleMs ms
+  double _aiTargetY = (_kPH - _kPaddleH) / 2;
+  int _aiSampleAccMs = 0;
+
+  // Ball trail positions
+  final List<Offset> _ballTrail = [];
+
   @override
   void initState() {
     super.initState();
@@ -102,6 +111,9 @@ class _PongScreenState extends State<PongScreen> {
     _bvy = _ballSpd * sin(angle);
     _phase = _PongPhase.playing;
     _lastTick = null;
+    _aiTargetY = _by;
+    _aiSampleAccMs = 0;
+    _ballTrail.clear();
     _gameTimer?.cancel();
     _gameTimer = Timer.periodic(const Duration(milliseconds: 16), _tick);
     setState(() {});
@@ -126,11 +138,16 @@ class _PongScreenState extends State<PongScreen> {
     if (c.isHeld(ArcadeButton.down))
       _py = (_py + _kPaddleSpd * dt).clamp(0, _kPH - _kPaddleH);
 
-    // AI paddle — tracks ball y with speed cap + error
-    final aiTarget = _by - _kPaddleH / 2 +
-        (_rng.nextDouble() - 0.5) * _aiError * 2;
-    final aiDiff = aiTarget - _ay;
-    if (aiDiff.abs() > 0.3) {
+    // AI paddle — resample target every _kAiSampleMs to prevent jitter
+    _aiSampleAccMs += (dt * 1000).round();
+    if (_aiSampleAccMs >= _kAiSampleMs) {
+      _aiSampleAccMs = 0;
+      _aiTargetY = (_by - _kPaddleH / 2 +
+          (_rng.nextDouble() - 0.5) * _aiError * 2)
+          .clamp(0, _kPH - _kPaddleH);
+    }
+    final aiDiff = _aiTargetY - _ay;
+    if (aiDiff.abs() > 0.5) {
       final aiMove = aiDiff.sign * _aiSpeed * dt;
       _ay = (_ay + aiMove).clamp(0, _kPH - _kPaddleH);
     }
@@ -189,6 +206,10 @@ class _PongScreenState extends State<PongScreen> {
       _onPoint(true);
     }
 
+    // Update ball trail
+    _ballTrail.add(Offset(_bx, _by));
+    if (_ballTrail.length > 7) _ballTrail.removeAt(0);
+
     setState(() {});
   }
 
@@ -242,6 +263,7 @@ class _PongScreenState extends State<PongScreen> {
               playerScore: _playerScore, aiScore: _aiScore,
               playerRounds: _playerRounds, aiRounds: _aiRounds,
               round: _round,
+              trail: List.unmodifiable(_ballTrail),
             ),
           ),
         ),
@@ -296,6 +318,7 @@ class _PongScreenState extends State<PongScreen> {
 class _PongPainter extends CustomPainter {
   final double py, ay, bx, by;
   final int playerScore, aiScore, playerRounds, aiRounds, round;
+  final List<Offset> trail;
 
   const _PongPainter({
     required this.py, required this.ay,
@@ -303,6 +326,7 @@ class _PongPainter extends CustomPainter {
     required this.playerScore, required this.aiScore,
     required this.playerRounds, required this.aiRounds,
     required this.round,
+    required this.trail,
   });
 
   @override bool shouldRepaint(_PongPainter o) => true;
@@ -381,9 +405,17 @@ class _PongPainter extends CustomPainter {
     canvas.drawRect(
         Rect.fromLTWH(aix, ay * ph, _kPaddleW * pw, _kPaddleH * ph), p);
 
+    // Ball trail
+    final br = _kBallR * min(pw, ph);
+    for (int i = 0; i < trail.length; i++) {
+      final t = (i + 1) / trail.length;
+      p..color = Colors.white.withOpacity(t * 0.15)..maskFilter = null;
+      canvas.drawCircle(
+          Offset(trail[i].dx * pw, trail[i].dy * ph), br * t * 0.85, p);
+    }
+
     // Ball glow + core
     final bscr = Offset(bx * pw, by * ph);
-    final br = _kBallR * min(pw, ph);
     p..color = Colors.white.withOpacity(0.3)
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6);
     canvas.drawCircle(bscr, br * 2.2, p);
