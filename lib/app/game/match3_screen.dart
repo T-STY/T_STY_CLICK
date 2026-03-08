@@ -900,8 +900,12 @@ class _CandySidePainter extends CustomPainter {
       const Color(0xFFCC44FF),
     ];
     final ballR = (w * 0.38).clamp(4.0, 10.0);
-    final step = h / 7.5;
-    for (int i = 0; i < 7; i++) {
+    // Use actual canvas height so balls don't overlap in short panels
+    final actualH = size.height;
+    // Fit as many balls as actually fit with no overlap
+    final maxBalls = (actualH / (ballR * 2 + 2)).floor().clamp(1, 7);
+    final step = actualH / (maxBalls + 0.5);
+    for (int i = 0; i < maxBalls; i++) {
       final cy = step * 0.5 + i * step;
       final cx = w / 2 + (i.isEven ? 2.0 : -2.0);
       final col = candyColors[i % candyColors.length];

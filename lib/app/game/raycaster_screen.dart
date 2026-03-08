@@ -74,7 +74,7 @@ class _Enemy {
 
 // ─── Weapon ───────────────────────────────────────────────────────────────────
 
-enum _WeaponType { pistol, shotgun }
+enum _WeaponType { pistol, shotgun, smg }
 
 // ─── Game state ───────────────────────────────────────────────────────────────
 
@@ -114,6 +114,8 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
   int _ammo = 30;         // pistol ammo
   int _shotgunAmmo = 0;
   bool _shotgunUnlocked = false;
+  int _smgAmmo = 0;
+  bool _smgUnlocked = false;
   _WeaponType _weapon = _WeaponType.pistol;
   double _fireTimer = 0;
   double _time = 0; // for animations (flames, bobbing)
@@ -173,8 +175,17 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
     if (event.isDown && event.button == ArcadeButton.a) {
       _fire();
     }
-    if (event.isDown && event.button == ArcadeButton.b && _shotgunUnlocked) {
-      setState(() => _weapon = _weapon == _WeaponType.pistol ? _WeaponType.shotgun : _WeaponType.pistol);
+    if (event.isDown && event.button == ArcadeButton.b) {
+      // Cycle through unlocked weapons: pistol → shotgun → smg → pistol
+      setState(() {
+        final options = [
+          _WeaponType.pistol,
+          if (_shotgunUnlocked) _WeaponType.shotgun,
+          if (_smgUnlocked) _WeaponType.smg,
+        ];
+        final idx = options.indexOf(_weapon);
+        _weapon = options[(idx + 1) % options.length];
+      });
       HapticFeedback.selectionClick();
     }
   }
@@ -190,6 +201,8 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
       _ammo = 30;
       _shotgunAmmo = 0;
       _shotgunUnlocked = false;
+      _smgAmmo = 0;
+      _smgUnlocked = false;
       _weapon = _WeaponType.pistol;
       _fireTimer = 0;
       _time = 0;
@@ -245,6 +258,8 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
   void _fire() {
     if (_weapon == _WeaponType.shotgun) {
       _fireShotgun();
+    } else if (_weapon == _WeaponType.smg) {
+      _fireSmg();
     } else {
       _firePistol();
     }
@@ -280,6 +295,36 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
     }
   }
 
+  void _fireSmg() {
+    if (_fireTimer > 0) return;
+    if (_smgAmmo <= 0) { HapticFeedback.lightImpact(); return; }
+    _smgAmmo--;
+    _fireTimer = 0.08; // very fast
+    _shootFlash = 0.6; // smaller flash for SMG
+    HapticFeedback.lightImpact();
+    // Slight random spread per bullet
+    final spread = (_rng.nextDouble() - 0.5) * 0.12;
+    final cosA = cos(spread), sinA = sin(spread);
+    final rDx = _dirX * cosA - _dirY * sinA;
+    final rDy = _dirX * sinA + _dirY * cosA;
+    _checkCenterHit(rDx, rDy, 10.0, damage: 1);
+  }
+
+  /// Returns true if a clear line-of-sight exists from (x0,y0) to (x1,y1)
+  bool _hasLos(double x0, double y0, double x1, double y1) {
+    final dx = x1 - x0, dy = y1 - y0;
+    final steps = (dx.abs() + dy.abs()) * 4; // sample density
+    if (steps < 1) return true;
+    for (int i = 1; i < steps; i++) {
+      final t = i / steps;
+      final mx = (x0 + dx * t).floor();
+      final my = (y0 + dy * t).floor();
+      if (mx < 0 || mx >= _kMapW || my < 0 || my >= _kMapH) return false;
+      if (_kMap[my][mx] == 1) return false;
+    }
+    return true;
+  }
+
   void _checkCenterHit(double rayDirX, double rayDirY, double maxRange, {int damage = 1}) {
     double bestDist = maxRange;
     _Enemy? target;
@@ -289,7 +334,10 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
       final dot = dx * rayDirX + dy * rayDirY;
       if (dot <= 0 || dot > bestDist) continue;
       final perp = (dx * rayDirY - dy * rayDirX).abs();
-      if (perp < 0.60) { bestDist = dot; target = e; }
+      if (perp < 0.60 && _hasLos(_posX, _posY, e.x, e.y)) {
+        bestDist = dot;
+        target = e;
+      }
     }
     if (target != null) {
       target.hp -= damage;
@@ -314,8 +362,15 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
       _shotgunUnlocked = true;
     }
     if (_wave >= 2 && _wave % 2 == 0) {
-      final nextCount = _wave + 3; // enemies that will spawn
+      final nextCount = _wave + 3;
       _shotgunAmmo += (nextCount * 0.75).round();
+    }
+    // SMG: unlock at wave 4, grant ammo every wave thereafter
+    if (_wave == 4) {
+      _smgUnlocked = true;
+    }
+    if (_wave >= 4) {
+      _smgAmmo += (_wave + 3) * 4; // lots of bullets, it's an SMG
     }
 
     _saldo += 1;
@@ -341,6 +396,10 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
 
   void _processMovement(double dt) {
     final c = widget.controller;
+    // SMG: full-auto while A is held
+    if (_weapon == _WeaponType.smg && c.isHeld(ArcadeButton.a)) {
+      _fireSmg();
+    }
     if (c.isHeld(ArcadeButton.up)) {
       final nx = _posX + _dirX * _moveSpeed * dt;
       final ny = _posY + _dirY * _moveSpeed * dt;
@@ -448,6 +507,8 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
               ammo: _ammo,
               shotgunAmmo: _shotgunAmmo,
               shotgunUnlocked: _shotgunUnlocked,
+              smgAmmo: _smgAmmo,
+              smgUnlocked: _smgUnlocked,
               weapon: _weapon,
               wave: _wave,
               hitFlash: _hitFlash,
@@ -603,8 +664,8 @@ class _RaycasterPainter extends CustomPainter {
   final double posX, posY, dirX, dirY, planeX, planeY;
   final List<_Enemy> enemies;
   final List<double> zBuf;
-  final int health, kills, ammo, shotgunAmmo, wave;
-  final bool shotgunUnlocked;
+  final int health, kills, ammo, shotgunAmmo, smgAmmo, wave;
+  final bool shotgunUnlocked, smgUnlocked;
   final _WeaponType weapon;
   final double hitFlash, shootFlash, dimFlash, time;
   final bool isFiring, showHud;
@@ -616,7 +677,9 @@ class _RaycasterPainter extends CustomPainter {
     required this.enemies, required this.zBuf,
     required this.health, required this.kills,
     required this.ammo, required this.shotgunAmmo,
-    required this.shotgunUnlocked, required this.weapon,
+    required this.shotgunUnlocked,
+    required this.smgAmmo, required this.smgUnlocked,
+    required this.weapon,
     required this.wave,
     required this.hitFlash, required this.shootFlash,
     required this.dimFlash,
@@ -1184,24 +1247,31 @@ class _RaycasterPainter extends CustomPainter {
     _hudText(canvas, 'OLA $wave', size.width / 2 - 22, barY + 2,
         color: const Color(0xFFFF8800), size: 10);
 
-    // ── Ammo display (right side) ─────────────────────────────────────────────
-    if (!shotgunUnlocked) {
-      _hudText(canvas, '🔫 $ammo', size.width - 62, barY + 2,
-          color: Colors.white, size: 10);
-    } else {
-      final pistolColor = weapon == _WeaponType.pistol
-          ? const Color(0xFFFFEE44) : Colors.white54;
-      final shotgunColor = weapon == _WeaponType.shotgun
-          ? const Color(0xFFFFEE44) : Colors.white54;
-      _hudText(canvas, '🔫 $ammo', size.width - 78, barY,
-          color: pistolColor, size: 9);
-      _hudText(canvas, '🟠 $shotgunAmmo', size.width - 78, barY + 13,
-          color: shotgunColor, size: 9);
-      // Active weapon indicator bar
-      final activeY = weapon == _WeaponType.pistol ? barY + 1.5 : barY + 14.5;
-      p.color = const Color(0xFFFFEE44);
-      canvas.drawRect(Rect.fromLTWH(size.width - 82, activeY, 2, 7), p);
+    // ── Ammo display (right side) — stacked rows per unlocked weapon ─────────
+    const sel = Color(0xFFFFEE44);
+    const dim = Colors.white54;
+    double wy = barY; // cursor for stacked rows
+    // Pistol always shown
+    _hudText(canvas, '🔫 $ammo', size.width - 78, wy,
+        color: weapon == _WeaponType.pistol ? sel : dim, size: 9);
+    double pistolY = wy; wy += 9;
+    double? shotgunY, smgY;
+    if (shotgunUnlocked) {
+      _hudText(canvas, '🟠 $shotgunAmmo', size.width - 78, wy,
+          color: weapon == _WeaponType.shotgun ? sel : dim, size: 9);
+      shotgunY = wy; wy += 9;
     }
+    if (smgUnlocked) {
+      _hudText(canvas, '⚡ $smgAmmo', size.width - 78, wy,
+          color: weapon == _WeaponType.smg ? sel : dim, size: 9);
+      smgY = wy;
+    }
+    // Active indicator bar
+    final activeY = weapon == _WeaponType.pistol ? pistolY
+        : weapon == _WeaponType.shotgun ? (shotgunY ?? pistolY)
+        : (smgY ?? pistolY);
+    p.color = sel;
+    canvas.drawRect(Rect.fromLTWH(size.width - 82, activeY + 1, 2, 7), p);
   }
 
   void _hudText(Canvas canvas, String text, double x, double y,
@@ -1348,6 +1418,8 @@ class _RaycasterPainter extends CustomPainter {
   void _drawWeapon(Canvas canvas, Size size, bool firing) {
     if (weapon == _WeaponType.shotgun) {
       _drawShotgun(canvas, size, firing);
+    } else if (weapon == _WeaponType.smg) {
+      _drawSmg(canvas, size, firing);
     } else {
       _drawPistol(canvas, size, firing);
     }
@@ -1357,24 +1429,41 @@ class _RaycasterPainter extends CustomPainter {
 
   void _drawShotgun(Canvas canvas, Size size, bool firing) {
     canvas.save();
-    // Anchor bottom-right; moderate tilt ~32° so barrel visible upper-left, grip clips off bottom
+    // Anchor bottom-right; ~45° tilt — barrel clearly visible, grip clips off bottom
     canvas.translate(size.width * 0.68, size.height * 0.95);
-    canvas.rotate(-0.55);
+    canvas.rotate(-0.82);
 
     final p = Paint()..isAntiAlias = false;
 
-    // ── Dual muzzle flash (above both barrels) ────────────────────────────────
+    // ── Dual muzzle flash — directional starburst, one per barrel ────────────
     if (firing) {
       p.isAntiAlias = true;
-      p.color = const Color(0xFFFF5500).withOpacity(0.88);
-      canvas.drawOval(const Rect.fromLTWH(-26, -120, 30, 24), p);
-      canvas.drawOval(const Rect.fromLTWH(2,  -120, 30, 24), p);
-      p.color = const Color(0xFFFFDD00);
-      canvas.drawOval(const Rect.fromLTWH(-22, -117, 20, 16), p);
-      canvas.drawOval(const Rect.fromLTWH(6,  -117, 20, 16), p);
-      p.color = Colors.white;
-      canvas.drawOval(const Rect.fromLTWH(-18, -114, 12, 11), p);
-      canvas.drawOval(const Rect.fromLTWH(10, -114, 12, 11), p);
+      for (final bx in [-11.0, 11.0]) {
+        const by = -113.0;
+        // Outer orange: long forward spike + two side petals
+        p.color = const Color(0xFFFF4400).withOpacity(0.80);
+        canvas.drawPath(Path()
+          ..moveTo(bx,      by - 32)  // forward tip
+          ..lineTo(bx + 9,  by - 4)
+          ..lineTo(bx + 15, by + 4)   // right petal
+          ..lineTo(bx + 6,  by - 1)
+          ..lineTo(bx,      by + 4)
+          ..lineTo(bx - 6,  by - 1)
+          ..lineTo(bx - 15, by + 4)   // left petal
+          ..lineTo(bx - 9,  by - 4)
+          ..close(), p);
+        // Mid yellow core flame
+        p.color = const Color(0xFFFFCC00);
+        canvas.drawPath(Path()
+          ..moveTo(bx,     by - 20)
+          ..lineTo(bx + 6, by - 2)
+          ..lineTo(bx,     by + 2)
+          ..lineTo(bx - 6, by - 2)
+          ..close(), p);
+        // Hot white core
+        p.color = Colors.white;
+        canvas.drawCircle(Offset(bx, by - 4), 3.5, p);
+      }
       p.isAntiAlias = false;
     }
 
@@ -1470,21 +1559,39 @@ class _RaycasterPainter extends CustomPainter {
 
   void _drawPistol(Canvas canvas, Size size, bool firing) {
     canvas.save();
-    // Anchor bottom-right; moderate tilt ~37° — barrel visible upper-left, grip clips off bottom
+    // Anchor bottom-right; ~52° tilt — barrel clearly visible, grip clips off bottom
     canvas.translate(size.width * 0.82, size.height * 0.95);
-    canvas.rotate(-0.65);
+    canvas.rotate(-0.95);
 
     final p = Paint()..isAntiAlias = false;
 
-    // ── Muzzle flash ──────────────────────────────────────────────────────────
+    // ── Muzzle flash — directional starburst ──────────────────────────────────
     if (firing) {
       p.isAntiAlias = true;
-      p.color = const Color(0xFFFF8800).withOpacity(0.88);
-      canvas.drawOval(const Rect.fromLTWH(-17, -110, 34, 26), p);
-      p.color = const Color(0xFFFFEE00);
-      canvas.drawOval(const Rect.fromLTWH(-11, -107, 22, 17), p);
+      const cx = 1.0, cy = -103.0;
+      // Outer orange: long forward plume + side petals
+      p.color = const Color(0xFFFF5500).withOpacity(0.85);
+      canvas.drawPath(Path()
+        ..moveTo(cx,      cy - 38)  // forward tip
+        ..lineTo(cx + 11, cy - 4)
+        ..lineTo(cx + 18, cy + 5)   // right petal
+        ..lineTo(cx + 8,  cy - 1)
+        ..lineTo(cx,      cy + 5)
+        ..lineTo(cx - 8,  cy - 1)
+        ..lineTo(cx - 18, cy + 5)   // left petal
+        ..lineTo(cx - 11, cy - 4)
+        ..close(), p);
+      // Mid yellow core
+      p.color = const Color(0xFFFFCC00);
+      canvas.drawPath(Path()
+        ..moveTo(cx,     cy - 25)
+        ..lineTo(cx + 8, cy - 3)
+        ..lineTo(cx,     cy + 3)
+        ..lineTo(cx - 8, cy - 3)
+        ..close(), p);
+      // Hot white core
       p.color = Colors.white;
-      canvas.drawOval(const Rect.fromLTWH(-7, -104, 14, 13), p);
+      canvas.drawCircle(Offset(cx, cy - 6), 5, p);
       p.isAntiAlias = false;
     }
 
@@ -1572,6 +1679,121 @@ class _RaycasterPainter extends CustomPainter {
       final tp = TextPainter(
         text: const TextSpan(text: '— SIN BALAS —',
           style: TextStyle(color: Colors.red, fontSize: 10,
+            fontFamily: 'monospace', fontWeight: FontWeight.bold)),
+        textDirection: TextDirection.ltr,
+      );
+      tp.layout();
+      tp.paint(canvas, Offset(size.width / 2 - tp.width / 2, size.height * 0.60));
+      tp.dispose();
+    }
+  }
+
+  // ── SMG – compact submachine gun ─────────────────────────────────────────────
+
+  void _drawSmg(Canvas canvas, Size size, bool firing) {
+    canvas.save();
+    // Center-right, angled like pistol but positioned slightly left
+    canvas.translate(size.width * 0.78, size.height * 0.95);
+    canvas.rotate(-0.95);
+
+    final p = Paint()..isAntiAlias = false;
+
+    // ── Muzzle flash — compact star burst ─────────────────────────────────────
+    if (firing) {
+      p.isAntiAlias = true;
+      const cx = 0.0, cy = -78.0;
+      p.color = const Color(0xFFFF6600).withOpacity(0.80);
+      canvas.drawPath(Path()
+        ..moveTo(cx,      cy - 26)
+        ..lineTo(cx + 9,  cy - 3)
+        ..lineTo(cx + 14, cy + 3)
+        ..lineTo(cx + 6,  cy)
+        ..lineTo(cx,      cy + 3)
+        ..lineTo(cx - 6,  cy)
+        ..lineTo(cx - 14, cy + 3)
+        ..lineTo(cx - 9,  cy - 3)
+        ..close(), p);
+      p.color = const Color(0xFFFFCC00);
+      canvas.drawPath(Path()
+        ..moveTo(cx, cy - 17)
+        ..lineTo(cx + 6, cy - 2)
+        ..lineTo(cx, cy + 2)
+        ..lineTo(cx - 6, cy - 2)
+        ..close(), p);
+      p.color = Colors.white;
+      canvas.drawCircle(Offset(cx, cy - 4), 3.5, p);
+      p.isAntiAlias = false;
+    }
+
+    // ── Short barrel ──────────────────────────────────────────────────────────
+    p.color = const Color(0xFF888888);
+    canvas.drawRect(const Rect.fromLTWH(-4, -72, 2, 36), p);
+    p.color = const Color(0xFF666666);
+    canvas.drawRect(const Rect.fromLTWH(-2, -72, 10, 36), p);
+    p.color = const Color(0xFF404040);
+    canvas.drawRect(const Rect.fromLTWH(8, -72, 2, 36), p);
+    // Bore
+    p.color = const Color(0xFF111111);
+    canvas.drawRect(const Rect.fromLTWH(-1, -73, 6, 5), p);
+    // Barrel shroud
+    p.color = const Color(0xFF555555);
+    canvas.drawRect(const Rect.fromLTWH(-6, -72, 16, 4), p);
+    p.color = const Color(0xFF444444);
+    canvas.drawRect(const Rect.fromLTWH(-6, -68, 16, 28), p);
+    // Vent holes in shroud
+    p.color = const Color(0xFF222222);
+    for (int i = 0; i < 3; i++) {
+      canvas.drawRect(Rect.fromLTWH(-4, -64.0 + i * 7, 12, 3), p);
+    }
+
+    // ── Receiver / body ───────────────────────────────────────────────────────
+    p.color = const Color(0xFF383838);
+    canvas.drawRect(const Rect.fromLTWH(-10, -40, 28, 32), p);
+    p.color = const Color(0xFF4A4A4A);
+    canvas.drawRect(const Rect.fromLTWH(-10, -40, 28, 3), p); // top
+    p.color = const Color(0xFF282828);
+    canvas.drawRect(const Rect.fromLTWH(-10, -10, 28, 2), p); // bottom shadow
+    // Charging handle nub
+    p.color = const Color(0xFF555555);
+    canvas.drawRect(const Rect.fromLTWH(16, -34, 5, 6), p);
+    // Ejection port
+    p.color = const Color(0xFF1A1A1A);
+    canvas.drawRect(const Rect.fromLTWH(12, -32, 5, 16), p);
+
+    // ── Folded stock stub ─────────────────────────────────────────────────────
+    p.color = const Color(0xFF2A2A2A);
+    canvas.drawRect(const Rect.fromLTWH(-10, -8, 6, 30), p);
+    p.color = const Color(0xFF444444);
+    canvas.drawRect(const Rect.fromLTWH(-10, -8, 2, 30), p);
+
+    // ── Magazine (extended below receiver) ────────────────────────────────────
+    p.color = const Color(0xFF2E2E2E);
+    canvas.drawRect(const Rect.fromLTWH(-4, -8, 14, 38), p);
+    p.color = const Color(0xFF444444);
+    canvas.drawRect(const Rect.fromLTWH(-4, -8, 3, 38), p); // left sheen
+    p.color = const Color(0xFF1A1A1A);
+    canvas.drawRect(const Rect.fromLTWH(-4, 28, 14, 4), p); // base
+    // Mag ridges
+    p.color = const Color(0xFF383838);
+    for (int i = 0; i < 3; i++) {
+      canvas.drawRect(Rect.fromLTWH(-2, -4.0 + i * 9, 10, 2), p);
+    }
+
+    // ── Trigger guard ─────────────────────────────────────────────────────────
+    p.color = const Color(0xFF333333);
+    canvas.drawRect(const Rect.fromLTWH(-8, -8, 22, 2), p);
+    canvas.drawRect(const Rect.fromLTWH(-8, -8, 2, 16), p);
+    canvas.drawRect(const Rect.fromLTWH(12, -8, 2, 16), p);
+    canvas.drawRect(const Rect.fromLTWH(-8, 6, 22, 2), p);
+    p.color = const Color(0xFF888888);
+    canvas.drawRect(const Rect.fromLTWH(-1, -5, 5, 10), p); // trigger
+
+    canvas.restore();
+
+    if (smgAmmo == 0) {
+      final tp = TextPainter(
+        text: const TextSpan(text: '— SIN MUNICIÓN —',
+          style: TextStyle(color: Colors.orange, fontSize: 10,
             fontFamily: 'monospace', fontWeight: FontWeight.bold)),
         textDirection: TextDirection.ltr,
       );

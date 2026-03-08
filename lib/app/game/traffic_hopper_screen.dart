@@ -817,6 +817,7 @@ class _HopperPainter extends CustomPainter {
     // Determine rotation based on facing
     canvas.save();
     canvas.translate(fx + cs / 2, fy + cs / 2);
+    canvas.scale(0.90); // 10% smaller
     switch (frogFacing) {
       case _Facing.up:    break; // default
       case _Facing.down:  canvas.rotate(3.14159); break;

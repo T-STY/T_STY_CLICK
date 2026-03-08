@@ -28,6 +28,20 @@ const _kDpad     = Color(0xFF2E2E2E);
 const _kMeta     = Color(0xFF9E9E9E);
 const _kBodyBdr  = Color(0xFF888888);
 
+// ─── Neon accent colours (one per game, used for border glow in grid) ────────
+
+const _kNeonColors = <Color>[
+  Color(0xFF00FF88), // La Sierpe        – green
+  Color(0xFF4488FF), // Tragalaberinto   – blue
+  Color(0xFF00CCFF), // Alas Locas       – cyan
+  Color(0xFF88FF44), // Paso a Paso      – lime
+  Color(0xFFFF4422), // Astrocaza        – red/orange
+  Color(0xFFFF8800), // Inframundo 2D    – hot orange
+  Color(0xFFBB44FF), // Tetromuro        – purple
+  Color(0xFFFFEE00), // Busca-Trampas    – yellow
+  Color(0xFFFF44BB), // Dulce Racha      – pink
+];
+
 // ─── Card background gradients (per game — colours match the actual game) ─────
 
 const _kCardGradients = <List<Color>>[
@@ -168,11 +182,16 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
     final btn = event.button;
 
     if (_activeGame == null) {
+      const cols = 3; // neon grid columns
       switch (btn) {
         case ArcadeButton.left:
           setState(() => _selectedIndex = (_selectedIndex - 1 + 9) % 9);
         case ArcadeButton.right:
           setState(() => _selectedIndex = (_selectedIndex + 1) % 9);
+        case ArcadeButton.up:
+          setState(() => _selectedIndex = (_selectedIndex - cols + 9) % 9);
+        case ArcadeButton.down:
+          setState(() => _selectedIndex = (_selectedIndex + cols) % 9);
         case ArcadeButton.a:
         case ArcadeButton.start:
           _launchSelected();
@@ -292,165 +311,202 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
       padding: const EdgeInsets.all(8),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(10),
-        child: _activeGame == null ? _buildCarousel() : _buildActiveGame(),
+        child: _activeGame == null ? _buildNeonGrid() : _buildActiveGame(),
       ),
     );
   }
 
-  // ── Carousel ──────────────────────────────────────────────────────────────
+  // ── Neon Arcade Cabinet Grid ───────────────────────────────────────────────
 
-  Widget _buildCarousel() {
+  Widget _buildNeonGrid() {
     return Container(
-      color: const Color(0xFF060A14),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final w = constraints.maxWidth;
-          final h = constraints.maxHeight;
-          // Cards taller, centered on screen
-          final cardW = (w * 0.80).clamp(168.0, 268.0);
-          final cardH = (h * 0.88).clamp(160.0, 250.0);
-          final gap = w * 0.06;
-          final centerX = (w - cardW) / 2;
+      color: const Color(0xFF07000F),
+      child: Column(children: [
+        _buildNeonMarquee(),
+        Expanded(child: _buildGameGrid()),
+        _buildGridHint(),
+      ]),
+    );
+  }
 
-          return Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              // Collection title
-              const Text('THE RETRO 8 COLLECTION',
-                style: TextStyle(color: Colors.white24, fontSize: 7,
-                    letterSpacing: 3, fontWeight: FontWeight.w700)),
-              const SizedBox(height: 8),
+  Widget _buildNeonMarquee() {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(10, 8, 10, 7),
+      decoration: BoxDecoration(
+        color: const Color(0xFF0D0020),
+        border: Border(
+          bottom: BorderSide(color: const Color(0xFF660099).withOpacity(0.60), width: 1),
+        ),
+        boxShadow: [BoxShadow(
+          color: const Color(0xFFCC00FF).withOpacity(0.15),
+          blurRadius: 12, offset: const Offset(0, 3))],
+      ),
+      child: Row(children: [
+        // Animated scanline glow dot
+        Container(
+          width: 6, height: 6,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: const Color(0xFF00FFCC),
+            boxShadow: [BoxShadow(
+              color: const Color(0xFF00FFCC).withOpacity(0.90), blurRadius: 8)],
+          ),
+        ),
+        const SizedBox(width: 8),
+        ShaderMask(
+          shaderCallback: (bounds) => const LinearGradient(
+            colors: [Color(0xFFFF00FF), Color(0xFF00FFFF), Color(0xFFFF00FF)],
+          ).createShader(bounds),
+          child: const Text('ARCADE  CENTER',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 14,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 4,
+              fontFamily: 'monospace',
+            ),
+          ),
+        ),
+        const Spacer(),
+        Text('💰 ${_saldo.toStringAsFixed(0)}',
+          style: const TextStyle(
+            color: Color(0xFFFFDD44),
+            fontSize: 9, fontFamily: 'monospace', fontWeight: FontWeight.bold,
+          )),
+      ]),
+    );
+  }
 
-              // Cards carousel — the focal point
-              SizedBox(
-                height: cardH,
-                child: Stack(
-                  clipBehavior: Clip.none,
-                  children: List.generate(kArcadeGames.length, (i) {
-                    final offset = (i - _selectedIndex) * (cardW + gap);
-                    final isSelected = i == _selectedIndex;
-                    return AnimatedPositioned(
-                      duration: const Duration(milliseconds: 280),
-                      curve: Curves.easeOutCubic,
-                      left: centerX + offset,
-                      top: isSelected ? 0 : cardH * 0.05,
-                      child: AnimatedOpacity(
-                        duration: const Duration(milliseconds: 280),
-                        opacity: (i - _selectedIndex).abs() <= 1 ? 1.0 : 0.0,
-                        child: _buildCarouselCard(
-                          kArcadeGames[i], i, isSelected, cardW, cardH),
-                      ),
-                    );
-                  }),
+  Widget _buildGameGrid() {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        const cols = 3;
+        final cellW = constraints.maxWidth / cols;
+        final cellH = constraints.maxHeight / 3;
+
+        return GridView.builder(
+          physics: const NeverScrollableScrollPhysics(),
+          padding: const EdgeInsets.all(6),
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: cols,
+            mainAxisSpacing: 6,
+            crossAxisSpacing: 6,
+          ),
+          itemCount: kArcadeGames.length,
+          itemBuilder: (_, i) => _buildNeonCard(
+              kArcadeGames[i], i, i == _selectedIndex, cellW - 6, cellH - 6),
+        );
+      },
+    );
+  }
+
+  Widget _buildNeonCard(ArcadeGameDef def, int index, bool selected, double w, double h) {
+    final neon = _kNeonColors[index];
+    return GestureDetector(
+      onTap: () => setState(() => _selectedIndex = index),
+      onDoubleTap: selected ? _launchSelected : null,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: selected ? neon : neon.withOpacity(0.35),
+            width: selected ? 2.0 : 1.0,
+          ),
+          boxShadow: selected ? [
+            BoxShadow(color: neon.withOpacity(0.55), blurRadius: 12, spreadRadius: 1),
+            BoxShadow(color: neon.withOpacity(0.20), blurRadius: 24, spreadRadius: 3),
+          ] : [
+            BoxShadow(color: neon.withOpacity(0.08), blurRadius: 6),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(9),
+          child: Stack(children: [
+            // Card art background
+            Positioned.fill(
+              child: CustomPaint(
+                painter: _CartridgePainter(index: index, selected: selected),
+              ),
+            ),
+            // Neon tint overlay on selected
+            if (selected)
+              Positioned.fill(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: neon.withOpacity(0.06),
+                  ),
                 ),
               ),
-
-              const SizedBox(height: 10),
-
-              // Navigation dots
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: List.generate(9, (i) {
-                  final sel = i == _selectedIndex;
-                  return AnimatedContainer(
-                    duration: const Duration(milliseconds: 220),
-                    margin: const EdgeInsets.symmetric(horizontal: 2),
-                    width: sel ? 18 : 5,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: sel ? Colors.white70 : Colors.white24,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  );
-                }),
-              ),
-
-              const SizedBox(height: 6),
-              const Text('◄ ► navegar   A jugar   SELECT salir',
-                style: TextStyle(color: Colors.white24, fontSize: 7)),
-            ],
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildCarouselCard(
-      ArcadeGameDef def, int index, bool selected, double w, double h) {
-    return GestureDetector(
-      onTap: selected ? _launchSelected : () => setState(() => _selectedIndex = index),
-      child: AnimatedScale(
-        duration: const Duration(milliseconds: 280),
-        scale: selected ? 1.0 : 0.88,
-        child: SizedBox(
-          width: w, height: h,
-          child: Stack(children: [
-            // ── Full TCG-card art painting ──────────────────────────────────
-            CustomPaint(
-              painter: _CartridgePainter(index: index, selected: selected),
-              child: const SizedBox.expand(),
-            ),
-
-            // ── Footer: category + title + high score ───────────────────────
-            Positioned(
-              left: 10, right: 10, bottom: 10,
+            // Content overlay
+            Positioned.fill(
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
+                mainAxisAlignment: MainAxisAlignment.end,
                 children: [
-                  Row(children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withOpacity(0.60),
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: Colors.white.withOpacity(0.22)),
-                      ),
-                      child: Text(_kCategoryLabels[index ~/ 2],
-                        style: const TextStyle(color: Colors.white60, fontSize: 7,
-                            letterSpacing: 1.5, fontWeight: FontWeight.w700)),
-                    ),
-                    if (_highScores[index] > 0) ...[
-                      const Spacer(),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.60),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Text('⭐ ${_highScores[index]}',
-                          style: const TextStyle(color: Colors.amber, fontSize: 7)),
-                      ),
-                    ],
-                  ]),
-                  const SizedBox(height: 4),
+                  // Emoji
+                  Text(def.emoji,
+                    style: TextStyle(fontSize: selected ? 20 : 16)),
+                  const SizedBox(height: 2),
+                  // Title
                   Text(def.title,
-                    style: const TextStyle(color: Colors.white, fontSize: 13,
-                        fontWeight: FontWeight.bold, letterSpacing: 0.3,
-                        shadows: [Shadow(color: Colors.black, blurRadius: 8,
-                            offset: Offset(0, 1))]),
-                    maxLines: 1, overflow: TextOverflow.ellipsis),
+                    textAlign: TextAlign.center,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: selected ? neon : Colors.white70,
+                      fontSize: 7.5,
+                      fontWeight: FontWeight.bold,
+                      fontFamily: 'monospace',
+                      letterSpacing: 0.5,
+                      shadows: selected ? [Shadow(color: neon, blurRadius: 8)] : null,
+                    ),
+                  ),
+                  // High score
+                  if (_highScores[index] > 0)
+                    Text('★ ${_highScores[index]}',
+                      style: TextStyle(
+                        color: Colors.amber.withOpacity(selected ? 1.0 : 0.60),
+                        fontSize: 7, fontFamily: 'monospace',
+                      )),
+                  const SizedBox(height: 5),
                 ],
               ),
             ),
-
-            // ── JUGAR badge (selected only) ──────────────────────────────────
+            // JUGAR badge on selected
             if (selected)
-              Center(
+              Positioned(
+                top: 4, right: 4,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 9),
+                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
                   decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.68),
-                    borderRadius: BorderRadius.circular(22),
-                    border: Border.all(color: Colors.white.withOpacity(0.70), width: 1.5),
+                    color: neon.withOpacity(0.20),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: neon.withOpacity(0.70), width: 1),
                   ),
-                  child: const Text('▶  JUGAR',
-                    style: TextStyle(color: Colors.white, fontSize: 12,
-                        fontWeight: FontWeight.bold, letterSpacing: 2.5)),
+                  child: Text('▶',
+                    style: TextStyle(color: neon, fontSize: 8,
+                        shadows: [Shadow(color: neon, blurRadius: 6)])),
                 ),
               ),
           ]),
         ),
+      ),
+    );
+  }
+
+  Widget _buildGridHint() {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      decoration: BoxDecoration(
+        color: const Color(0xFF0D0020),
+        border: Border(top: BorderSide(
+            color: const Color(0xFF660099).withOpacity(0.40), width: 1)),
+      ),
+      child: const Text(
+        '◄ ► ▲ ▼ navegar   A jugar   SELECT salir',
+        textAlign: TextAlign.center,
+        style: TextStyle(color: Colors.white30, fontSize: 7,
+            fontFamily: 'monospace', letterSpacing: 1),
       ),
     );
   }
