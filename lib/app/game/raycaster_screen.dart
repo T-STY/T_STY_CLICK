@@ -77,6 +77,41 @@ class _Enemy {
 
   /// Damage increases 15% per wave (caps at 3×)
   double get damage => (_baseDamage * (1.0 + (wave - 1) * 0.15)).clamp(0, _baseDamage * 3);
+
+  // ── Ranged attack params (0 = melee only) ──────────────────────────────────
+  double get attackRange    => type == _EnemyType.skeleton ? 7.0
+      : (type == _EnemyType.cacodemon ? 5.5 : 0.0);
+  double get attackInterval => type == _EnemyType.skeleton ? 1.8
+      : (type == _EnemyType.cacodemon ? 2.4 : 0.0);
+  double get projectileDmg  => type == _EnemyType.skeleton
+      ? (10.0 * (1.0 + (wave - 1) * 0.15)).clamp(0, 30.0)
+      : (type == _EnemyType.cacodemon
+          ? (6.0 * (1.0 + (wave - 1) * 0.15)).clamp(0, 18.0) : 0.0);
+  double get projectileSpeed => type == _EnemyType.skeleton ? 5.0
+      : (type == _EnemyType.cacodemon ? 3.5 : 0.0);
+  /// Ranged enemies stop closing in once within this distance
+  double get minEngageRange  => attackRange > 0 ? 2.0 : 0.0;
+
+  double attackCooldown = 0;
+}
+
+// ─── Projectile ───────────────────────────────────────────────────────────────
+
+class _Projectile {
+  double x, y;
+  double dx, dy;   // normalized direction (set at spawn, never changes)
+  double speed;
+  double damage;
+  _EnemyType type; // visual: cacodemon=fireball, skeleton=arrow
+  bool alive = true;
+  double dist = 0; // distance traveled so far
+
+  static const double maxRange = 11.0;
+
+  _Projectile({required this.x, required this.y,
+      required this.dx, required this.dy,
+      required this.speed, required this.damage,
+      required this.type});
 }
 
 // ─── Weapon ───────────────────────────────────────────────────────────────────
@@ -142,6 +177,7 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
   double _dimTimer = 0;       // countdown to next dim event
 
   final List<_Enemy> _enemies = [];
+  final List<_Projectile> _projectiles = [];
   final List<double> _zBuf = List<double>.filled(120, 0);
   final Random _rng = Random();
 
@@ -238,6 +274,7 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
 
   void _spawnWave(int wave) {
     _enemies.clear();
+    _projectiles.clear();
     if (wave == 1) {
       _enemies.addAll([
         _Enemy(8.5, 8.5, type: _EnemyType.demon, wave: wave),
@@ -396,6 +433,7 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
     _time += dts;
     _processMovement(dts);
     _updateEnemies(dts);
+    _updateProjectiles(dts);
     _updateTimers(dts);
     setState(() {});
   }
@@ -438,23 +476,75 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
       if (!e.alive) continue;
       final dx = _posX - e.x, dy = _posY - e.y;
       final dist = sqrt(dx * dx + dy * dy);
-      if (dist < 0.5) {
-        // Accumulate fractional damage — no rounding so it always applies
-        _health -= e.damage * dt;
-        _hitFlash = (_hitFlash + dt * 3).clamp(0, 1);
-        if (_damageCooldown <= 0) {
-          HapticFeedback.lightImpact();
-          _damageCooldown = 0.35;
+
+      if (e.attackRange == 0) {
+        // ── Demon: pure melee ──────────────────────────────────────────────
+        if (dist < 0.5) {
+          _health -= e.damage * dt;
+          _hitFlash = (_hitFlash + dt * 3).clamp(0, 1);
+          if (_damageCooldown <= 0) {
+            HapticFeedback.lightImpact();
+            _damageCooldown = 0.35;
+          }
+          if (_health <= 0) { _health = 0; _gameOver(); return; }
+          continue;
         }
-        if (_health <= 0) { _health = 0; _gameOver(); return; }
-        continue;
+      } else {
+        // ── Ranged (skeleton / cacodemon): shoot, don't melee ─────────────
+        if (e.attackCooldown <= 0 &&
+            dist > 0.5 && dist < e.attackRange &&
+            _hasLos(e.x, e.y, _posX, _posY)) {
+          _projectiles.add(_Projectile(
+            x: e.x, y: e.y,
+            dx: dx / dist, dy: dy / dist,
+            speed: e.projectileSpeed,
+            damage: e.projectileDmg,
+            type: e.type,
+          ));
+          e.attackCooldown = e.attackInterval;
+        }
+        // Stop closing in once within minimum engage range
+        if (dist <= e.minEngageRange) continue;
       }
+
       final spd = eBaseSpeed * e.speed;
       final nx = e.x + (dx / dist) * spd * dt;
       final ny = e.y + (dy / dist) * spd * dt;
       if (_kMap[e.y.floor()][nx.floor()] == 0) e.x = nx;
       if (_kMap[ny.floor()][e.x.floor()] == 0) e.y = ny;
     }
+  }
+
+  void _updateProjectiles(double dt) {
+    for (final p in _projectiles) {
+      if (!p.alive) continue;
+      p.x += p.dx * p.speed * dt;
+      p.y += p.dy * p.speed * dt;
+      p.dist += p.speed * dt;
+
+      // Wall collision
+      final mx = p.x.floor(), my = p.y.floor();
+      if (mx < 0 || mx >= _kMapW || my < 0 || my >= _kMapH || _kMap[my][mx] == 1) {
+        p.alive = false;
+        continue;
+      }
+      // Max range
+      if (p.dist > _Projectile.maxRange) { p.alive = false; continue; }
+
+      // Player hit
+      final pdx = _posX - p.x, pdy = _posY - p.y;
+      if (pdx * pdx + pdy * pdy < 0.28 * 0.28) {
+        p.alive = false;
+        _health -= p.damage;
+        _hitFlash = (_hitFlash + 0.55).clamp(0.0, 1.0);
+        if (_damageCooldown <= 0) {
+          HapticFeedback.lightImpact();
+          _damageCooldown = 0.35;
+        }
+        if (_health <= 0) { _health = 0; _gameOver(); return; }
+      }
+    }
+    _projectiles.removeWhere((p) => !p.alive);
   }
 
   void _updateTimers(double dt) {
@@ -472,6 +562,7 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
     }
     for (final e in _enemies) {
       if (e.hitFlash > 0) e.hitFlash = (e.hitFlash - dt * 7.0).clamp(0, 1);
+      if (e.attackCooldown > 0) e.attackCooldown -= dt;
     }
   }
 
@@ -507,6 +598,7 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
               dirX: _dirX, dirY: _dirY,
               planeX: _planeX, planeY: _planeY,
               enemies: _enemies,
+              projectiles: _projectiles,
               zBuf: _zBuf,
               health: _health.round().clamp(0, 100),
               kills: _kills,
@@ -669,6 +761,7 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
 class _RaycasterPainter extends CustomPainter {
   final double posX, posY, dirX, dirY, planeX, planeY;
   final List<_Enemy> enemies;
+  final List<_Projectile> projectiles;
   final List<double> zBuf;
   final int health, kills, ammo, shotgunAmmo, smgAmmo, wave;
   final bool shotgunUnlocked, smgUnlocked;
@@ -680,7 +773,7 @@ class _RaycasterPainter extends CustomPainter {
     required this.posX, required this.posY,
     required this.dirX, required this.dirY,
     required this.planeX, required this.planeY,
-    required this.enemies, required this.zBuf,
+    required this.enemies, required this.projectiles, required this.zBuf,
     required this.health, required this.kills,
     required this.ammo, required this.shotgunAmmo,
     required this.shotgunUnlocked,
@@ -704,6 +797,7 @@ class _RaycasterPainter extends CustomPainter {
     _drawCeilingAndFloor(canvas, size, pxW, pxH);
     _castWalls(canvas, size, pxW, pxH);
     _drawEnemySprites(canvas, size, pxW, pxH);
+    _drawProjectiles(canvas, size, pxW, pxH);
     _drawScreenFx(canvas, size);
     if (showHud) {
       _drawHud(canvas, size);
@@ -879,6 +973,50 @@ class _RaycasterPainter extends CustomPainter {
         sp.color = Colors.white;
         canvas.drawRect(Rect.fromLTWH(cx - 5, cy - 1, 10, 2), sp);
         canvas.drawRect(Rect.fromLTWH(cx - 1, cy - 5, 2, 10), sp);
+      }
+    }
+  }
+
+  // ─── Enemy projectiles ────────────────────────────────────────────────────────
+
+  void _drawProjectiles(Canvas canvas, Size size, double pxW, double pxH) {
+    final sp = Paint()..isAntiAlias = false;
+    final invDet = 1.0 / (planeX * dirY - dirX * planeY);
+
+    for (final p in projectiles) {
+      if (!p.alive) continue;
+      final dx = p.x - posX, dy = p.y - posY;
+      final transformX = invDet * (dirY * dx - dirX * dy);
+      final transformY = invDet * (-planeY * dx + planeX * dy);
+      if (transformY <= 0.05) continue;
+
+      final screenCol = (60 * (1 + transformX / transformY)).round();
+      if (screenCol < 0 || screenCol >= 120) continue;
+      if (transformY >= zBuf[screenCol]) continue; // behind wall
+
+      final screenX = screenCol * pxW;
+      final screenY = size.height * 0.5;
+      final s = (4.5 / transformY).clamp(1.0, 14.0);
+
+      if (p.type == _EnemyType.cacodemon) {
+        // Fireball — three-layer glowing orb
+        sp.color = const Color(0x55FF2200);
+        canvas.drawCircle(Offset(screenX, screenY), s * pxW * 1.5, sp);
+        sp.color = Colors.orange;
+        canvas.drawCircle(Offset(screenX, screenY), s * pxW * 0.9, sp);
+        sp.color = const Color(0xFFFFEE44);
+        canvas.drawCircle(Offset(screenX, screenY), s * pxW * 0.4, sp);
+      } else {
+        // Arrow — shaft + dark metal tip
+        final hw = s * pxW * 1.2; // half-width of shaft
+        final hh = s * pxH * 0.22;
+        sp.color = const Color(0xFF8B5A2B); // wood shaft
+        canvas.drawRect(Rect.fromCenter(
+            center: Offset(screenX, screenY), width: hw * 2, height: hh * 2), sp);
+        sp.color = const Color(0xFF888888); // metal tip
+        canvas.drawRect(Rect.fromCenter(
+            center: Offset(screenX + hw * 0.65, screenY),
+            width: hw * 0.7, height: hh * 3), sp);
       }
     }
   }
