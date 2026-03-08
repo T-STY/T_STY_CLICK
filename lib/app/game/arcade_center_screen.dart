@@ -1294,16 +1294,16 @@ class _ConsoleDPad extends StatefulWidget {
 
 class _ConsoleDPadState extends State<_ConsoleDPad> {
   Set<ArcadeButton> _active = const {};
-  Offset _nudge = Offset.zero; // thumbstick hub offset
 
-  static const _dead = 16.0;
+  // Larger dead zone (24 px) reduces accidental triggers on touch
+  static const _dead = 24.0;
 
   List<ArcadeButton> _buttonsFor(Offset local) {
     const cx = 72.0, cy = 72.0;
     final dx = local.dx - cx, dy = local.dy - cy;
     if (dx * dx + dy * dy < _dead * _dead) return const [];
     if (widget.joystick) {
-      // 8-direction for thumbstick
+      // 8-direction for diagonal-capable games (shooter / raycaster)
       final angle = (atan2(dy, dx) * 180 / pi + 450) % 360;
       if (angle < 22.5 || angle >= 337.5) return [ArcadeButton.up];
       if (angle < 67.5)  return [ArcadeButton.up, ArcadeButton.right];
@@ -1323,16 +1323,6 @@ class _ConsoleDPadState extends State<_ConsoleDPad> {
     }
   }
 
-  Offset _nudgeFor(Offset local) {
-    const cx = 72.0, cy = 72.0;
-    const maxNudge = 20.0;
-    final dx = local.dx - cx, dy = local.dy - cy;
-    final dist = sqrt(dx * dx + dy * dy);
-    if (dist < _dead) return Offset.zero;
-    final scale = ((dist.clamp(_dead, 60.0) - _dead) / (60.0 - _dead)) * maxNudge;
-    return Offset(dx / dist * scale, dy / dist * scale);
-  }
-
   void _applyButtons(List<ArcadeButton> next, Offset local) {
     final newSet = next.toSet();
     for (final b in _active.difference(newSet)) widget.controller.release(b);
@@ -1340,15 +1330,12 @@ class _ConsoleDPadState extends State<_ConsoleDPad> {
       widget.controller.press(b);
       HapticFeedback.lightImpact();
     }
-    setState(() {
-      _active = newSet;
-      if (widget.joystick) _nudge = _nudgeFor(local);
-    });
+    setState(() { _active = newSet; });
   }
 
   void _release() {
     for (final b in _active) widget.controller.release(b);
-    setState(() { _active = const {}; _nudge = Offset.zero; });
+    setState(() { _active = const {}; });
   }
 
   @override
@@ -1359,11 +1346,11 @@ class _ConsoleDPadState extends State<_ConsoleDPad> {
       onPointerMove:   (e) => _applyButtons(_buttonsFor(e.localPosition), e.localPosition),
       onPointerUp:     (_) => _release(),
       onPointerCancel: (_) => _release(),
+      // Always use the cross D-pad visual — joystick mode only differs in
+      // which directions it recognises (cardinal vs 8-way), not the look.
       child: CustomPaint(
         size: const Size(144, 144),
-        painter: widget.joystick
-            ? _ThumbstickPainter(active: _active, nudge: _nudge)
-            : _CrossDPadPainter(active: _active),
+        painter: _CrossDPadPainter(active: _active),
       ),
     );
   }

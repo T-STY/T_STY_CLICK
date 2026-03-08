@@ -12,7 +12,7 @@ const _kPW = 120.0, _kPH = 80.0;
 const _kPaddleW = 2.5, _kPaddleH = 14.0;
 const _kPaddleSpd = 62.0;
 const _kBallR = 1.3;
-const _kBallSpdInit = 34.0;
+const _kBallSpdInit = 48.0;
 const _kBallSpdMax = 75.0;
 const _kBallSpdInc = 1.8; // speed added per paddle hit
 const _kWinScore = 7;
@@ -347,10 +347,10 @@ class _PongPainter extends CustomPainter {
     txt('$aiScore', size.width * 0.64, size.height * 0.025,
         Colors.white.withOpacity(0.55), scoreFs);
 
-    // Round indicators — fixed-size dots (no ph/pw scaling to avoid overlap)
+    // Round indicators — fixed-size dots, positioned below the score
     const cyan = Color(0xFF00DDFF);
     const dotR = 4.0, dotStep = 13.0;
-    final dotsY = size.height * 0.075;
+    final dotsY = size.height * 0.14;
     for (int i = 0; i < 4; i++) {
       p.color = i < playerRounds ? cyan : Colors.white12;
       canvas.drawCircle(

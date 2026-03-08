@@ -457,15 +457,15 @@ class _BreakoutPainter extends CustomPainter {
       tp.paint(canvas, Offset(x, y));
     }
 
-    txt('$score', size.width * 0.04, size.height * 0.015, paddleColor, hfs);
-    txt('NIV ${level + 1}', size.width * 0.44, size.height * 0.015,
+    txt('$score', size.width * 0.04, size.height * 0.015 - 5, paddleColor, hfs);
+    txt('NIV ${level + 1}', size.width * 0.44, size.height * 0.015 - 5,
         Colors.white54, hfs * 0.9);
-    txt('RÉC $hiScore', size.width * 0.68, size.height * 0.015,
+    txt('RÉC $hiScore', size.width * 0.68, size.height * 0.015 - 5,
         Colors.white24, hfs * 0.9);
 
     // Lives — small hearts so they read clearly as life indicators
     txt(List.filled(lives.clamp(0, 5), '♥').join(' '),
-        size.width * 0.04, size.height - hfs - 6,
+        size.width * 0.04, size.height - hfs - 11,
         Colors.redAccent.withOpacity(0.85), hfs);
   }
 }
