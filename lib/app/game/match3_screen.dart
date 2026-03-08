@@ -65,6 +65,7 @@ class _Match3ScreenState extends State<Match3Screen> with SingleTickerProviderSt
 
   bool _isPlaying = false;
   bool _isDead = false;
+  bool _paused = false;
   bool _roundComplete = false;
   bool _roundCompleteDelay = false;
   int _comboCount = 0;
@@ -146,6 +147,8 @@ class _Match3ScreenState extends State<Match3Screen> with SingleTickerProviderSt
       if (btn == ArcadeButton.a || btn == ArcadeButton.start) _restart();
       return;
     }
+    if (btn == ArcadeButton.start) { _togglePause(); return; }
+    if (_paused) return;
     if (_roundCompleteDelay) return;
 
     switch (btn) {
@@ -358,8 +361,13 @@ class _Match3ScreenState extends State<Match3Screen> with SingleTickerProviderSt
     _secondTicker = Timer.periodic(const Duration(seconds: 1), _onSecondTick);
   }
 
+  void _togglePause() {
+    if (!_isPlaying || _isDead) return;
+    setState(() => _paused = !_paused);
+  }
+
   void _onSecondTick(Timer _) {
-    if (!_isPlaying || _roundComplete || _roundCompleteDelay) return;
+    if (!_isPlaying || _paused || _roundComplete || _roundCompleteDelay) return;
     setState(() {
       _timeLeft--;
       if (_timeLeft <= 5) HapticFeedback.lightImpact();
@@ -397,89 +405,69 @@ class _Match3ScreenState extends State<Match3Screen> with SingleTickerProviderSt
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF1A000E),
+      backgroundColor: const Color(0xFF55AADE),
       body: Stack(children: [
-        // Main layout: left deco | board | right HUD
+        // Candy sky background
+        const SizedBox.expand(child: CustomPaint(painter: _CandySkyPainter())),
+
+        // Main content
         LayoutBuilder(builder: (ctx, constraints) {
           final totalW = constraints.maxWidth;
           final totalH = constraints.maxHeight;
-          const leftW = 26.0, rightW = 58.0;
-          final boardW = totalW - leftW - rightW;
-          final cellW = boardW / _kCols;
-          const topBarH = 42.0;
-          final cellH = (totalH - topBarH - 4) / _kRows;
+          const headerH = 76.0;
+          const footerH = 72.0;
+          const hPad = 8.0;
+          final boardH = totalH - headerH - footerH;
+          final cellW = (totalW - hPad * 2) / _kCols;
+          final cellH = boardH / _kRows;
 
-          return Row(children: [
-            // ── Left decorative panel ──────────────────────────────────────
-            SizedBox(
-              width: leftW, height: totalH,
-              child: CustomPaint(painter: _CandySidePainter(side: 0, h: totalH)),
-            ),
+          return Column(children: [
+            // Header bar
+            _buildHeader(totalW, headerH),
 
-            // ── Center: top bar + swipeable candy board ────────────────────
-            SizedBox(
-              width: boardW,
-              child: Stack(children: [
-                Column(children: [
-                  // Top bar
-                  SizedBox(
-                    height: topBarH,
-                    child: _buildTopBar(boardW, topBarH),
-                  ),
-                  // Swipeable board
-                  Expanded(
-                    child: GestureDetector(
-                      onPanStart: _isPlaying
-                          ? (d) => _onBoardPanStart(d, cellW, cellH, 0)
-                          : null,
-                      onPanEnd: _isPlaying ? _onBoardPanEnd : null,
-                      child: CustomPaint(
-                        painter: _CandyBoardPainter(
-                          board: _board,
-                          cursorCol: _cursorCol, cursorRow: _cursorRow,
-                          selCol: _selCol, selRow: _selRow,
-                          comboCount: _comboCount,
-                          showCursor: _isPlaying,
-                          animProgress: _isAnimating ? _swapAnimCtrl.value : -1.0,
-                          animForward: _swapForward,
-                          animC1: _animC1, animR1: _animR1,
-                          animC2: _animC2, animR2: _animR2,
-                        ),
-                        child: const SizedBox.expand(),
+            // Board in dark wooden container
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: hPad),
+              child: Container(
+                height: boardH,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF3D2510),
+                  borderRadius: BorderRadius.circular(14),
+                  boxShadow: const [BoxShadow(color: Colors.black54, blurRadius: 10, offset: Offset(0, 4))],
+                  border: Border.all(color: const Color(0xFF7A4E28), width: 2.5),
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: GestureDetector(
+                    onPanStart: (_isPlaying && !_paused)
+                        ? (d) => _onBoardPanStart(d, cellW, cellH, 0)
+                        : null,
+                    onPanEnd: (_isPlaying && !_paused) ? _onBoardPanEnd : null,
+                    child: CustomPaint(
+                      painter: _CandyBoardPainter(
+                        board: _board,
+                        cursorCol: _cursorCol, cursorRow: _cursorRow,
+                        selCol: _selCol, selRow: _selRow,
+                        comboCount: _comboCount,
+                        showCursor: _isPlaying && !_paused,
+                        animProgress: _isAnimating ? _swapAnimCtrl.value : -1.0,
+                        animForward: _swapForward,
+                        animC1: _animC1, animR1: _animR1,
+                        animC2: _animC2, animR2: _animR2,
                       ),
-                    ),
-                  ),
-                ]),
-                // Glass frame overlay (top + bottom chrome rails)
-                Positioned(
-                  top: topBarH - 3, left: 0, right: 0,
-                  child: Container(height: 4,
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(colors: [
-                        Colors.white.withOpacity(0.35),
-                        Colors.white.withOpacity(0.08),
-                      ], begin: Alignment.topCenter, end: Alignment.bottomCenter),
+                      child: const SizedBox.expand(),
                     ),
                   ),
                 ),
-                Positioned(
-                  bottom: 0, left: 0, right: 0,
-                  child: Container(height: 4,
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(colors: [
-                        Colors.white.withOpacity(0.08),
-                        Colors.white.withOpacity(0.30),
-                      ], begin: Alignment.topCenter, end: Alignment.bottomCenter),
-                    ),
-                  ),
-                ),
-              ]),
+              ),
             ),
 
-            // ── Right HUD panel ────────────────────────────────────────────
-            SizedBox(
-              width: rightW, height: totalH,
-              child: _buildRightHud(rightW, totalH),
+            // Bottom candy landscape
+            Expanded(
+              child: CustomPaint(
+                painter: const _CandyLandPainter(),
+                child: const SizedBox.expand(),
+              ),
             ),
           ]);
         }),
@@ -488,20 +476,43 @@ class _Match3ScreenState extends State<Match3Screen> with SingleTickerProviderSt
         if (_roundComplete && !_isDead)
           Center(
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
               decoration: BoxDecoration(
                 color: Colors.black87,
                 border: Border.all(color: Colors.amberAccent, width: 2),
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [BoxShadow(color: Colors.amber.withOpacity(0.4), blurRadius: 16)],
               ),
               child: Column(mainAxisSize: MainAxisSize.min, children: [
                 const Text('🍬 ¡CASCADA DULCE!',
-                  style: TextStyle(color: Colors.amberAccent, fontSize: 18,
+                  style: TextStyle(color: Colors.amberAccent, fontSize: 20,
                       fontWeight: FontWeight.bold, fontFamily: 'monospace')),
                 const SizedBox(height: 4),
                 const Text('+1 pto real 🌟',
-                  style: TextStyle(color: Colors.white70, fontSize: 11)),
+                  style: TextStyle(color: Colors.white70, fontSize: 12)),
               ]),
+            ),
+          ),
+
+        // Pause overlay
+        if (_paused && _isPlaying)
+          Container(
+            color: Colors.black.withOpacity(0.75),
+            child: Center(
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 20),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF3D2510),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Colors.amberAccent, width: 2),
+                ),
+                child: Column(mainAxisSize: MainAxisSize.min, children: [
+                  const Text('⏸ PAUSA', style: TextStyle(color: Colors.amberAccent, fontSize: 22,
+                      fontWeight: FontWeight.bold, fontFamily: 'monospace')),
+                  const SizedBox(height: 8),
+                  const Text('Start para continuar', style: TextStyle(color: Colors.white60, fontSize: 12)),
+                ]),
+              ),
             ),
           ),
 
@@ -514,178 +525,194 @@ class _Match3ScreenState extends State<Match3Screen> with SingleTickerProviderSt
     );
   }
 
-  // ── Top bar ────────────────────────────────────────────────────────────────
+  // ── Header (candy-crush style) ─────────────────────────────────────────────
 
-  Widget _buildTopBar(double w, double h) {
+  Widget _buildHeader(double w, double h) {
     final timeFrac = (_timeLeft / _kRoundTime).clamp(0.0, 1.0);
-    final barColor = timeFrac > 0.40
+    final timerColor = _timeLeft > 10
         ? const Color(0xFF22DD55)
-        : timeFrac > 0.20 ? const Color(0xFFFF9900) : const Color(0xFFFF2200);
+        : _timeLeft > 5 ? const Color(0xFFFF9900) : const Color(0xFFFF2200);
 
     return Container(
-      color: const Color(0xFF1A000E),
-      padding: const EdgeInsets.fromLTRB(6, 6, 6, 2),
-      child: Column(children: [
-        // Timer bar
-        Container(
-          height: 8,
-          decoration: BoxDecoration(
-            color: const Color(0xFF330020),
-            borderRadius: BorderRadius.circular(4),
-          ),
-          child: FractionallySizedBox(
-            alignment: Alignment.centerLeft,
-            widthFactor: timeFrac,
-            child: Container(
-              decoration: BoxDecoration(
-                color: barColor,
-                borderRadius: BorderRadius.circular(4),
-                boxShadow: [BoxShadow(color: barColor.withOpacity(0.60), blurRadius: 4)],
+      height: h,
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topCenter, end: Alignment.bottomCenter,
+          colors: [Color(0xFFCB8C55), Color(0xFF9A5E2A)],
+        ),
+        boxShadow: const [BoxShadow(color: Colors.black54, blurRadius: 6, offset: Offset(0, 3))],
+      ),
+      child: SafeArea(
+        bottom: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(10, 4, 10, 6),
+          child: Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
+            // Left: circular timer
+            SizedBox(
+              width: 52, height: 52,
+              child: Stack(alignment: Alignment.center, children: [
+                CircularProgressIndicator(
+                  value: timeFrac,
+                  strokeWidth: 5,
+                  backgroundColor: Colors.black26,
+                  color: timerColor,
+                ),
+                Text('$_timeLeft',
+                  style: TextStyle(color: timerColor, fontSize: 14,
+                      fontWeight: FontWeight.bold, fontFamily: 'monospace')),
+              ]),
+            ),
+            const SizedBox(width: 8),
+
+            // Center: score + level + candy-type mini icons
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  // Candy type color dots with counts
+                  Row(mainAxisAlignment: MainAxisAlignment.center,
+                    children: List.generate(min(_kCandyTypes, 4), (t) {
+                      final cnt = _board.expand((r) => r).where((c) => c == t).length;
+                      final col = _kCandyPalette[t];
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 3),
+                        child: Column(mainAxisSize: MainAxisSize.min, children: [
+                          Container(
+                            width: 12, height: 12,
+                            decoration: BoxDecoration(
+                              color: col, shape: BoxShape.circle,
+                              boxShadow: [BoxShadow(color: col.withOpacity(0.6), blurRadius: 3)],
+                            ),
+                          ),
+                          Text('$cnt', style: const TextStyle(color: Colors.white,
+                              fontSize: 8, fontWeight: FontWeight.bold)),
+                        ]),
+                      );
+                    }),
+                  ),
+                  const SizedBox(height: 2),
+                  Text('$_score',
+                    style: const TextStyle(color: Colors.white, fontSize: 18,
+                        fontWeight: FontWeight.bold, fontFamily: 'monospace',
+                        shadows: [Shadow(color: Colors.black45, blurRadius: 3, offset: Offset(1, 1))])),
+                  Text('Ronda $_round  •  Meta $_roundTarget',
+                    style: const TextStyle(color: Colors.white70, fontSize: 8, fontFamily: 'monospace')),
+                ],
               ),
             ),
-          ),
+            const SizedBox(width: 8),
+
+            // Right: pause button
+            GestureDetector(
+              onTap: _togglePause,
+              child: Container(
+                width: 38, height: 38,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF22AA44),
+                  shape: BoxShape.circle,
+                  boxShadow: const [BoxShadow(color: Colors.black38, blurRadius: 4, offset: Offset(0, 2))],
+                ),
+                child: Icon(_paused ? Icons.play_arrow : Icons.pause,
+                    color: Colors.white, size: 22),
+              ),
+            ),
+          ]),
         ),
-        const SizedBox(height: 4),
-        Row(children: [
-          Text('⏱ $_timeLeft s',
-            style: const TextStyle(color: Colors.white70, fontSize: 9,
-                fontFamily: 'monospace', fontWeight: FontWeight.bold)),
-          const Spacer(),
-          Text('META: $_roundTarget',
-            style: const TextStyle(color: Colors.pinkAccent, fontSize: 9,
-                fontFamily: 'monospace', fontWeight: FontWeight.bold)),
-        ]),
-      ]),
-    );
-  }
-
-  // ── Right HUD ──────────────────────────────────────────────────────────────
-
-  Widget _buildRightHud(double w, double h) {
-    return Container(
-      color: const Color(0xFF120008),
-      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.start,
-        children: [
-          const SizedBox(height: 6),
-          _hudLabel('RONDA'),
-          _hudValue('$_round', Colors.amberAccent),
-          const SizedBox(height: 14),
-          _hudLabel('PUNTOS'),
-          _hudValue('$_score', Colors.pinkAccent),
-          const SizedBox(height: 14),
-          _hudLabel('RÉCORD'),
-          _hudValue('$_hiScore', Colors.white38),
-          const SizedBox(height: 14),
-          if (_comboCount >= 2) ...[
-            _hudLabel('COMBO'),
-            _hudValue('x$_comboCount', Colors.yellowAccent),
-            const SizedBox(height: 8),
-          ],
-          const Spacer(),
-          // Candy stripe decoration
-          CustomPaint(
-            painter: _CandySidePainter(side: 1, h: 80),
-            child: const SizedBox(width: 50, height: 80),
-          ),
-          const SizedBox(height: 6),
-          const Text('desliza\n🍬',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: Colors.white24, fontSize: 8,
-                fontFamily: 'monospace')),
-          const SizedBox(height: 6),
-        ],
       ),
     );
   }
-
-  Widget _hudLabel(String text) => Text(text,
-    style: const TextStyle(color: Colors.white30, fontSize: 7,
-        letterSpacing: 1.5, fontWeight: FontWeight.w700));
-
-  Widget _hudValue(String text, Color color) => Text(text,
-    style: TextStyle(color: color, fontSize: 14,
-        fontFamily: 'monospace', fontWeight: FontWeight.bold,
-        shadows: [Shadow(color: color.withOpacity(0.60), blurRadius: 6)]));
 
   // ── Overlays ───────────────────────────────────────────────────────────────
 
   Widget _buildStartOverlay() {
     return Container(
-      color: Colors.black.withOpacity(0.88),
+      color: Colors.black.withOpacity(0.80),
       child: Center(
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          const Text('🍬', style: TextStyle(fontSize: 56)),
-          const SizedBox(height: 10),
-          const Text('CASCADA DULCE',
-            style: TextStyle(color: Colors.pinkAccent, fontSize: 22,
-                fontWeight: FontWeight.bold, letterSpacing: 3,
-                fontFamily: 'monospace')),
-          const SizedBox(height: 6),
-          const Text('Combina 3 o más dulces',
-            style: TextStyle(color: Colors.white60, fontSize: 11)),
-          const SizedBox(height: 4),
-          const Text('Desliza en pantalla o usa D-pad + A',
-            style: TextStyle(color: Colors.white38, fontSize: 10)),
-          const SizedBox(height: 22),
-          Text('Meta: $_roundTarget puntos en $_kRoundTime s',
-            style: const TextStyle(color: Colors.amberAccent, fontSize: 11)),
-          const SizedBox(height: 24),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 40),
-            child: SizedBox(
+        child: Container(
+          margin: const EdgeInsets.symmetric(horizontal: 24),
+          padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
+          decoration: BoxDecoration(
+            color: const Color(0xFF3D2510),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: const Color(0xFF9A6030), width: 2),
+            boxShadow: [BoxShadow(color: Colors.amber.withOpacity(0.3), blurRadius: 20)],
+          ),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            const Text('🍬', style: TextStyle(fontSize: 52)),
+            const SizedBox(height: 8),
+            const Text('CASCADA DULCE',
+              style: TextStyle(color: Colors.amberAccent, fontSize: 22,
+                  fontWeight: FontWeight.bold, letterSpacing: 2,
+                  fontFamily: 'monospace')),
+            const SizedBox(height: 6),
+            const Text('Combina 3 o más dulces',
+              style: TextStyle(color: Colors.white70, fontSize: 11)),
+            const SizedBox(height: 2),
+            const Text('Desliza o usa D-pad + A',
+              style: TextStyle(color: Colors.white38, fontSize: 10)),
+            const SizedBox(height: 16),
+            Text('Meta: $_roundTarget pts en $_kRoundTime s',
+              style: const TextStyle(color: Colors.orange, fontSize: 11,
+                  fontFamily: 'monospace')),
+            const SizedBox(height: 20),
+            SizedBox(
               width: double.infinity,
               child: ElevatedButton(
                 onPressed: _startGame,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF880040),
+                  backgroundColor: const Color(0xFF22AA44),
                   foregroundColor: Colors.white,
-                  shape: const StadiumBorder()),
-                child: const Text('¡Jugar!'),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                child: const Text('¡Jugar!', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
               ),
             ),
-          ),
-        ]),
+          ]),
+        ),
       ),
     );
   }
 
   Widget _buildDeathOverlay() {
     return Container(
-      color: Colors.black.withOpacity(0.90),
+      color: Colors.black.withOpacity(0.85),
       child: Center(
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          const Text('⏰ TIEMPO AGOTADO',
-            style: TextStyle(color: Color(0xFFFF2200), fontSize: 20,
-                fontWeight: FontWeight.bold, fontFamily: 'monospace',
-                letterSpacing: 2)),
-          const SizedBox(height: 16),
-          Text('Puntuación: $_score',
-            style: const TextStyle(color: Colors.white, fontSize: 18,
-                fontFamily: 'monospace')),
-          Text('Ronda: $_round',
-            style: const TextStyle(color: Colors.white70, fontSize: 13,
-                fontFamily: 'monospace')),
-          Text('Récord: $_hiScore',
-            style: const TextStyle(color: Colors.amberAccent, fontSize: 12,
-                fontFamily: 'monospace')),
-          const SizedBox(height: 26),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 40),
-            child: SizedBox(
+        child: Container(
+          margin: const EdgeInsets.symmetric(horizontal: 24),
+          padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
+          decoration: BoxDecoration(
+            color: const Color(0xFF3D2510),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: Colors.redAccent, width: 2),
+          ),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            const Text('⏰ TIEMPO AGOTADO',
+              style: TextStyle(color: Color(0xFFFF2200), fontSize: 20,
+                  fontWeight: FontWeight.bold, fontFamily: 'monospace',
+                  letterSpacing: 1)),
+            const SizedBox(height: 14),
+            Text('Puntuación: $_score',
+              style: const TextStyle(color: Colors.white, fontSize: 20,
+                  fontFamily: 'monospace', fontWeight: FontWeight.bold)),
+            Text('Ronda: $_round',
+              style: const TextStyle(color: Colors.white70, fontSize: 13,
+                  fontFamily: 'monospace')),
+            Text('Récord: $_hiScore',
+              style: const TextStyle(color: Colors.amberAccent, fontSize: 12,
+                  fontFamily: 'monospace')),
+            const SizedBox(height: 22),
+            SizedBox(
               width: double.infinity,
               child: ElevatedButton(
                 onPressed: _restart,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF880040),
+                  backgroundColor: const Color(0xFF22AA44),
                   foregroundColor: Colors.white,
-                  shape: const StadiumBorder()),
-                child: const Text('Nueva Partida'),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                child: const Text('Nueva Partida', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
               ),
             ),
-          ),
-        ]),
+          ]),
+        ),
       ),
     );
   }
@@ -722,26 +749,38 @@ class _CandyBoardPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final p = Paint()..isAntiAlias = false;
 
-    // Background
-    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height),
-      Paint()..shader = const LinearGradient(
-        begin: Alignment.topCenter, end: Alignment.bottomCenter,
-        colors: [Color(0xFF1A000E), Color(0xFF2A001A)],
-      ).createShader(Rect.fromLTWH(0, 0, size.width, size.height)));
+    // Dark board background with subtle stone-tile grid
+    p.color = const Color(0xFF2A1A0A);
+    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), p);
 
     final cellW = size.width / _kCols;
     final cellH = size.height / _kRows;
 
-    // Subtle grid lines
-    p.color = const Color(0xFF440028).withOpacity(0.50);
-    p.style = PaintingStyle.stroke; p.strokeWidth = 0.5;
+    // Stone tiles — alternating dark squares like a game board
+    for (int r = 0; r < _kRows; r++) {
+      for (int c = 0; c < _kCols; c++) {
+        final tileColor = (r + c).isEven
+            ? const Color(0xFF3D2814)
+            : const Color(0xFF321E0E);
+        p.color = tileColor;
+        canvas.drawRect(Rect.fromLTWH(c * cellW + 1, r * cellH + 1,
+            cellW - 2, cellH - 2), p);
+        // Subtle inner bevel
+        p.color = Colors.white.withOpacity(0.05);
+        canvas.drawRect(Rect.fromLTWH(c * cellW + 1, r * cellH + 1, cellW - 2, 2), p);
+      }
+    }
+
+    // Grid separators
+    p.color = const Color(0xFF1A0A00).withOpacity(0.80);
+    p.style = PaintingStyle.stroke; p.strokeWidth = 2;
     for (int c = 0; c <= _kCols; c++) {
       canvas.drawLine(Offset(c * cellW, 0), Offset(c * cellW, size.height), p);
     }
     for (int r = 0; r <= _kRows; r++) {
       canvas.drawLine(Offset(0, r * cellH), Offset(size.width, r * cellH), p);
     }
-    p.style = PaintingStyle.fill;
+    p..style = PaintingStyle.fill..isAntiAlias = true;
 
     // Candies (with optional swap animation)
     final bool hasAnim = animProgress >= 0 && animC1 >= 0;
@@ -814,43 +853,234 @@ class _CandyBoardPainter extends CustomPainter {
     final cx = gx + cellW / 2;
     final cy = gy + cellH / 2;
     final r = min(cellW, cellH) * 0.40;
+    p.isAntiAlias = true;
 
+    // Selection glow ring
     if (isSelected) {
-      p.color = color.withOpacity(0.35);
-      p.isAntiAlias = true;
+      p.color = color.withOpacity(0.45);
+      p.style = PaintingStyle.stroke;
+      p.strokeWidth = 3;
       canvas.drawCircle(Offset(cx, cy), r + 5, p);
+      p.style = PaintingStyle.fill;
     }
 
-    // Candy body (circle)
-    p.isAntiAlias = true;
-    // Dark base
+    // Shadow
+    p.color = Colors.black.withOpacity(0.35);
+    canvas.drawCircle(Offset(cx + 1.5, cy + 2), r, p);
+
+    // Dark base border
     p.color = Color.fromARGB(255,
-      (color.red * 0.50).round(),
-      (color.green * 0.50).round(),
-      (color.blue * 0.50).round());
+      (color.red * 0.45).round(),
+      (color.green * 0.45).round(),
+      (color.blue * 0.45).round());
     canvas.drawCircle(Offset(cx, cy), r, p);
-    // Main colour
-    p.color = color;
-    canvas.drawCircle(Offset(cx, cy), r - 2, p);
 
-    // Stripe (diagonal band across candy)
-    p.color = Colors.white.withOpacity(0.22);
-    canvas.save();
-    canvas.clipRect(Rect.fromLTWH(gx, gy, cellW + 4, cellH));
-    canvas.translate(cx, cy);
-    canvas.rotate(0.6);
-    canvas.drawRect(Rect.fromLTWH(-r + 2, -r * 0.35, r * 2 - 4, r * 0.70), p);
-    canvas.restore();
+    switch (type) {
+      case 0: // Red — heart shape
+        _drawHeart(canvas, p, cx, cy, r, color);
+      case 1: // Orange — star
+        _drawStar(canvas, p, cx, cy, r, color, 5);
+      case 2: // Yellow — lemon drop (oval)
+        _drawLemon(canvas, p, cx, cy, r, color);
+      case 3: // Green — rounded diamond
+        _drawDiamond(canvas, p, cx, cy, r, color);
+      case 4: // Blue — rounded square
+        _drawSquare(canvas, p, cx, cy, r, color);
+      default: // Purple — star4
+        _drawStar(canvas, p, cx, cy, r, color, 4);
+    }
 
-    // Top shine arc
-    p.color = Colors.white.withOpacity(0.55);
-    canvas.drawOval(Rect.fromLTWH(cx - r*0.55, cy - r*0.72, r*0.55, r*0.32), p);
-
-    // Tiny sparkle dot
-    p.color = Colors.white.withOpacity(0.80);
-    canvas.drawCircle(Offset(cx - r*0.32, cy - r*0.38), r * 0.12, p);
+    // Top-left shine (glossy effect on all types)
+    p.color = Colors.white.withOpacity(0.50);
+    canvas.drawOval(Rect.fromLTWH(cx - r * 0.58, cy - r * 0.75, r * 0.52, r * 0.30), p);
+    p.color = Colors.white.withOpacity(0.85);
+    canvas.drawCircle(Offset(cx - r * 0.35, cy - r * 0.40), r * 0.11, p);
 
     p.isAntiAlias = false;
+  }
+
+  void _drawHeart(Canvas canvas, Paint p, double cx, double cy, double r, Color color) {
+    p.color = color;
+    final path = Path();
+    final s = r * 0.72;
+    path.moveTo(cx, cy + s * 0.6);
+    path.cubicTo(cx - s * 1.1, cy - s * 0.2, cx - s * 1.2, cy - s * 1.1, cx, cy - s * 0.4);
+    path.cubicTo(cx + s * 1.2, cy - s * 1.1, cx + s * 1.1, cy - s * 0.2, cx, cy + s * 0.6);
+    canvas.drawPath(path, p);
+    p.color = color.withOpacity(0.55);
+    canvas.drawOval(Rect.fromLTWH(cx - s * 0.55, cy - s * 0.95, s * 0.55, s * 0.45), p);
+  }
+
+  void _drawStar(Canvas canvas, Paint p, double cx, double cy, double r, Color color, int points) {
+    p.color = color;
+    final path = Path();
+    final inner = r * 0.42;
+    for (int i = 0; i < points * 2; i++) {
+      final angle = (i * pi / points) - pi / 2;
+      final rad = i.isEven ? r * 0.88 : inner;
+      final x = cx + rad * cos(angle);
+      final y = cy + rad * sin(angle);
+      if (i == 0) path.moveTo(x, y); else path.lineTo(x, y);
+    }
+    path.close();
+    canvas.drawPath(path, p);
+    // Center glow
+    p.color = color.withOpacity(0.6);
+    canvas.drawCircle(Offset(cx, cy), r * 0.30, p);
+  }
+
+  void _drawLemon(Canvas canvas, Paint p, double cx, double cy, double r, Color color) {
+    p.color = color;
+    canvas.drawOval(Rect.fromLTWH(cx - r * 0.75, cy - r, r * 1.5, r * 2.0), p);
+    // Stripe
+    p.color = Colors.white.withOpacity(0.20);
+    canvas.save();
+    canvas.clipRect(Rect.fromLTWH(cx - r, cy - r, r * 2, r * 2));
+    canvas.translate(cx, cy);
+    canvas.rotate(0.4);
+    canvas.drawRect(Rect.fromLTWH(-r, -r * 0.25, r * 2, r * 0.50), p);
+    canvas.restore();
+  }
+
+  void _drawDiamond(Canvas canvas, Paint p, double cx, double cy, double r, Color color) {
+    p.color = color;
+    final path = Path()
+      ..moveTo(cx, cy - r * 0.92)
+      ..lineTo(cx + r * 0.72, cy)
+      ..lineTo(cx, cy + r * 0.92)
+      ..lineTo(cx - r * 0.72, cy)
+      ..close();
+    canvas.drawPath(path, p);
+    p.color = color.withOpacity(0.45);
+    canvas.drawPath(Path()
+      ..moveTo(cx, cy - r * 0.92)
+      ..lineTo(cx + r * 0.72, cy)
+      ..lineTo(cx, cy)
+      ..close(), p);
+  }
+
+  void _drawSquare(Canvas canvas, Paint p, double cx, double cy, double r, Color color) {
+    p.color = color;
+    final rr = r * 0.85;
+    canvas.drawRRect(RRect.fromRectAndRadius(
+        Rect.fromLTWH(cx - rr, cy - rr, rr * 2, rr * 2),
+        Radius.circular(rr * 0.28)), p);
+    // Bottom-right shadow for 3D effect
+    p.color = Color.fromARGB(255,
+      (color.red * 0.60).round(), (color.green * 0.60).round(), (color.blue * 0.60).round());
+    canvas.drawRRect(RRect.fromRectAndRadius(
+        Rect.fromLTWH(cx - rr + 2, cy, rr * 2 - 2, rr - 2),
+        Radius.circular(rr * 0.20)), p);
+  }
+}
+
+// ─── Candy Sky Background ─────────────────────────────────────────────────────
+
+class _CandySkyPainter extends CustomPainter {
+  const _CandySkyPainter();
+
+  @override bool shouldRepaint(_) => false;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    // Sky gradient — light blue
+    canvas.drawRect(
+      Rect.fromLTWH(0, 0, size.width, size.height),
+      Paint()..shader = const LinearGradient(
+        begin: Alignment.topCenter, end: Alignment.bottomCenter,
+        colors: [Color(0xFF5AC8F5), Color(0xFF88D8F0)],
+      ).createShader(Rect.fromLTWH(0, 0, size.width, size.height)));
+
+    final p = Paint()..isAntiAlias = true;
+
+    // Fluffy clouds
+    void cloud(double x, double y, double s) {
+      p.color = Colors.white.withOpacity(0.88);
+      canvas.drawCircle(Offset(x, y), s, p);
+      canvas.drawCircle(Offset(x + s * 1.1, y + s * 0.1), s * 0.75, p);
+      canvas.drawCircle(Offset(x - s * 0.8, y + s * 0.15), s * 0.65, p);
+      canvas.drawCircle(Offset(x + s * 0.4, y - s * 0.4), s * 0.55, p);
+      // Bottom fill
+      p.color = Colors.white;
+      canvas.drawRect(Rect.fromLTWH(x - s * 0.9, y, s * 2.1, s * 0.5), p);
+    }
+    cloud(size.width * 0.18, size.height * 0.08, 20);
+    cloud(size.width * 0.72, size.height * 0.05, 16);
+    cloud(size.width * 0.45, size.height * 0.13, 13);
+  }
+}
+
+// ─── Candy Land Bottom Decoration ─────────────────────────────────────────────
+
+class _CandyLandPainter extends CustomPainter {
+  const _CandyLandPainter();
+
+  @override bool shouldRepaint(_) => false;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width, h = size.height;
+    final p = Paint()..isAntiAlias = true;
+
+    // Green candy hills background
+    p.color = const Color(0xFF44BB44);
+    final hillPath = Path()
+      ..moveTo(0, h * 0.6)
+      ..quadraticBezierTo(w * 0.15, h * 0.1, w * 0.30, h * 0.5)
+      ..quadraticBezierTo(w * 0.45, h * 0.9, w * 0.60, h * 0.4)
+      ..quadraticBezierTo(w * 0.75, h * 0.05, w * 0.90, h * 0.5)
+      ..quadraticBezierTo(w, h * 0.3, w, h * 0.7)
+      ..lineTo(w, h)..lineTo(0, h)..close();
+    canvas.drawPath(hillPath, p);
+
+    // Pink hill accent
+    p.color = const Color(0xFFFF88AA);
+    final hillPath2 = Path()
+      ..moveTo(0, h * 0.8)
+      ..quadraticBezierTo(w * 0.20, h * 0.5, w * 0.42, h * 0.75)
+      ..quadraticBezierTo(w * 0.62, h * 0.95, w * 0.80, h * 0.6)
+      ..quadraticBezierTo(w * 0.92, h * 0.45, w, h * 0.65)
+      ..lineTo(w, h)..lineTo(0, h)..close();
+    canvas.drawPath(hillPath2, p);
+
+    // Ground strip
+    p.color = const Color(0xFF55CC55);
+    canvas.drawRect(Rect.fromLTWH(0, h * 0.82, w, h * 0.18), p);
+
+    // Candy cane poles (decorative)
+    for (int i = 0; i < 3; i++) {
+      final cx = w * (0.15 + i * 0.35);
+      // Pole
+      p.color = Colors.white;
+      canvas.drawRRect(RRect.fromRectAndRadius(
+          Rect.fromLTWH(cx - 3, h * 0.15, 6, h * 0.68), const Radius.circular(3)), p);
+      // Red stripes
+      p.color = const Color(0xFFDD2244);
+      for (double sy = h * 0.15; sy < h * 0.83; sy += h * 0.10) {
+        canvas.drawRRect(RRect.fromRectAndRadius(
+            Rect.fromLTWH(cx - 3, sy, 6, h * 0.04), const Radius.circular(2)), p);
+      }
+      // Ball on top
+      p.color = const Color(0xFFDD2244);
+      canvas.drawCircle(Offset(cx, h * 0.13), 7, p);
+      p.color = Colors.white.withOpacity(0.6);
+      canvas.drawCircle(Offset(cx - 2, h * 0.11), 2.5, p);
+    }
+
+    // Candy dot decorations on hills
+    final candyDots = [
+      (w * 0.08, h * 0.70, const Color(0xFFFF2266)),
+      (w * 0.25, h * 0.60, const Color(0xFFFFDD00)),
+      (w * 0.55, h * 0.55, const Color(0xFF3388FF)),
+      (w * 0.72, h * 0.68, const Color(0xFF22CC44)),
+      (w * 0.88, h * 0.62, const Color(0xFFCC44FF)),
+    ];
+    for (final (cx, cy, col) in candyDots) {
+      p.color = col;
+      canvas.drawCircle(Offset(cx, cy), 6, p);
+      p.color = Colors.white.withOpacity(0.55);
+      canvas.drawCircle(Offset(cx - 2, cy - 2), 2, p);
+    }
   }
 }
 

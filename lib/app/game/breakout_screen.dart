@@ -75,6 +75,7 @@ class _BreakoutScreenState extends State<BreakoutScreen> {
   final List<Offset> _trail = [];
   // Game state
   int _score = 0, _hiScore = 0, _lives = 3, _level = 0;
+  bool _paused = false;
   late double _saldo;
   _BKState _state = _BKState.start;
   Timer? _gameTimer;
@@ -118,6 +119,11 @@ class _BreakoutScreenState extends State<BreakoutScreen> {
     final event = widget.controller.lastEvent;
     if (event == null || !event.isDown) return;
     final btn = event.button;
+    if (_state == _BKState.playing && btn == ArcadeButton.start) {
+      setState(() => _paused = !_paused);
+      return;
+    }
+    if (_paused) return;
     if (_state == _BKState.start || _state == _BKState.levelClear ||
         _state == _BKState.dead) {
       if (btn == ArcadeButton.a || btn == ArcadeButton.start) {
@@ -160,6 +166,7 @@ class _BreakoutScreenState extends State<BreakoutScreen> {
   }
 
   void _tick(Timer t) {
+    if (_paused) return;
     final now = DateTime.now();
     final dt = (_lastTick == null
         ? 0.016
@@ -334,6 +341,8 @@ class _BreakoutScreenState extends State<BreakoutScreen> {
           _buildOverlay('GAME OVER',
               'Puntuación: $_score\nPulsa A para reintentar',
               Colors.redAccent),
+        if (_paused && _state == _BKState.playing)
+          _buildOverlay('⏸ PAUSA', 'Start para continuar', Colors.white54),
       ]),
     );
   }

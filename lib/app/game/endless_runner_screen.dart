@@ -21,7 +21,13 @@ const _kSaldoEvery = 500;
 
 // ─── Obstacle types ───────────────────────────────────────────────────────────
 
-enum _OType { wall, ceil, lowWall, tall }
+// Prehistoric obstacle types
+enum _OType {
+  log,          // short rotten log (was lowWall)
+  stump,        // tree stump, medium (was wall)
+  boulder,      // large rock, taller (was tall)
+  pterodactyl,  // flying dino — must duck (was ceil)
+}
 
 class _Obstacle {
   double x;
@@ -30,19 +36,19 @@ class _Obstacle {
 
   double get top {
     switch (type) {
-      case _OType.wall:    return _kGroundY - 1.05;
-      case _OType.ceil:    return 3.05;
-      case _OType.lowWall: return _kGroundY - 0.55; // short ground block
-      case _OType.tall:    return _kGroundY - 1.50; // tall block, tighter timing
+      case _OType.log:         return _kGroundY - 0.55;
+      case _OType.stump:       return _kGroundY - 1.05;
+      case _OType.boulder:     return _kGroundY - 1.50;
+      case _OType.pterodactyl: return 3.05;
     }
   }
   double get bot {
     switch (type) {
-      case _OType.ceil: return 3.65;
-      default:          return _kGroundY;
+      case _OType.pterodactyl: return 3.65;
+      default:                 return _kGroundY;
     }
   }
-  double get hw => type == _OType.tall ? 0.32 : 0.28;
+  double get hw => type == _OType.boulder ? 0.38 : 0.30;
 }
 
 // ─── Widget ───────────────────────────────────────────────────────────────────
@@ -101,9 +107,16 @@ class _EndlessRunnerScreenState extends State<EndlessRunnerScreen> {
   bool _introDone = false;   // pan has completed, freeze
   double _dinoLegPhase = 0.0; // oscillates for dino leg animation
 
-  // ─── Death dino animation ─────────────────────────────────────────────────
+  // ─── Death / mauling animation ────────────────────────────────────────────
   double _deathDinoX = -2.0;  // dino rushes from LEFT (behind player) on death
   bool _dinoChomping = false;
+  bool _mauling = false;          // head-shake mauling phase
+  double _maulPhase = 0.0;        // oscillates fast for head shake
+  bool _playerMauled = false;     // switch player sprite to pork-leg
+  final List<_BloodParticle> _bloodParticles = [];
+
+  // Pause
+  bool _paused = false;
 
   @override
   void initState() {
@@ -177,6 +190,13 @@ class _EndlessRunnerScreenState extends State<EndlessRunnerScreen> {
       return;
     }
 
+    // Pause toggle
+    if (event.isDown && btn == ArcadeButton.start) {
+      setState(() => _paused = !_paused);
+      return;
+    }
+    if (_paused) return;
+
     // Jump
     if (event.isDown && (btn == ArcadeButton.a || btn == ArcadeButton.up) &&
         _onGround) {
@@ -211,8 +231,13 @@ class _EndlessRunnerScreenState extends State<EndlessRunnerScreen> {
     _obs.clear();
     _playing = true;
     _dead = false;
+    _paused = false;
     _showDeathOverlay = false;
     _dinoChomping = false;
+    _mauling = false;
+    _maulPhase = 0.0;
+    _playerMauled = false;
+    _bloodParticles.clear();
     _deathDinoX = -2.0;    // will enter from left on next death
     _lastTick = null;
     _gameTimer?.cancel();
@@ -222,17 +247,18 @@ class _EndlessRunnerScreenState extends State<EndlessRunnerScreen> {
 
   // Determine obstacle type for a spawn, based on current distance
   _OType _pickObstacleType({bool forCombo = false}) {
-    // Ceiling chance rises from 30% → 65% with distance
-    final ceilChance = (0.30 + _dist / 1200).clamp(0.30, 0.65);
-    if (_rng.nextDouble() < ceilChance) return _OType.ceil;
-    // Ground obstacle variety: lowWall early, tall later
-    if (_dist < 80) return _OType.lowWall;
-    final tallChance = (_dist / 600).clamp(0.0, 0.35);
-    if (_rng.nextDouble() < tallChance) return _OType.tall;
-    return _OType.wall;
+    // Pterodactyl chance rises from 30% → 65% with distance
+    final pteroChance = (0.30 + _dist / 1200).clamp(0.30, 0.65);
+    if (_rng.nextDouble() < pteroChance) return _OType.pterodactyl;
+    // Ground obstacle variety: log early, boulder later
+    if (_dist < 80) return _OType.log;
+    final boulderChance = (_dist / 600).clamp(0.0, 0.35);
+    if (_rng.nextDouble() < boulderChance) return _OType.boulder;
+    return _OType.stump;
   }
 
   void _tick(Timer t) {
+    if (_paused) return;
     final now = DateTime.now();
     final dt = (_lastTick == null
         ? 0.016
@@ -289,7 +315,7 @@ class _EndlessRunnerScreenState extends State<EndlessRunnerScreen> {
         if (_rng.nextDouble() < comboChance) {
           final spacing = 1.5 + _rng.nextDouble() * 0.6;
           // Second type is intentionally different for variety
-          final t2 = type == _OType.ceil ? _OType.wall : _OType.ceil;
+          final t2 = type == _OType.pterodactyl ? _OType.stump : _OType.pterodactyl;
           _obs.add(_Obstacle(x: _kGW + 0.5 + spacing, type: t2));
         }
       }
@@ -340,15 +366,39 @@ class _EndlessRunnerScreenState extends State<EndlessRunnerScreen> {
       if (!mounted) { _introTimer?.cancel(); return; }
       const dt = 0.016;
       setState(() {
-        // Dino rushes RIGHTWARD from behind (left side) toward player
-        _deathDinoX += 7.0 * dt;
-        _dinoLegPhase += 0.32; // animate dino legs while running
-        if (_deathDinoX >= _kPlayerX - 0.3 && !_dinoChomping) {
-          _dinoChomping = true;
-          _introTimer?.cancel();
-          Future.delayed(const Duration(milliseconds: 600), () {
-            if (mounted) setState(() => _showDeathOverlay = true);
-          });
+        if (!_dinoChomping) {
+          // Dino rushes RIGHTWARD from behind (left side) toward player
+          _deathDinoX += 7.0 * dt;
+          _dinoLegPhase += 0.32;
+          if (_deathDinoX >= _kPlayerX - 0.3) {
+            _dinoChomping = true;
+            _mauling = true;
+          }
+        } else if (_mauling) {
+          // Head-shake mauling phase
+          _maulPhase += 0.40;
+          // Spawn blood particles
+          if (_rng.nextDouble() < 0.35) {
+            _bloodParticles.add(_BloodParticle(
+              x: _kPlayerX + (_rng.nextDouble() - 0.5) * 0.6,
+              y: _kGroundY - 0.6 - _rng.nextDouble() * 0.5,
+              vx: (_rng.nextDouble() - 0.5) * 3.0,
+              vy: -2.0 - _rng.nextDouble() * 3.0,
+            ));
+          }
+          // Update blood particles
+          for (final bp in _bloodParticles) { bp.update(dt); }
+          _bloodParticles.removeWhere((bp) => bp.opacity <= 0);
+          // After ~500ms switch to pork leg
+          if (_maulPhase > 30 && !_playerMauled) _playerMauled = true;
+          // After ~1s show overlay
+          if (_maulPhase > 60) {
+            _mauling = false;
+            _introTimer?.cancel();
+            Future.delayed(const Duration(milliseconds: 400), () {
+              if (mounted) setState(() => _showDeathOverlay = true);
+            });
+          }
         }
       });
     });
@@ -392,15 +442,20 @@ class _EndlessRunnerScreenState extends State<EndlessRunnerScreen> {
               dinoX: dinoX,
               dinoChomping: _dinoChomping,
               dinoLegPhase: _dinoLegPhase,
+              maulPhase: _maulPhase,
+              playerMauled: _playerMauled,
+              bloodParticles: List.unmodifiable(_bloodParticles),
             ),
           ),
         ),
         if (!_playing && !_dead)
-          _buildOverlay('CORREDOR INFINITO',
-              'Arriba / A = Saltar\nAbajo = Agacharse\nPulsa A para correr'),
+          _buildOverlay('🦕 DINO ESCAPE',
+              'Arriba / A = Saltar\nAbajo = Agacharse\nStart = Pausa'),
         if (_dead && _showDeathOverlay)
-          _buildOverlay('¡APLASTADO!',
+          _buildOverlay('😱 ¡DEVORADO!',
               'Distancia: ${_score}m\nPulsa A para reintentar'),
+        if (_playing && _paused)
+          _buildOverlay('⏸ PAUSA', 'Start para continuar'),
       ]),
     );
   }
@@ -448,13 +503,27 @@ class _BgElement {
   _BgElement({required this.x, required this.h, required this.w});
 }
 
+class _BloodParticle {
+  double x, y, vx, vy;
+  double opacity = 1.0;
+  _BloodParticle({required this.x, required this.y, required this.vx, required this.vy});
+  void update(double dt) {
+    x += vx * dt;
+    y += vy * dt;
+    vy += 12.0 * dt; // gravity
+    opacity -= dt * 1.8;
+  }
+}
+
 // ─── Painter ──────────────────────────────────────────────────────────────────
 
 class _RunnerPainter extends CustomPainter {
   final double py, playerDisplayX, dinoX, legPhase, dinoLegPhase;
-  final bool isDucking, onGround, dinoChomping;
+  final double maulPhase;
+  final bool isDucking, onGround, dinoChomping, playerMauled;
   final List<_Obstacle> obstacles;
   final List<_BgElement> bgFar, bgMid;
+  final List<_BloodParticle> bloodParticles;
   final int score, hiScore;
 
   const _RunnerPainter({
@@ -466,6 +535,9 @@ class _RunnerPainter extends CustomPainter {
     required this.dinoX,
     required this.dinoChomping,
     required this.dinoLegPhase,
+    required this.maulPhase,
+    required this.playerMauled,
+    required this.bloodParticles,
   });
 
   @override bool shouldRepaint(_RunnerPainter o) => true;
@@ -476,152 +548,198 @@ class _RunnerPainter extends CustomPainter {
     final uy = size.height / _kGH;
     final p = Paint()..isAntiAlias = false;
 
-    // Sky gradient
+    // ── Prehistoric sky ───────────────────────────────────────────────────────
     final skyPaint = Paint()
       ..shader = const LinearGradient(
         begin: Alignment.topCenter, end: Alignment.bottomCenter,
-        colors: [Color(0xFF02040C), Color(0xFF050A18)],
+        colors: [Color(0xFFD96820), Color(0xFFE8A840), Color(0xFFF5C860)],
+        stops: [0.0, 0.5, 1.0],
       ).createShader(Rect.fromLTWH(0, 0, size.width, size.height));
     canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), skyPaint);
 
-    // Stars (static seed-based)
-    p.color = Colors.white.withOpacity(0.3);
-    for (int i = 0; i < 40; i++) {
-      final sx = (i * 237.3) % _kGW;
-      final sy = (i * 133.7) % (_kGroundY * 0.8);
-      canvas.drawCircle(Offset(sx * ux, sy * uy), 1, p);
+    // Distant volcano silhouettes (far bg elements repurposed)
+    p.isAntiAlias = true;
+    p.color = const Color(0xFF8B3010).withOpacity(0.50);
+    for (final b in bgFar) {
+      // Volcano cone shape
+      final vx = b.x * ux;
+      final vw = b.w * ux * 1.8;
+      final vh = b.h * uy * 1.5;
+      final vy = (_kGroundY - b.h * 1.5) * uy;
+      final volPath = Path()
+        ..moveTo(vx - vw / 2, _kGroundY * uy)
+        ..lineTo(vx, vy)
+        ..lineTo(vx + vw / 2, _kGroundY * uy)
+        ..close();
+      canvas.drawPath(volPath, p);
+      // Lava glow at peak
+      p.color = const Color(0xFFFF4400).withOpacity(0.25);
+      canvas.drawCircle(Offset(vx, vy), 8, p);
+      p.color = const Color(0xFF8B3010).withOpacity(0.50);
     }
 
-    // Far background buildings
-    p.color = const Color(0xFF0A0F22);
-    for (final b in bgFar) {
-      canvas.drawRect(
-          Rect.fromLTWH(b.x * ux, (_kGroundY - b.h) * uy, b.w * ux, b.h * uy), p);
-    }
-    // Windows
-    p.color = const Color(0xFF1A2A55).withOpacity(0.6);
-    for (final b in bgFar) {
-      for (double wy = _kGroundY - b.h + 0.15; wy < _kGroundY - 0.2; wy += 0.25) {
-        for (double wx = b.x + 0.05; wx < b.x + b.w - 0.05; wx += 0.12) {
-          canvas.drawRect(Rect.fromLTWH(wx * ux, wy * uy, 0.07 * ux, 0.14 * uy), p);
-        }
-      }
-    }
-
-    // Mid background
-    p.color = const Color(0xFF0D1530);
+    // Fern trees (mid background)
+    p.color = const Color(0xFF2A5A10).withOpacity(0.55);
     for (final b in bgMid) {
-      canvas.drawRect(
-          Rect.fromLTWH(b.x * ux, (_kGroundY - b.h) * uy, b.w * ux, b.h * uy), p);
+      // Trunk
+      canvas.drawRect(Rect.fromLTWH(
+          b.x * ux - 2, (_kGroundY - b.h) * uy, 4, b.h * uy), p);
+      // Fern fronds
+      p.color = const Color(0xFF3A7A18).withOpacity(0.65);
+      for (int fi = -2; fi <= 2; fi++) {
+        final fPath = Path()
+          ..moveTo(b.x * ux, (_kGroundY - b.h) * uy)
+          ..quadraticBezierTo(
+              (b.x + fi * 0.25) * ux, (_kGroundY - b.h - 0.45) * uy,
+              (b.x + fi * 0.45) * ux, (_kGroundY - b.h - 0.30) * uy);
+        p..style = PaintingStyle.stroke..strokeWidth = 3;
+        canvas.drawPath(fPath, p);
+        p.style = PaintingStyle.fill;
+      }
+      p.color = const Color(0xFF2A5A10).withOpacity(0.55);
     }
 
-    // Ground
-    p..color = const Color(0xFF0C1208)..maskFilter = null;
+    // ── Ground — dirt + grass ─────────────────────────────────────────────────
+    p..color = const Color(0xFF7A4A1A)..maskFilter = null..isAntiAlias = false;
     canvas.drawRect(Rect.fromLTWH(0, _kGroundY * uy, size.width,
         size.height - _kGroundY * uy), p);
-    p..color = const Color(0xFF44FF44).withOpacity(0.7)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
-    canvas.drawRect(Rect.fromLTWH(0, _kGroundY * uy - 1, size.width, 2), p);
-    p..color = const Color(0xFF44FF44)..maskFilter = null;
-    canvas.drawRect(Rect.fromLTWH(0, _kGroundY * uy - 1, size.width, 1), p);
+    // Grass strip
+    p.color = const Color(0xFF4A8A20);
+    canvas.drawRect(Rect.fromLTWH(0, _kGroundY * uy - 1, size.width, 5 * (uy / 10)), p);
+    // Dirt texture dots
+    p.color = const Color(0xFF5A3410).withOpacity(0.35);
+    for (int i = 0; i < 20; i++) {
+      final gx = (i * 0.53) % _kGW;
+      final gy = _kGroundY + 0.12 + (i * 0.37) % 0.25;
+      canvas.drawCircle(Offset(gx * ux, gy * uy), 2, p);
+    }
 
-    // Obstacles
+    // ── Obstacles (prehistoric style) ─────────────────────────────────────────
+    p.isAntiAlias = true;
     for (final o in obstacles) {
+      final cx = o.x * ux;
       final ox = (o.x - o.hw) * ux;
       final ow = o.hw * 2 * ux;
       final ot = o.top * uy;
       final oh = (o.bot - o.top) * uy;
 
-      final oColor = switch (o.type) {
-        _OType.wall    => const Color(0xFFFF4422),
-        _OType.ceil    => const Color(0xFFFF8800),
-        _OType.lowWall => const Color(0xFFDDCC00),
-        _OType.tall    => const Color(0xFFFF1155),
-      };
+      switch (o.type) {
+        case _OType.log:
+          // Rotten log — dark brown cylinder shape
+          p.color = const Color(0xFF5A3010);
+          canvas.drawRRect(RRect.fromRectAndRadius(
+              Rect.fromLTWH(ox, ot, ow, oh), const Radius.circular(6)), p);
+          // Wood rings
+          p..color = const Color(0xFF3A1A08)..style = PaintingStyle.stroke..strokeWidth = 1.5;
+          canvas.drawRRect(RRect.fromRectAndRadius(
+              Rect.fromLTWH(ox + 2, ot + 2, ow - 4, oh - 4), const Radius.circular(4)), p);
+          p.style = PaintingStyle.fill;
+          // Moss on top
+          p.color = const Color(0xFF3A7A20);
+          canvas.drawRRect(RRect.fromRectAndRadius(
+              Rect.fromLTWH(ox + 2, ot, ow - 4, oh * 0.28), const Radius.circular(4)), p);
 
-      // Glow
-      p..color = oColor.withOpacity(0.3)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5);
-      canvas.drawRect(Rect.fromLTWH(ox - 2, ot - 2, ow + 4, oh + 4), p);
-      p.maskFilter = null;
+        case _OType.stump:
+          // Tree stump — brown with rings on top
+          p.color = const Color(0xFF6A3818);
+          canvas.drawRRect(RRect.fromRectAndRadius(
+              Rect.fromLTWH(ox, ot, ow, oh), const Radius.circular(4)), p);
+          // Top rings (cross-section)
+          p.color = const Color(0xFF4A2A0A);
+          canvas.drawOval(Rect.fromLTWH(ox + 2, ot, ow - 4, oh * 0.22), p);
+          p..color = const Color(0xFF7A4A22)..style = PaintingStyle.stroke..strokeWidth = 1;
+          canvas.drawOval(Rect.fromLTWH(ox + 5, ot + 2, ow - 10, oh * 0.12), p);
+          p..style = PaintingStyle.fill;
+          // Bark lines
+          p.color = const Color(0xFF3A2010).withOpacity(0.4);
+          for (double ly = ot + oh * 0.28; ly < ot + oh - 3; ly += oh * 0.18) {
+            canvas.drawRect(Rect.fromLTWH(ox, ly, ow, 2), p);
+          }
+          // Grass base
+          p.color = const Color(0xFF4A8A20);
+          canvas.drawRRect(RRect.fromRectAndRadius(
+              Rect.fromLTWH(ox - 3, _kGroundY * uy - 4, ow + 6, 5), const Radius.circular(2)), p);
 
-      // Body
-      p.color = oColor.withOpacity(0.75);
-      canvas.drawRect(Rect.fromLTWH(ox, ot, ow, oh), p);
+        case _OType.boulder:
+          // Large rounded boulder — grey stone
+          p.color = const Color(0xFF888880);
+          canvas.drawRRect(RRect.fromRectAndRadius(
+              Rect.fromLTWH(ox, ot, ow, oh), const Radius.circular(10)), p);
+          // Highlight
+          p.color = const Color(0xFFBBBBB5).withOpacity(0.5);
+          canvas.drawOval(Rect.fromLTWH(ox + 4, ot + 4, ow * 0.45, oh * 0.30), p);
+          // Crack lines
+          p..color = const Color(0xFF555550)..style = PaintingStyle.stroke..strokeWidth = 1.2;
+          canvas.drawLine(Offset(cx + 4, ot + oh * 0.2),
+              Offset(cx - 2, ot + oh * 0.65), p);
+          canvas.drawLine(Offset(cx - 6, ot + oh * 0.3),
+              Offset(cx + 2, ot + oh * 0.5), p);
+          p.style = PaintingStyle.fill;
+          // Lichen spots
+          p.color = const Color(0xFF7A8A40).withOpacity(0.55);
+          canvas.drawCircle(Offset(ox + ow * 0.7, ot + oh * 0.25), 5, p);
+          canvas.drawCircle(Offset(ox + ow * 0.25, ot + oh * 0.55), 4, p);
 
-      // Border
-      p..color = oColor..style = PaintingStyle.stroke..strokeWidth = 1;
-      canvas.drawRect(Rect.fromLTWH(ox, ot, ow, oh), p);
-      p.style = PaintingStyle.fill;
-
-      // Ceiling bar connector
-      if (o.type == _OType.ceil) {
-        p.color = oColor.withOpacity(0.4);
-        canvas.drawRect(Rect.fromLTWH(o.x * ux - 1, 0, 2, ot), p);
+        case _OType.pterodactyl:
+          // Flying pterodactyl — must duck under
+          // Wings
+          p.color = const Color(0xFF6A3010);
+          final wingY = (ot + oh * 0.5);
+          final wingSpan = ow * 0.65;
+          // Left wing
+          final lwPath = Path()
+            ..moveTo(cx, wingY)
+            ..quadraticBezierTo(cx - wingSpan * 0.5, wingY - 8, cx - wingSpan, wingY + 4)
+            ..quadraticBezierTo(cx - wingSpan * 0.5, wingY + 6, cx, wingY);
+          canvas.drawPath(lwPath, p);
+          // Right wing
+          final rwPath = Path()
+            ..moveTo(cx, wingY)
+            ..quadraticBezierTo(cx + wingSpan * 0.5, wingY - 8, cx + wingSpan, wingY + 4)
+            ..quadraticBezierTo(cx + wingSpan * 0.5, wingY + 6, cx, wingY);
+          canvas.drawPath(rwPath, p);
+          // Body
+          p.color = const Color(0xFF8A4018);
+          canvas.drawOval(Rect.fromLTWH(cx - ow * 0.22, ot + oh * 0.2, ow * 0.44, oh * 0.60), p);
+          // Head + beak
+          canvas.drawOval(Rect.fromLTWH(cx + ow * 0.12, ot, ow * 0.22, oh * 0.30), p);
+          p.color = const Color(0xFFCC8840);
+          final beakPath = Path()
+            ..moveTo(cx + ow * 0.34, ot + oh * 0.08)
+            ..lineTo(cx + ow * 0.55, ot + oh * 0.14)
+            ..lineTo(cx + ow * 0.34, ot + oh * 0.22)
+            ..close();
+          canvas.drawPath(beakPath, p);
+          // Eye
+          p.color = Colors.red.withOpacity(0.85);
+          canvas.drawCircle(Offset(cx + ow * 0.24, ot + oh * 0.10), 3, p);
+          // Connector line from ceiling
+          p..color = const Color(0xFF6A3010).withOpacity(0.30)
+            ..style = PaintingStyle.stroke..strokeWidth = 1;
+          canvas.drawLine(Offset(cx, 0), Offset(cx, ot), p);
+          p..style = PaintingStyle.fill;
       }
     }
 
     // ── Dinosaur ─────────────────────────────────────────────────────────────
     if (dinoX > -3.0 && dinoX < _kGW + 4.5) {
-      _drawDino(canvas, dinoX, ux, uy,
-          chomping: dinoChomping, legPhase: dinoLegPhase);
+      // Head shake offset during mauling
+      final shakeX = _mauling ? sin(maulPhase * 18.0) * 0.18 : 0.0;
+      _drawDino(canvas, dinoX + shakeX, ux, uy,
+          chomping: dinoChomping, legPhase: dinoLegPhase, mauling: _mauling);
     }
 
-    // ── Player ───────────────────────────────────────────────────────────────
-    final pLeft = (playerDisplayX - _kPlayerW) * ux;
-    final pW = _kPlayerW * 2 * ux;
-    final pH = (isDucking ? _kPlayerHDuck : _kPlayerHStand) * uy;
-    final pTop = py * uy;
+    // ── Blood particles ───────────────────────────────────────────────────────
+    for (final bp in bloodParticles) {
+      p.color = const Color(0xFFCC0010).withOpacity(bp.opacity.clamp(0, 1));
+      canvas.drawCircle(Offset(bp.x * ux, bp.y * uy), 3.5, p);
+    }
 
-    const playerColor = Color(0xFFFFAA00);
-
-    // Body glow
-    p..color = playerColor.withOpacity(0.25)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6);
-    canvas.drawRRect(
-        RRect.fromRectAndRadius(
-            Rect.fromLTWH(pLeft - 2, pTop - 2, pW + 4, pH + 4),
-            const Radius.circular(4)),
-        p);
-    p.maskFilter = null;
-
-    // Body
-    p.color = playerColor.withOpacity(0.85);
-    canvas.drawRRect(
-        RRect.fromRectAndRadius(
-            Rect.fromLTWH(pLeft, pTop, pW, pH),
-            const Radius.circular(3)),
-        p);
-
-    if (!isDucking) {
-      // Eye (right side of face, front of runner)
-      p.color = Colors.black;
-      canvas.drawCircle(
-          Offset((playerDisplayX + _kPlayerW * 0.45) * ux, (py + 0.17) * uy),
-          2.5, p);
-      p.color = playerColor.withOpacity(0.9);
-      canvas.drawCircle(
-          Offset((playerDisplayX + _kPlayerW * 0.45) * ux, (py + 0.17) * uy),
-          1.2, p);
-
-      // Legs — left and right, clearly separated, no overlap
-      // Left leg center: playerDisplayX - _kPlayerW*0.5
-      // Right leg center: playerDisplayX + _kPlayerW*0.5
-      final legW = _kPlayerW * 0.55 * ux; // leg width
-      final legH = pH * 0.28;
-      final legBaseY = pTop + pH * 0.70;
-      final sinV = sin(legPhase); // -1..1
-      final legSwing = uy * 0.08; // max swing in pixels
-
-      p.color = playerColor.withOpacity(0.7);
-      // Left leg
-      final llX = (playerDisplayX - _kPlayerW * 0.55) * ux;
-      canvas.drawRect(Rect.fromLTWH(
-          llX, legBaseY + sinV * legSwing, legW, legH), p);
-      // Right leg (opposite phase)
-      final rlX = (playerDisplayX + _kPlayerW * 0.05) * ux;
-      canvas.drawRect(Rect.fromLTWH(
-          rlX, legBaseY - sinV * legSwing, legW, legH), p);
+    // ── Player (caveman) or pork-leg if mauled ────────────────────────────────
+    if (playerMauled) {
+      _drawPorkLeg(canvas, playerDisplayX, py, ux, uy, isDucking);
+    } else {
+      _drawCaveman(canvas, playerDisplayX, py, ux, uy, isDucking, legPhase, onGround);
     }
 
     // ── HUD ──────────────────────────────────────────────────────────────────
@@ -637,18 +755,171 @@ class _RunnerPainter extends CustomPainter {
       tp.paint(canvas, Offset(x, y));
     }
     txt('${score}m', size.width * 0.04, size.height * 0.02,
-        const Color(0xFF88FF44), hfs);
+        const Color(0xFFFFDD44), hfs);
     if (hiScore > 0) {
       txt('RÉC: ${hiScore}m', size.width * 0.58, size.height * 0.02,
-          Colors.white38, hfs * 0.82);
+          Colors.white54, hfs * 0.82);
     }
   }
 
+  // ── Caveman player ───────────────────────────────────────────────────────────
+  static void _drawCaveman(Canvas canvas, double px, double py, double ux, double uy,
+      bool isDucking, double legPhase, bool onGround) {
+    final p = Paint()..isAntiAlias = true;
+    final pH = (isDucking ? _kPlayerHDuck : _kPlayerHStand);
+    final bodyH = pH * 0.52;
+    const skinColor = Color(0xFFD4925A);
+    const leatherColor = Color(0xFF8B5E2A);
+    const leatherDark = Color(0xFF5A3A10);
+    const hairColor = Color(0xFF3A2010);
+
+    // ── Body (leather tunic) ─────────────────────────────────────────────────
+    final bodyTop = py + pH * 0.26;
+    final bodyBot = py + pH * 0.78;
+    p.color = leatherColor;
+    canvas.drawRRect(RRect.fromRectAndRadius(
+        Rect.fromLTWH((px - _kPlayerW * 0.7) * ux, bodyTop * uy,
+            _kPlayerW * 1.4 * ux, (bodyBot - bodyTop) * uy),
+        const Radius.circular(4)), p);
+    // Tunic belt line
+    p..color = leatherDark..style = PaintingStyle.stroke..strokeWidth = 1.5;
+    canvas.drawLine(
+        Offset((px - _kPlayerW * 0.7) * ux, (bodyBot - (bodyBot - bodyTop) * 0.15) * uy),
+        Offset((px + _kPlayerW * 0.7) * ux, (bodyBot - (bodyBot - bodyTop) * 0.15) * uy), p);
+    p.style = PaintingStyle.fill;
+    // Shoulder stripe marks
+    p.color = leatherDark.withOpacity(0.5);
+    canvas.drawRect(Rect.fromLTWH(
+        (px - _kPlayerW * 0.62) * ux, (bodyTop + 0.02) * uy,
+        _kPlayerW * 0.15 * ux, (bodyBot - bodyTop) * 0.40 * uy), p);
+
+    // ── Head ─────────────────────────────────────────────────────────────────
+    final headH = pH * 0.28;
+    final headTop = py;
+    final headBot = py + headH;
+    p.color = skinColor;
+    canvas.drawRRect(RRect.fromRectAndRadius(
+        Rect.fromLTWH((px - _kPlayerW * 0.55) * ux, headTop * uy,
+            _kPlayerW * 1.1 * ux, headH * uy),
+        const Radius.circular(4)), p);
+    // Spiky caveman hair
+    if (!isDucking) {
+      p.color = hairColor;
+      final hairPath = Path();
+      final hl = (px - _kPlayerW * 0.55) * ux;
+      final hr = (px + _kPlayerW * 0.55) * ux;
+      final ht = headTop * uy;
+      hairPath.moveTo(hl, ht + 2);
+      for (int i = 0; i < 5; i++) {
+        final hx = hl + (hr - hl) * (i / 4.0);
+        hairPath.lineTo(hx, ht - 6 - (i.isEven ? 6 : 2));
+        hairPath.lineTo(hx + (hr - hl) * 0.12, ht + 2);
+      }
+      hairPath.close();
+      canvas.drawPath(hairPath, p);
+    }
+    // Eye (facing right)
+    p.color = Colors.black;
+    canvas.drawCircle(
+        Offset((px + _kPlayerW * 0.38) * ux, (headTop + headH * 0.42) * uy), 2.2, p);
+    p.color = Colors.white;
+    canvas.drawCircle(
+        Offset((px + _kPlayerW * 0.32) * ux, (headTop + headH * 0.38) * uy), 0.9, p);
+    // Beard stubble
+    p..color = hairColor.withOpacity(0.45)..style = PaintingStyle.stroke..strokeWidth = 1;
+    canvas.drawArc(Rect.fromLTWH(
+        (px - _kPlayerW * 0.32) * ux, (headTop + headH * 0.62) * uy,
+        _kPlayerW * 0.70 * ux, headH * 0.30 * uy), 0, pi, false, p);
+    p.style = PaintingStyle.fill;
+
+    if (!isDucking) {
+      // ── Club arm ──────────────────────────────────────────────────────────
+      final armY = bodyTop + (bodyBot - bodyTop) * 0.18;
+      p.color = skinColor;
+      canvas.drawRect(Rect.fromLTWH(
+          (px + _kPlayerW * 0.65) * ux, armY * uy,
+          _kPlayerW * 0.22 * ux, (bodyBot - bodyTop) * 0.25 * uy), p);
+      // Club handle
+      p.color = leatherDark;
+      canvas.drawRRect(RRect.fromRectAndRadius(
+          Rect.fromLTWH((px + _kPlayerW * 0.82) * ux, (armY - 0.12) * uy,
+              _kPlayerW * 0.18 * ux, pH * 0.38 * uy),
+          const Radius.circular(3)), p);
+      // Club head (oval)
+      p.color = const Color(0xFF888888);
+      canvas.drawOval(Rect.fromLTWH(
+          (px + _kPlayerW * 0.76) * ux, (armY - 0.28) * uy,
+          _kPlayerW * 0.30 * ux, pH * 0.20 * uy), p);
+
+      // ── Legs — below body ─────────────────────────────────────────────────
+      final legW = _kPlayerW * 0.45 * ux;
+      final legBaseY = bodyBot * uy;
+      // Ground legs go from bodyBot → _kGroundY
+      final fullLegH = (_kGroundY - bodyBot) * uy;
+      final sinV = onGround ? sin(legPhase) : 0.0;
+      final liftL = max(0.0, sinV) * fullLegH * 0.5;
+      final liftR = max(0.0, -sinV) * fullLegH * 0.5;
+      final legLH = fullLegH - liftL;
+      final legRH = fullLegH - liftR;
+      p.color = leatherColor;
+      canvas.drawRRect(RRect.fromRectAndRadius(
+          Rect.fromLTWH((px - _kPlayerW * 0.60) * ux, legBaseY, legW, legLH),
+          const Radius.circular(3)), p);
+      canvas.drawRRect(RRect.fromRectAndRadius(
+          Rect.fromLTWH((px + _kPlayerW * 0.15) * ux, legBaseY, legW, legRH),
+          const Radius.circular(3)), p);
+      // Feet
+      p.color = leatherDark;
+      if (liftL < fullLegH * 0.25) {
+        canvas.drawRRect(RRect.fromRectAndRadius(
+            Rect.fromLTWH((px - _kPlayerW * 0.65) * ux, (legBaseY + legLH - 4),
+                legW + 6, 5), const Radius.circular(2)), p);
+      }
+      if (liftR < fullLegH * 0.25) {
+        canvas.drawRRect(RRect.fromRectAndRadius(
+            Rect.fromLTWH((px + _kPlayerW * 0.10) * ux, (legBaseY + legRH - 4),
+                legW + 6, 5), const Radius.circular(2)), p);
+      }
+    }
+  }
+
+  // ── Pork-leg replacement after mauling ───────────────────────────────────────
+  static void _drawPorkLeg(Canvas canvas, double px, double py, double ux, double uy,
+      bool isDucking) {
+    final p = Paint()..isAntiAlias = true;
+    const pH = _kPlayerHStand;
+    // Bone
+    p.color = Colors.white.withOpacity(0.9);
+    canvas.drawRRect(RRect.fromRectAndRadius(
+        Rect.fromLTWH((px - _kPlayerW * 0.20) * ux, (py + pH * 0.1) * uy,
+            _kPlayerW * 0.40 * ux, pH * 0.70 * uy),
+        const Radius.circular(6)), p);
+    // Bone knobs
+    p.color = Colors.white;
+    canvas.drawCircle(Offset(px * ux, (py + pH * 0.13) * uy), 10, p);
+    canvas.drawCircle(Offset(px * ux, (py + pH * 0.78) * uy), 10, p);
+    // Meat
+    p.color = const Color(0xFFE05030).withOpacity(0.85);
+    canvas.drawRRect(RRect.fromRectAndRadius(
+        Rect.fromLTWH((px - _kPlayerW * 0.35) * ux, (py + pH * 0.25) * uy,
+            _kPlayerW * 0.70 * ux, pH * 0.45 * uy),
+        const Radius.circular(10)), p);
+    // Fat marbling
+    p.color = Colors.white.withOpacity(0.35);
+    canvas.drawOval(Rect.fromLTWH(
+        (px - _kPlayerW * 0.22) * ux, (py + pH * 0.32) * uy,
+        _kPlayerW * 0.44 * ux, pH * 0.20 * uy), p);
+  }
+
+  // getter used in mauling check
+  bool get _mauling => maulPhase > 0 && maulPhase < 60;
+
   // ── Dinosaur painter ───────────────────────────────────────────────────────
   static void _drawDino(Canvas canvas, double dx, double ux, double uy,
-      {bool chomping = false, double legPhase = 0.0}) {
+      {bool chomping = false, double legPhase = 0.0, bool mauling = false}) {
     final p = Paint()..isAntiAlias = true;
-    const clr = Color(0xFF1DAA55);
+    // Scarier when mauling — deeper red tint
+    final clr = mauling ? const Color(0xFF158A40) : const Color(0xFF1DAA55);
     const clrDark = Color(0xFF0E6633);
     const clrLight = Color(0xFF3AE87A);
 
@@ -713,54 +984,85 @@ class _RunnerPainter extends CustomPainter {
             const Radius.circular(3)),
         p);
 
-    // Snout / jaw
-    final mouthDrop = chomping ? 0.14 : 0.0;
+    // Upper jaw / snout — always there, drops slightly when chomping
+    final jawGap = chomping || mauling ? 0.20 : 0.04;
+    // Upper jaw stays mostly fixed
     canvas.drawRRect(
         RRect.fromRectAndRadius(
             Rect.fromLTWH(
-                (headLeft + headW - 0.02) * ux, (headTop + 0.12 - mouthDrop) * uy,
-                0.24 * ux, (0.20 + mouthDrop) * uy),
+                (headLeft + headW - 0.02) * ux, (headTop + 0.08) * uy,
+                0.28 * ux, 0.16 * uy),
             const Radius.circular(2)),
         p);
 
-    // Teeth when chomping
-    if (chomping) {
-      p.color = Colors.white.withOpacity(0.92);
+    // Lower jaw — drops down when chomping
+    p.color = clr;
+    canvas.drawRRect(
+        RRect.fromRectAndRadius(
+            Rect.fromLTWH(
+                (headLeft + headW - 0.02) * ux, (headTop + 0.08 + jawGap) * uy,
+                0.24 * ux, 0.14 * uy),
+            const Radius.circular(2)),
+        p);
+
+    // Teeth — UPPER teeth (pointing down)
+    p.color = Colors.white.withOpacity(0.95);
+    for (int i = 0; i < 4; i++) {
+      canvas.drawRect(Rect.fromLTWH(
+          (headLeft + headW - 0.01 + i * 0.06) * ux,
+          (headTop + 0.24) * uy,
+          0.04 * ux, (chomping || mauling) ? 0.10 * uy : 0.04 * uy), p);
+    }
+    // Teeth — LOWER teeth (pointing up), only visible when mouth is open
+    if (chomping || mauling) {
       for (int i = 0; i < 3; i++) {
         canvas.drawRect(Rect.fromLTWH(
-            (headLeft + headW + 0.01 + i * 0.07) * ux,
-            (headTop + 0.28) * uy,
-            0.045 * ux, 0.11 * uy), p);
+            (headLeft + headW + 0.02 + i * 0.07) * ux,
+            (headTop + 0.08 + jawGap - 0.08) * uy,
+            0.04 * ux, 0.10 * uy), p);
       }
-      p.color = clr;
+      // Saliva drip
+      p.color = Colors.white.withOpacity(0.55);
+      canvas.drawOval(Rect.fromLTWH(
+          (headLeft + headW + 0.04) * ux, (headTop + 0.34) * uy,
+          0.04 * ux, 0.08 * uy), p);
     }
+    p.color = clr;
 
-    // Angry eyebrow ridge (angled down toward snout = fierce look)
+    // Angry eyebrow ridge — thicker and angrier when mauling
     final eyeCx = (headLeft + 0.33) * ux;
     final eyeCy = (headTop + 0.16) * uy;
     p..color = clrDark
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.5;
+      ..strokeWidth = mauling ? 2.5 : 1.5;
     canvas.drawLine(
-        Offset(eyeCx - 7, eyeCy + 4),
-        Offset(eyeCx + 4, eyeCy),
+        Offset(eyeCx - 8, eyeCy + 5),
+        Offset(eyeCx + 5, eyeCy),
         p);
     p..style = PaintingStyle.fill..strokeWidth = 1.0;
 
-    // Eye — vertical reptile slit (yellow iris, black pupil)
-    p.color = Colors.yellowAccent.withOpacity(0.92);
+    // Eye glow when mauling (red demonic)
+    if (mauling) {
+      p..color = Colors.red.withOpacity(0.55)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
+      canvas.drawCircle(Offset(eyeCx, eyeCy + 4), 10, p);
+      p.maskFilter = null;
+    }
+
+    // Eye — vertical reptile slit (red iris when mauling, yellow normally)
+    p.color = (mauling ? Colors.redAccent : Colors.yellowAccent).withOpacity(0.95);
     canvas.drawOval(
         Rect.fromCenter(center: Offset(eyeCx, eyeCy + 4),
-            width: 5.5, height: 8.5),
+            width: 6.0, height: 9.5),
         p);
     p.color = Colors.black;
     canvas.drawOval(
         Rect.fromCenter(center: Offset(eyeCx, eyeCy + 4),
-            width: 2.0, height: 7.0),
+            width: 2.2, height: 8.0),
         p);
     // Gleam
     p.color = Colors.white.withOpacity(0.75);
-    canvas.drawCircle(Offset(eyeCx - 1.2, eyeCy + 1.5), 1.3, p);
+    canvas.drawCircle(Offset(eyeCx - 1.5, eyeCy + 1.5), 1.5, p);
 
     // Tiny T-Rex arm + claw hints
     p.color = clrDark;

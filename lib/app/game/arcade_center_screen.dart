@@ -45,7 +45,7 @@ const _kNeonColors = <Color>[
   Color(0xFF88FF44), // Rana Saltarina  – lime
   Color(0xFF00FF88), // Víbora Veloz    – green
   Color(0xFF00CCFF), // Vuelo Kamikaze  – sky cyan
-  Color(0xFFFF44AA), // Corredor Infinito – hot pink
+  Color(0xFFFF44AA), // Dino Escape       – hot pink
   Color(0xFF00DDFF), // Muro de Neón      – electric cyan
   Color(0xFFFFAA00), // Contragolpe       – amber
 ];
@@ -63,7 +63,7 @@ const _kCardGradients = <List<Color>>[
   [Color(0xFF080C00), Color(0xFF254700)],   // Rana Saltarina  – forest green
   [Color(0xFF001200), Color(0xFF005A00)],   // Víbora Veloz    – neon green
   [Color(0xFF001018), Color(0xFF004D70)],   // Vuelo Kamikaze  – sky blue
-  [Color(0xFF180008), Color(0xFF3A0025)],   // Corredor Infinito – dark magenta
+  [Color(0xFF180008), Color(0xFF3A0025)],   // Dino Escape       – dark magenta
   [Color(0xFF001418), Color(0xFF003040)],   // Muro de Neón      – dark teal
   [Color(0xFF141000), Color(0xFF382800)],   // Contragolpe       – dark amber
 ];
@@ -145,7 +145,7 @@ final List<ArcadeGameDef> kArcadeGames = [
         required controller, required onSaldoChanged}) =>
       FlappyBirdScreen(userId: userId, rewardsDocRef: rewardsDocRef,
         currentSaldo: currentSaldo, controller: controller, onSaldoChanged: onSaldoChanged)),
-  ArcadeGameDef(id: 'runner', emoji: '🏃', title: 'Corredor Infinito',
+  ArcadeGameDef(id: 'runner', emoji: '🦕', title: 'Dino Escape',
     builder: ({required userId, required rewardsDocRef, required currentSaldo,
         required controller, required onSaldoChanged}) =>
       EndlessRunnerScreen(userId: userId, rewardsDocRef: rewardsDocRef,
@@ -1197,7 +1197,7 @@ class _CartridgePainter extends CustomPainter {
         p.isAntiAlias = false;
         break;
 
-      // ── Corredor Infinito (Endless Runner) ────────────────────────────────
+      // ── Dino Escape (Endless Runner) ─────────────────────────────────────
       case 9:
         // City silhouette
         p.color = const Color(0xFF1A0030).withOpacity(0.70);

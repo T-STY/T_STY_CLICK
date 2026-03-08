@@ -74,6 +74,9 @@ class _PongScreenState extends State<PongScreen> {
   // Ball trail positions
   final List<Offset> _ballTrail = [];
 
+  // Pause
+  bool _paused = false;
+
   @override
   void initState() {
     super.initState();
@@ -94,6 +97,11 @@ class _PongScreenState extends State<PongScreen> {
   void _onInput() {
     final event = widget.controller.lastEvent;
     if (event == null || !event.isDown) return;
+    if (_phase == _PongPhase.playing && event.button == ArcadeButton.start) {
+      setState(() => _paused = !_paused);
+      return;
+    }
+    if (_paused) return;
     if (_phase == _PongPhase.ready || _phase == _PongPhase.scored) {
       if (event.button == ArcadeButton.a || event.button == ArcadeButton.start) {
         _startRound();
@@ -123,6 +131,7 @@ class _PongScreenState extends State<PongScreen> {
   double get _aiError => _kAiErrors[_round.clamp(0, _kAiErrors.length - 1)];
 
   void _tick(Timer t) {
+    if (_paused) return;
     final now = DateTime.now();
     final dt = (_lastTick == null
         ? 0.016
@@ -271,6 +280,8 @@ class _PongScreenState extends State<PongScreen> {
           _buildOverlay('CONTRAGOLPE', 'Sube/Baja con el D-Pad\n¡Pulsa A para jugar!'),
         if (_phase == _PongPhase.scored)
           _buildOverlay(_msg, 'Pulsa A para continuar'),
+        if (_paused && _phase == _PongPhase.playing)
+          _buildOverlay('⏸ PAUSA', 'Start para continuar'),
       ]),
     );
   }
