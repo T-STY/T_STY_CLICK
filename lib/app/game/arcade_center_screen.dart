@@ -166,6 +166,8 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
   int _selectedIndex = 0;
   ArcadeGameDef? _activeGame;
   final List<int> _highScores = List.filled(12, 0);
+  int? _newRecordIndex;
+  Timer? _recordTimer;
 
   // ── Splash / power-on ──────────────────────────────────────────────────────
   bool _splashDone = false;
@@ -229,6 +231,7 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
   @override
   void dispose() {
     _splashTimer?.cancel();
+    _recordTimer?.cancel();
     _ctrl.removeListener(_handleShellEvent);
     _ctrl.dispose();
     super.dispose();
@@ -270,7 +273,19 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
       }
     } else {
       if (btn == ArcadeButton.select) {
-        setState(() { _activeGame = null; _loadHighScores(); });
+        final prevScore = _highScores[_selectedIndex];
+        final gameIdx = _selectedIndex;
+        setState(() => _activeGame = null);
+        _loadHighScores().then((_) {
+          if (!mounted) return;
+          if (_highScores[gameIdx] > prevScore) {
+            _recordTimer?.cancel();
+            setState(() => _newRecordIndex = gameIdx);
+            _recordTimer = Timer(const Duration(seconds: 6), () {
+              if (mounted) setState(() => _newRecordIndex = null);
+            });
+          }
+        });
       }
     }
   }
@@ -514,7 +529,9 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
-            color: selected ? phosphor : neon.withOpacity(0.22),
+            color: (_newRecordIndex == index)
+                ? Colors.amber
+                : selected ? phosphor : neon.withOpacity(0.22),
             width: selected ? 1.5 : 1.0,
           ),
           boxShadow: selected ? [
@@ -539,6 +556,25 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
                 ),
               ),
             ),
+            // New record celebration banner
+            if (_newRecordIndex == index)
+              Positioned(
+                top: 5,
+                left: 0,
+                right: 0,
+                child: Center(
+                  child: Text(
+                    '⚡ NUEVO RECORD ⚡',
+                    style: TextStyle(
+                      color: Colors.amber,
+                      fontSize: 5.5,
+                      fontFamily: 'monospace',
+                      fontWeight: FontWeight.bold,
+                      shadows: [Shadow(color: Colors.amber, blurRadius: 8)],
+                    ),
+                  ),
+                ),
+              ),
             // Content
             Positioned.fill(
               child: Column(
