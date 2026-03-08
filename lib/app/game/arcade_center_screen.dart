@@ -385,7 +385,7 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
     return Container(
       color: const Color(0xFF07000F),
       child: Column(children: [
-        _buildGameGrid(),
+        Expanded(child: _buildGameGrid()),
         _buildGridHint(),
       ]),
     );

@@ -562,7 +562,7 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           const Text('🔥', style: TextStyle(fontSize: 48)),
           const SizedBox(height: 8),
-          const Text('CRIPTA MALDITA',
+          const Text('INFRAMUNDO 2D',
             style: TextStyle(
               color: Color(0xFFCC2200),
               fontSize: 26,
@@ -889,7 +889,7 @@ class _RaycasterPainter extends CustomPainter {
       double by, double sh, double v, double frac, double hp, double flash) {
     // 20 % shorter: demon occupies center 80 % of the column height (10 % gap top + bottom)
     const kPad = 0.10;
-    if (v < kPad || v > 1.0 - kPad) return;
+    if (v < 0.01) return; // degenerate sprite only
     // Compressed helpers — all row offsets and heights are expressed in these
     // units so the demon fills exactly 80 % of the column
     double vy(double row) => by + v * (kPad * 20 + row * 0.80);
@@ -1456,7 +1456,7 @@ class _RaycasterPainter extends CustomPainter {
     canvas.save();
     // Barrel aimed toward crosshair (screen centre) from bottom-right anchor
     canvas.translate(size.width * 0.68, size.height * 0.95);
-    canvas.rotate(-0.18);
+    canvas.rotate(-0.42);
 
     final p = Paint()..isAntiAlias = false;
 
@@ -1586,7 +1586,7 @@ class _RaycasterPainter extends CustomPainter {
     canvas.save();
     // Barrel aimed toward crosshair (screen centre) from bottom-right anchor
     canvas.translate(size.width * 0.82, size.height * 0.95);
-    canvas.rotate(-0.32);
+    canvas.rotate(-0.55);
 
     final p = Paint()..isAntiAlias = false;
 
@@ -1719,7 +1719,7 @@ class _RaycasterPainter extends CustomPainter {
     canvas.save();
     // Barrel aimed toward crosshair (screen centre) from bottom-right anchor
     canvas.translate(size.width * 0.78, size.height * 0.95);
-    canvas.rotate(-0.28);
+    canvas.rotate(-0.50);
 
     final p = Paint()..isAntiAlias = false;
 
