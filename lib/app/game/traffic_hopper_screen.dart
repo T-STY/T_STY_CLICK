@@ -143,11 +143,11 @@ class _TrafficHopperScreenState extends State<TrafficHopperScreen> {
     final sm = 1.0 + (_level - 1) * 0.18;
 
     final rowConfigs = {
-      7:  (speed: 3.0 * sm, dir: -1, color: const Color(0xFFDD2222)),
-      8:  (speed: 2.5 * sm, dir:  1, color: const Color(0xFF2244DD)),
-      9:  (speed: 3.5 * sm, dir: -1, color: const Color(0xFFDDCC00)),
-      10: (speed: 2.8 * sm, dir:  1, color: const Color(0xFF22AA44)),
-      11: (speed: 4.0 * sm, dir: -1, color: const Color(0xFFEEEEEE)),
+      7:  (speed: 3.4 * sm, dir: -1, color: const Color(0xFFDD2222)),
+      8:  (speed: 2.9 * sm, dir:  1, color: const Color(0xFF2244DD)),
+      9:  (speed: 4.0 * sm, dir: -1, color: const Color(0xFFDDCC00)),
+      10: (speed: 3.2 * sm, dir:  1, color: const Color(0xFF22AA44)),
+      11: (speed: 4.6 * sm, dir: -1, color: const Color(0xFFEEEEEE)),
     };
 
     for (final entry in rowConfigs.entries) {

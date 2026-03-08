@@ -13,7 +13,7 @@ import 'high_score_service.dart';
 const _kCols = 7;
 const _kRows = 8;
 const _kCandyTypes = 6;
-const _kRoundTime = 30;  // seconds per round
+const _kRoundTime = 25;  // seconds per round (was 30)
 const _kMinMatch = 3;
 
 // Candy colour palette — bright & distinct

@@ -95,7 +95,7 @@ class _SpaceShooterScreenState extends State<SpaceShooterScreen> {
   static const double kShipMinY = 9.0;
   static const double kFireCooldown = 0.25;
   static const double kSpecialCooldown = 0.5;
-  static const double kSpawnInterval = 0.65;
+  static const double kSpawnInterval = 0.50;
   // Auto-advance to next wave after all aliens cleared
   static const double kBetweenWaveDuration = 2.5;
 

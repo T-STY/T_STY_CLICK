@@ -107,7 +107,7 @@ class _LogicGridScreenState extends State<LogicGridScreen> {
 
   // ─── Mine Placement ────────────────────────────────────────────────────────
 
-  static const int _kMineCount = 12; // was 10 — harder
+  static const int _kMineCount = 15; // was 12 — harder
 
   void _placeMines(int safeRow, int safeCol) {
     final rng = Random();

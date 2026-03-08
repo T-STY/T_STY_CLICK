@@ -181,7 +181,7 @@ class _TetrisScreenState extends State<TetrisScreen> {
 
   // ─── Gravity ───────────────────────────────────────────────────────────────
 
-  int get _gravInterval => (750 - (_level - 1) * 60).clamp(70, 750);
+  int get _gravInterval => (650 - (_level - 1) * 65).clamp(65, 650);
 
   void _startGravity() {
     _gravTimer?.cancel();

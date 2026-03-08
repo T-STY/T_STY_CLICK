@@ -37,8 +37,8 @@ class SnakeGameScreen extends StatefulWidget {
 class _SnakeGameScreenState extends State<SnakeGameScreen> {
   static const int kGridW = 18;
   static const int kGridH = 26;
-  static const int kFoodForLevel = 4; // was 5 — harder
-  static const double kStartTickMs = 217.0; // 15% faster than 250
+  static const int kFoodForLevel = 3; // was 4 — harder
+  static const double kStartTickMs = 190.0; // faster start speed
 
   final _rng = Random();
 

@@ -62,11 +62,10 @@ class _FlappyBirdScreenState extends State<FlappyBirdScreen> {
   // Pipes
   static const double kPipeW = 1.3;
   static const double kPipeSpacing = 4.2; // world units between pipes
-  static const double kGapHStart = 3.8; // gap height at wave 1
+  static const double kGapHStart = 3.4; // gap height at wave 1 (was 3.8)
   // Min gap must be >= 1.5 × bird diameter (kBirdR*2=0.76 → 1.5×=1.14).
-  // We keep 2.2 for comfortable playability while satisfying the constraint.
-  static const double kGapHMin = 2.2; // minimum gap height (≈ 2.9× bird diameter)
-  static const double kSpeedStart = 3.2;
+  static const double kGapHMin = 2.0; // minimum gap height (was 2.2)
+  static const double kSpeedStart = 3.6; // pipe scroll speed (was 3.2)
   static const double kSpeedMax = 7.0;
 
   // Ground

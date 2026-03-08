@@ -95,7 +95,7 @@ class _MazeChasScreenState extends State<MazeChasScreen> {
 
   bool _pelletBlink = false;
   bool _scaredBlink = false;
-  int _ghostIntervalMs = 350;
+  int _ghostIntervalMs = 300;
 
   final _rng = Random();
 
