@@ -87,9 +87,11 @@ class ArcadeGameDef {
   final String emoji;
   final String title;
   final bool locked;
+  final bool supportsDiagonal; // true → thumbstick; false → cross d-pad
   final ArcadeGameBuilder? builder;
   const ArcadeGameDef({required this.id, required this.emoji,
-      required this.title, this.locked = false, this.builder});
+      required this.title, this.locked = false,
+      this.supportsDiagonal = false, this.builder});
 }
 
 // Games ordered alphabetically by new Spanish title (9 playable + 3 locked teasers):
@@ -113,7 +115,7 @@ final List<ArcadeGameDef> kArcadeGames = [
         required controller, required onSaldoChanged}) =>
       Match3Screen(userId: userId, rewardsDocRef: rewardsDocRef,
         currentSaldo: currentSaldo, controller: controller, onSaldoChanged: onSaldoChanged)),
-  ArcadeGameDef(id: 'shooter',  emoji: '🚀', title: 'Caza Estelar',
+  ArcadeGameDef(id: 'shooter',  emoji: '🚀', title: 'Caza Estelar', supportsDiagonal: true,
     builder: ({required userId, required rewardsDocRef, required currentSaldo,
         required controller, required onSaldoChanged}) =>
       SpaceShooterScreen(userId: userId, rewardsDocRef: rewardsDocRef,
@@ -123,7 +125,7 @@ final List<ArcadeGameDef> kArcadeGames = [
         required controller, required onSaldoChanged}) =>
       MazeChasScreen(userId: userId, rewardsDocRef: rewardsDocRef,
         currentSaldo: currentSaldo, controller: controller, onSaldoChanged: onSaldoChanged)),
-  ArcadeGameDef(id: 'raycaster',emoji: '🔥', title: 'INFRAMUNDO 2D',
+  ArcadeGameDef(id: 'raycaster',emoji: '🔥', title: 'INFRAMUNDO 2D', supportsDiagonal: true,
     builder: ({required userId, required rewardsDocRef, required currentSaldo,
         required controller, required onSaldoChanged}) =>
       RaycasterScreen(userId: userId, rewardsDocRef: rewardsDocRef,
@@ -727,7 +729,9 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
     );
   }
 
-  Widget _buildDPad() => _ConsoleDPad(controller: _ctrl);
+  Widget _buildDPad() => _ConsoleDPad(
+      controller: _ctrl,
+      joystick: _activeGame?.supportsDiagonal ?? false);
 
   Widget _buildABXYCluster() {
     const btnSize = 48.0;
@@ -1276,190 +1280,317 @@ class _CartridgePainter extends CustomPainter {
   }
 }
 
-// ─── D-Pad (8-direction circular-zone) ───────────────────────────────────────
+// ─── D-pad widget ─────────────────────────────────────────────────────────────
 //
-// The entire 144×144 area is a single touch target. The touch angle from the
-// centre determines which of the 8 sectors is active:
-//   cardinal (N/E/S/W)  → single button
-//   diagonal (NE/SE/SW/NW) → two buttons simultaneously
+// joystick=false → classic cross/plus pad (cardinal-only, for grid games)
+// joystick=true  → faceted thumbstick (8-dir, for shooter / raycaster)
 
 class _ConsoleDPad extends StatefulWidget {
   final ArcadeInputController controller;
-  const _ConsoleDPad({required this.controller});
+  final bool joystick;
+  const _ConsoleDPad({required this.controller, this.joystick = false});
   @override State<_ConsoleDPad> createState() => _ConsoleDPadState();
 }
 
 class _ConsoleDPadState extends State<_ConsoleDPad> {
   Set<ArcadeButton> _active = const {};
+  Offset _nudge = Offset.zero; // thumbstick hub offset
 
-  static const _dead = 16.0; // dead-zone radius in logical px
+  static const _dead = 16.0;
 
   List<ArcadeButton> _buttonsFor(Offset local) {
     const cx = 72.0, cy = 72.0;
     final dx = local.dx - cx, dy = local.dy - cy;
     if (dx * dx + dy * dy < _dead * _dead) return const [];
-    // atan2: 0=right, positive=down. Convert so 0=up, clockwise.
-    final angle = (atan2(dy, dx) * 180 / pi + 450) % 360;
-    if (angle < 22.5 || angle >= 337.5) return [ArcadeButton.up];
-    if (angle < 67.5)  return [ArcadeButton.up, ArcadeButton.right];
-    if (angle < 112.5) return [ArcadeButton.right];
-    if (angle < 157.5) return [ArcadeButton.down, ArcadeButton.right];
-    if (angle < 202.5) return [ArcadeButton.down];
-    if (angle < 247.5) return [ArcadeButton.down, ArcadeButton.left];
-    if (angle < 292.5) return [ArcadeButton.left];
-    return [ArcadeButton.up, ArcadeButton.left];
+    if (widget.joystick) {
+      // 8-direction for thumbstick
+      final angle = (atan2(dy, dx) * 180 / pi + 450) % 360;
+      if (angle < 22.5 || angle >= 337.5) return [ArcadeButton.up];
+      if (angle < 67.5)  return [ArcadeButton.up, ArcadeButton.right];
+      if (angle < 112.5) return [ArcadeButton.right];
+      if (angle < 157.5) return [ArcadeButton.down, ArcadeButton.right];
+      if (angle < 202.5) return [ArcadeButton.down];
+      if (angle < 247.5) return [ArcadeButton.down, ArcadeButton.left];
+      if (angle < 292.5) return [ArcadeButton.left];
+      return [ArcadeButton.up, ArcadeButton.left];
+    } else {
+      // Cardinal-only: snap to dominant axis
+      if (dx.abs() >= dy.abs()) {
+        return [dx > 0 ? ArcadeButton.right : ArcadeButton.left];
+      } else {
+        return [dy > 0 ? ArcadeButton.down : ArcadeButton.up];
+      }
+    }
   }
 
-  void _applyButtons(List<ArcadeButton> next) {
+  Offset _nudgeFor(Offset local) {
+    const cx = 72.0, cy = 72.0;
+    const maxNudge = 20.0;
+    final dx = local.dx - cx, dy = local.dy - cy;
+    final dist = sqrt(dx * dx + dy * dy);
+    if (dist < _dead) return Offset.zero;
+    final scale = ((dist.clamp(_dead, 60.0) - _dead) / (60.0 - _dead)) * maxNudge;
+    return Offset(dx / dist * scale, dy / dist * scale);
+  }
+
+  void _applyButtons(List<ArcadeButton> next, Offset local) {
     final newSet = next.toSet();
     for (final b in _active.difference(newSet)) widget.controller.release(b);
     for (final b in newSet.difference(_active)) {
       widget.controller.press(b);
       HapticFeedback.lightImpact();
     }
-    setState(() => _active = newSet);
+    setState(() {
+      _active = newSet;
+      if (widget.joystick) _nudge = _nudgeFor(local);
+    });
   }
 
   void _release() {
     for (final b in _active) widget.controller.release(b);
-    setState(() => _active = const {});
+    setState(() { _active = const {}; _nudge = Offset.zero; });
   }
 
   @override
   Widget build(BuildContext context) {
     return Listener(
       behavior: HitTestBehavior.opaque,
-      onPointerDown:   (e) => _applyButtons(_buttonsFor(e.localPosition)),
-      onPointerMove:   (e) => _applyButtons(_buttonsFor(e.localPosition)),
+      onPointerDown:   (e) => _applyButtons(_buttonsFor(e.localPosition), e.localPosition),
+      onPointerMove:   (e) => _applyButtons(_buttonsFor(e.localPosition), e.localPosition),
       onPointerUp:     (_) => _release(),
       onPointerCancel: (_) => _release(),
       child: CustomPaint(
         size: const Size(144, 144),
-        painter: _DPadPainter(active: _active),
+        painter: widget.joystick
+            ? _ThumbstickPainter(active: _active, nudge: _nudge)
+            : _CrossDPadPainter(active: _active),
       ),
     );
   }
 }
 
-class _DPadPainter extends CustomPainter {
+// ─── Cross D-pad painter (cardinal-only games) ────────────────────────────────
+
+class _CrossDPadPainter extends CustomPainter {
   final Set<ArcadeButton> active;
-  const _DPadPainter({required this.active});
+  const _CrossDPadPainter({required this.active});
 
   @override
-  bool shouldRepaint(_DPadPainter o) =>
+  bool shouldRepaint(_CrossDPadPainter o) =>
       o.active.length != active.length || !o.active.containsAll(active);
 
   @override
   void paint(Canvas canvas, Size size) {
-    final p = Paint()..isAntiAlias = false;
-    const arm = 48.0; // arm width/height
-    const cx = 72.0, cy = 72.0; // centre
+    const cx = 72.0, cy = 72.0;
+    const arm = 48.0, half = arm / 2;
+    const r = 9.0; // outer-tip corner radius
 
     bool lit(ArcadeButton b) => active.contains(b);
-    Color armCol(ArcadeButton b) =>
-        lit(b) ? const Color(0xFF606060) : _kDpad;
+    const base    = Color(0xFF1C1C1C);
+    const pressed = Color(0xFF3E3E3E);
+    final p = Paint()..isAntiAlias = true;
 
-    // Corner hints (very subtle — show the diagonal zone is touchable)
-    p.color = const Color(0xFF1C1C1C);
-    canvas.drawRRect(RRect.fromRectAndRadius(
-        const Rect.fromLTWH(0, 0, arm, arm), const Radius.circular(4)), p);
-    canvas.drawRRect(RRect.fromRectAndRadius(
-        Rect.fromLTWH(cx + arm / 2, 0, arm, arm), const Radius.circular(4)), p);
-    canvas.drawRRect(RRect.fromRectAndRadius(
-        Rect.fromLTWH(0, cy + arm / 2, arm, arm), const Radius.circular(4)), p);
-    canvas.drawRRect(RRect.fromRectAndRadius(
-        Rect.fromLTWH(cx + arm / 2, cy + arm / 2, arm, arm),
-        const Radius.circular(4)), p);
-
-    // Active diagonal corner highlights
-    void litCorner(bool cond, Rect r) {
-      if (!cond) return;
-      p.color = const Color(0xFF454545);
-      canvas.drawRRect(RRect.fromRectAndRadius(r, const Radius.circular(4)), p);
-    }
-    litCorner(lit(ArcadeButton.up) && lit(ArcadeButton.right),
-        Rect.fromLTWH(cx + arm / 2, 0, arm, arm));
-    litCorner(lit(ArcadeButton.down) && lit(ArcadeButton.right),
-        Rect.fromLTWH(cx + arm / 2, cy + arm / 2, arm, arm));
-    litCorner(lit(ArcadeButton.down) && lit(ArcadeButton.left),
-        Rect.fromLTWH(0, cy + arm / 2, arm, arm));
-    litCorner(lit(ArcadeButton.up) && lit(ArcadeButton.left),
-        const Rect.fromLTWH(0, 0, arm, arm));
-
-    // Up arm
-    p.color = armCol(ArcadeButton.up);
+    // ── Arms ──────────────────────────────────────────────────────────────────
+    // Up
+    p.color = lit(ArcadeButton.up) ? pressed : base;
     canvas.drawRRect(RRect.fromRectAndCorners(
-        Rect.fromLTWH(cx - arm / 2, 0, arm, arm),
-        topLeft: const Radius.circular(6),
-        topRight: const Radius.circular(6)), p);
-
-    // Down arm
-    p.color = armCol(ArcadeButton.down);
+        Rect.fromLTWH(cx - half, 0, arm, cy - half),
+        topLeft: Radius.circular(r), topRight: Radius.circular(r)), p);
+    // Down
+    p.color = lit(ArcadeButton.down) ? pressed : base;
     canvas.drawRRect(RRect.fromRectAndCorners(
-        Rect.fromLTWH(cx - arm / 2, cy + arm / 2, arm, arm),
-        bottomLeft: const Radius.circular(6),
-        bottomRight: const Radius.circular(6)), p);
-
-    // Left arm
-    p.color = armCol(ArcadeButton.left);
+        Rect.fromLTWH(cx - half, cy + half, arm, cy - half),
+        bottomLeft: Radius.circular(r), bottomRight: Radius.circular(r)), p);
+    // Left
+    p.color = lit(ArcadeButton.left) ? pressed : base;
     canvas.drawRRect(RRect.fromRectAndCorners(
-        Rect.fromLTWH(0, cy - arm / 2, arm, arm),
-        topLeft: const Radius.circular(6),
-        bottomLeft: const Radius.circular(6)), p);
-
-    // Right arm
-    p.color = armCol(ArcadeButton.right);
+        Rect.fromLTWH(0, cy - half, cx - half, arm),
+        topLeft: Radius.circular(r), bottomLeft: Radius.circular(r)), p);
+    // Right
+    p.color = lit(ArcadeButton.right) ? pressed : base;
     canvas.drawRRect(RRect.fromRectAndCorners(
-        Rect.fromLTWH(cx + arm / 2, cy - arm / 2, arm, arm),
-        topRight: const Radius.circular(6),
-        bottomRight: const Radius.circular(6)), p);
+        Rect.fromLTWH(cx + half, cy - half, cx - half, arm),
+        topRight: Radius.circular(r), bottomRight: Radius.circular(r)), p);
+    // Centre fill (no rounding, fills the gap between arms)
+    p.color = base;
+    canvas.drawRect(Rect.fromLTWH(cx - half, cy - half, arm, arm), p);
 
-    // Centre piece
-    p.color = _kDpad;
-    canvas.drawRect(
-        Rect.fromLTWH(cx - arm / 2, cy - arm / 2, arm, arm), p);
-
-    // Arm borders
-    p..color = Colors.white.withOpacity(0.08)
+    // ── Outline strokes on cross bars ─────────────────────────────────────────
+    p..color = Colors.white.withOpacity(0.07)
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 0.8;
-    for (final r in [
-      Rect.fromLTWH(cx - arm / 2, 0, arm, arm * 3),       // vertical bar
-      Rect.fromLTWH(0, cy - arm / 2, arm * 3, arm),       // horizontal bar
-    ]) { canvas.drawRect(r, p); }
+      ..strokeWidth = 1.0;
+    canvas.drawRRect(RRect.fromRectAndCorners(          // vertical bar
+        Rect.fromLTWH(cx - half, 0, arm, size.height),
+        topLeft: Radius.circular(r), topRight: Radius.circular(r),
+        bottomLeft: Radius.circular(r), bottomRight: Radius.circular(r)), p);
+    canvas.drawRRect(RRect.fromRectAndCorners(          // horizontal bar
+        Rect.fromLTWH(0, cy - half, size.width, arm),
+        topLeft: Radius.circular(r), topRight: Radius.circular(r),
+        bottomLeft: Radius.circular(r), bottomRight: Radius.circular(r)), p);
     p.style = PaintingStyle.fill;
 
-    // Arrow icons (simple triangles)
-    final ap = Paint()
-      ..color = Colors.white.withOpacity(lit(ArcadeButton.up) ? 1.0 : 0.6)
-      ..isAntiAlias = true;
-    void tri(Path path) => canvas.drawPath(path, ap);
+    // ── Bevel highlights (top/left edge = lighter; bottom/right = shadow) ─────
+    // Up-arm top highlight
+    p.color = Colors.white.withOpacity(lit(ArcadeButton.up) ? 0.14 : 0.07);
+    canvas.drawRRect(RRect.fromRectAndCorners(
+        Rect.fromLTWH(cx - half + 1, 1, arm - 2, 2),
+        topLeft: Radius.circular(r), topRight: Radius.circular(r)), p);
+    // Down-arm bottom shadow
+    p.color = Colors.black.withOpacity(0.35);
+    canvas.drawRRect(RRect.fromRectAndCorners(
+        Rect.fromLTWH(cx - half + 1, size.height - 3, arm - 2, 2),
+        bottomLeft: Radius.circular(r), bottomRight: Radius.circular(r)), p);
+    // Left-arm left highlight
+    p.color = Colors.white.withOpacity(lit(ArcadeButton.left) ? 0.14 : 0.07);
+    canvas.drawRRect(RRect.fromRectAndCorners(
+        Rect.fromLTWH(1, cy - half + 1, 2, arm - 2),
+        topLeft: Radius.circular(r), bottomLeft: Radius.circular(r)), p);
+    // Right-arm right shadow
+    p.color = Colors.black.withOpacity(0.35);
+    canvas.drawRRect(RRect.fromRectAndCorners(
+        Rect.fromLTWH(size.width - 3, cy - half + 1, 2, arm - 2),
+        topRight: Radius.circular(r), bottomRight: Radius.circular(r)), p);
 
-    // Up arrow
-    ap.color = Colors.white.withOpacity(lit(ArcadeButton.up) ? 1.0 : 0.6);
-    tri(Path()
-      ..moveTo(cx, 13) ..lineTo(cx - 8, 32) ..lineTo(cx + 8, 32) ..close());
+    // ── Arrow triangles ───────────────────────────────────────────────────────
+    final ap = Paint()..isAntiAlias = true;
+    // Up
+    ap.color = Colors.white.withOpacity(lit(ArcadeButton.up)    ? 0.95 : 0.40);
+    canvas.drawPath(Path()..moveTo(cx, 14)..lineTo(cx - 9, 33)..lineTo(cx + 9, 33)..close(), ap);
+    // Down
+    ap.color = Colors.white.withOpacity(lit(ArcadeButton.down)  ? 0.95 : 0.40);
+    canvas.drawPath(Path()..moveTo(cx, 130)..lineTo(cx - 9, 111)..lineTo(cx + 9, 111)..close(), ap);
+    // Left
+    ap.color = Colors.white.withOpacity(lit(ArcadeButton.left)  ? 0.95 : 0.40);
+    canvas.drawPath(Path()..moveTo(14, cy)..lineTo(33, cy - 9)..lineTo(33, cy + 9)..close(), ap);
+    // Right
+    ap.color = Colors.white.withOpacity(lit(ArcadeButton.right) ? 0.95 : 0.40);
+    canvas.drawPath(Path()..moveTo(130, cy)..lineTo(111, cy - 9)..lineTo(111, cy + 9)..close(), ap);
+  }
+}
 
-    // Down arrow
-    ap.color = Colors.white.withOpacity(lit(ArcadeButton.down) ? 1.0 : 0.6);
-    tri(Path()
-      ..moveTo(cx, cy + arm / 2 + arm - 13)
-      ..lineTo(cx - 8, cy + arm / 2 + arm - 32)
-      ..lineTo(cx + 8, cy + arm / 2 + arm - 32)
-      ..close());
+// ─── Thumbstick painter (diagonal/analog games) ───────────────────────────────
 
-    // Left arrow
-    ap.color = Colors.white.withOpacity(lit(ArcadeButton.left) ? 1.0 : 0.6);
-    tri(Path()
-      ..moveTo(13, cy) ..lineTo(32, cy - 8) ..lineTo(32, cy + 8) ..close());
+class _ThumbstickPainter extends CustomPainter {
+  final Set<ArcadeButton> active;
+  final Offset nudge; // hub offset when pressed
+  const _ThumbstickPainter({required this.active, required this.nudge});
 
-    // Right arrow
-    ap.color = Colors.white.withOpacity(lit(ArcadeButton.right) ? 1.0 : 0.6);
-    tri(Path()
-      ..moveTo(cx + arm / 2 + arm - 13, cy)
-      ..lineTo(cx + arm / 2 + arm - 32, cy - 8)
-      ..lineTo(cx + arm / 2 + arm - 32, cy + 8)
-      ..close());
+  @override
+  bool shouldRepaint(_ThumbstickPainter o) =>
+      o.active != active || o.nudge != nudge;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    const cx = 72.0, cy = 72.0;
+    const R    = 66.0;  // disc radius
+    const hubR = 14.0;  // centre hub radius
+    const N    = 20;    // facet count
+
+    final p = Paint()..isAntiAlias = true;
+
+    // Drop shadow beneath disc
+    p.color = Colors.black.withOpacity(0.50);
+    canvas.drawCircle(const Offset(cx + 2, cy + 4), R, p);
+
+    // Clip everything to the disc boundary
+    canvas.save();
+    canvas.clipPath(Path()
+        ..addOval(Rect.fromCircle(center: const Offset(cx, cy), radius: R)));
+
+    // Compute active direction vector (for facet glow)
+    double ax = 0, ay = 0;
+    if (active.contains(ArcadeButton.right)) ax += 1;
+    if (active.contains(ArcadeButton.left))  ax -= 1;
+    if (active.contains(ArcadeButton.down))  ay += 1;
+    if (active.contains(ArcadeButton.up))    ay -= 1;
+    final hasActive = ax != 0 || ay != 0;
+    final targetAngle = hasActive ? atan2(ay, ax) : 0.0;
+
+    // Facets: N triangular wedges, coloured by a top-left diffuse light
+    for (int i = 0; i < N; i++) {
+      final startA = -pi / 2 + i       * 2 * pi / N;
+      final endA   = -pi / 2 + (i + 1) * 2 * pi / N;
+      final midA   = (startA + endA) / 2;
+
+      // Diffuse: light from upper-left (angle ~225°)
+      const lx = -0.5774, ly = -0.8165;
+      final nx = cos(midA), ny = sin(midA);
+      final diffuse = ((nx * lx + ny * ly).clamp(-1.0, 1.0) + 1) / 2; // 0..1
+
+      // Base brightness from diffuse
+      int v = (0x10 + diffuse * 0x28).round();
+
+      // Glow in active direction
+      if (hasActive) {
+        var diff = (midA - targetAngle).abs() % (2 * pi);
+        if (diff > pi) diff = 2 * pi - diff;
+        if (diff < pi * 0.65) {
+          v = (v + ((1 - diff / (pi * 0.65)) * 0x2E).round()).clamp(0, 0xFF);
+        }
+      }
+
+      p.color = Color(0xFF000000 | (v << 16) | (v << 8) | v);
+      canvas.drawPath(
+        Path()
+          ..moveTo(cx, cy)
+          ..lineTo(cx + R * cos(startA), cy + R * sin(startA))
+          ..arcTo(Rect.fromCircle(center: const Offset(cx, cy), radius: R),
+              startA, 2 * pi / N, false)
+          ..close(),
+        p,
+      );
+    }
+
+    // Thin divider lines between facets
+    p..color = Colors.black.withOpacity(0.28)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 0.55;
+    for (int i = 0; i < N; i++) {
+      final a = -pi / 2 + i * 2 * pi / N;
+      canvas.drawLine(const Offset(cx, cy),
+          Offset(cx + R * cos(a), cy + R * sin(a)), p);
+    }
+    p.style = PaintingStyle.fill;
+
+    // Specular arc (upper-left rim highlight)
+    p..color = Colors.white.withOpacity(0.18)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.0;
+    canvas.drawArc(
+        Rect.fromCircle(center: const Offset(cx, cy), radius: R - 2.5),
+        -pi * 1.25, pi * 0.65, false, p);
+    p.style = PaintingStyle.fill;
+
+    canvas.restore();
+
+    // Outer border ring
+    p..color = Colors.black.withOpacity(0.80)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.0;
+    canvas.drawCircle(const Offset(cx, cy), R, p);
+    p.style = PaintingStyle.fill;
+
+    // Hub (moves with nudge to indicate push direction)
+    final hx = cx + nudge.dx, hy = cy + nudge.dy;
+
+    // Hub shadow
+    p.color = Colors.black.withOpacity(0.55);
+    canvas.drawCircle(Offset(hx + 1, hy + 2), hubR, p);
+    // Hub base
+    p.color = const Color(0xFF0E0E0E);
+    canvas.drawCircle(Offset(hx, hy), hubR, p);
+    // Hub inner raised disc
+    p.color = const Color(0xFF252525);
+    canvas.drawCircle(Offset(hx, hy), hubR - 3, p);
+    // Hub specular highlight
+    p.color = Colors.white.withOpacity(0.22);
+    canvas.drawCircle(Offset(hx - 4, hy - 4), 4, p);
+    // Hub border
+    p..color = Colors.black.withOpacity(0.65)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.2;
+    canvas.drawCircle(Offset(hx, hy), hubR, p);
+    p.style = PaintingStyle.fill;
   }
 }
 
