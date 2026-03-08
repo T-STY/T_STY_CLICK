@@ -97,11 +97,12 @@ class _EndlessRunnerScreenState extends State<EndlessRunnerScreen> {
   // ─── Dino intro animation (runs on start screen) ──────────────────────────
   Timer? _introTimer;
   double _introPx = 9.0;     // player display x during pan
-  double _introDinoX = 11.5; // dino display x (trails 2.5 units behind player)
+  double _introDinoX = 6.5;  // dino display x (2.5 units BEHIND = to the LEFT of player)
   bool _introDone = false;   // pan has completed, freeze
+  double _dinoLegPhase = 0.0; // oscillates for dino leg animation
 
   // ─── Death dino animation ─────────────────────────────────────────────────
-  double _deathDinoX = _kGW + 3.0; // dino rushes from right on death
+  double _deathDinoX = -2.0;  // dino rushes from LEFT (behind player) on death
   bool _dinoChomping = false;
 
   @override
@@ -133,19 +134,24 @@ class _EndlessRunnerScreenState extends State<EndlessRunnerScreen> {
     }
   }
 
-  // Start intro: player pans in from the right with a dino chasing
+  // Start intro: player pans in from the right, dino chases from behind (left)
   void _startIntroAnim() {
     _introPx = 9.0;
-    _introDinoX = 11.5;
+    _introDinoX = 6.5; // dino starts 2.5 units LEFT of player (behind)
     _introDone = false;
+    _dinoLegPhase = 0.0;
+    _legPhase = 0.0;
     _introTimer?.cancel();
     _introTimer = Timer.periodic(const Duration(milliseconds: 16), (_) {
       if (!mounted) return;
       if (_introDone) return; // pan complete, hold position
       setState(() {
         _introPx = (_introPx - 0.042).clamp(1.5, 9.0);
-        // Dino always 2.5 units behind the player
-        _introDinoX = _introPx + 2.5;
+        // Dino always 2.5 units to the LEFT of the player (chasing from behind)
+        _introDinoX = _introPx - 2.5;
+        // Animate both sets of legs
+        _legPhase += 0.30;
+        _dinoLegPhase += 0.28;
         if (_introPx <= 1.5) _introDone = true;
       });
     });
@@ -207,7 +213,7 @@ class _EndlessRunnerScreenState extends State<EndlessRunnerScreen> {
     _dead = false;
     _showDeathOverlay = false;
     _dinoChomping = false;
-    _deathDinoX = _kGW + 3.0;
+    _deathDinoX = -2.0;    // will enter from left on next death
     _lastTick = null;
     _gameTimer?.cancel();
     _gameTimer = Timer.periodic(const Duration(milliseconds: 16), _tick);
@@ -314,7 +320,7 @@ class _EndlessRunnerScreenState extends State<EndlessRunnerScreen> {
       _dead = true;
       _showDeathOverlay = false;
       _dinoChomping = false;
-      _deathDinoX = _kGW + 3.0;
+      _deathDinoX = -2.0;    // enters from left (behind the player)
       HapticFeedback.heavyImpact();
       HighScoreService.submit('runner', _score);
       HighScoreService.load('runner').then((v) {
@@ -334,11 +340,12 @@ class _EndlessRunnerScreenState extends State<EndlessRunnerScreen> {
       if (!mounted) { _introTimer?.cancel(); return; }
       const dt = 0.016;
       setState(() {
-        _deathDinoX -= 7.0 * dt; // dino rushes toward player at 7 units/sec
-        if (_deathDinoX <= _kPlayerX + 0.3 && !_dinoChomping) {
+        // Dino rushes RIGHTWARD from behind (left side) toward player
+        _deathDinoX += 7.0 * dt;
+        _dinoLegPhase += 0.32; // animate dino legs while running
+        if (_deathDinoX >= _kPlayerX - 0.3 && !_dinoChomping) {
           _dinoChomping = true;
           _introTimer?.cancel();
-          // Delay showing the game-over overlay until after chomp
           Future.delayed(const Duration(milliseconds: 600), () {
             if (mounted) setState(() => _showDeathOverlay = true);
           });
@@ -384,6 +391,7 @@ class _EndlessRunnerScreenState extends State<EndlessRunnerScreen> {
               score: _score, hiScore: _hiScore,
               dinoX: dinoX,
               dinoChomping: _dinoChomping,
+              dinoLegPhase: _dinoLegPhase,
             ),
           ),
         ),
@@ -443,7 +451,7 @@ class _BgElement {
 // ─── Painter ──────────────────────────────────────────────────────────────────
 
 class _RunnerPainter extends CustomPainter {
-  final double py, playerDisplayX, dinoX, legPhase;
+  final double py, playerDisplayX, dinoX, legPhase, dinoLegPhase;
   final bool isDucking, onGround, dinoChomping;
   final List<_Obstacle> obstacles;
   final List<_BgElement> bgFar, bgMid;
@@ -457,6 +465,7 @@ class _RunnerPainter extends CustomPainter {
     required this.score, required this.hiScore,
     required this.dinoX,
     required this.dinoChomping,
+    required this.dinoLegPhase,
   });
 
   @override bool shouldRepaint(_RunnerPainter o) => true;
@@ -553,8 +562,9 @@ class _RunnerPainter extends CustomPainter {
     }
 
     // ── Dinosaur ─────────────────────────────────────────────────────────────
-    if (dinoX < _kGW + 4.5) {
-      _drawDino(canvas, dinoX, ux, uy, chomping: dinoChomping);
+    if (dinoX > -3.0 && dinoX < _kGW + 4.5) {
+      _drawDino(canvas, dinoX, ux, uy,
+          chomping: dinoChomping, legPhase: dinoLegPhase);
     }
 
     // ── Player ───────────────────────────────────────────────────────────────
@@ -636,7 +646,7 @@ class _RunnerPainter extends CustomPainter {
 
   // ── Dinosaur painter ───────────────────────────────────────────────────────
   static void _drawDino(Canvas canvas, double dx, double ux, double uy,
-      {bool chomping = false}) {
+      {bool chomping = false, double legPhase = 0.0}) {
     final p = Paint()..isAntiAlias = true;
     const clr = Color(0xFF1DAA55); // dino green
     const clrDark = Color(0xFF0E6633);
@@ -719,20 +729,21 @@ class _RunnerPainter extends CustomPainter {
             const Radius.circular(2)),
         p);
 
-    // Legs (alternating run animation)
+    // Legs — sinusoidal alternating run animation
     p.color = clr;
-    final legSwing = chomping ? 0.0 : 0.06; // no animation when chomping
+    final legSin = chomping ? 0.0 : sin(legPhase);
+    final legSwingPx = legSin * 0.09; // game-unit swing amplitude
     canvas.drawRRect(
         RRect.fromRectAndRadius(
             Rect.fromLTWH(
-                (dx - 0.25) * ux, (_kGroundY - 0.32 + legSwing) * uy,
+                (dx - 0.25) * ux, (_kGroundY - 0.32 + legSwingPx) * uy,
                 0.18 * ux, 0.32 * uy),
             const Radius.circular(2)),
         p);
     canvas.drawRRect(
         RRect.fromRectAndRadius(
             Rect.fromLTWH(
-                (dx + 0.07) * ux, (_kGroundY - 0.32 - legSwing) * uy,
+                (dx + 0.07) * ux, (_kGroundY - 0.32 - legSwingPx) * uy,
                 0.18 * ux, 0.32 * uy),
             const Radius.circular(2)),
         p);

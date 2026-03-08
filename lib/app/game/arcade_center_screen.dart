@@ -1346,11 +1346,13 @@ class _ConsoleDPadState extends State<_ConsoleDPad> {
       onPointerMove:   (e) => _applyButtons(_buttonsFor(e.localPosition), e.localPosition),
       onPointerUp:     (_) => _release(),
       onPointerCancel: (_) => _release(),
-      // Always use the cross D-pad visual — joystick mode only differs in
-      // which directions it recognises (cardinal vs 8-way), not the look.
+      // Joystick games → round D-pad (circular disc with cross embossed)
+      // Cardinal games → classic plus-cross D-pad
       child: CustomPaint(
         size: const Size(144, 144),
-        painter: _CrossDPadPainter(active: _active),
+        painter: widget.joystick
+            ? _RoundDPadPainter(active: _active)
+            : _CrossDPadPainter(active: _active),
       ),
     );
   }
@@ -1451,6 +1453,121 @@ class _CrossDPadPainter extends CustomPainter {
     canvas.drawPath(Path()..moveTo(14, cy)..lineTo(33, cy - 9)..lineTo(33, cy + 9)..close(), ap);
     // Right
     ap.color = Colors.white.withOpacity(lit(ArcadeButton.right) ? 0.95 : 0.40);
+    canvas.drawPath(Path()..moveTo(130, cy)..lineTo(111, cy - 9)..lineTo(111, cy + 9)..close(), ap);
+  }
+}
+
+// ─── Round D-pad painter (8-direction games: shooter / raycaster) ─────────────
+// Circular disc with cross/plus embossed — like a Game Boy / Switch D-pad cap.
+
+class _RoundDPadPainter extends CustomPainter {
+  final Set<ArcadeButton> active;
+  const _RoundDPadPainter({required this.active});
+
+  @override
+  bool shouldRepaint(_RoundDPadPainter o) =>
+      o.active.length != active.length || !o.active.containsAll(active);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    const cx = 72.0, cy = 72.0;
+    const R = 65.0;            // disc radius
+    const arm = 47.0, half = arm / 2; // cross-arm width
+
+    bool lit(ArcadeButton b) => active.contains(b);
+    const base    = Color(0xFF1C1C1C);
+    const hi      = Color(0xFF3A3A3A); // pressed / highlight
+    final p = Paint()..isAntiAlias = true;
+
+    // Drop shadow
+    p.color = Colors.black.withOpacity(0.50);
+    canvas.drawCircle(const Offset(cx + 2, cy + 4), R, p);
+
+    // Base disc
+    p.color = base;
+    canvas.drawCircle(const Offset(cx, cy), R, p);
+
+    // ── Clip to disc for arm/quadrant fills ──────────────────────────────────
+    canvas.save();
+    canvas.clipPath(Path()
+        ..addOval(Rect.fromCircle(center: const Offset(cx, cy), radius: R)));
+
+    // Fill each arm (the cross bars — always visible as slightly raised areas)
+    // Vertical bar
+    p.color = const Color(0xFF222222);
+    canvas.drawRect(Rect.fromLTWH(cx - half, 0, arm, 144), p);
+    // Horizontal bar
+    canvas.drawRect(Rect.fromLTWH(0, cy - half, 144, arm), p);
+
+    // Active quadrant glow — lights up the pressed arm segment
+    if (lit(ArcadeButton.up)) {
+      p.color = hi;
+      canvas.drawRect(Rect.fromLTWH(cx - half, 0, arm, cy - half), p);
+    }
+    if (lit(ArcadeButton.down)) {
+      p.color = hi;
+      canvas.drawRect(Rect.fromLTWH(cx - half, cy + half, arm, cy - half), p);
+    }
+    if (lit(ArcadeButton.left)) {
+      p.color = hi;
+      canvas.drawRect(Rect.fromLTWH(0, cy - half, cx - half, arm), p);
+    }
+    if (lit(ArcadeButton.right)) {
+      p.color = hi;
+      canvas.drawRect(Rect.fromLTWH(cx + half, cy - half, cx - half, arm), p);
+    }
+
+    // Centre knob (always base — where the cross bars intersect)
+    p.color = base;
+    canvas.drawRect(Rect.fromLTWH(cx - half, cy - half, arm, arm), p);
+
+    // Cross groove lines — dark dividers between the arm sections
+    p..color = Colors.black.withOpacity(0.55)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.5;
+    canvas.drawLine(const Offset(cx - half, 0), const Offset(cx - half, 144), p);
+    canvas.drawLine(const Offset(cx + half, 0), const Offset(cx + half, 144), p);
+    canvas.drawLine(const Offset(0, cy - half), const Offset(144, cy - half), p);
+    canvas.drawLine(const Offset(0, cy + half), const Offset(144, cy + half), p);
+    p.style = PaintingStyle.fill;
+
+    // Bevel highlights
+    p.color = Colors.white.withOpacity(lit(ArcadeButton.up) ? 0.16 : 0.07);
+    canvas.drawRect(Rect.fromLTWH(cx - half + 1, 1, arm - 2, 2), p);
+    p.color = Colors.white.withOpacity(lit(ArcadeButton.left) ? 0.16 : 0.07);
+    canvas.drawRect(Rect.fromLTWH(1, cy - half + 1, 2, arm - 2), p);
+    // Bottom/right shadows
+    p.color = Colors.black.withOpacity(0.30);
+    canvas.drawRect(Rect.fromLTWH(cx - half + 1, 141, arm - 2, 2), p);
+    canvas.drawRect(Rect.fromLTWH(141, cy - half + 1, 2, arm - 2), p);
+
+    canvas.restore();
+
+    // Outer ring
+    p..color = Colors.black.withOpacity(0.80)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.5;
+    canvas.drawCircle(const Offset(cx, cy), R, p);
+    p.style = PaintingStyle.fill;
+
+    // Specular arc (upper-left rim)
+    p..color = Colors.white.withOpacity(0.18)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.0;
+    canvas.drawArc(
+        Rect.fromCircle(center: const Offset(cx, cy), radius: R - 2.5),
+        -pi * 1.25, pi * 0.65, false, p);
+    p.style = PaintingStyle.fill;
+
+    // Arrow triangles (same geometry as cross pad)
+    final ap = Paint()..isAntiAlias = true;
+    ap.color = Colors.white.withOpacity(lit(ArcadeButton.up)    ? 0.95 : 0.35);
+    canvas.drawPath(Path()..moveTo(cx, 14)..lineTo(cx - 9, 33)..lineTo(cx + 9, 33)..close(), ap);
+    ap.color = Colors.white.withOpacity(lit(ArcadeButton.down)  ? 0.95 : 0.35);
+    canvas.drawPath(Path()..moveTo(cx, 130)..lineTo(cx - 9, 111)..lineTo(cx + 9, 111)..close(), ap);
+    ap.color = Colors.white.withOpacity(lit(ArcadeButton.left)  ? 0.95 : 0.35);
+    canvas.drawPath(Path()..moveTo(14, cy)..lineTo(33, cy - 9)..lineTo(33, cy + 9)..close(), ap);
+    ap.color = Colors.white.withOpacity(lit(ArcadeButton.right) ? 0.95 : 0.35);
     canvas.drawPath(Path()..moveTo(130, cy)..lineTo(111, cy - 9)..lineTo(111, cy + 9)..close(), ap);
   }
 }
