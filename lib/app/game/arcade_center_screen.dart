@@ -5,11 +5,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'arcade_input_controller.dart';
+import 'breakout_screen.dart';
+import 'endless_runner_screen.dart';
 import 'flappy_bird_screen.dart';
 import 'high_score_service.dart';
 import 'logic_grid_screen.dart';
 import 'match3_screen.dart';
 import 'maze_chase_screen.dart';
+import 'pong_screen.dart';
 import 'raycaster_screen.dart';
 import 'snake_game_screen.dart';
 import 'space_shooter_screen.dart';
@@ -42,9 +45,9 @@ const _kNeonColors = <Color>[
   Color(0xFF88FF44), // Rana Saltarina  – lime
   Color(0xFF00FF88), // Víbora Veloz    – green
   Color(0xFF00CCFF), // Vuelo Kamikaze  – sky cyan
-  Color(0xFF222222), // Locked slot 1   – dim
-  Color(0xFF222222), // Locked slot 2   – dim
-  Color(0xFF222222), // Locked slot 3   – dim
+  Color(0xFFFF44AA), // Corredor Infinito – hot pink
+  Color(0xFF00DDFF), // Muro de Neón      – electric cyan
+  Color(0xFFFFAA00), // Contragolpe       – amber
 ];
 
 // ─── Card background gradients (per game — colours match the actual game) ─────
@@ -60,9 +63,9 @@ const _kCardGradients = <List<Color>>[
   [Color(0xFF080C00), Color(0xFF254700)],   // Rana Saltarina  – forest green
   [Color(0xFF001200), Color(0xFF005A00)],   // Víbora Veloz    – neon green
   [Color(0xFF001018), Color(0xFF004D70)],   // Vuelo Kamikaze  – sky blue
-  [Color(0xFF040404), Color(0xFF0A0A0A)],   // Locked slot 1
-  [Color(0xFF040404), Color(0xFF0A0A0A)],   // Locked slot 2
-  [Color(0xFF040404), Color(0xFF0A0A0A)],   // Locked slot 3
+  [Color(0xFF180008), Color(0xFF3A0025)],   // Corredor Infinito – dark magenta
+  [Color(0xFF001418), Color(0xFF003040)],   // Muro de Neón      – dark teal
+  [Color(0xFF141000), Color(0xFF382800)],   // Contragolpe       – dark amber
 ];
 
 // ─── Category labels ──────────────────────────────────────────────────────────
@@ -140,10 +143,21 @@ final List<ArcadeGameDef> kArcadeGames = [
         required controller, required onSaldoChanged}) =>
       FlappyBirdScreen(userId: userId, rewardsDocRef: rewardsDocRef,
         currentSaldo: currentSaldo, controller: controller, onSaldoChanged: onSaldoChanged)),
-  // ── Future games (locked teasers) ──────────────────────────────────────────
-  ArcadeGameDef(id: 'locked_race',    emoji: '🏎️', title: '???', locked: true),
-  ArcadeGameDef(id: 'locked_fight',   emoji: '⚔️',  title: '???', locked: true),
-  ArcadeGameDef(id: 'locked_space',   emoji: '🌌',  title: '???', locked: true),
+  ArcadeGameDef(id: 'runner', emoji: '🏃', title: 'Corredor Infinito',
+    builder: ({required userId, required rewardsDocRef, required currentSaldo,
+        required controller, required onSaldoChanged}) =>
+      EndlessRunnerScreen(userId: userId, rewardsDocRef: rewardsDocRef,
+        currentSaldo: currentSaldo, controller: controller, onSaldoChanged: onSaldoChanged)),
+  ArcadeGameDef(id: 'breakout', emoji: '🧱', title: 'Muro de Neón',
+    builder: ({required userId, required rewardsDocRef, required currentSaldo,
+        required controller, required onSaldoChanged}) =>
+      BreakoutScreen(userId: userId, rewardsDocRef: rewardsDocRef,
+        currentSaldo: currentSaldo, controller: controller, onSaldoChanged: onSaldoChanged)),
+  ArcadeGameDef(id: 'pong', emoji: '🏓', title: 'Contragolpe',
+    builder: ({required userId, required rewardsDocRef, required currentSaldo,
+        required controller, required onSaldoChanged}) =>
+      PongScreen(userId: userId, rewardsDocRef: rewardsDocRef,
+        currentSaldo: currentSaldo, controller: controller, onSaldoChanged: onSaldoChanged)),
 ];
 
 // ─── Shell ────────────────────────────────────────────────────────────────────
@@ -713,28 +727,7 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
     );
   }
 
-  Widget _buildDPad() {
-    return SizedBox(
-      width: 144, height: 144,
-      child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-        Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-          _ConsoleDPadArm(icon: Icons.keyboard_arrow_up_rounded, btn: ArcadeButton.up,
-              controller: _ctrl, radius: const BorderRadius.vertical(top: Radius.circular(6))),
-        ]),
-        Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-          _ConsoleDPadArm(icon: Icons.keyboard_arrow_left_rounded, btn: ArcadeButton.left,
-              controller: _ctrl, radius: const BorderRadius.horizontal(left: Radius.circular(6))),
-          Container(width: 48, height: 48, decoration: const BoxDecoration(color: _kDpad)),
-          _ConsoleDPadArm(icon: Icons.keyboard_arrow_right_rounded, btn: ArcadeButton.right,
-              controller: _ctrl, radius: const BorderRadius.horizontal(right: Radius.circular(6))),
-        ]),
-        Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-          _ConsoleDPadArm(icon: Icons.keyboard_arrow_down_rounded, btn: ArcadeButton.down,
-              controller: _ctrl, radius: const BorderRadius.vertical(bottom: Radius.circular(6))),
-        ]),
-      ]),
-    );
-  }
+  Widget _buildDPad() => _ConsoleDPad(controller: _ctrl);
 
   Widget _buildABXYCluster() {
     const btnSize = 48.0;
@@ -1199,41 +1192,274 @@ class _CartridgePainter extends CustomPainter {
         canvas.drawRect(Rect.fromLTWH(w*0.57, h*0.41, 9, 5), p);
         p.isAntiAlias = false;
         break;
+
+      // ── Corredor Infinito (Endless Runner) ────────────────────────────────
+      case 9:
+        // City silhouette
+        p.color = const Color(0xFF1A0030).withOpacity(0.70);
+        canvas.drawRect(Rect.fromLTWH(w*0.00, h*0.28, w*0.18, h*0.40), p);
+        canvas.drawRect(Rect.fromLTWH(w*0.22, h*0.18, w*0.14, h*0.50), p);
+        canvas.drawRect(Rect.fromLTWH(w*0.40, h*0.32, w*0.10, h*0.36), p);
+        canvas.drawRect(Rect.fromLTWH(w*0.55, h*0.22, w*0.16, h*0.46), p);
+        canvas.drawRect(Rect.fromLTWH(w*0.75, h*0.30, w*0.25, h*0.38), p);
+        // Ground neon line
+        p.color = const Color(0xFF44FF44).withOpacity(0.80);
+        canvas.drawRect(Rect.fromLTWH(0, h*0.68, w, 2.5), p);
+        p.color = const Color(0xFF44FF44).withOpacity(0.18);
+        canvas.drawRect(Rect.fromLTWH(0, h*0.68, w, h*0.32), p);
+        // Runner figure
+        p.color = const Color(0xFFFFAA00).withOpacity(0.90);
+        p.isAntiAlias = true;
+        canvas.drawOval(Rect.fromLTWH(w*0.18, h*0.42, 14, 14), p); // head
+        canvas.drawRect(Rect.fromLTWH(w*0.20, h*0.52, 10, 16), p); // torso
+        p.color = const Color(0xFFFFCC44).withOpacity(0.75);
+        canvas.drawRect(Rect.fromLTWH(w*0.20, h*0.66, 7, 3), p); // leg1
+        canvas.drawRect(Rect.fromLTWH(w*0.26, h*0.64, 7, 3), p); // leg2
+        // Obstacle ahead
+        p.color = const Color(0xFFFF4422).withOpacity(0.80);
+        canvas.drawRect(Rect.fromLTWH(w*0.58, h*0.57, 14, 14), p);
+        p.color = const Color(0xFFFF4422).withOpacity(0.50);
+        canvas.drawRect(Rect.fromLTWH(w*0.56, h*0.55, 18, 3), p);
+        p.isAntiAlias = false;
+        break;
+
+      // ── Muro de Neón (Breakout) ───────────────────────────────────────────
+      case 10:
+        // Brick grid (5 rows × 4 visible cols)
+        final brickColors10 = [
+          const Color(0xFFFF2222), const Color(0xFFFF8800),
+          const Color(0xFFFFDD00), const Color(0xFF44FF44), const Color(0xFF00DDFF),
+        ];
+        for (int row = 0; row < 5; row++) {
+          for (int col = 0; col < 4; col++) {
+            final bx = w * (0.05 + col * 0.24);
+            final by = h * (0.05 + row * 0.13);
+            p.color = brickColors10[row].withOpacity(0.70);
+            canvas.drawRect(Rect.fromLTWH(bx, by, w*0.22, h*0.11), p);
+            p.color = brickColors10[row].withOpacity(0.25);
+            p.style = PaintingStyle.stroke;
+            p.strokeWidth = 0.8;
+            canvas.drawRect(Rect.fromLTWH(bx, by, w*0.22, h*0.11), p);
+            p.style = PaintingStyle.fill;
+          }
+        }
+        // Paddle
+        p.color = const Color(0xFF00DDFF).withOpacity(0.85);
+        canvas.drawRect(Rect.fromLTWH(w*0.24, h*0.83, w*0.52, h*0.05), p);
+        // Ball
+        p.isAntiAlias = true;
+        p.color = Colors.white.withOpacity(0.90);
+        canvas.drawCircle(Offset(w*0.52, h*0.72), 6, p);
+        p.isAntiAlias = false;
+        break;
+
+      // ── Contragolpe (Pong) ────────────────────────────────────────────────
+      case 11:
+        // Centre dashes
+        p.color = Colors.white.withOpacity(0.15);
+        for (int i = 0; i < 8; i++) {
+          if (i.isEven) canvas.drawRect(Rect.fromLTWH(w*0.49, h*(0.05 + i*0.12), 3, h*0.08), p);
+        }
+        // Player paddle (left)
+        p.color = const Color(0xFF00DDFF).withOpacity(0.85);
+        canvas.drawRect(Rect.fromLTWH(w*0.08, h*0.32, w*0.06, h*0.36), p);
+        // AI paddle (right)
+        p.color = Colors.redAccent.withOpacity(0.75);
+        canvas.drawRect(Rect.fromLTWH(w*0.86, h*0.24, w*0.06, h*0.36), p);
+        // Ball
+        p.isAntiAlias = true;
+        p.color = Colors.white.withOpacity(0.90);
+        canvas.drawCircle(Offset(w*0.55, h*0.46), 7, p);
+        p.isAntiAlias = false;
+        break;
     }
   }
 }
 
-// ─── D-Pad arm ────────────────────────────────────────────────────────────────
+// ─── D-Pad (8-direction circular-zone) ───────────────────────────────────────
+//
+// The entire 144×144 area is a single touch target. The touch angle from the
+// centre determines which of the 8 sectors is active:
+//   cardinal (N/E/S/W)  → single button
+//   diagonal (NE/SE/SW/NW) → two buttons simultaneously
 
-class _ConsoleDPadArm extends StatefulWidget {
-  final IconData icon;
-  final ArcadeButton btn;
+class _ConsoleDPad extends StatefulWidget {
   final ArcadeInputController controller;
-  final BorderRadius radius;
-  const _ConsoleDPadArm({required this.icon, required this.btn,
-      required this.controller, required this.radius});
-  @override State<_ConsoleDPadArm> createState() => _ConsoleDPadArmState();
+  const _ConsoleDPad({required this.controller});
+  @override State<_ConsoleDPad> createState() => _ConsoleDPadState();
 }
 
-class _ConsoleDPadArmState extends State<_ConsoleDPadArm> {
-  bool _pressed = false;
+class _ConsoleDPadState extends State<_ConsoleDPad> {
+  Set<ArcadeButton> _active = const {};
+
+  static const _dead = 16.0; // dead-zone radius in logical px
+
+  List<ArcadeButton> _buttonsFor(Offset local) {
+    const cx = 72.0, cy = 72.0;
+    final dx = local.dx - cx, dy = local.dy - cy;
+    if (dx * dx + dy * dy < _dead * _dead) return const [];
+    // atan2: 0=right, positive=down. Convert so 0=up, clockwise.
+    final angle = (atan2(dy, dx) * 180 / pi + 450) % 360;
+    if (angle < 22.5 || angle >= 337.5) return [ArcadeButton.up];
+    if (angle < 67.5)  return [ArcadeButton.up, ArcadeButton.right];
+    if (angle < 112.5) return [ArcadeButton.right];
+    if (angle < 157.5) return [ArcadeButton.down, ArcadeButton.right];
+    if (angle < 202.5) return [ArcadeButton.down];
+    if (angle < 247.5) return [ArcadeButton.down, ArcadeButton.left];
+    if (angle < 292.5) return [ArcadeButton.left];
+    return [ArcadeButton.up, ArcadeButton.left];
+  }
+
+  void _applyButtons(List<ArcadeButton> next) {
+    final newSet = next.toSet();
+    for (final b in _active.difference(newSet)) widget.controller.release(b);
+    for (final b in newSet.difference(_active)) {
+      widget.controller.press(b);
+      HapticFeedback.lightImpact();
+    }
+    setState(() => _active = newSet);
+  }
+
+  void _release() {
+    for (final b in _active) widget.controller.release(b);
+    setState(() => _active = const {});
+  }
+
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTapDown: (_) { setState(() => _pressed = true); HapticFeedback.lightImpact(); widget.controller.press(widget.btn); },
-      onTapUp:   (_) { setState(() => _pressed = false); widget.controller.release(widget.btn); },
-      onTapCancel: () { setState(() => _pressed = false); widget.controller.release(widget.btn); },
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 40),
-        width: 48, height: 48,
-        decoration: BoxDecoration(
-          color: _pressed ? const Color(0xFF555555) : _kDpad,
-          borderRadius: widget.radius,
-          border: Border.all(color: Colors.white.withOpacity(0.08)),
-        ),
-        child: Icon(widget.icon, color: _pressed ? Colors.white : Colors.white70, size: 26),
+    return Listener(
+      behavior: HitTestBehavior.opaque,
+      onPointerDown:   (e) => _applyButtons(_buttonsFor(e.localPosition)),
+      onPointerMove:   (e) => _applyButtons(_buttonsFor(e.localPosition)),
+      onPointerUp:     (_) => _release(),
+      onPointerCancel: (_) => _release(),
+      child: CustomPaint(
+        size: const Size(144, 144),
+        painter: _DPadPainter(active: _active),
       ),
     );
+  }
+}
+
+class _DPadPainter extends CustomPainter {
+  final Set<ArcadeButton> active;
+  const _DPadPainter({required this.active});
+
+  @override
+  bool shouldRepaint(_DPadPainter o) =>
+      o.active.length != active.length || !o.active.containsAll(active);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final p = Paint()..isAntiAlias = false;
+    const arm = 48.0; // arm width/height
+    const cx = 72.0, cy = 72.0; // centre
+
+    bool lit(ArcadeButton b) => active.contains(b);
+    Color armCol(ArcadeButton b) =>
+        lit(b) ? const Color(0xFF606060) : _kDpad;
+
+    // Corner hints (very subtle — show the diagonal zone is touchable)
+    p.color = const Color(0xFF1C1C1C);
+    canvas.drawRRect(RRect.fromRectAndRadius(
+        const Rect.fromLTWH(0, 0, arm, arm), const Radius.circular(4)), p);
+    canvas.drawRRect(RRect.fromRectAndRadius(
+        Rect.fromLTWH(cx + arm / 2, 0, arm, arm), const Radius.circular(4)), p);
+    canvas.drawRRect(RRect.fromRectAndRadius(
+        Rect.fromLTWH(0, cy + arm / 2, arm, arm), const Radius.circular(4)), p);
+    canvas.drawRRect(RRect.fromRectAndRadius(
+        Rect.fromLTWH(cx + arm / 2, cy + arm / 2, arm, arm),
+        const Radius.circular(4)), p);
+
+    // Active diagonal corner highlights
+    void litCorner(bool cond, Rect r) {
+      if (!cond) return;
+      p.color = const Color(0xFF454545);
+      canvas.drawRRect(RRect.fromRectAndRadius(r, const Radius.circular(4)), p);
+    }
+    litCorner(lit(ArcadeButton.up) && lit(ArcadeButton.right),
+        Rect.fromLTWH(cx + arm / 2, 0, arm, arm));
+    litCorner(lit(ArcadeButton.down) && lit(ArcadeButton.right),
+        Rect.fromLTWH(cx + arm / 2, cy + arm / 2, arm, arm));
+    litCorner(lit(ArcadeButton.down) && lit(ArcadeButton.left),
+        Rect.fromLTWH(0, cy + arm / 2, arm, arm));
+    litCorner(lit(ArcadeButton.up) && lit(ArcadeButton.left),
+        const Rect.fromLTWH(0, 0, arm, arm));
+
+    // Up arm
+    p.color = armCol(ArcadeButton.up);
+    canvas.drawRRect(RRect.fromRectAndCorners(
+        Rect.fromLTWH(cx - arm / 2, 0, arm, arm),
+        topLeft: const Radius.circular(6),
+        topRight: const Radius.circular(6)), p);
+
+    // Down arm
+    p.color = armCol(ArcadeButton.down);
+    canvas.drawRRect(RRect.fromRectAndCorners(
+        Rect.fromLTWH(cx - arm / 2, cy + arm / 2, arm, arm),
+        bottomLeft: const Radius.circular(6),
+        bottomRight: const Radius.circular(6)), p);
+
+    // Left arm
+    p.color = armCol(ArcadeButton.left);
+    canvas.drawRRect(RRect.fromRectAndCorners(
+        Rect.fromLTWH(0, cy - arm / 2, arm, arm),
+        topLeft: const Radius.circular(6),
+        bottomLeft: const Radius.circular(6)), p);
+
+    // Right arm
+    p.color = armCol(ArcadeButton.right);
+    canvas.drawRRect(RRect.fromRectAndCorners(
+        Rect.fromLTWH(cx + arm / 2, cy - arm / 2, arm, arm),
+        topRight: const Radius.circular(6),
+        bottomRight: const Radius.circular(6)), p);
+
+    // Centre piece
+    p.color = _kDpad;
+    canvas.drawRect(
+        Rect.fromLTWH(cx - arm / 2, cy - arm / 2, arm, arm), p);
+
+    // Arm borders
+    p..color = Colors.white.withOpacity(0.08)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 0.8;
+    for (final r in [
+      Rect.fromLTWH(cx - arm / 2, 0, arm, arm * 3),       // vertical bar
+      Rect.fromLTWH(0, cy - arm / 2, arm * 3, arm),       // horizontal bar
+    ]) { canvas.drawRect(r, p); }
+    p.style = PaintingStyle.fill;
+
+    // Arrow icons (simple triangles)
+    final ap = Paint()
+      ..color = Colors.white.withOpacity(lit(ArcadeButton.up) ? 1.0 : 0.6)
+      ..isAntiAlias = true;
+    void tri(Path path) => canvas.drawPath(path, ap);
+
+    // Up arrow
+    ap.color = Colors.white.withOpacity(lit(ArcadeButton.up) ? 1.0 : 0.6);
+    tri(Path()
+      ..moveTo(cx, 13) ..lineTo(cx - 8, 32) ..lineTo(cx + 8, 32) ..close());
+
+    // Down arrow
+    ap.color = Colors.white.withOpacity(lit(ArcadeButton.down) ? 1.0 : 0.6);
+    tri(Path()
+      ..moveTo(cx, cy + arm / 2 + arm - 13)
+      ..lineTo(cx - 8, cy + arm / 2 + arm - 32)
+      ..lineTo(cx + 8, cy + arm / 2 + arm - 32)
+      ..close());
+
+    // Left arrow
+    ap.color = Colors.white.withOpacity(lit(ArcadeButton.left) ? 1.0 : 0.6);
+    tri(Path()
+      ..moveTo(13, cy) ..lineTo(32, cy - 8) ..lineTo(32, cy + 8) ..close());
+
+    // Right arrow
+    ap.color = Colors.white.withOpacity(lit(ArcadeButton.right) ? 1.0 : 0.6);
+    tri(Path()
+      ..moveTo(cx + arm / 2 + arm - 13, cy)
+      ..lineTo(cx + arm / 2 + arm - 32, cy - 8)
+      ..lineTo(cx + arm / 2 + arm - 32, cy + 8)
+      ..close());
   }
 }
 
