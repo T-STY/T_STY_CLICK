@@ -18,11 +18,11 @@ const _kBrickLeft = 5.0, _kBrickTop = 4.0;
 // Paddle
 const _kPaddleH = 3.0, _kPaddleY = 73.0;
 const _kPaddleSpdBase = 78.0;
-double _kPaddleW(int level) => (24.0 - level * 1.2).clamp(14.0, 24.0);
+double _kPaddleW(int level) => (24.0 - level * 1.6).clamp(11.0, 24.0);
 
 // Ball
 const _kBallR = 1.4;
-double _kBallSpd(int level) => (50.0 + level * 3.0).clamp(50.0, 80.0);
+double _kBallSpd(int level) => (50.0 + level * 5.0).clamp(50.0, 100.0);
 
 // Brick HP by row (top = hardest)
 const _kBrickHp = [3, 2, 1, 1, 1, 1];
@@ -444,7 +444,8 @@ class _BreakoutPainter extends CustomPainter {
     p..color = Colors.white..maskFilter = null;
     canvas.drawCircle(bscr, br, p);
 
-    // HUD
+    // HUD — fixed-pixel font, no scaling by ph/pw
+    final hfs = size.height / 30; // ≈ 13 px on typical canvas
     final tp = TextPainter(textDirection: TextDirection.ltr);
     void txt(String s, double x, double y, Color c, double fs) {
       tp.text = TextSpan(
@@ -456,18 +457,15 @@ class _BreakoutPainter extends CustomPainter {
       tp.paint(canvas, Offset(x, y));
     }
 
-    txt('$score', size.width * 0.04, size.height * 0.005, paddleColor, 10 * ph);
-    txt('NIVEL ${level + 1}', size.width * 0.40, size.height * 0.005,
-        Colors.white54, 9 * ph);
-    txt('RÉCORD: $hiScore', size.width * 0.65, size.height * 0.005,
-        Colors.white24, 9 * ph);
+    txt('$score', size.width * 0.04, size.height * 0.015, paddleColor, hfs);
+    txt('NIV ${level + 1}', size.width * 0.44, size.height * 0.015,
+        Colors.white54, hfs * 0.9);
+    txt('RÉC $hiScore', size.width * 0.68, size.height * 0.015,
+        Colors.white24, hfs * 0.9);
 
-    // Lives
-    p.color = Colors.redAccent.withOpacity(0.8);
-    for (int i = 0; i < lives; i++) {
-      canvas.drawCircle(
-          Offset(size.width * 0.04 + i * 12 * pw, size.height * 0.965),
-          4 * ph, p);
-    }
+    // Lives — small hearts so they read clearly as life indicators
+    txt(List.filled(lives.clamp(0, 5), '♥').join(' '),
+        size.width * 0.04, size.height - hfs - 6,
+        Colors.redAccent.withOpacity(0.85), hfs);
   }
 }

@@ -17,9 +17,9 @@ const _kBallSpdMax = 75.0;
 const _kBallSpdInc = 1.8; // speed added per paddle hit
 const _kWinScore = 7;
 // AI speed per round (gets faster each round)
-const _kAiSpeeds = [36.0, 50.0, 62.0, 72.0];
+const _kAiSpeeds = [28.0, 38.0, 50.0, 60.0, 68.0, 75.0];
 // AI prediction error (± units at target y) — shrinks each round
-const _kAiErrors = [6.0, 3.5, 1.5, 0.5];
+const _kAiErrors = [8.0, 5.5, 3.5, 1.8, 0.6, 0.1];
 
 enum _PongPhase { ready, playing, scored, gameOver }
 
@@ -241,7 +241,7 @@ class _PongScreenState extends State<PongScreen> {
               py: _py, ay: _ay, bx: _bx, by: _by,
               playerScore: _playerScore, aiScore: _aiScore,
               playerRounds: _playerRounds, aiRounds: _aiRounds,
-              hiScore: _hiScore, round: _round,
+              round: _round,
             ),
           ),
         ),
@@ -295,14 +295,14 @@ class _PongScreenState extends State<PongScreen> {
 
 class _PongPainter extends CustomPainter {
   final double py, ay, bx, by;
-  final int playerScore, aiScore, playerRounds, aiRounds, hiScore, round;
+  final int playerScore, aiScore, playerRounds, aiRounds, round;
 
   const _PongPainter({
     required this.py, required this.ay,
     required this.bx, required this.by,
     required this.playerScore, required this.aiScore,
     required this.playerRounds, required this.aiRounds,
-    required this.hiScore, required this.round,
+    required this.round,
   });
 
   @override bool shouldRepaint(_PongPainter o) => true;
@@ -340,22 +340,24 @@ class _PongPainter extends CustomPainter {
       tp.paint(canvas, Offset(x, y));
     }
 
-    txt('$playerScore', size.width * 0.28, size.height * 0.03,
-        Colors.white, 26 * ph);
-    txt('$aiScore', size.width * 0.64, size.height * 0.03,
-        Colors.white.withOpacity(0.55), 26 * ph);
+    // Scores — fixed pixel size so they don't dwarf the playfield
+    final scoreFs = size.height / 14;
+    txt('$playerScore', size.width * 0.30, size.height * 0.025,
+        Colors.white, scoreFs);
+    txt('$aiScore', size.width * 0.64, size.height * 0.025,
+        Colors.white.withOpacity(0.55), scoreFs);
 
-    // Round indicators (up to 4)
+    // Round indicators — fixed-size dots (no ph/pw scaling to avoid overlap)
     const cyan = Color(0xFF00DDFF);
+    const dotR = 4.0, dotStep = 13.0;
+    final dotsY = size.height * 0.075;
     for (int i = 0; i < 4; i++) {
       p.color = i < playerRounds ? cyan : Colors.white12;
       canvas.drawCircle(
-          Offset(size.width * 0.37 + i * 9 * pw, size.height * 0.06),
-          3.5 * ph, p);
+          Offset(size.width * 0.36 + i * dotStep, dotsY), dotR, p);
       p.color = i < aiRounds ? Colors.redAccent : Colors.white12;
       canvas.drawCircle(
-          Offset(size.width * 0.58 + i * 9 * pw, size.height * 0.06),
-          3.5 * ph, p);
+          Offset(size.width * 0.60 + i * dotStep, dotsY), dotR, p);
     }
 
     // Player paddle
@@ -388,14 +390,10 @@ class _PongPainter extends CustomPainter {
     p..color = Colors.white..maskFilter = null;
     canvas.drawCircle(bscr, br, p);
 
-    // Hi-score
-    txt('RÉCORD: $hiScore rondas', size.width * 0.25, size.height * 0.93,
-        Colors.white24, 8 * ph);
-
-    // Round label
+    // Round label (bottom-centre, only when past round 0)
     if (round > 0) {
-      txt('RONDA $round', size.width * 0.42, size.height * 0.89,
-          Colors.white38, 8 * ph);
+      txt('RONDA $round', size.width * 0.42, size.height * 0.91,
+          Colors.white38, size.height / 40);
     }
   }
 }

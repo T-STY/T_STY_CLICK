@@ -168,9 +168,10 @@ class _EndlessRunnerScreenState extends State<EndlessRunnerScreen> {
         .clamp(0.001, 0.05) as double;
     _lastTick = now;
 
-    // Scroll speed ramps up with distance
-    _scrollSpd = 4.0 + (_dist / 600).clamp(0, 3.5);
-    _spawnInterval = (2.2 - _dist / 800).clamp(0.9, 2.2);
+    // Scroll speed ramps up with distance (4 → 8.5 over 500 m)
+    _scrollSpd = 4.0 + (_dist / 500).clamp(0.0, 4.5);
+    // Spawn interval tightens (2.2 → 0.7 s over 700 m)
+    _spawnInterval = (2.2 - _dist / 700).clamp(0.7, 2.2);
 
     // Distance / score
     _dist += _scrollSpd * dt;
@@ -205,7 +206,9 @@ class _EndlessRunnerScreenState extends State<EndlessRunnerScreen> {
     _spawnTimer -= dt;
     if (_spawnTimer <= 0) {
       _spawnTimer = _spawnInterval * (0.8 + _rng.nextDouble() * 0.4);
-      final type = _rng.nextDouble() < 0.4 ? _OType.ceil : _OType.wall;
+      // Ceiling obstacles become more frequent at higher distances (30 % → 65 %)
+      final ceilChance = (0.30 + _dist / 1200).clamp(0.30, 0.65);
+      final type = _rng.nextDouble() < ceilChance ? _OType.ceil : _OType.wall;
       _obs.add(_Obstacle(x: _kGW + 0.5, type: type));
     }
 
@@ -484,7 +487,8 @@ class _RunnerPainter extends CustomPainter {
           p);
     }
 
-    // HUD
+    // HUD — fixed-pixel font so it doesn't scale with game units
+    final hfs = size.height / 26; // ≈ 15 px on typical canvas
     final tp = TextPainter(textDirection: TextDirection.ltr);
     void txt(String s, double x, double y, Color c, double fs) {
       tp.text = TextSpan(
@@ -496,10 +500,10 @@ class _RunnerPainter extends CustomPainter {
       tp.paint(canvas, Offset(x, y));
     }
     txt('${score}m', size.width * 0.04, size.height * 0.02,
-        const Color(0xFF88FF44), 11 * uy);
+        const Color(0xFF88FF44), hfs);
     if (hiScore > 0) {
-      txt('RÉCORD: ${hiScore}m', size.width * 0.55, size.height * 0.02,
-          Colors.white24, 9 * uy);
+      txt('RÉC: ${hiScore}m', size.width * 0.58, size.height * 0.02,
+          Colors.white38, hfs * 0.82);
     }
   }
 }
