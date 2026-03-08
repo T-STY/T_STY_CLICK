@@ -572,7 +572,7 @@ class _MazeChasScreenState extends State<MazeChasScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Text('TRAGALABERINTO',
+          const Text('COMECOCOS',
             style: TextStyle(
               color: Color(0xFFFFFF00),
               fontSize: 26,

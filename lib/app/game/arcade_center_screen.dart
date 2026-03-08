@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
@@ -30,35 +31,37 @@ const _kBodyBdr  = Color(0xFF888888);
 
 // ─── Neon accent colours (one per game, used for border glow in grid) ────────
 
+// Neon border colours — one per game, in alphabetical title order:
 const _kNeonColors = <Color>[
-  Color(0xFF00FF88), // La Sierpe        – green
-  Color(0xFF4488FF), // Tragalaberinto   – blue
-  Color(0xFF00CCFF), // Alas Locas       – cyan
-  Color(0xFF88FF44), // Paso a Paso      – lime
-  Color(0xFFFF4422), // Astrocaza        – red/orange
-  Color(0xFFFF8800), // Inframundo 2D    – hot orange
-  Color(0xFFBB44FF), // Tetromuro        – purple
-  Color(0xFFFFEE00), // Busca-Trampas    – yellow
-  Color(0xFFFF44BB), // Dulce Racha      – pink
+  Color(0xFFBB44FF), // Bloques Caídos  – purple
+  Color(0xFFFFEE00), // Campo Minado    – yellow (caution)
+  Color(0xFFFF44BB), // Cascada Dulce   – pink
+  Color(0xFFFF4422), // Caza Estelar    – red-orange
+  Color(0xFF4488FF), // Comecocos       – blue
+  Color(0xFFFF8800), // Cripta Maldita  – hellfire orange
+  Color(0xFF88FF44), // Rana Saltarina  – lime
+  Color(0xFF00FF88), // Víbora Veloz    – green
+  Color(0xFF00CCFF), // Vuelo Kamikaze  – sky cyan
 ];
 
 // ─── Card background gradients (per game — colours match the actual game) ─────
 
+// Card art gradients — matched to alphabetical title order:
 const _kCardGradients = <List<Color>>[
-  [Color(0xFF001200), Color(0xFF005A00)],   // La Sierpe        – neon green
-  [Color(0xFF000A28), Color(0xFF001E8A)],   // Tragalaberinto   – royal blue
-  [Color(0xFF001018), Color(0xFF004D70)],   // Alas Locas       – sky blue
-  [Color(0xFF080C00), Color(0xFF254700)],   // Paso a Paso      – forest green
-  [Color(0xFF02040E), Color(0xFF060E38)],   // Astrocaza        – deep space navy
-  [Color(0xFF160000), Color(0xFF4D0000)],   // Inframundo 2D    – blood red
-  [Color(0xFF040414), Color(0xFF10104A)],   // Tetromuro        – dark navy
-  [Color(0xFF040C04), Color(0xFF0C2A0C)],   // Busca-Trampas    – dark forest
-  [Color(0xFF1A0018), Color(0xFF5A0038)],   // Dulce Racha      – candy pink
+  [Color(0xFF040414), Color(0xFF10104A)],   // Bloques Caídos  – dark navy
+  [Color(0xFF040C04), Color(0xFF0C2A0C)],   // Campo Minado    – dark forest
+  [Color(0xFF1A0018), Color(0xFF5A0038)],   // Cascada Dulce   – candy pink
+  [Color(0xFF02040E), Color(0xFF060E38)],   // Caza Estelar    – deep space
+  [Color(0xFF000A28), Color(0xFF001E8A)],   // Comecocos       – royal blue
+  [Color(0xFF160000), Color(0xFF4D0000)],   // Cripta Maldita  – blood red
+  [Color(0xFF080C00), Color(0xFF254700)],   // Rana Saltarina  – forest green
+  [Color(0xFF001200), Color(0xFF005A00)],   // Víbora Veloz    – neon green
+  [Color(0xFF001018), Color(0xFF004D70)],   // Vuelo Kamikaze  – sky blue
 ];
 
 // ─── Category labels ──────────────────────────────────────────────────────────
 
-const _kCategoryLabels = ['REJILLA', 'REFLEJOS', 'DISPAROS', 'PUZLE', 'DULCE'];
+// Category labels removed — hub now uses alphabetical order with neon colour coding
 
 // ─── Game registry ─────────────────────────────────────────────────────────────
 
@@ -79,56 +82,55 @@ class ArcadeGameDef {
       required this.title, required this.builder});
 }
 
+// Games ordered alphabetically by new Spanish title:
+// Bloques Caídos · Campo Minado · Cascada Dulce ·
+// Caza Estelar   · Comecocos    · Cripta Maldita ·
+// Rana Saltarina · Víbora Veloz · Vuelo Kamikaze
 final List<ArcadeGameDef> kArcadeGames = [
-  // Col 0 — REJILLA
-  ArcadeGameDef(id: 'snake',    emoji: '🐍', title: 'La Sierpe',
-    builder: ({required userId, required rewardsDocRef, required currentSaldo,
-        required controller, required onSaldoChanged}) =>
-      SnakeGameScreen(userId: userId, rewardsDocRef: rewardsDocRef,
-        currentSaldo: currentSaldo, controller: controller, onSaldoChanged: onSaldoChanged)),
-  ArcadeGameDef(id: 'maze',     emoji: '👻', title: 'Tragalaberinto',
-    builder: ({required userId, required rewardsDocRef, required currentSaldo,
-        required controller, required onSaldoChanged}) =>
-      MazeChasScreen(userId: userId, rewardsDocRef: rewardsDocRef,
-        currentSaldo: currentSaldo, controller: controller, onSaldoChanged: onSaldoChanged)),
-  // Col 1 — REFLEJOS
-  ArcadeGameDef(id: 'flappy',   emoji: '🕊️', title: 'Alas Locas',
-    builder: ({required userId, required rewardsDocRef, required currentSaldo,
-        required controller, required onSaldoChanged}) =>
-      FlappyBirdScreen(userId: userId, rewardsDocRef: rewardsDocRef,
-        currentSaldo: currentSaldo, controller: controller, onSaldoChanged: onSaldoChanged)),
-  ArcadeGameDef(id: 'hopper',   emoji: '🐸', title: 'Paso a Paso',
-    builder: ({required userId, required rewardsDocRef, required currentSaldo,
-        required controller, required onSaldoChanged}) =>
-      TrafficHopperScreen(userId: userId, rewardsDocRef: rewardsDocRef,
-        currentSaldo: currentSaldo, controller: controller, onSaldoChanged: onSaldoChanged)),
-  // Col 2 — DISPAROS
-  ArcadeGameDef(id: 'shooter',  emoji: '🚀', title: 'Astrocaza',
-    builder: ({required userId, required rewardsDocRef, required currentSaldo,
-        required controller, required onSaldoChanged}) =>
-      SpaceShooterScreen(userId: userId, rewardsDocRef: rewardsDocRef,
-        currentSaldo: currentSaldo, controller: controller, onSaldoChanged: onSaldoChanged)),
-  ArcadeGameDef(id: 'raycaster',emoji: '🔥', title: 'Inframundo 2D',
-    builder: ({required userId, required rewardsDocRef, required currentSaldo,
-        required controller, required onSaldoChanged}) =>
-      RaycasterScreen(userId: userId, rewardsDocRef: rewardsDocRef,
-        currentSaldo: currentSaldo, controller: controller, onSaldoChanged: onSaldoChanged)),
-  // Col 3 — PUZLE
-  ArcadeGameDef(id: 'tetris',   emoji: '🟦', title: 'Tetromuro',
+  ArcadeGameDef(id: 'tetris',   emoji: '🟦', title: 'Bloques Caídos',
     builder: ({required userId, required rewardsDocRef, required currentSaldo,
         required controller, required onSaldoChanged}) =>
       TetrisScreen(userId: userId, rewardsDocRef: rewardsDocRef,
         currentSaldo: currentSaldo, controller: controller, onSaldoChanged: onSaldoChanged)),
-  ArcadeGameDef(id: 'logic',    emoji: '💣', title: 'Busca-Trampas',
+  ArcadeGameDef(id: 'logic',    emoji: '💣', title: 'Campo Minado',
     builder: ({required userId, required rewardsDocRef, required currentSaldo,
         required controller, required onSaldoChanged}) =>
       LogicGridScreen(userId: userId, rewardsDocRef: rewardsDocRef,
         currentSaldo: currentSaldo, controller: controller, onSaldoChanged: onSaldoChanged)),
-  // Col 4 — DULCE
-  ArcadeGameDef(id: 'match3',   emoji: '🍬', title: 'Dulce Racha',
+  ArcadeGameDef(id: 'match3',   emoji: '🍬', title: 'Cascada Dulce',
     builder: ({required userId, required rewardsDocRef, required currentSaldo,
         required controller, required onSaldoChanged}) =>
       Match3Screen(userId: userId, rewardsDocRef: rewardsDocRef,
+        currentSaldo: currentSaldo, controller: controller, onSaldoChanged: onSaldoChanged)),
+  ArcadeGameDef(id: 'shooter',  emoji: '🚀', title: 'Caza Estelar',
+    builder: ({required userId, required rewardsDocRef, required currentSaldo,
+        required controller, required onSaldoChanged}) =>
+      SpaceShooterScreen(userId: userId, rewardsDocRef: rewardsDocRef,
+        currentSaldo: currentSaldo, controller: controller, onSaldoChanged: onSaldoChanged)),
+  ArcadeGameDef(id: 'maze',     emoji: '👻', title: 'Comecocos',
+    builder: ({required userId, required rewardsDocRef, required currentSaldo,
+        required controller, required onSaldoChanged}) =>
+      MazeChasScreen(userId: userId, rewardsDocRef: rewardsDocRef,
+        currentSaldo: currentSaldo, controller: controller, onSaldoChanged: onSaldoChanged)),
+  ArcadeGameDef(id: 'raycaster',emoji: '🔥', title: 'Cripta Maldita',
+    builder: ({required userId, required rewardsDocRef, required currentSaldo,
+        required controller, required onSaldoChanged}) =>
+      RaycasterScreen(userId: userId, rewardsDocRef: rewardsDocRef,
+        currentSaldo: currentSaldo, controller: controller, onSaldoChanged: onSaldoChanged)),
+  ArcadeGameDef(id: 'hopper',   emoji: '🐸', title: 'Rana Saltarina',
+    builder: ({required userId, required rewardsDocRef, required currentSaldo,
+        required controller, required onSaldoChanged}) =>
+      TrafficHopperScreen(userId: userId, rewardsDocRef: rewardsDocRef,
+        currentSaldo: currentSaldo, controller: controller, onSaldoChanged: onSaldoChanged)),
+  ArcadeGameDef(id: 'snake',    emoji: '🐍', title: 'Víbora Veloz',
+    builder: ({required userId, required rewardsDocRef, required currentSaldo,
+        required controller, required onSaldoChanged}) =>
+      SnakeGameScreen(userId: userId, rewardsDocRef: rewardsDocRef,
+        currentSaldo: currentSaldo, controller: controller, onSaldoChanged: onSaldoChanged)),
+  ArcadeGameDef(id: 'flappy',   emoji: '🕊️', title: 'Vuelo Kamikaze',
+    builder: ({required userId, required rewardsDocRef, required currentSaldo,
+        required controller, required onSaldoChanged}) =>
+      FlappyBirdScreen(userId: userId, rewardsDocRef: rewardsDocRef,
         currentSaldo: currentSaldo, controller: controller, onSaldoChanged: onSaldoChanged)),
 ];
 
@@ -153,6 +155,20 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
   ArcadeGameDef? _activeGame;
   final List<int> _highScores = List.filled(9, 0);
 
+  // ── Splash / power-on ──────────────────────────────────────────────────────
+  bool _splashDone = false;
+  int _splashLine = 0;          // 0-6: animate boot lines one by one
+  String _userName = '';
+  Timer? _splashTimer;
+
+  static const _kBootLines = [
+    '> Verificando CPU       [  OK  ]',
+    '> RAM 64K               [  OK  ]',
+    '> Buffer de video       [  OK  ]',
+    '> Sintetizador audio    [  OK  ]',
+    '> Conexión de red       [  OK  ]',
+  ];
+
   @override
   void initState() {
     super.initState();
@@ -160,6 +176,34 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
     _saldo = widget.currentSaldo;
     _ctrl.addListener(_handleShellEvent);
     _loadHighScores();
+    _fetchUserName();
+    // Advance boot lines every 420 ms
+    _splashTimer = Timer.periodic(const Duration(milliseconds: 420), (t) {
+      if (!mounted) { t.cancel(); return; }
+      setState(() {
+        if (_splashLine < _kBootLines.length + 1) {
+          _splashLine++;
+        } else {
+          t.cancel(); // wait for A/Start press
+        }
+      });
+    });
+  }
+
+  Future<void> _fetchUserName() async {
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('users').doc(widget.userId).get();
+      if (mounted) {
+        setState(() {
+          _userName = (doc.data()?['userInfo']?['name'] as String?)?.trim()
+              .split(' ').first // first name only
+              ?? 'Jugador';
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _userName = 'Jugador');
+    }
   }
 
   Future<void> _loadHighScores() async {
@@ -171,6 +215,7 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
 
   @override
   void dispose() {
+    _splashTimer?.cancel();
     _ctrl.removeListener(_handleShellEvent);
     _ctrl.dispose();
     super.dispose();
@@ -180,6 +225,15 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
     final event = _ctrl.lastEvent;
     if (event == null || !event.isDown) return;
     final btn = event.button;
+
+    // Splash intercept — any confirm button dismisses the splash
+    if (!_splashDone) {
+      if (btn == ArcadeButton.a || btn == ArcadeButton.start) {
+        _splashTimer?.cancel();
+        setState(() => _splashDone = true);
+      }
+      return;
+    }
 
     if (_activeGame == null) {
       const cols = 3; // neon grid columns
@@ -311,7 +365,15 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
       padding: const EdgeInsets.all(8),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(10),
-        child: _activeGame == null ? _buildNeonGrid() : _buildActiveGame(),
+        child: Stack(children: [
+          _activeGame == null ? _buildNeonGrid() : _buildActiveGame(),
+          // CRT scanline + vignette overlay
+          Positioned.fill(
+            child: IgnorePointer(
+              child: CustomPaint(painter: _CrtOverlayPainter()),
+            ),
+          ),
+        ]),
       ),
     );
   }
@@ -319,61 +381,84 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
   // ── Neon Arcade Cabinet Grid ───────────────────────────────────────────────
 
   Widget _buildNeonGrid() {
+    if (!_splashDone) return _buildSplashScreen();
     return Container(
       color: const Color(0xFF07000F),
       child: Column(children: [
-        _buildNeonMarquee(),
-        Expanded(child: _buildGameGrid()),
+        _buildGameGrid(),
         _buildGridHint(),
       ]),
     );
   }
 
-  Widget _buildNeonMarquee() {
+  // ── CRT Power-on splash ───────────────────────────────────────────────────
+
+  Widget _buildSplashScreen() {
+    final showWelcome = _splashLine >= _kBootLines.length + 1;
     return Container(
-      padding: const EdgeInsets.fromLTRB(10, 8, 10, 7),
-      decoration: BoxDecoration(
-        color: const Color(0xFF0D0020),
-        border: Border(
-          bottom: BorderSide(color: const Color(0xFF660099).withOpacity(0.60), width: 1),
-        ),
-        boxShadow: [BoxShadow(
-          color: const Color(0xFFCC00FF).withOpacity(0.15),
-          blurRadius: 12, offset: const Offset(0, 3))],
-      ),
-      child: Row(children: [
-        // Animated scanline glow dot
-        Container(
-          width: 6, height: 6,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: const Color(0xFF00FFCC),
-            boxShadow: [BoxShadow(
-              color: const Color(0xFF00FFCC).withOpacity(0.90), blurRadius: 8)],
-          ),
-        ),
-        const SizedBox(width: 8),
-        ShaderMask(
-          shaderCallback: (bounds) => const LinearGradient(
-            colors: [Color(0xFFFF00FF), Color(0xFF00FFFF), Color(0xFFFF00FF)],
-          ).createShader(bounds),
-          child: const Text('ARCADE  CENTER',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 14,
-              fontWeight: FontWeight.w900,
-              letterSpacing: 4,
-              fontFamily: 'monospace',
+      color: Colors.black,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header
+          const Text('ARCADE CENTER OS  v1.0.0',
+            style: TextStyle(color: Color(0xFF00FF88), fontSize: 9,
+                fontFamily: 'monospace', fontWeight: FontWeight.bold,
+                letterSpacing: 1.5)),
+          const SizedBox(height: 2),
+          Container(height: 1, color: const Color(0xFF00FF88).withOpacity(0.35)),
+          const SizedBox(height: 8),
+          // Boot lines (appear one by one)
+          for (int i = 0; i < _kBootLines.length; i++)
+            if (i < _splashLine)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Text(_kBootLines[i],
+                  style: const TextStyle(color: Color(0xFF44FF88), fontSize: 8,
+                      fontFamily: 'monospace')),
+              ),
+          const Spacer(),
+          // Welcome message (appears after all boot lines)
+          if (showWelcome) ...[
+            Container(height: 1, color: const Color(0xFF00FF88).withOpacity(0.25)),
+            const SizedBox(height: 12),
+            Center(
+              child: Column(children: [
+                Text('¡BIENVENIDO,',
+                  style: const TextStyle(color: Color(0xFF00FF88), fontSize: 13,
+                      fontFamily: 'monospace', fontWeight: FontWeight.bold,
+                      letterSpacing: 2)),
+                Text(_userName.isEmpty ? '...' : _userName.toUpperCase() + '!',
+                  style: const TextStyle(color: Colors.white, fontSize: 22,
+                      fontFamily: 'monospace', fontWeight: FontWeight.w900,
+                      letterSpacing: 3,
+                      shadows: [Shadow(color: Color(0xFF00FF88), blurRadius: 14)])),
+              ]),
             ),
-          ),
-        ),
-        const Spacer(),
-        Text('💰 ${_saldo.toStringAsFixed(0)}',
-          style: const TextStyle(
-            color: Color(0xFFFFDD44),
-            fontSize: 9, fontFamily: 'monospace', fontWeight: FontWeight.bold,
-          )),
-      ]),
+            const SizedBox(height: 16),
+            Center(
+              child: Text('[ A ]  Continuar',
+                style: TextStyle(
+                  color: const Color(0xFF00FF88).withOpacity(0.70),
+                  fontSize: 8, fontFamily: 'monospace', letterSpacing: 2)),
+            ),
+          ] else ...[
+            // Blinking cursor while booting
+            Row(children: [
+              const Text('> ',
+                style: TextStyle(color: Color(0xFF00FF88), fontSize: 8, fontFamily: 'monospace')),
+              Container(width: 6, height: 10, color: const Color(0xFF00FF88).withOpacity(0.80)),
+            ]),
+          ],
+          const SizedBox(height: 6),
+          Container(height: 1, color: const Color(0xFF00FF88).withOpacity(0.15)),
+          const SizedBox(height: 4),
+          Text('ARCADE CENTER OS  ©2025',
+            style: TextStyle(color: const Color(0xFF00FF88).withOpacity(0.30),
+                fontSize: 7, fontFamily: 'monospace')),
+        ],
+      ),
     );
   }
 
@@ -1155,5 +1240,46 @@ class _ConsoleMetaButtonState extends State<_ConsoleMetaButton> {
             fontSize: 9, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
       ),
     );
+  }
+}
+
+// ─── CRT scanline + vignette overlay ─────────────────────────────────────────
+
+class _CrtOverlayPainter extends CustomPainter {
+  const _CrtOverlayPainter();
+
+  @override
+  bool shouldRepaint(_CrtOverlayPainter _) => false;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final p = Paint()..isAntiAlias = false;
+
+    // Horizontal scanlines — one dark line every 2 px for CRT effect
+    p.color = Colors.black.withOpacity(0.14);
+    for (double y = 0; y < size.height; y += 2) {
+      canvas.drawRect(Rect.fromLTWH(0, y, size.width, 1), p);
+    }
+
+    // Very faint vertical grid (pixel grid)
+    p.color = Colors.black.withOpacity(0.04);
+    for (double x = 0; x < size.width; x += 2) {
+      canvas.drawRect(Rect.fromLTWH(x, 0, 1, size.height), p);
+    }
+
+    // Radial vignette — darker edges, bright centre
+    final vignette = Paint()
+      ..shader = RadialGradient(
+        center: Alignment.center,
+        radius: 0.75,
+        colors: [Colors.transparent, Colors.black.withOpacity(0.42)],
+      ).createShader(Rect.fromLTWH(0, 0, size.width, size.height))
+      ..isAntiAlias = true;
+    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), vignette);
+
+    // Subtle green phosphor tint
+    p.color = const Color(0xFF00FF88).withOpacity(0.022);
+    p.isAntiAlias = true;
+    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), p);
   }
 }

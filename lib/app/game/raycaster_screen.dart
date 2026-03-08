@@ -46,30 +46,37 @@ class _Enemy {
   bool alive;
   double hitFlash;
   _EnemyType type;
+  int wave; // used to scale damage each wave
 
-  _Enemy(this.x, this.y, {this.type = _EnemyType.demon})
-      : hp = _baseHp(type).toDouble(),
+  _Enemy(this.x, this.y, {this.type = _EnemyType.demon, this.wave = 1})
+      : hp = _baseHp(type) * (1.0 + (wave - 1) * 0.25),
         alive = true,
         hitFlash = 0;
 
-  static int _baseHp(_EnemyType t) {
+  static double _baseHp(_EnemyType t) {
     switch (t) {
-      case _EnemyType.demon: return 3;
+      case _EnemyType.demon:     return 3;
       case _EnemyType.cacodemon: return 2;
-      case _EnemyType.skeleton: return 2;
+      case _EnemyType.skeleton:  return 1;
     }
   }
 
   double get spriteScale {
     switch (type) {
-      case _EnemyType.demon: return 0.58;    // was 0.72, -20%
+      case _EnemyType.demon:     return 0.58;
       case _EnemyType.cacodemon: return 0.60;
-      case _EnemyType.skeleton: return 0.60; // was 0.75, -20%
+      case _EnemyType.skeleton:  return 0.60;
     }
   }
 
-  double get speed => type == _EnemyType.skeleton ? 0.65 : (type == _EnemyType.cacodemon ? 1.1 : 1.0);
-  double get damage => type == _EnemyType.skeleton ? 15.0 : (type == _EnemyType.cacodemon ? 7.0 : 10.0);
+  double get speed => type == _EnemyType.skeleton ? 0.65
+      : (type == _EnemyType.cacodemon ? 1.1 : 1.0);
+
+  double get _baseDamage => type == _EnemyType.skeleton ? 15.0
+      : (type == _EnemyType.cacodemon ? 7.0 : 10.0);
+
+  /// Damage increases 15% per wave (caps at 3×)
+  double get damage => (_baseDamage * (1.0 + (wave - 1) * 0.15)).clamp(0, _baseDamage * 3);
 }
 
 // ─── Weapon ───────────────────────────────────────────────────────────────────
@@ -233,10 +240,10 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
     _enemies.clear();
     if (wave == 1) {
       _enemies.addAll([
-        _Enemy(8.5, 8.5, type: _EnemyType.demon),
-        _Enemy(12.5, 3.5, type: _EnemyType.cacodemon),
-        _Enemy(4.5, 12.5, type: _EnemyType.demon),
-        _Enemy(10.5, 12.5, type: _EnemyType.skeleton),
+        _Enemy(8.5, 8.5, type: _EnemyType.demon, wave: wave),
+        _Enemy(12.5, 3.5, type: _EnemyType.cacodemon, wave: wave),
+        _Enemy(4.5, 12.5, type: _EnemyType.demon, wave: wave),
+        _Enemy(10.5, 12.5, type: _EnemyType.skeleton, wave: wave),
       ]);
       return;
     }
@@ -250,7 +257,7 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
       final ex = cx + 0.5, ey = cy + 0.5;
       final dx = ex - _posX, dy = ey - _posY;
       if (dx * dx + dy * dy < 9) continue;
-      _enemies.add(_Enemy(ex, ey, type: _randomType(wave)));
+      _enemies.add(_Enemy(ex, ey, type: _randomType(wave), wave: wave));
       spawned++;
     }
   }
@@ -354,23 +361,22 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
   void _checkWaveComplete() {
     if (_enemies.any((e) => e.alive)) return;
     _wave++;
-    _ammo += 25;
+    _ammo += 30;                    // pistol: 30 rounds per wave
     _health = (_health + 20).clamp(0, 100.0);
 
-    // Shotgun: unlock at wave 2, grant ammo every even wave (2, 4, 6…)
+    // Shotgun: unlock at wave 2, +6 shells every wave thereafter
     if (_wave == 2) {
       _shotgunUnlocked = true;
+      _shotgunAmmo += 6;
+    } else if (_wave > 2) {
+      _shotgunAmmo += 6;
     }
-    if (_wave >= 2 && _wave % 2 == 0) {
-      final nextCount = _wave + 3;
-      _shotgunAmmo += (nextCount * 0.75).round();
-    }
-    // SMG: unlock at wave 4, grant ammo every wave thereafter
+    // SMG: unlock at wave 4, +20 rounds every wave thereafter
     if (_wave == 4) {
       _smgUnlocked = true;
-    }
-    if (_wave >= 4) {
-      _smgAmmo += (_wave + 3) * 4; // lots of bullets, it's an SMG
+      _smgAmmo += 20;
+    } else if (_wave > 4) {
+      _smgAmmo += 20;
     }
 
     _saldo += 1;
@@ -556,7 +562,7 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           const Text('🔥', style: TextStyle(fontSize: 48)),
           const SizedBox(height: 8),
-          const Text('INFRAMUNDO 2D',
+          const Text('CRIPTA MALDITA',
             style: TextStyle(
               color: Color(0xFFCC2200),
               fontSize: 26,
@@ -565,7 +571,7 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
               letterSpacing: 3,
             )),
           const SizedBox(height: 4),
-          const Text('Demonios acechan en la oscuridad…',
+          const Text('Los demonios te esperan en las sombras…',
             style: TextStyle(color: Color(0xFF882200), fontSize: 11, fontFamily: 'monospace')),
           const SizedBox(height: 22),
           Container(
@@ -877,118 +883,137 @@ class _RaycasterPainter extends CustomPainter {
     }
   }
 
-  // ─── Demon (bipedal humanoid) ───────────────────────────────────────────────
+  // ─── Demon (bipedal humanoid) — 20% shorter, more menacing ─────────────────
 
   void _drawDemonColumn(Canvas canvas, Paint sp, int sx, double pxW,
       double by, double sh, double v, double frac, double hp, double flash) {
-    final Color body, detail, eye;
+    // 20 % shorter: demon occupies center 80 % of the column height (10 % gap top + bottom)
+    const kPad = 0.10;
+    if (v < kPad || v > 1.0 - kPad) return;
+    // Compressed helpers — all row offsets and heights are expressed in these
+    // units so the demon fills exactly 80 % of the column
+    double vy(double row) => by + v * (kPad * 20 + row * 0.80);
+    double vh(double rows) => v * rows * 0.80;
+
+    final Color body, detail, eye, mouth;
     if (hp >= 3) {
-      body = Color.fromARGB(255, (0x8B + (255 - 0x8B) * flash).round(), (0x18 * (1 - flash)).round(), (0x18 * (1 - flash)).round());
-      detail = const Color(0xFF3A0808);
-      eye = const Color(0xFFFF1100);
+      body   = Color.fromARGB(255, (0x7A + (255 - 0x7A) * flash).round(), (0x10 * (1 - flash)).round(), (0x10 * (1 - flash)).round());
+      detail = const Color(0xFF2A0404);
+      eye    = const Color(0xFFFF2200);
+      mouth  = const Color(0xFFFF6600);
     } else if (hp >= 2) {
-      body = Color.fromARGB(255, (0xBB + (255 - 0xBB) * flash).round(), (0x44 * (1 - flash)).round(), 0);
-      detail = const Color(0xFF552200);
-      eye = const Color(0xFFFFAA00);
+      body   = Color.fromARGB(255, (0xAA + (255 - 0xAA) * flash).round(), (0x33 * (1 - flash)).round(), 0);
+      detail = const Color(0xFF441800);
+      eye    = const Color(0xFFFFAA00);
+      mouth  = const Color(0xFFFF4400);
     } else {
-      body = Color.fromARGB(255, 255, (0x22 * (1 - flash)).round(), (0x99 * (1 - flash)).round());
-      detail = const Color(0xFF770044);
-      eye = const Color(0xFFFF00FF);
+      body   = Color.fromARGB(255, 255, (0x18 * (1 - flash)).round(), (0x88 * (1 - flash)).round());
+      detail = const Color(0xFF660033);
+      eye    = const Color(0xFFFF00FF);
+      mouth  = const Color(0xFFFF00AA);
     }
 
     final x = sx * pxW;
 
-    // Body center 20-80%
-    if (frac >= 0.20 && frac <= 0.80) {
-      sp.color = body;
-      canvas.drawRect(Rect.fromLTWH(x, by + v * 4, pxW, sh - v * 5), sp);
-    }
-    // Head 25-75%, rows 1-5
-    if (frac >= 0.25 && frac <= 0.75) {
-      sp.color = body;
-      canvas.drawRect(Rect.fromLTWH(x, by + v * 1, pxW, v * 3.5), sp);
-    }
-    // Horns 10-30% and 70-90%, rows 0-2
-    if ((frac >= 0.10 && frac <= 0.30) || (frac >= 0.70 && frac <= 0.90)) {
+    // ── Tall swept-back horns (frac 8-28 % and 72-92 %, rows 0-3) ──────────
+    if ((frac >= 0.08 && frac <= 0.28) || (frac >= 0.72 && frac <= 0.92)) {
       sp.color = detail;
-      canvas.drawRect(Rect.fromLTWH(x, by, pxW, v * 2.0), sp);
+      canvas.drawRect(Rect.fromLTWH(x, vy(0), pxW, vh(3.0)), sp);
+      // Horn highlight edge
+      sp.color = Color.fromARGB(255, (detail.red * 1.8).clamp(0,255).round(), 0, 0);
+      canvas.drawRect(Rect.fromLTWH(x, vy(0), pxW, vh(0.5)), sp);
     }
-    // Eyes 32-44% and 56-68%, rows 2-3.5
-    if ((frac >= 0.32 && frac <= 0.44) || (frac >= 0.56 && frac <= 0.68)) {
+
+    // ── Head (frac 22-78 %, rows 1-5) ────────────────────────────────────────
+    if (frac >= 0.22 && frac <= 0.78) {
+      sp.color = body;
+      canvas.drawRect(Rect.fromLTWH(x, vy(1), pxW, vh(4.0)), sp);
+    }
+
+    // ── Glowing eyes — larger and hotter (frac 30-43 % and 57-70 %, rows 1.8-3.5)
+    if ((frac >= 0.30 && frac <= 0.43) || (frac >= 0.57 && frac <= 0.70)) {
       sp.color = eye;
-      canvas.drawRect(Rect.fromLTWH(x, by + v * 2.0, pxW, v * 1.5), sp);
+      canvas.drawRect(Rect.fromLTWH(x, vy(1.8), pxW, vh(1.8)), sp);
+      // Inner hot white core
+      sp.color = Colors.white.withOpacity(0.85);
+      canvas.drawRect(Rect.fromLTWH(x, vy(2.1), pxW, vh(0.8)), sp);
     }
-    // Arms 5-20% and 80-95%, rows 5-12
-    if ((frac >= 0.05 && frac <= 0.20) || (frac >= 0.80 && frac <= 0.95)) {
-      sp.color = detail;
-      canvas.drawRect(Rect.fromLTWH(x, by + v * 4.5, pxW, v * 7), sp);
-    }
-    // Legs 28-44% and 56-72%, rows 15-20
-    if ((frac >= 0.28 && frac <= 0.44) || (frac >= 0.56 && frac <= 0.72)) {
-      sp.color = body;
-      canvas.drawRect(Rect.fromLTWH(x, by + v * 15, pxW, v * 5), sp);
-    }
-    // Pectoral muscles — bright slab across upper chest, high contrast
-    if ((frac >= 0.22 && frac <= 0.38) || (frac >= 0.62 && frac <= 0.78)) {
-      // Top pec highlight (very bright)
-      sp.color = Color.fromARGB(255,
-        (body.red * 1.65).clamp(0, 255).round(),
-        (body.green * 1.1).clamp(0, 255).round(),
-        (body.blue * 1.1).clamp(0, 255).round(),
-      );
-      canvas.drawRect(Rect.fromLTWH(x, by + v * 4.0, pxW, v * 0.8), sp);
-      // Bottom pec shadow (very dark)
-      sp.color = Color.fromARGB(255,
-        (body.red * 0.30).clamp(0, 255).round(),
-        (body.green * 0.30).clamp(0, 255).round(),
-        (body.blue * 0.30).clamp(0, 255).round(),
-      );
-      canvas.drawRect(Rect.fromLTWH(x, by + v * 4.8, pxW, v * 0.8), sp);
-    }
-    // Sternum division line — dark groove between pecs
-    if (frac >= 0.47 && frac <= 0.53) {
-      sp.color = Color.fromARGB(255,
-        (body.red * 0.20).clamp(0, 255).round(), 0, 0);
-      canvas.drawRect(Rect.fromLTWH(x, by + v * 4.0, pxW, v * 2.0), sp);
-    }
-    // Abdominal ridges — strong contrast: bright light / near-black shadow
-    if (frac >= 0.30 && frac <= 0.70) {
-      for (int ab = 0; ab < 4; ab++) {
-        final isLight = ab % 2 == 0;
-        sp.color = isLight
-            ? Color.fromARGB(255,
-                (body.red * 1.70).clamp(0, 255).round(),
-                (body.green * 1.0).clamp(0, 255).round(),
-                (body.blue * 1.0).clamp(0, 255).round())
-            : Color.fromARGB(255,
-                (body.red * 0.22).clamp(0, 255).round(),
-                0, 0);
-        canvas.drawRect(Rect.fromLTWH(x, by + v * (7.0 + ab * 1.8), pxW, v * 1.1), sp);
+
+    // ── Fanged mouth — glowing slit (frac 34-66 %, rows 3.8-4.5) ────────────
+    if (frac >= 0.34 && frac <= 0.66) {
+      sp.color = mouth;
+      canvas.drawRect(Rect.fromLTWH(x, vy(3.8), pxW, vh(0.7)), sp);
+      // Fang tips (bright white pixels at intervals)
+      if (frac >= 0.36 && frac <= 0.40 || frac >= 0.48 && frac <= 0.52 ||
+          frac >= 0.60 && frac <= 0.64) {
+        sp.color = Colors.white.withOpacity(0.90);
+        canvas.drawRect(Rect.fromLTWH(x, vy(4.2), pxW, vh(0.5)), sp);
       }
     }
-    // Arm outer bulge highlight — bright outer edge on each arm
-    if ((frac >= 0.05 && frac <= 0.14) || (frac >= 0.86 && frac <= 0.95)) {
-      sp.color = Color.fromARGB(255,
-        (body.red * 1.55).clamp(0, 255).round(),
-        (body.green * 1.0).clamp(0, 255).round(),
-        (body.blue * 1.0).clamp(0, 255).round(),
-      );
-      canvas.drawRect(Rect.fromLTWH(x, by + v * 4.5, pxW, v * 3.5), sp);
-    }
-    // Arm inner shadow — dark groove where arm meets body
-    if ((frac >= 0.17 && frac <= 0.21) || (frac >= 0.79 && frac <= 0.83)) {
-      sp.color = Color.fromARGB(255,
-        (body.red * 0.18).clamp(0, 255).round(), 0, 0);
-      canvas.drawRect(Rect.fromLTWH(x, by + v * 4.5, pxW, v * 7.0), sp);
-    }
-    // Thick neck (frac 42-58%, rows 3-4)
+
+    // ── Thick neck (frac 42-58 %, rows 4.8-6) ────────────────────────────────
     if (frac >= 0.42 && frac <= 0.58) {
-      sp.color = Color.fromARGB(255,
-        (body.red * 1.20).clamp(0, 255).round(),
-        (body.green * 1.0).clamp(0, 255).round(),
-        (body.blue * 1.0).clamp(0, 255).round(),
-      );
-      canvas.drawRect(Rect.fromLTWH(x, by + v * 3.2, pxW, v * 1.2), sp);
+      sp.color = Color.fromARGB(255, (body.red * 1.15).clamp(0,255).round(), 0, 0);
+      canvas.drawRect(Rect.fromLTWH(x, vy(4.8), pxW, vh(1.2)), sp);
+    }
+
+    // ── Body torso (frac 18-82 %, rows 5-14) ─────────────────────────────────
+    if (frac >= 0.18 && frac <= 0.82) {
+      sp.color = body;
+      canvas.drawRect(Rect.fromLTWH(x, vy(5), pxW, vh(9)), sp);
+    }
+
+    // ── Pectoral slabs — very bright highlight + deep shadow ─────────────────
+    if ((frac >= 0.20 && frac <= 0.36) || (frac >= 0.64 && frac <= 0.80)) {
+      sp.color = Color.fromARGB(255, (body.red * 1.70).clamp(0,255).round(), 0, 0);
+      canvas.drawRect(Rect.fromLTWH(x, vy(5.2), pxW, vh(0.9)), sp);
+      sp.color = Color.fromARGB(255, (body.red * 0.22).clamp(0,255).round(), 0, 0);
+      canvas.drawRect(Rect.fromLTWH(x, vy(6.1), pxW, vh(0.9)), sp);
+    }
+
+    // ── Sternum groove (frac 46-54 %, rows 5-8) ──────────────────────────────
+    if (frac >= 0.46 && frac <= 0.54) {
+      sp.color = Color.fromARGB(255, (body.red * 0.15).clamp(0,255).round(), 0, 0);
+      canvas.drawRect(Rect.fromLTWH(x, vy(5), pxW, vh(3)), sp);
+    }
+
+    // ── Abdominal ridges (frac 30-70 %, rows 7-13) ────────────────────────────
+    if (frac >= 0.30 && frac <= 0.70) {
+      for (int ab = 0; ab < 4; ab++) {
+        sp.color = ab.isEven
+            ? Color.fromARGB(255, (body.red * 1.70).clamp(0,255).round(), 0, 0)
+            : Color.fromARGB(255, (body.red * 0.18).clamp(0,255).round(), 0, 0);
+        canvas.drawRect(Rect.fromLTWH(x, vy(7.5 + ab * 1.5), pxW, vh(1.0)), sp);
+      }
+    }
+
+    // ── Arms — wide reach, clawed tips (frac 2-18 % and 82-98 %, rows 5-14) ──
+    if ((frac >= 0.02 && frac <= 0.18) || (frac >= 0.82 && frac <= 0.98)) {
+      sp.color = detail;
+      canvas.drawRect(Rect.fromLTWH(x, vy(5), pxW, vh(9)), sp);
+      // Arm outer highlight
+      if ((frac >= 0.02 && frac <= 0.10) || (frac >= 0.90 && frac <= 0.98)) {
+        sp.color = Color.fromARGB(255, (body.red * 1.55).clamp(0,255).round(), 0, 0);
+        canvas.drawRect(Rect.fromLTWH(x, vy(5.5), pxW, vh(4)), sp);
+      }
+      // Claws — bright spikes at arm bottom (rows 12-14)
+      sp.color = Colors.white.withOpacity(0.80);
+      canvas.drawRect(Rect.fromLTWH(x, vy(12.5), pxW, vh(1.5)), sp);
+    }
+
+    // ── Arm-body junction shadow ──────────────────────────────────────────────
+    if ((frac >= 0.16 && frac <= 0.20) || (frac >= 0.80 && frac <= 0.84)) {
+      sp.color = Color.fromARGB(255, (body.red * 0.12).clamp(0,255).round(), 0, 0);
+      canvas.drawRect(Rect.fromLTWH(x, vy(5), pxW, vh(9)), sp);
+    }
+
+    // ── Legs (frac 26-42 % and 58-74 %, rows 14-20) ──────────────────────────
+    if ((frac >= 0.26 && frac <= 0.42) || (frac >= 0.58 && frac <= 0.74)) {
+      sp.color = body;
+      canvas.drawRect(Rect.fromLTWH(x, vy(14), pxW, vh(6)), sp);
+      // Knee cap highlight
+      sp.color = Color.fromARGB(255, (body.red * 1.40).clamp(0,255).round(), 0, 0);
+      canvas.drawRect(Rect.fromLTWH(x, vy(15.5), pxW, vh(1.0)), sp);
     }
   }
 
@@ -1429,9 +1454,9 @@ class _RaycasterPainter extends CustomPainter {
 
   void _drawShotgun(Canvas canvas, Size size, bool firing) {
     canvas.save();
-    // Anchor bottom-right; ~45° tilt — barrel clearly visible, grip clips off bottom
+    // Barrel aimed toward crosshair (screen centre) from bottom-right anchor
     canvas.translate(size.width * 0.68, size.height * 0.95);
-    canvas.rotate(-0.82);
+    canvas.rotate(-0.18);
 
     final p = Paint()..isAntiAlias = false;
 
@@ -1559,9 +1584,9 @@ class _RaycasterPainter extends CustomPainter {
 
   void _drawPistol(Canvas canvas, Size size, bool firing) {
     canvas.save();
-    // Anchor bottom-right; ~52° tilt — barrel clearly visible, grip clips off bottom
+    // Barrel aimed toward crosshair (screen centre) from bottom-right anchor
     canvas.translate(size.width * 0.82, size.height * 0.95);
-    canvas.rotate(-0.95);
+    canvas.rotate(-0.32);
 
     final p = Paint()..isAntiAlias = false;
 
@@ -1692,9 +1717,9 @@ class _RaycasterPainter extends CustomPainter {
 
   void _drawSmg(Canvas canvas, Size size, bool firing) {
     canvas.save();
-    // Center-right, angled like pistol but positioned slightly left
+    // Barrel aimed toward crosshair (screen centre) from bottom-right anchor
     canvas.translate(size.width * 0.78, size.height * 0.95);
-    canvas.rotate(-0.95);
+    canvas.rotate(-0.28);
 
     final p = Paint()..isAntiAlias = false;
 

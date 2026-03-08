@@ -495,7 +495,7 @@ class _Match3ScreenState extends State<Match3Screen> with SingleTickerProviderSt
                 borderRadius: BorderRadius.circular(14),
               ),
               child: Column(mainAxisSize: MainAxisSize.min, children: [
-                const Text('🍬 ¡DULCE RACHA!',
+                const Text('🍬 ¡CASCADA DULCE!',
                   style: TextStyle(color: Colors.amberAccent, fontSize: 18,
                       fontWeight: FontWeight.bold, fontFamily: 'monospace')),
                 const SizedBox(height: 4),
@@ -618,7 +618,7 @@ class _Match3ScreenState extends State<Match3Screen> with SingleTickerProviderSt
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           const Text('🍬', style: TextStyle(fontSize: 56)),
           const SizedBox(height: 10),
-          const Text('DULCE RACHA',
+          const Text('CASCADA DULCE',
             style: TextStyle(color: Colors.pinkAccent, fontSize: 22,
                 fontWeight: FontWeight.bold, letterSpacing: 3,
                 fontFamily: 'monospace')),

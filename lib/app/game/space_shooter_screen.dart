@@ -708,7 +708,7 @@ class _SpaceShooterScreenState extends State<SpaceShooterScreen> {
           children: [
             const Text('🚀', style: TextStyle(fontSize: 60)),
             const SizedBox(height: 8),
-            const Text('ASTROCAZA',
+            const Text('CAZA ESTELAR',
                 style: TextStyle(
                     color: Color(0xFF44EEFF),
                     fontSize: 28,

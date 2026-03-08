@@ -8,56 +8,67 @@ A handheld arcade emulator UI built in Flutter. All games are rendered via
 
 ## Architecture
 - **Entry / shell**: `lib/app/game/arcade_center_screen.dart`
-  - Game selector: **Neon Arcade Cabinet 3×3 grid** (carousel was replaced)
+  - Game selector: **Neon Arcade Cabinet 3×3 grid** — alphabetical order
   - Each cell has a neon-colored border/glow from `_kNeonColors` (one per game)
-  - Marquee header with pink→cyan gradient title + green dot indicator
+  - Power-on **splash screen** on launch: boot lines animate in, then "¡BIENVENIDO, NAME!" is shown; user presses A/Start to continue. User name fetched from Firestore `users/{userId}['userInfo']['name']`.
+  - **CRT scanline overlay** (`_CrtOverlayPainter`) renders over all bezel content
+  - Top console strip (gray "ARCADE CENTER" + saldo) is the only place these are shown — they are NOT duplicated inside the grid
   - D-pad: left/right moves ±1, up/down moves ±3 (columns) in the grid
   - `_CartridgePainter` still used as card art background
-  - Registered games: `kArcadeGames` list of `ArcadeGameDef`
-  - Shared point/score system via `HighScoreService`
+  - Registered games: `kArcadeGames` list of `ArcadeGameDef` — **alphabetical by new Spanish title**
+  - Shared point/score system via `HighScoreService` (IDs unchanged for score compatibility)
 - **Input**: `lib/app/game/arcade_input_controller.dart` — virtual D-pad + ABXY/Select/Start
-- **Games** (all in `lib/app/game/`):
 
-| File | Title (Spanish) | Notes |
-|---|---|---|
-| `snake_game_screen.dart` | La Sierpe | Snake |
-| `maze_chase_screen.dart` | Tragalaberinto | Pac-Man style maze |
-| `flappy_bird_screen.dart` | Alas Locas | Flappy Bird |
-| `traffic_hopper_screen.dart` | Paso a Paso | Frogger — frog 10% smaller (scale 0.90) |
-| `space_shooter_screen.dart` | Astrocaza | Space shooter — enemies fire single OR 3-burst |
-| `raycaster_screen.dart` | Inframundo 2D | Doom-style raycaster FPS |
-| `tetris_game_screen.dart` | Tetromuro | Tetris |
-| `logic_grid_screen.dart` | Busca-Trampas | Minesweeper |
-| `match3_screen.dart` | Dulce Racha | Match-3 — right panel candies auto-fit by size |
-| `mario_game_screen.dart` | (hidden bonus) | Platformer unlocked via secret input |
+## Game Registry — Alphabetical by Title
 
-## Inframundo 2D (raycaster_screen.dart) — current state
+| Grid pos | ID | Emoji | New Title | Game type |
+|---|---|---|---|---|
+| 0 (row0,col0) | `tetris` | 🟦 | **Bloques Caídos** | Tetris |
+| 1 (row0,col1) | `logic` | 💣 | **Campo Minado** | Minesweeper |
+| 2 (row0,col2) | `match3` | 🍬 | **Cascada Dulce** | Match-3 |
+| 3 (row1,col0) | `shooter` | 🚀 | **Caza Estelar** | Space shooter |
+| 4 (row1,col1) | `maze` | 👻 | **Comecocos** | Pac-Man maze |
+| 5 (row1,col2) | `raycaster` | 🔥 | **Cripta Maldita** | Doom-style FPS |
+| 6 (row2,col0) | `hopper` | 🐸 | **Rana Saltarina** | Frogger — frog 10% smaller (scale 0.90) |
+| 7 (row2,col1) | `snake` | 🐍 | **Víbora Veloz** | Snake |
+| 8 (row2,col2) | `flappy` | 🕊️ | **Vuelo Kamikaze** | Flappy Bird |
+
+In-game titles also updated in each screen's start overlay.
+
+## Cripta Maldita (raycaster_screen.dart) — current state
 
 ### Weapons
-| Weapon | Rotation | Anchor | Fire rate | Unlock | Notes |
-|---|---|---|---|---|---|
-| Pistol | -0.95 rad | (0.82w, 0.95h) | 0.25s | always | semi-auto |
-| Shotgun | -0.82 rad | (0.68w, 0.95h) | 0.55s | wave 2 | 7-pellet spread |
-| SMG | -0.95 rad | (0.78w, 0.95h) | 0.08s | wave 4 | full-auto (hold A), compact pixel model |
+| Weapon | Rotation | Anchor | Fire rate | Unlock | Ammo/wave | Notes |
+|---|---|---|---|---|---|---|
+| Pistol | -0.32 rad | (0.82w, 0.95h) | 0.25s | always | +30 | semi-auto |
+| Shotgun | -0.18 rad | (0.68w, 0.95h) | 0.55s | wave 2 | +6 shells | 7-pellet spread |
+| SMG | -0.28 rad | (0.78w, 0.95h) | 0.08s | wave 4 | +20 | full-auto (hold A) |
 
+- All weapon rotations computed so barrel aims toward crosshair (screen centre)
 - B button cycles through all *unlocked* weapons
 - Muzzle flash: directional star-burst (forward spike + side petals + white core), NOT circles
 - Wall-check: `_hasLos()` DDA march before registering any bullet hit (no shooting through walls)
-- SMG: `_fireSmg()` with slight random spread per bullet, granted ammo = `(wave+3)*4` per wave
 
-### Enemies
-- **Skeleton**: white pixel art, 1hp
-- **Demon** (red): column-based art with high-contrast pec/ab/arm muscles (1.65× highlight, 0.22× shadow)
-- **Cacodemon**: crimson sphere with spherical shading
+### Enemies — Wave Scaling
+- HP: `baseHp × (1.0 + (wave-1) × 0.25)` — grows each wave
+- Damage: `baseDamage × (1.0 + (wave-1) × 0.15)` — caps at 3×
+- **Skeleton**: 1 hp base, 15 dmg base
+- **Demon**: 3 hp base, 10 dmg base — **20% shorter** (kPad=0.10 compression), scarier: wide swept-back horns w/ edge highlight, glowing eyes + white hot core, fanged mouth + white fang pixels, clawed arm tips, knee highlights
+- **Cacodemon**: 2 hp base, 7 dmg base, floating
 
 ### Radar
-- Bottom-left mini-map, range-based visibility (enemies displayed at all ranges but within clip circle)
-- Skull icon = skeleton, red diamond+horns = demon, blue circle+horn = cacodemon
-- No wall-penetration shooting — radar is for situational awareness only
+- Bottom-left mini-map — situational awareness only
+- No wall-penetration shooting; radar is for navigation
 
 ### Floor / environment
-- Dark stone floor with distance lines + blood pool splotches (no lava animation)
-- Screen-edge infernal vignette
+- Dark stone floor + blood pools + screen-edge infernal vignette
+
+## CRT Overlay (`_CrtOverlayPainter` in arcade_center_screen.dart)
+- Horizontal scanlines every 2px at 14% opacity
+- Vertical pixel grid every 2px at 4% opacity
+- Radial vignette at 42% edge opacity
+- Green phosphor tint at 2.2% opacity
+- Applied over all bezel content via `Stack` + `IgnorePointer`
 
 ## Pending / next session tasks
 
@@ -65,5 +76,6 @@ A handheld arcade emulator UI built in Flutter. All games are rendered via
 - User wants to add a new game (topic TBD — discuss at start of session)
 
 ### Possible tweaks to revisit
-- Inframundo gun angles may still need fine-tuning (pistol -0.95, shotgun -0.82)
-- Radar could optionally be range-limited to reduce its power further
+- Weapon angles may need visual fine-tuning after seeing on device
+- Radar range-limiting to reduce its tactical advantage further
+- CRT overlay intensity (opacity values above are current baseline)

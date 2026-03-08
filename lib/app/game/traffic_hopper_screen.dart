@@ -509,7 +509,7 @@ class _TrafficHopperScreenState extends State<TrafficHopperScreen> {
           children: [
             const Text('🐸', style: TextStyle(fontSize: 60)),
             const SizedBox(height: 8),
-            const Text('PASO A PASO',
+            const Text('RANA SALTARINA',
               style: TextStyle(
                 color: Colors.white,
                 fontSize: 26,
