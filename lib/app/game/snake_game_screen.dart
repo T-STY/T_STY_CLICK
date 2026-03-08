@@ -258,15 +258,32 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> {
 
   // ─── Build ───────────────────────────────────────────────────────────────
 
+  void _onHorizontalDrag(DragUpdateDetails d) {
+    if (d.delta.dx.abs() > 5) {
+      _tryChangeDir(d.delta.dx > 0 ? _Direction.right : _Direction.left);
+    }
+  }
+
+  void _onVerticalDrag(DragUpdateDetails d) {
+    if (d.delta.dy.abs() > 5) {
+      _tryChangeDir(d.delta.dy > 0 ? _Direction.down : _Direction.up);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      children: [
-        _buildGameCanvas(),
-        _buildScoreBar(),
-        if (!_isRunning && !_isDead) _buildStartOverlay(),
-        if (_isDead) _buildGameOverOverlay(),
-      ],
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onHorizontalDragUpdate: _onHorizontalDrag,
+      onVerticalDragUpdate: _onVerticalDrag,
+      child: Stack(
+        children: [
+          _buildGameCanvas(),
+          _buildScoreBar(),
+          if (!_isRunning && !_isDead) _buildStartOverlay(),
+          if (_isDead) _buildGameOverOverlay(),
+        ],
+      ),
     );
   }
 
