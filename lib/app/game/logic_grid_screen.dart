@@ -56,6 +56,7 @@ class _LogicGridScreenState extends State<LogicGridScreen> {
   bool _isRunning = false;
   bool _isWon = false;
   bool _isLost = false;
+  bool _paused = false;
   Timer? _ticker;
   int _elapsedSeconds = 0;
 
@@ -242,7 +243,17 @@ class _LogicGridScreenState extends State<LogicGridScreen> {
           _handleFlag();
           break;
         case ArcadeButton.start:
-          _restart();
+          if (_isRunning && !_isWon && !_isLost) {
+            setState(() => _paused = !_paused);
+            if (_paused) { _ticker?.cancel(); _ticker = null; }
+            else if (!_firstReveal) {
+              _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
+                if (mounted && !_isWon && !_isLost && !_paused) setState(() => _elapsedSeconds++);
+              });
+            }
+          } else {
+            _restart();
+          }
           break;
         default:
           break;
@@ -343,6 +354,7 @@ class _LogicGridScreenState extends State<LogicGridScreen> {
           if (_isWon) _buildWinOverlay(),
           // Loss overlay
           if (_isLost) _buildLossOverlay(),
+          if (_paused && _isRunning) _buildPauseOverlay(),
         ],
       ),
     );
@@ -476,6 +488,22 @@ class _LogicGridScreenState extends State<LogicGridScreen> {
       ),
     );
   }
+
+  Widget _buildPauseOverlay() => Positioned.fill(
+    child: Container(
+      color: const Color(0xCC000000),
+      child: const Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text('⏸', style: TextStyle(fontSize: 48)),
+          SizedBox(height: 8),
+          Text('PAUSA', style: TextStyle(color: Color(0xFF88DDFF), fontSize: 28, fontWeight: FontWeight.bold, letterSpacing: 6)),
+          SizedBox(height: 16),
+          Text('START para continuar', style: TextStyle(color: Color(0xFF446677), fontSize: 12)),
+        ],
+      ),
+    ),
+  );
 }
 
 // ─── Painter ─────────────────────────────────────────────────────────────────

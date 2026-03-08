@@ -55,6 +55,7 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> {
   Timer? _ticker;
   late double _saldo;
   bool _awardingPoints = false;
+  bool _paused = false;
   int _bestScore = 0;
 
   @override
@@ -89,8 +90,13 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> {
       case ArcadeButton.right:
         _tryChangeDir(_Direction.right);
       case ArcadeButton.a:
-      case ArcadeButton.start:
         if (!_isRunning && !_isDead) _beginGame(_nextDir);
+      case ArcadeButton.start:
+        if (_isRunning && !_isDead) {
+          setState(() => _paused = !_paused);
+        } else if (!_isRunning && !_isDead) {
+          _beginGame(_nextDir);
+        }
       default:
         break;
     }
@@ -138,7 +144,7 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> {
   // ─── Game loop ───────────────────────────────────────────────────────────
 
   void _tick() {
-    if (!_isRunning || _isDead) return;
+    if (!_isRunning || _isDead || _paused) return;
 
     _dir = _nextDir;
 
@@ -282,6 +288,7 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> {
           _buildScoreBar(),
           if (!_isRunning && !_isDead) _buildStartOverlay(),
           if (_isDead) _buildGameOverOverlay(),
+          if (_paused && _isRunning) _buildPauseOverlay(),
         ],
       ),
     );
@@ -434,6 +441,22 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> {
     ),
   );
 }
+
+  Widget _buildPauseOverlay() => Positioned.fill(
+    child: Container(
+      color: const Color(0xCC000000),
+      child: const Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text('⏸', style: TextStyle(fontSize: 48)),
+          SizedBox(height: 8),
+          Text('PAUSA', style: TextStyle(color: Color(0xFF00FF44), fontSize: 28, fontWeight: FontWeight.bold, letterSpacing: 6)),
+          SizedBox(height: 16),
+          Text('START para continuar', style: TextStyle(color: Color(0xFF44AA44), fontSize: 12)),
+        ],
+      ),
+    ),
+  );
 }
 
 // ─── Painter ─────────────────────────────────────────────────────────────────

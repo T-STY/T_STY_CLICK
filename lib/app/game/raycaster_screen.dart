@@ -167,6 +167,7 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
   int _hiScore = 0;
 
   _GameState _state = _GameState.start;
+  bool _paused = false;
   Timer? _gameTimer;
   DateTime? _lastTick;
 
@@ -215,6 +216,11 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
       }
       return;
     }
+    if (event.isDown && event.button == ArcadeButton.start) {
+      setState(() => _paused = !_paused);
+      return;
+    }
+    if (_paused) return;
     if (event.isDown && event.button == ArcadeButton.a) {
       _fire();
     }
@@ -425,7 +431,7 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
   }
 
   void _tick(Timer t) {
-    if (_state != _GameState.playing) return;
+    if (_state != _GameState.playing || _paused) return;
     final now = DateTime.now();
     final dt = _lastTick == null ? 0.016 : now.difference(_lastTick!).inMicroseconds / 1e6;
     _lastTick = now;
@@ -621,6 +627,7 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
         if (_state == _GameState.playing && _waveBannerTimer > 0) _buildWaveBanner(),
         if (_state == _GameState.start) _buildStartOverlay(),
         if (_state == _GameState.dead) _buildDeathOverlay(),
+        if (_paused && _state == _GameState.playing) _buildPauseOverlay(),
       ]),
     );
   }
@@ -754,6 +761,22 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
       ),
     );
   }
+
+  Widget _buildPauseOverlay() => Positioned.fill(
+    child: Container(
+      color: const Color(0xCC000000),
+      child: const Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text('⏸', style: TextStyle(fontSize: 48)),
+          SizedBox(height: 8),
+          Text('PAUSA', style: TextStyle(color: Color(0xFFFF4422), fontSize: 28, fontWeight: FontWeight.bold, letterSpacing: 6)),
+          SizedBox(height: 16),
+          Text('START para continuar', style: TextStyle(color: Color(0xFF882211), fontSize: 12)),
+        ],
+      ),
+    ),
+  );
 }
 
 // ─── Painter ──────────────────────────────────────────────────────────────────

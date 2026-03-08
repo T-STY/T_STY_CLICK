@@ -135,6 +135,7 @@ class _SpaceShooterScreenState extends State<SpaceShooterScreen> {
   // Game state
   bool _isRunning = false;
   bool _isDead = false;
+  bool _paused = false;
   int _score = 0;
   int _wave = 1;
   int _bestScore = 0;
@@ -171,6 +172,10 @@ class _SpaceShooterScreenState extends State<SpaceShooterScreen> {
     }
     if (!_isRunning) {
       _startGame();
+      return;
+    }
+    if (btn == ArcadeButton.start && !_betweenWaves) {
+      setState(() => _paused = !_paused);
     }
   }
 
@@ -187,7 +192,7 @@ class _SpaceShooterScreenState extends State<SpaceShooterScreen> {
     final dt =
         (now.difference(_lastTick!).inMicroseconds / 1e6).clamp(0.0, 0.05);
     _lastTick = now;
-    if (_isDead) return;
+    if (_isDead || _paused) return;
     _update(dt);
     if (mounted) setState(() {});
   }
@@ -679,6 +684,7 @@ class _SpaceShooterScreenState extends State<SpaceShooterScreen> {
           ),
         if (!_isRunning && !_isDead) _buildStartOverlay(),
         if (_isDead) _buildDeathOverlay(),
+        if (_paused && _isRunning) _buildPauseOverlay(),
       ]);
     });
   }
@@ -811,6 +817,23 @@ class _SpaceShooterScreenState extends State<SpaceShooterScreen> {
         ),
       ),
     );
+}
+
+  Widget _buildPauseOverlay() => Positioned.fill(
+    child: Container(
+      color: const Color(0xCC000000),
+      child: const Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text('⏸', style: TextStyle(fontSize: 48)),
+          SizedBox(height: 8),
+          Text('PAUSA', style: TextStyle(color: Color(0xFF4FC3F7), fontSize: 28, fontWeight: FontWeight.bold, letterSpacing: 6)),
+          SizedBox(height: 16),
+          Text('START para continuar', style: TextStyle(color: Color(0xFF4488AA), fontSize: 12)),
+        ],
+      ),
+    ),
+  );
 }
 
 // ─── Star helper ─────────────────────────────────────────────────────────────

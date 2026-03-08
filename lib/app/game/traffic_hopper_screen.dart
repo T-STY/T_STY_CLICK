@@ -58,6 +58,7 @@ class _TrafficHopperScreenState extends State<TrafficHopperScreen> {
   int _lives = 3;
   int _level = 1;
   _GamePhase _phase = _GamePhase.start;
+  bool _paused = false;
 
   // Frog position (col is floating for river drift)
   double _frogX = 6.0; // fractional column
@@ -174,7 +175,7 @@ class _TrafficHopperScreenState extends State<TrafficHopperScreen> {
   }
 
   void _tick() {
-    if (_phase != _GamePhase.playing) return;
+    if (_phase != _GamePhase.playing || _paused) return;
     if (!mounted) return;
 
     const dt = 16.0 / 1000.0; // seconds per tick
@@ -278,6 +279,13 @@ class _TrafficHopperScreenState extends State<TrafficHopperScreen> {
     }
 
     if (_phase == _GamePhase.levelComplete) return;
+
+    // pause toggle
+    if (btn == ArcadeButton.start) {
+      setState(() => _paused = !_paused);
+      return;
+    }
+    if (_paused) return;
 
     // playing
     switch (btn) {
@@ -457,6 +465,7 @@ class _TrafficHopperScreenState extends State<TrafficHopperScreen> {
         if (_phase == _GamePhase.start) _buildStartOverlay(),
         if (_phase == _GamePhase.dead) _buildGameOverOverlay(),
         if (_phase == _GamePhase.levelComplete) _buildLevelCompleteOverlay(),
+        if (_paused && _phase == _GamePhase.playing) _buildPauseOverlay(),
       ],
     );
   }
@@ -635,6 +644,22 @@ class _TrafficHopperScreenState extends State<TrafficHopperScreen> {
       ),
     );
   }
+
+  Widget _buildPauseOverlay() => Positioned.fill(
+    child: Container(
+      color: const Color(0xCC000000),
+      child: const Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text('⏸', style: TextStyle(fontSize: 48)),
+          SizedBox(height: 8),
+          Text('PAUSA', style: TextStyle(color: Colors.greenAccent, fontSize: 28, fontWeight: FontWeight.bold, letterSpacing: 6)),
+          SizedBox(height: 16),
+          Text('START para continuar', style: TextStyle(color: Color(0xFF336633), fontSize: 12)),
+        ],
+      ),
+    ),
+  );
 }
 
 // ─── Painter ─────────────────────────────────────────────────────────────────

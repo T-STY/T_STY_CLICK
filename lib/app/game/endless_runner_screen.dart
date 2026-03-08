@@ -83,9 +83,9 @@ class _EndlessRunnerScreenState extends State<EndlessRunnerScreen> {
 
   // World
   double _dist = 0;
-  double _scrollSpd = 4.0;
+  double _scrollSpd = 5.0;
   double _spawnTimer = 0;
-  double _spawnInterval = 2.2;
+  double _spawnInterval = 1.8;
   final List<_Obstacle> _obs = [];
   final List<_BgElement> _bgFar = [];
   final List<_BgElement> _bgMid = [];
@@ -110,6 +110,8 @@ class _EndlessRunnerScreenState extends State<EndlessRunnerScreen> {
   // ─── Death / mauling animation ────────────────────────────────────────────
   double _deathDinoX = -2.0;  // dino rushes from LEFT (behind player) on death
   bool _dinoChomping = false;
+  bool _fallingDead = false;  // player drops to floor before dino arrives
+  double _fallDeadVy = 0.0;  // fall velocity during death drop
   bool _mauling = false;          // head-shake mauling phase
   double _maulPhase = 0.0;        // oscillates fast for head shake
   bool _playerMauled = false;     // switch player sprite to pork-leg
@@ -224,8 +226,8 @@ class _EndlessRunnerScreenState extends State<EndlessRunnerScreen> {
     _legPhase = 0.0;
     _dist = 0;
     _score = 0;
-    _scrollSpd = 4.0;
-    _spawnInterval = 2.2;
+    _scrollSpd = 5.0;
+    _spawnInterval = 1.8;
     _spawnTimer = 1.0;
     _nextSaldoAt = _kSaldoEvery;
     _obs.clear();
@@ -234,6 +236,8 @@ class _EndlessRunnerScreenState extends State<EndlessRunnerScreen> {
     _paused = false;
     _showDeathOverlay = false;
     _dinoChomping = false;
+    _fallingDead = false;
+    _fallDeadVy = 0.0;
     _mauling = false;
     _maulPhase = 0.0;
     _playerMauled = false;
@@ -266,10 +270,10 @@ class _EndlessRunnerScreenState extends State<EndlessRunnerScreen> {
         .clamp(0.001, 0.05) as double;
     _lastTick = now;
 
-    // Scroll speed ramps up with distance (4 → 8.5 over 500 m)
-    _scrollSpd = 4.0 + (_dist / 500).clamp(0.0, 4.5);
-    // Spawn interval tightens (2.2 → 0.7 s over 700 m)
-    _spawnInterval = (2.2 - _dist / 700).clamp(0.7, 2.2);
+    // Scroll speed ramps up with distance (5 → 10 over 400 m)
+    _scrollSpd = 5.0 + (_dist / 400).clamp(0.0, 5.0);
+    // Spawn interval tightens (1.8 → 0.6 s over 600 m)
+    _spawnInterval = (1.8 - _dist / 600).clamp(0.6, 1.8);
 
     _dist += _scrollSpd * dt;
     _score = _dist.floor();
@@ -340,13 +344,15 @@ class _EndlessRunnerScreenState extends State<EndlessRunnerScreen> {
       final oLeft = o.x - o.hw, oRight = o.x + o.hw;
       if (pRight <= oLeft || pLeft >= oRight ||
           pBot <= o.top || pTop >= o.bot) continue;
-      // Hit — trigger death dino animation
+      // Hit — player drops to floor, then dino rushes in
       _gameTimer?.cancel();
       _playing = false;
       _dead = true;
+      _fallingDead = true;
+      _fallDeadVy = 0.0;
       _showDeathOverlay = false;
       _dinoChomping = false;
-      _deathDinoX = -2.0;    // enters from left (behind the player)
+      _deathDinoX = -2.0;
       HapticFeedback.heavyImpact();
       HighScoreService.submit('runner', _score);
       HighScoreService.load('runner').then((v) {
@@ -366,6 +372,20 @@ class _EndlessRunnerScreenState extends State<EndlessRunnerScreen> {
       if (!mounted) { _introTimer?.cancel(); return; }
       const dt = 0.016;
       setState(() {
+        // Phase 0: player falls to ground
+        if (_fallingDead) {
+          _fallDeadVy += _kGravity * dt;
+          _py += _fallDeadVy * dt;
+          final groundTop = _kGroundY - _kPlayerHStand;
+          if (_py >= groundTop) {
+            _py = groundTop;
+            _fallDeadVy = 0;
+            _fallingDead = false;
+            _onGround = true;
+          }
+          return;
+        }
+
         if (!_dinoChomping) {
           // Dino rushes RIGHTWARD from behind (left side) toward player
           _deathDinoX += 7.0 * dt;
@@ -681,43 +701,104 @@ class _RunnerPainter extends CustomPainter {
           canvas.drawCircle(Offset(ox + ow * 0.25, ot + oh * 0.55), 4, p);
 
         case _OType.pterodactyl:
-          // Flying pterodactyl — must duck under
-          // Wings
-          p.color = const Color(0xFF6A3010);
-          final wingY = (ot + oh * 0.5);
-          final wingSpan = ow * 0.65;
-          // Left wing
+          // Flying pterodactyl — faces LEFT, bigger, animated wings + hanging talons
+          final wingFlap = sin(DateTime.now().millisecondsSinceEpoch / 220.0);
+          final flapOffset = wingFlap * oh * 0.45;
+          final bodyW = ow * 0.55;
+          final bodyH = oh * 0.65;
+          final bodyCX = cx - ow * 0.05; // body slightly right of center
+          final bodyCY = ot + oh * 0.42;
+
+          // Ceiling string — thin line from top of screen
+          p..color = const Color(0xFF5A2A08).withOpacity(0.45)
+            ..style = PaintingStyle.stroke..strokeWidth = 1.2;
+          canvas.drawLine(Offset(bodyCX, 0), Offset(bodyCX, ot + oh * 0.15), p);
+          p..style = PaintingStyle.fill;
+
+          // Left wing (faces left, so left wing is the trailing wing)
+          p.color = const Color(0xFF7A3818);
           final lwPath = Path()
-            ..moveTo(cx, wingY)
-            ..quadraticBezierTo(cx - wingSpan * 0.5, wingY - 8, cx - wingSpan, wingY + 4)
-            ..quadraticBezierTo(cx - wingSpan * 0.5, wingY + 6, cx, wingY);
+            ..moveTo(bodyCX - bodyW * 0.35, bodyCY)
+            ..quadraticBezierTo(
+                bodyCX - ow * 0.85, bodyCY - oh * 0.25 - flapOffset * 0.6,
+                bodyCX - ow * 1.2, bodyCY + flapOffset * 0.3)
+            ..quadraticBezierTo(
+                bodyCX - ow * 0.75, bodyCY + oh * 0.22,
+                bodyCX - bodyW * 0.35, bodyCY + oh * 0.20);
           canvas.drawPath(lwPath, p);
-          // Right wing
+          // Right wing (forward wing since facing left)
           final rwPath = Path()
-            ..moveTo(cx, wingY)
-            ..quadraticBezierTo(cx + wingSpan * 0.5, wingY - 8, cx + wingSpan, wingY + 4)
-            ..quadraticBezierTo(cx + wingSpan * 0.5, wingY + 6, cx, wingY);
+            ..moveTo(bodyCX + bodyW * 0.35, bodyCY)
+            ..quadraticBezierTo(
+                bodyCX + ow * 0.60, bodyCY - oh * 0.30 - flapOffset * 0.8,
+                bodyCX + ow * 0.90, bodyCY + flapOffset * 0.4)
+            ..quadraticBezierTo(
+                bodyCX + ow * 0.50, bodyCY + oh * 0.18,
+                bodyCX + bodyW * 0.35, bodyCY + oh * 0.20);
           canvas.drawPath(rwPath, p);
+
+          // Wing membrane texture (darker veins)
+          p..color = const Color(0xFF4A1A08).withOpacity(0.40)
+            ..style = PaintingStyle.stroke..strokeWidth = 1;
+          canvas.drawLine(Offset(bodyCX - bodyW * 0.2, bodyCY + 3),
+              Offset(bodyCX - ow * 0.9, bodyCY + flapOffset * 0.2 + 5), p);
+          canvas.drawLine(Offset(bodyCX + bodyW * 0.2, bodyCY + 3),
+              Offset(bodyCX + ow * 0.65, bodyCY + flapOffset * 0.3 + 5), p);
+          p.style = PaintingStyle.fill;
+
           // Body
-          p.color = const Color(0xFF8A4018);
-          canvas.drawOval(Rect.fromLTWH(cx - ow * 0.22, ot + oh * 0.2, ow * 0.44, oh * 0.60), p);
-          // Head + beak
-          canvas.drawOval(Rect.fromLTWH(cx + ow * 0.12, ot, ow * 0.22, oh * 0.30), p);
-          p.color = const Color(0xFFCC8840);
+          p.color = const Color(0xFF9A4A20);
+          canvas.drawOval(Rect.fromLTWH(
+              bodyCX - bodyW * 0.50, bodyCY - bodyH * 0.45,
+              bodyW, bodyH), p);
+
+          // Head — on LEFT side (facing left)
+          final headR = oh * 0.28;
+          p.color = const Color(0xFF9A4A20);
+          canvas.drawOval(Rect.fromLTWH(
+              bodyCX - bodyW * 0.50 - headR * 1.6, bodyCY - bodyH * 0.40,
+              headR * 1.7, headR * 1.4), p);
+
+          // Beak — pointing LEFT
+          p.color = const Color(0xFFCC9040);
           final beakPath = Path()
-            ..moveTo(cx + ow * 0.34, ot + oh * 0.08)
-            ..lineTo(cx + ow * 0.55, ot + oh * 0.14)
-            ..lineTo(cx + ow * 0.34, ot + oh * 0.22)
+            ..moveTo(bodyCX - bodyW * 0.50 - headR * 1.5, bodyCY - bodyH * 0.20)
+            ..lineTo(bodyCX - bodyW * 0.50 - headR * 2.6, bodyCY - bodyH * 0.05)
+            ..lineTo(bodyCX - bodyW * 0.50 - headR * 1.5, bodyCY + bodyH * 0.08)
             ..close();
           canvas.drawPath(beakPath, p);
-          // Eye
-          p.color = Colors.red.withOpacity(0.85);
-          canvas.drawCircle(Offset(cx + ow * 0.24, ot + oh * 0.10), 3, p);
-          // Connector line from ceiling
-          p..color = const Color(0xFF6A3010).withOpacity(0.30)
-            ..style = PaintingStyle.stroke..strokeWidth = 1;
-          canvas.drawLine(Offset(cx, 0), Offset(cx, ot), p);
-          p..style = PaintingStyle.fill;
+          // Beak ridge
+          p..color = const Color(0xFF996820)..style = PaintingStyle.stroke..strokeWidth = 1;
+          canvas.drawLine(
+              Offset(bodyCX - bodyW * 0.50 - headR * 1.5, bodyCY - bodyH * 0.06),
+              Offset(bodyCX - bodyW * 0.50 - headR * 2.6, bodyCY - bodyH * 0.05), p);
+          p.style = PaintingStyle.fill;
+
+          // Eye — red, on LEFT side
+          p.color = Colors.red.withOpacity(0.90);
+          canvas.drawCircle(
+              Offset(bodyCX - bodyW * 0.50 - headR * 0.8, bodyCY - bodyH * 0.25), 4, p);
+          p.color = Colors.black;
+          canvas.drawCircle(
+              Offset(bodyCX - bodyW * 0.50 - headR * 0.75, bodyCY - bodyH * 0.24), 2, p);
+
+          // Hanging talons — two feet dangling below body
+          p.color = const Color(0xFF5A2A08);
+          final talonBaseY = bodyCY + bodyH * 0.45;
+          for (int t = 0; t < 2; t++) {
+            final tx = bodyCX + (t == 0 ? -bodyW * 0.18 : bodyW * 0.12);
+            // Leg
+            canvas.drawRect(Rect.fromLTWH(tx - 3, talonBaseY, 6, oh * 0.25), p);
+            // Claws — 3 talons
+            p..style = PaintingStyle.stroke..strokeWidth = 1.5;
+            for (int c = 0; c < 3; c++) {
+              final clawAngle = (c - 1) * 0.5;
+              canvas.drawLine(
+                  Offset(tx, talonBaseY + oh * 0.25),
+                  Offset(tx + cos(clawAngle) * 8, talonBaseY + oh * 0.25 + sin(clawAngle.abs() + 0.4) * 6), p);
+            }
+            p.style = PaintingStyle.fill;
+          }
       }
     }
 
@@ -854,8 +935,9 @@ class _RunnerPainter extends CustomPainter {
       // ── Legs — below body ─────────────────────────────────────────────────
       final legW = _kPlayerW * 0.45 * ux;
       final legBaseY = bodyBot * uy;
-      // Ground legs go from bodyBot → _kGroundY
-      final fullLegH = (_kGroundY - bodyBot) * uy;
+      // Fixed leg height — avoids noodle stretch when airborne
+      const fixedLegH = _kPlayerHStand * 0.22; // ~0.21 game units
+      final fullLegH = fixedLegH * uy;
       final sinV = onGround ? sin(legPhase) : 0.0;
       final liftL = max(0.0, sinV) * fullLegH * 0.5;
       final liftR = max(0.0, -sinV) * fullLegH * 0.5;
@@ -883,247 +965,297 @@ class _RunnerPainter extends CustomPainter {
     }
   }
 
-  // ── Pork-leg replacement after mauling ───────────────────────────────────────
+  // ── Turkey drumstick replacement after mauling ───────────────────────────────
   static void _drawPorkLeg(Canvas canvas, double px, double py, double ux, double uy,
       bool isDucking) {
     final p = Paint()..isAntiAlias = true;
     const pH = _kPlayerHStand;
-    // Bone
-    p.color = Colors.white.withOpacity(0.9);
+    final cx = px * ux;
+    final meatTop = (py + pH * 0.05) * uy;
+    final meatW = _kPlayerW * 1.1 * ux;
+    final meatH = pH * 0.58 * uy;
+
+    // Bone — thin white stick at bottom
+    p.color = const Color(0xFFF5F5E0);
+    final boneX = cx - _kPlayerW * 0.06 * ux;
+    final boneW = _kPlayerW * 0.12 * ux;
     canvas.drawRRect(RRect.fromRectAndRadius(
-        Rect.fromLTWH((px - _kPlayerW * 0.20) * ux, (py + pH * 0.1) * uy,
-            _kPlayerW * 0.40 * ux, pH * 0.70 * uy),
-        const Radius.circular(6)), p);
-    // Bone knobs
-    p.color = Colors.white;
-    canvas.drawCircle(Offset(px * ux, (py + pH * 0.13) * uy), 10, p);
-    canvas.drawCircle(Offset(px * ux, (py + pH * 0.78) * uy), 10, p);
-    // Meat
-    p.color = const Color(0xFFE05030).withOpacity(0.85);
-    canvas.drawRRect(RRect.fromRectAndRadius(
-        Rect.fromLTWH((px - _kPlayerW * 0.35) * ux, (py + pH * 0.25) * uy,
-            _kPlayerW * 0.70 * ux, pH * 0.45 * uy),
-        const Radius.circular(10)), p);
-    // Fat marbling
-    p.color = Colors.white.withOpacity(0.35);
-    canvas.drawOval(Rect.fromLTWH(
-        (px - _kPlayerW * 0.22) * ux, (py + pH * 0.32) * uy,
-        _kPlayerW * 0.44 * ux, pH * 0.20 * uy), p);
+        Rect.fromLTWH(boneX, meatTop + meatH * 0.45, boneW, meatH * 0.55),
+        const Radius.circular(4)), p);
+    // Bone end knob
+    canvas.drawCircle(Offset(cx, meatTop + meatH * 0.98), 8, p);
+
+    // Meat — pear/teardrop shape (wider at top, narrower at bottom)
+    p.color = const Color(0xFFC47A30);
+    canvas.drawOval(Rect.fromLTWH(cx - meatW * 0.50, meatTop, meatW, meatH * 0.72), p);
+    canvas.drawOval(Rect.fromLTWH(cx - meatW * 0.30, meatTop + meatH * 0.50,
+        meatW * 0.60, meatH * 0.35), p);
+
+    // Crispy surface — slightly lighter center
+    p.color = const Color(0xFFD88C3A);
+    canvas.drawOval(Rect.fromLTWH(cx - meatW * 0.35, meatTop + 3, meatW * 0.70, meatH * 0.42), p);
+
+    // Dark crispy spots
+    p.color = const Color(0xFF7A3A10).withOpacity(0.55);
+    canvas.drawCircle(Offset(cx - meatW * 0.20, meatTop + meatH * 0.22), 6, p);
+    canvas.drawCircle(Offset(cx + meatW * 0.22, meatTop + meatH * 0.40), 5, p);
+    canvas.drawCircle(Offset(cx - meatW * 0.10, meatTop + meatH * 0.58), 4, p);
+
+    // Gleam / highlight
+    p.color = Colors.white.withOpacity(0.30);
+    canvas.drawOval(Rect.fromLTWH(cx - meatW * 0.28, meatTop + 5, meatW * 0.30, meatH * 0.22), p);
   }
 
   // getter used in mauling check
   bool get _mauling => maulPhase > 0 && maulPhase < 60;
 
-  // ── Dinosaur painter ───────────────────────────────────────────────────────
+  // ── Dinosaur painter (T-Rex redesign) ─────────────────────────────────────
   static void _drawDino(Canvas canvas, double dx, double ux, double uy,
       {bool chomping = false, double legPhase = 0.0, bool mauling = false}) {
     final p = Paint()..isAntiAlias = true;
-    // Scarier when mauling — deeper red tint
-    final clr = mauling ? const Color(0xFF158A40) : const Color(0xFF1DAA55);
-    const clrDark = Color(0xFF0E6633);
-    const clrLight = Color(0xFF3AE87A);
+    final clr = mauling ? const Color(0xFF106E30) : const Color(0xFF178844);
+    const clrDark = Color(0xFF0A4A20);
+    const clrLight = Color(0xFF28CC66);
+    const clrBelly = Color(0xFF90C890);
 
-    // Body bob — double-frequency, always positive (bounces up on each step)
-    final bob = chomping ? 0.0 : sin(legPhase * 2.0).abs() * 0.04;
+    final bob = chomping ? 0.0 : sin(legPhase * 2.0).abs() * 0.035;
 
-    // Key Y anchors in game units
-    final bodyTop = _kGroundY - 1.12 - bob;
-    final bodyBot = _kGroundY - 0.28 - bob;
-    const bodyLeft = -0.42; // relative to dx
-    const bodyRight = 0.33;
+    // ── Anchor points ────────────────────────────────────────────────────────
+    // Wider, more horizontal T-Rex body
+    final bodyTop = _kGroundY - 1.20 - bob;
+    final bodyBot = _kGroundY - 0.22 - bob;
+    const bodyLeft = -0.55;   // wide body
+    const bodyRight = 0.42;
+    final bodyMidY = (bodyTop + bodyBot) / 2;
 
-    // Glow
-    p..color = clr.withOpacity(0.18)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 7);
-    canvas.drawOval(
-        Rect.fromCenter(
-            center: Offset(dx * ux, (_kGroundY - 0.60 - bob * 0.5) * uy),
-            width: 1.7 * ux, height: 1.3 * uy),
-        p);
+    // ── Glow ─────────────────────────────────────────────────────────────────
+    p..color = clr.withOpacity(mauling ? 0.30 : 0.12)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10);
+    canvas.drawOval(Rect.fromCenter(
+        center: Offset(dx * ux, (_kGroundY - 0.55 - bob) * uy),
+        width: 2.2 * ux, height: 1.4 * uy), p);
     p.maskFilter = null;
 
-    // Tail — sways with cos(legPhase), tip drags behind body-left
-    final tailSway = chomping ? 0.0 : cos(legPhase) * 0.07;
+    // ── Tail — large, thick, sweeping ────────────────────────────────────────
+    final tailSway = chomping ? 0.0 : cos(legPhase) * 0.09;
     p.color = clrDark;
     final tailPath = Path()
-      ..moveTo((dx + bodyLeft) * ux, (_kGroundY - 0.52 - bob) * uy)
-      ..lineTo((dx - 0.92) * ux, (_kGroundY - 0.26 + tailSway - bob) * uy)
-      ..lineTo((dx + bodyLeft) * ux, (_kGroundY - 0.88 - bob) * uy)
+      ..moveTo((dx + bodyLeft) * ux, (_kGroundY - 0.45 - bob) * uy)
+      ..quadraticBezierTo(
+          (dx - 0.90) * ux, (_kGroundY - 0.50 + tailSway - bob) * uy,
+          (dx - 1.30) * ux, (_kGroundY - 0.18 + tailSway * 1.5 - bob) * uy)
+      ..lineTo((dx - 1.20) * ux, (_kGroundY - 0.10 - bob) * uy)
+      ..quadraticBezierTo(
+          (dx - 0.80) * ux, (_kGroundY - 0.28 + tailSway - bob) * uy,
+          (dx + bodyLeft) * ux, (_kGroundY - 0.85 - bob) * uy)
       ..close();
     canvas.drawPath(tailPath, p);
-
-    // Body
+    // Tail highlight
     p.color = clr;
-    canvas.drawRRect(
-        RRect.fromRectAndRadius(
-            Rect.fromLTWH(
-                (dx + bodyLeft) * ux, bodyTop * uy,
-                (bodyRight - bodyLeft) * ux, (bodyBot - bodyTop) * uy),
-            const Radius.circular(4)),
-        p);
+    final tailHPath = Path()
+      ..moveTo((dx + bodyLeft) * ux, (_kGroundY - 0.60 - bob) * uy)
+      ..quadraticBezierTo(
+          (dx - 0.65) * ux, (_kGroundY - 0.55 + tailSway * 0.6 - bob) * uy,
+          (dx - 1.05) * ux, (_kGroundY - 0.22 + tailSway - bob) * uy)
+      ..lineTo((dx - 0.98) * ux, (_kGroundY - 0.16 - bob) * uy)
+      ..quadraticBezierTo(
+          (dx - 0.60) * ux, (_kGroundY - 0.40 + tailSway * 0.5 - bob) * uy,
+          (dx + bodyLeft) * ux, (_kGroundY - 0.78 - bob) * uy)
+      ..close();
+    canvas.drawPath(tailHPath, p);
 
-    // Body highlight stripe (top-left)
-    p.color = clrLight.withOpacity(0.45);
-    canvas.drawRRect(
-        RRect.fromRectAndRadius(
-            Rect.fromLTWH(
-                (dx + bodyLeft + 0.05) * ux, (bodyTop + 0.05) * uy,
-                0.16 * ux, 0.22 * uy),
-            const Radius.circular(2)),
-        p);
-
-    // Head — bottom = bodyTop (seamless, no gap)
-    const headW = 0.54;
-    const headH = 0.48;
-    final headLeft = dx + 0.08;
-    final headTop = bodyTop - headH;
+    // ── Body ─────────────────────────────────────────────────────────────────
     p.color = clr;
-    canvas.drawRRect(
-        RRect.fromRectAndRadius(
-            Rect.fromLTWH(headLeft * ux, headTop * uy, headW * ux, headH * uy),
-            const Radius.circular(3)),
-        p);
+    canvas.drawRRect(RRect.fromRectAndRadius(
+        Rect.fromLTWH((dx + bodyLeft) * ux, bodyTop * uy,
+            (bodyRight - bodyLeft) * ux, (bodyBot - bodyTop) * uy),
+        const Radius.circular(8)), p);
 
-    // Upper jaw / snout — always there, drops slightly when chomping
-    final jawGap = chomping || mauling ? 0.20 : 0.04;
-    // Upper jaw stays mostly fixed
-    canvas.drawRRect(
-        RRect.fromRectAndRadius(
-            Rect.fromLTWH(
-                (headLeft + headW - 0.02) * ux, (headTop + 0.08) * uy,
-                0.28 * ux, 0.16 * uy),
-            const Radius.circular(2)),
-        p);
+    // Belly lighter patch
+    p.color = clrBelly.withOpacity(0.5);
+    canvas.drawOval(Rect.fromLTWH(
+        (dx + bodyLeft + 0.12) * ux, (bodyTop + (bodyBot - bodyTop) * 0.30) * uy,
+        (bodyRight - bodyLeft - 0.28) * ux, (bodyBot - bodyTop) * 0.55 * uy), p);
 
-    // Lower jaw — drops down when chomping
-    p.color = clr;
-    canvas.drawRRect(
-        RRect.fromRectAndRadius(
-            Rect.fromLTWH(
-                (headLeft + headW - 0.02) * ux, (headTop + 0.08 + jawGap) * uy,
-                0.24 * ux, 0.14 * uy),
-            const Radius.circular(2)),
-        p);
-
-    // Teeth — UPPER teeth (pointing down)
-    p.color = Colors.white.withOpacity(0.95);
-    for (int i = 0; i < 4; i++) {
-      canvas.drawRect(Rect.fromLTWH(
-          (headLeft + headW - 0.01 + i * 0.06) * ux,
-          (headTop + 0.24) * uy,
-          0.04 * ux, (chomping || mauling) ? 0.10 * uy : 0.04 * uy), p);
-    }
-    // Teeth — LOWER teeth (pointing up), only visible when mouth is open
-    if (chomping || mauling) {
-      for (int i = 0; i < 3; i++) {
-        canvas.drawRect(Rect.fromLTWH(
-            (headLeft + headW + 0.02 + i * 0.07) * ux,
-            (headTop + 0.08 + jawGap - 0.08) * uy,
-            0.04 * ux, 0.10 * uy), p);
-      }
-      // Saliva drip
-      p.color = Colors.white.withOpacity(0.55);
-      canvas.drawOval(Rect.fromLTWH(
-          (headLeft + headW + 0.04) * ux, (headTop + 0.34) * uy,
-          0.04 * ux, 0.08 * uy), p);
-    }
-    p.color = clr;
-
-    // Angry eyebrow ridge — thicker and angrier when mauling
-    final eyeCx = (headLeft + 0.33) * ux;
-    final eyeCy = (headTop + 0.16) * uy;
-    p..color = clrDark
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = mauling ? 2.5 : 1.5;
-    canvas.drawLine(
-        Offset(eyeCx - 8, eyeCy + 5),
-        Offset(eyeCx + 5, eyeCy),
-        p);
-    p..style = PaintingStyle.fill..strokeWidth = 1.0;
-
-    // Eye glow when mauling (red demonic)
-    if (mauling) {
-      p..color = Colors.red.withOpacity(0.55)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
-      canvas.drawCircle(Offset(eyeCx, eyeCy + 4), 10, p);
-      p.maskFilter = null;
+    // Scale dots along body
+    p.color = clrDark.withOpacity(0.35);
+    for (int i = 0; i < 6; i++) {
+      final sx = dx + bodyLeft + 0.10 + i * 0.14;
+      final sy = bodyTop + (bodyBot - bodyTop) * (0.20 + (i % 2) * 0.25);
+      canvas.drawCircle(Offset(sx * ux, sy * uy), 3, p);
     }
 
-    // Eye — vertical reptile slit (red iris when mauling, yellow normally)
-    p.color = (mauling ? Colors.redAccent : Colors.yellowAccent).withOpacity(0.95);
-    canvas.drawOval(
-        Rect.fromCenter(center: Offset(eyeCx, eyeCy + 4),
-            width: 6.0, height: 9.5),
-        p);
-    p.color = Colors.black;
-    canvas.drawOval(
-        Rect.fromCenter(center: Offset(eyeCx, eyeCy + 4),
-            width: 2.2, height: 8.0),
-        p);
-    // Gleam
-    p.color = Colors.white.withOpacity(0.75);
-    canvas.drawCircle(Offset(eyeCx - 1.5, eyeCy + 1.5), 1.5, p);
-
-    // Tiny T-Rex arm + claw hints
+    // Dorsal ridge bumps along top of body
     p.color = clrDark;
-    canvas.drawRRect(
-        RRect.fromRectAndRadius(
-            Rect.fromLTWH(
-                (dx + 0.22) * ux, (bodyTop + 0.10) * uy,
-                0.17 * ux, 0.13 * uy),
-            const Radius.circular(2)),
-        p);
-    p..style = PaintingStyle.stroke..strokeWidth = 1.0;
-    for (int i = 0; i < 2; i++) {
-      final fx = (dx + 0.39 + i * 0.04) * ux;
-      final fy = (bodyTop + 0.23) * uy;
-      canvas.drawLine(Offset(fx, fy - 3), Offset(fx + 3, fy), p);
+    for (int i = 0; i < 5; i++) {
+      final rx = dx + bodyLeft + 0.15 + i * 0.17;
+      canvas.drawOval(Rect.fromLTWH(
+          rx * ux - 5, (bodyTop - 0.05 - bob) * uy, 10, 8), p);
+    }
+
+    // Body highlight stripe
+    p.color = clrLight.withOpacity(0.30);
+    canvas.drawRRect(RRect.fromRectAndRadius(
+        Rect.fromLTWH((dx + bodyLeft + 0.06) * ux, (bodyTop + 0.04) * uy,
+            0.22 * ux, (bodyBot - bodyTop) * 0.28 * uy),
+        const Radius.circular(3)), p);
+
+    // ── Tiny T-Rex arm ────────────────────────────────────────────────────────
+    p.color = clrDark;
+    canvas.drawRRect(RRect.fromRectAndRadius(
+        Rect.fromLTWH((dx + 0.22) * ux, (bodyTop + 0.15) * uy, 0.18 * ux, 0.14 * uy),
+        const Radius.circular(2)), p);
+    p..style = PaintingStyle.stroke..strokeWidth = 1.2;
+    for (int i = 0; i < 3; i++) {
+      canvas.drawLine(
+          Offset((dx + 0.40) * ux, (bodyTop + 0.28) * uy),
+          Offset((dx + 0.40 + i * 0.04) * ux, (bodyTop + 0.36) * uy), p);
     }
     p..style = PaintingStyle.fill;
 
-    // Legs — anchored at bodyBot; HEIGHT varies (no Y shift = no detachment)
+    // ── Head — wide, imposing, proper T-Rex proportions ───────────────────────
+    const headW = 0.78;  // much wider
+    const headH = 0.58;  // taller
+    final headLeft = dx + 0.05;
+    final headTop = bodyTop - headH + 0.08;
+    final snoutRight = headLeft + headW;
+
+    // Jaw gap for chomping/mauling
+    final jawOpen = chomping || mauling;
+    final jawGap = jawOpen ? 0.26 : 0.0;
+
+    // Upper jaw
+    p.color = clr;
+    canvas.drawRRect(RRect.fromRectAndRadius(
+        Rect.fromLTWH(headLeft * ux, headTop * uy, headW * ux, (headH * 0.55) * uy),
+        const Radius.circular(6)), p);
+    // Snout rounded tip
+    canvas.drawOval(Rect.fromLTWH(
+        (snoutRight - 0.12) * ux, headTop * uy, 0.18 * ux, headH * 0.50 * uy), p);
+
+    // Lower jaw — drops down
+    p.color = clrDark.withOpacity(0.85);
+    final lowerJawTop = headTop + headH * 0.50 + jawGap;
+    canvas.drawRRect(RRect.fromRectAndRadius(
+        Rect.fromLTWH(headLeft * ux, lowerJawTop * uy, headW * 0.85 * ux, headH * 0.30 * uy),
+        const Radius.circular(4)), p);
+
+    // Mouth opening — dark interior
+    if (jawOpen) {
+      p.color = const Color(0xFF440000);
+      canvas.drawRect(Rect.fromLTWH(
+          (headLeft + 0.08) * ux, (headTop + headH * 0.50) * uy,
+          headW * 0.75 * ux, jawGap * uy), p);
+
+      // Tongue — pink slab
+      p.color = const Color(0xFFCC3344);
+      canvas.drawOval(Rect.fromLTWH(
+          (headLeft + 0.18) * ux, (headTop + headH * 0.52) * uy,
+          headW * 0.45 * ux, jawGap * 0.50 * uy), p);
+    }
+
+    // UPPER teeth — large triangles pointing DOWN
+    p.color = Colors.white.withOpacity(0.95);
+    final toothCount = jawOpen ? 5 : 4;
+    for (int i = 0; i < toothCount; i++) {
+      final tx = (headLeft + 0.10 + i * (headW * 0.72 / toothCount)) * ux;
+      final ty = (headTop + headH * 0.50) * uy;
+      final th = (jawOpen ? 0.14 : 0.05) * uy;
+      final tw = 0.045 * ux;
+      final toothPath = Path()
+        ..moveTo(tx, ty)
+        ..lineTo(tx + tw, ty)
+        ..lineTo(tx + tw / 2, ty + th)
+        ..close();
+      canvas.drawPath(toothPath, p);
+    }
+
+    // LOWER teeth — triangles pointing UP, only when open
+    if (jawOpen) {
+      for (int i = 0; i < 4; i++) {
+        final tx = (headLeft + 0.14 + i * (headW * 0.62 / 4)) * ux;
+        final ty = lowerJawTop * uy;
+        final th = 0.11 * uy;
+        final tw = 0.040 * ux;
+        final toothPath = Path()
+          ..moveTo(tx, ty + th)
+          ..lineTo(tx + tw, ty + th)
+          ..lineTo(tx + tw / 2, ty)
+          ..close();
+        canvas.drawPath(toothPath, p);
+      }
+      // Saliva drip
+      p.color = Colors.white.withOpacity(0.50);
+      canvas.drawOval(Rect.fromLTWH(
+          (headLeft + 0.25) * ux, (headTop + headH * 0.48 + jawGap * 0.6) * uy,
+          0.05 * ux, 0.10 * uy), p);
+    }
+
+    // Nostril
+    p.color = clrDark.withOpacity(0.60);
+    canvas.drawOval(Rect.fromLTWH(
+        (snoutRight - 0.08) * ux, (headTop + headH * 0.12) * uy,
+        0.06 * ux, 0.05 * uy), p);
+
+    // Angry brow ridge
+    final eyeCx = (headLeft + 0.22) * ux;
+    final eyeCy = (headTop + headH * 0.22) * uy;
+    p..color = clrDark
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = mauling ? 3.0 : 2.0;
+    canvas.drawLine(Offset(eyeCx - 10, eyeCy + 7), Offset(eyeCx + 8, eyeCy - 2), p);
+    p..style = PaintingStyle.fill;
+
+    // Eye glow when mauling
+    if (mauling) {
+      p..color = Colors.red.withOpacity(0.60)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10);
+      canvas.drawCircle(Offset(eyeCx, eyeCy + 4), 12, p);
+      p.maskFilter = null;
+    }
+
+    // Eye — large vertical reptile slit
+    p.color = (mauling ? const Color(0xFFFF2200) : const Color(0xFFFFCC00)).withOpacity(0.95);
+    canvas.drawOval(Rect.fromCenter(
+        center: Offset(eyeCx, eyeCy + 4), width: 9.0, height: 14.0), p);
+    p.color = Colors.black;
+    canvas.drawOval(Rect.fromCenter(
+        center: Offset(eyeCx, eyeCy + 4), width: 3.5, height: 11.0), p);
+    p.color = Colors.white.withOpacity(0.80);
+    canvas.drawCircle(Offset(eyeCx - 2.0, eyeCy), 2.0, p);
+
+    // ── Legs ─────────────────────────────────────────────────────────────────
     p.color = clr;
     if (chomping) {
-      // Static wide stance
-      canvas.drawRRect(RRect.fromRectAndRadius(
-          Rect.fromLTWH((dx - 0.27) * ux, bodyBot * uy, 0.20 * ux, 0.28 * uy),
-          const Radius.circular(2)), p);
-      canvas.drawRRect(RRect.fromRectAndRadius(
-          Rect.fromLTWH((dx + 0.07) * ux, bodyBot * uy, 0.20 * ux, 0.28 * uy),
-          const Radius.circular(2)), p);
-    } else {
-      // Alternating lift: one leg shortens as foot rises off ground
-      final liftL = max(0.0, sin(legPhase)) * 0.15;
-      final liftR = max(0.0, -sin(legPhase)) * 0.15;
-      final legLH = (0.28 + bob - liftL).clamp(0.06, 0.40);
-      final legRH = (0.28 + bob - liftR).clamp(0.06, 0.40);
-
-      // Left leg
-      canvas.drawRRect(RRect.fromRectAndRadius(
-          Rect.fromLTWH((dx - 0.27) * ux, bodyBot * uy, 0.20 * ux, legLH * uy),
-          const Radius.circular(2)), p);
-      // Foot flat on ground when planted
-      if (liftL < 0.04) {
+      // Wide stance
+      for (final lx in [dx - 0.30, dx + 0.10]) {
+        canvas.drawRRect(RRect.fromRectAndRadius(
+            Rect.fromLTWH(lx * ux, bodyBot * uy, 0.25 * ux, 0.22 * uy),
+            const Radius.circular(3)), p);
         p.color = clrDark;
         canvas.drawRRect(RRect.fromRectAndRadius(
-            Rect.fromLTWH((dx - 0.32) * ux, (bodyBot + legLH - 0.055) * uy,
-                0.30 * ux, 0.055 * uy),
-            const Radius.circular(1)), p);
+            Rect.fromLTWH((lx - 0.05) * ux, (bodyBot + 0.18) * uy, 0.34 * ux, 0.06 * uy),
+            const Radius.circular(2)), p);
         p.color = clr;
       }
-
-      // Right leg
-      canvas.drawRRect(RRect.fromRectAndRadius(
-          Rect.fromLTWH((dx + 0.07) * ux, bodyBot * uy, 0.20 * ux, legRH * uy),
-          const Radius.circular(2)), p);
-      // Foot flat on ground when planted
-      if (liftR < 0.04) {
-        p.color = clrDark;
-        canvas.drawRRect(RRect.fromRectAndRadius(
-            Rect.fromLTWH((dx + 0.02) * ux, (bodyBot + legRH - 0.055) * uy,
-                0.30 * ux, 0.055 * uy),
-            const Radius.circular(1)), p);
+    } else {
+      final liftL = max(0.0, sin(legPhase)) * 0.16;
+      final liftR = max(0.0, -sin(legPhase)) * 0.16;
+      final legLH = (0.22 + bob - liftL).clamp(0.05, 0.35);
+      final legRH = (0.22 + bob - liftR).clamp(0.05, 0.35);
+      for (final entry in [(dx - 0.30, legLH, liftL), (dx + 0.10, legRH, liftR)]) {
+        final (lx, lh, lift) = entry;
         p.color = clr;
+        canvas.drawRRect(RRect.fromRectAndRadius(
+            Rect.fromLTWH(lx * ux, bodyBot * uy, 0.25 * ux, lh * uy),
+            const Radius.circular(3)), p);
+        if (lift < 0.04) {
+          p.color = clrDark;
+          canvas.drawRRect(RRect.fromRectAndRadius(
+              Rect.fromLTWH((lx - 0.05) * ux, (bodyBot + lh - 0.06) * uy,
+                  0.34 * ux, 0.06 * uy),
+              const Radius.circular(2)), p);
+        }
       }
     }
   }

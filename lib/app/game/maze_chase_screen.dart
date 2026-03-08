@@ -83,6 +83,7 @@ class _MazeChasScreenState extends State<MazeChasScreen> {
   bool _isRunning = false;
   bool _isDead = false;
   bool _levelComplete = false;
+  bool _paused = false;
   bool _scaredActive = false;
 
   double _saldo = 0;
@@ -186,9 +187,18 @@ class _MazeChasScreenState extends State<MazeChasScreen> {
         _queuedDir = 1;
         if (!_isRunning && !_isDead && !_levelComplete) _startGame();
       case ArcadeButton.a:
+        if (_isDead) {
+          _restart();
+        } else if (!_isRunning && !_levelComplete) {
+          _startGame();
+        }
       case ArcadeButton.start:
         if (_isDead) {
           _restart();
+        } else if (_isRunning && !_levelComplete) {
+          setState(() => _paused = !_paused);
+          if (_paused) _stopTimers();
+          else _startTimers();
         } else if (!_isRunning && !_levelComplete) {
           _startGame();
         }
@@ -559,6 +569,7 @@ class _MazeChasScreenState extends State<MazeChasScreen> {
         if (!_isRunning && !_isDead && !_levelComplete) _buildStartOverlay(),
         if (_isDead) _buildGameOverOverlay(),
         if (_levelComplete) _buildLevelCompleteOverlay(),
+        if (_paused && _isRunning) _buildPauseOverlay(),
       ],
     );
   }
@@ -696,6 +707,22 @@ class _MazeChasScreenState extends State<MazeChasScreen> {
       ),
     );
   }
+
+  Widget _buildPauseOverlay() => Positioned.fill(
+    child: Container(
+      color: const Color(0xCC000000),
+      child: const Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text('⏸', style: TextStyle(fontSize: 48)),
+          SizedBox(height: 8),
+          Text('PAUSA', style: TextStyle(color: Color(0xFFFFFF00), fontSize: 28, fontWeight: FontWeight.bold, letterSpacing: 6)),
+          SizedBox(height: 16),
+          Text('START para continuar', style: TextStyle(color: Color(0xFF666600), fontSize: 12)),
+        ],
+      ),
+    ),
+  );
 }
 
 // ─── CustomPainter ────────────────────────────────────────────────────────────

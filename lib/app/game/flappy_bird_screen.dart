@@ -93,6 +93,7 @@ class _FlappyBirdScreenState extends State<FlappyBirdScreen> {
   // State
   bool _isRunning = false;
   bool _isDead = false;
+  bool _paused = false;
 
   // Wing flap animation
   double _flapAngle = 0;
@@ -133,13 +134,24 @@ class _FlappyBirdScreenState extends State<FlappyBirdScreen> {
       return;
     }
 
-    // Any action button or up = flap
+    // Start pauses/resumes when running
+    if (btn == ArcadeButton.start) {
+      if (_isRunning) {
+        setState(() => _paused = !_paused);
+      } else {
+        _flap();
+        _startGame();
+      }
+      return;
+    }
+
+    // Any other action button = flap
     if (btn == ArcadeButton.a ||
         btn == ArcadeButton.b ||
         btn == ArcadeButton.x ||
         btn == ArcadeButton.y ||
-        btn == ArcadeButton.up ||
-        btn == ArcadeButton.start) {
+        btn == ArcadeButton.up) {
+      if (_paused) return;
       _flap();
       if (!_isRunning) _startGame();
     }
@@ -164,7 +176,7 @@ class _FlappyBirdScreenState extends State<FlappyBirdScreen> {
     final dt =
         (now.difference(_lastTick!).inMicroseconds / 1e6).clamp(0.0, 0.05);
     _lastTick = now;
-    if (_isDead) return;
+    if (_isDead || _paused) return;
     _update(dt);
     if (mounted) setState(() {});
   }
@@ -325,6 +337,7 @@ class _FlappyBirdScreenState extends State<FlappyBirdScreen> {
         ),
         if (!_isRunning && !_isDead) _buildStartOverlay(),
         if (_isDead) _buildDeathOverlay(),
+        if (_paused && _isRunning) _buildPauseOverlay(),
       ]);
     });
   }
@@ -457,6 +470,22 @@ class _FlappyBirdScreenState extends State<FlappyBirdScreen> {
         ),
       ),
     );
+
+  Widget _buildPauseOverlay() => Positioned.fill(
+    child: Container(
+      color: const Color(0xCC000000),
+      child: const Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text('⏸', style: TextStyle(fontSize: 48)),
+          SizedBox(height: 8),
+          Text('PAUSA', style: TextStyle(color: Color(0xFF5EC8E8), fontSize: 28, fontWeight: FontWeight.bold, letterSpacing: 6)),
+          SizedBox(height: 16),
+          Text('START para continuar', style: TextStyle(color: Color(0xFF3A8899), fontSize: 12)),
+        ],
+      ),
+    ),
+  );
 }
 
 // ─── Painter ─────────────────────────────────────────────────────────────────

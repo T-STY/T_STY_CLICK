@@ -509,132 +509,142 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
   }
 
   Widget _buildGameGrid() {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        const cols = 3;
-        final cellW = constraints.maxWidth / cols;
-        final cellH = constraints.maxHeight / 4;
-
-        return GridView.builder(
-          physics: const NeverScrollableScrollPhysics(),
-          padding: const EdgeInsets.all(6),
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: cols,
-            mainAxisSpacing: 6,
-            crossAxisSpacing: 6,
-          ),
-          itemCount: kArcadeGames.length,
-          itemBuilder: (_, i) {
-            final game = kArcadeGames[i];
-            if (game.locked) return _buildLockedCard(game, i, i == _selectedIndex);
-            return _buildNeonCard(game, i, i == _selectedIndex, cellW - 6, cellH - 6);
-          },
-        );
+    return GridView.builder(
+      physics: const NeverScrollableScrollPhysics(),
+      padding: const EdgeInsets.fromLTRB(5, 5, 5, 0),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 3,
+        mainAxisSpacing: 5,
+        crossAxisSpacing: 5,
+        childAspectRatio: 0.82,
+      ),
+      itemCount: kArcadeGames.length,
+      itemBuilder: (_, i) {
+        final game = kArcadeGames[i];
+        if (game.locked) return _buildLockedCard(game, i, i == _selectedIndex);
+        return _buildNeonCard(game, i, i == _selectedIndex, 0, 0);
       },
     );
   }
 
   Widget _buildNeonCard(ArcadeGameDef def, int index, bool selected, double w, double h) {
-    const phosphor = Color(0xFF00FF88);
     final neon = _kNeonColors[index];
+    final gradColors = _kCardGradients[index];
+    final isRecord = _newRecordIndex == index;
+    final borderColor = isRecord ? Colors.amber : (selected ? neon : neon.withOpacity(0.30));
+    final borderWidth = selected ? 1.8 : 1.0;
+
     return GestureDetector(
       onTap: () => setState(() => _selectedIndex = index),
       onDoubleTap: selected ? _launchSelected : null,
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
+        duration: const Duration(milliseconds: 130),
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-            color: (_newRecordIndex == index)
-                ? Colors.amber
-                : selected ? phosphor : neon.withOpacity(0.22),
-            width: selected ? 1.5 : 1.0,
+          gradient: LinearGradient(
+            begin: Alignment.topLeft, end: Alignment.bottomRight,
+            colors: gradColors,
           ),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: borderColor, width: borderWidth),
           boxShadow: selected ? [
-            BoxShadow(color: phosphor.withOpacity(0.28), blurRadius: 10),
-            BoxShadow(color: phosphor.withOpacity(0.10), blurRadius: 22, spreadRadius: 1),
-          ] : [],
+            BoxShadow(color: neon.withOpacity(0.45), blurRadius: 14, spreadRadius: 0),
+            BoxShadow(color: neon.withOpacity(0.15), blurRadius: 28, spreadRadius: 2),
+          ] : [
+            BoxShadow(color: neon.withOpacity(0.10), blurRadius: 5),
+          ],
         ),
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(7),
+          borderRadius: BorderRadius.circular(9),
           child: Stack(children: [
-            // Card art background
-            Positioned.fill(
-              child: CustomPaint(
-                painter: _CartridgePainter(index: index, selected: selected),
-              ),
-            ),
-            // Terminal dark overlay — dimmer when unselected
-            Positioned.fill(
-              child: DecoratedBox(
+            // Neon accent bar at top
+            Positioned(top: 0, left: 0, right: 0,
+              child: Container(
+                height: selected ? 3.0 : 2.0,
                 decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(selected ? 0.36 : 0.52),
-                ),
-              ),
-            ),
-            // New record celebration banner
-            if (_newRecordIndex == index)
-              Positioned(
-                top: 5,
-                left: 0,
-                right: 0,
-                child: Center(
-                  child: Text(
-                    '⚡ NUEVO RECORD ⚡',
-                    style: TextStyle(
-                      color: Colors.amber,
-                      fontSize: 5.5,
-                      fontFamily: 'monospace',
-                      fontWeight: FontWeight.bold,
-                      shadows: [Shadow(color: Colors.amber, blurRadius: 8)],
-                    ),
+                  gradient: LinearGradient(
+                    colors: [neon.withOpacity(selected ? 0.90 : 0.40), Colors.transparent],
                   ),
                 ),
               ),
-            // Content
+            ),
+            // Subtle corner glow
+            Positioned(top: 0, right: 0,
+              child: Container(
+                width: 32, height: 32,
+                decoration: BoxDecoration(
+                  gradient: RadialGradient(
+                    colors: [neon.withOpacity(selected ? 0.18 : 0.08), Colors.transparent],
+                  ),
+                ),
+              ),
+            ),
+            // Record burst
+            if (isRecord)
+              Positioned(top: 6, left: 0, right: 0,
+                child: Center(
+                  child: Text('⚡ RÉCORD ⚡',
+                    style: TextStyle(color: Colors.amber, fontSize: 6.0,
+                      fontFamily: 'monospace', fontWeight: FontWeight.bold,
+                      shadows: [Shadow(color: Colors.amber, blurRadius: 10)]),
+                  ),
+                ),
+              ),
+            // Main content
             Positioned.fill(
               child: Column(
-                mainAxisAlignment: MainAxisAlignment.end,
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Text(def.emoji, style: TextStyle(fontSize: selected ? 20 : 16)),
-                  const SizedBox(height: 2),
-                  Text(def.title,
-                    textAlign: TextAlign.center,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: selected ? phosphor : Colors.white54,
-                      fontSize: 7,
-                      fontWeight: FontWeight.bold,
-                      fontFamily: 'monospace',
-                      letterSpacing: 0.4,
-                      shadows: selected ? [Shadow(color: phosphor, blurRadius: 8)] : null,
+                  AnimatedDefaultTextStyle(
+                    duration: const Duration(milliseconds: 130),
+                    style: TextStyle(fontSize: selected ? 26 : 20),
+                    child: Text(def.emoji),
+                  ),
+                  const SizedBox(height: 3),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    child: Text(def.title,
+                      textAlign: TextAlign.center,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: selected ? neon : Colors.white60,
+                        fontSize: selected ? 7.5 : 6.5,
+                        fontWeight: FontWeight.bold,
+                        fontFamily: 'monospace',
+                        letterSpacing: 0.3,
+                        shadows: selected ? [Shadow(color: neon, blurRadius: 8)] : null,
+                      ),
                     ),
                   ),
+                  const SizedBox(height: 2),
                   if (_highScores[index] > 0)
                     Text('★ ${_highScores[index]}',
                       style: TextStyle(
-                        color: selected ? Colors.amber : Colors.amber.withOpacity(0.45),
-                        fontSize: 6.5, fontFamily: 'monospace',
+                        color: selected ? Colors.amber : Colors.amber.withOpacity(0.50),
+                        fontSize: 6.0, fontFamily: 'monospace',
+                        shadows: selected ? [const Shadow(color: Colors.amber, blurRadius: 6)] : null,
                       )),
-                  if (selected)
+                  if (selected) ...[
+                    const SizedBox(height: 4),
                     Padding(
-                      padding: const EdgeInsets.fromLTRB(6, 3, 6, 5),
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
                       child: Container(
                         width: double.infinity,
-                        padding: const EdgeInsets.symmetric(vertical: 2),
+                        padding: const EdgeInsets.symmetric(vertical: 3),
                         decoration: BoxDecoration(
-                          border: Border.all(color: phosphor.withOpacity(0.55), width: 1),
-                          borderRadius: BorderRadius.circular(3),
+                          color: neon.withOpacity(0.12),
+                          border: Border.all(color: neon.withOpacity(0.70), width: 1),
+                          borderRadius: BorderRadius.circular(4),
                         ),
-                        child: const Text('[▶ JUGAR]',
+                        child: Text('▶ JUGAR',
                           textAlign: TextAlign.center,
                           style: TextStyle(
-                            color: phosphor, fontSize: 6.5, fontFamily: 'monospace',
-                            shadows: [Shadow(color: phosphor, blurRadius: 5)])),
+                            color: neon, fontSize: 6.5, fontFamily: 'monospace',
+                            fontWeight: FontWeight.bold,
+                            shadows: [Shadow(color: neon, blurRadius: 6)])),
                       ),
-                    )
-                  else
+                    ),
+                  ] else
                     const SizedBox(height: 5),
                 ],
               ),
@@ -646,17 +656,19 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
   }
 
   Widget _buildLockedCard(ArcadeGameDef def, int index, bool selected) {
+    final neon = _kNeonColors[index];
     return GestureDetector(
       onTap: () => setState(() => _selectedIndex = index),
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
+        duration: const Duration(milliseconds: 130),
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(8),
-          color: const Color(0xFF050505),
+          gradient: LinearGradient(
+            begin: Alignment.topLeft, end: Alignment.bottomRight,
+            colors: [const Color(0xFF0A0A0A), const Color(0xFF050505)],
+          ),
+          borderRadius: BorderRadius.circular(10),
           border: Border.all(
-            color: selected
-                ? const Color(0xFF550000)
-                : Colors.white.withOpacity(0.07),
+            color: selected ? neon.withOpacity(0.30) : Colors.white.withOpacity(0.06),
             width: 1.0,
           ),
         ),
@@ -664,14 +676,15 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Text(def.emoji,
-              style: TextStyle(fontSize: 18, color: Colors.white.withOpacity(0.10))),
+              style: TextStyle(fontSize: 20, color: Colors.white.withOpacity(0.08))),
+            const SizedBox(height: 2),
+            const Text('🔒', style: TextStyle(fontSize: 14)),
             const SizedBox(height: 4),
-            const Text('🔒', style: TextStyle(fontSize: 13)),
-            const SizedBox(height: 3),
-            Text('PRÓXIMAMENTE',
+            Text('PRÓXIMO',
               style: TextStyle(
-                color: const Color(0xFF550000).withOpacity(selected ? 0.65 : 0.35),
-                fontSize: 6, fontFamily: 'monospace', letterSpacing: 0.5)),
+                color: neon.withOpacity(selected ? 0.45 : 0.20),
+                fontSize: 6, fontFamily: 'monospace', letterSpacing: 0.5,
+                fontWeight: FontWeight.bold)),
           ],
         ),
       ),
@@ -680,20 +693,42 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
 
   Widget _buildGridHint() {
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 5),
-      decoration: BoxDecoration(
-        color: const Color(0xFF0D0020),
-        border: Border(top: BorderSide(
-            color: const Color(0xFF660099).withOpacity(0.40), width: 1)),
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      decoration: const BoxDecoration(
+        color: Color(0xFF08001A),
+        border: Border(top: BorderSide(color: Color(0x33AA44FF), width: 1)),
       ),
-      child: const Text(
-        '◄ ► ▲ ▼ navegar   A jugar   SELECT salir',
-        textAlign: TextAlign.center,
-        style: TextStyle(color: Colors.white30, fontSize: 7,
-            fontFamily: 'monospace', letterSpacing: 1),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          _hintChip('◄►▲▼', 'navegar'),
+          const SizedBox(width: 10),
+          _hintChip('A', 'jugar'),
+          const SizedBox(width: 10),
+          _hintChip('SELECT', 'salir'),
+        ],
       ),
     );
   }
+
+  Widget _hintChip(String key, String label) => Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      Container(
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+        decoration: BoxDecoration(
+          color: const Color(0xFF220044),
+          borderRadius: BorderRadius.circular(3),
+          border: Border.all(color: const Color(0x55AA44FF), width: 0.5),
+        ),
+        child: Text(key, style: const TextStyle(
+          color: Color(0xFFAA88FF), fontSize: 6, fontFamily: 'monospace', fontWeight: FontWeight.bold)),
+      ),
+      const SizedBox(width: 3),
+      Text(label, style: const TextStyle(
+        color: Colors.white30, fontSize: 6, fontFamily: 'monospace')),
+    ],
+  );
 
   Widget _buildActiveGame() {
     return _activeGame!.builder!(
