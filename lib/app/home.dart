@@ -562,6 +562,89 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
     );
   }
 
+  // ─── Game hint callout ──────────────────────────────────────────────────────
+  Widget _buildGameHint() {
+    return AnimatedBuilder(
+      animation: _hintBobCtrl,
+      builder: (_, __) {
+        final bob = (_hintBobCtrl.value - 0.5) * 8;
+        return Transform.translate(
+          offset: Offset(0, bob),
+          child: GestureDetector(
+            onTap: _handleLogoTap,
+            child: Container(
+              margin: const EdgeInsets.fromLTRB(16, 2, 16, 0),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              decoration: BoxDecoration(
+                color: const Color(0xFF07000F),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: const Color(0xFF00FF88).withValues(alpha: 0.55),
+                  width: 1.2,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF00FF88).withValues(alpha: 0.15),
+                    blurRadius: 12,
+                    spreadRadius: 1,
+                  ),
+                ],
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  _PixelCharacter(phase: _hintBobCtrl.value),
+                  const SizedBox(width: 10),
+                  Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          const Text(
+                            '▲',
+                            style: TextStyle(
+                              color: Color(0xFF00FF88),
+                              fontSize: 11,
+                              shadows: [Shadow(color: Color(0xFF00FF88), blurRadius: 8)],
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            '¡Presióname para un buen rato!',
+                            style: TextStyle(
+                              color: const Color(0xFF00FF88).withValues(alpha: 0.90),
+                              fontSize: 11,
+                              fontFamily: 'monospace',
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'toca el logo  ·  10 pts mínimo',
+                        style: TextStyle(
+                          color: const Color(0xFF00FF88).withValues(alpha: 0.45),
+                          fontSize: 9,
+                          fontFamily: 'monospace',
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(width: 8),
+                  const Text('🕹️', style: TextStyle(fontSize: 22)),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   String _formatPrice(dynamic price) {
     if (price == null) return 'N/A';
     return '\$${(price as num).toStringAsFixed(2)}';
@@ -763,93 +846,6 @@ class FirestoreProductGrid extends StatelessWidget {
     );
   }
 
-  // ─── Game hint callout ──────────────────────────────────────────────────────
-  Widget _buildGameHint() {
-    return AnimatedBuilder(
-      animation: _hintBobCtrl,
-      builder: (_, __) {
-        final bob = (_hintBobCtrl.value - 0.5) * 8;
-        return Transform.translate(
-          offset: Offset(0, bob),
-          child: GestureDetector(
-            onTap: _handleLogoTap,
-            child: Container(
-              margin: const EdgeInsets.fromLTRB(16, 2, 16, 0),
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-              decoration: BoxDecoration(
-                color: const Color(0xFF07000F),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(
-                  color: const Color(0xFF00FF88).withOpacity(0.55),
-                  width: 1.2,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(0xFF00FF88).withOpacity(0.15),
-                    blurRadius: 12,
-                    spreadRadius: 1,
-                  ),
-                ],
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  _PixelCharacter(phase: _hintBobCtrl.value),
-                  const SizedBox(width: 10),
-                  Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          const Text(
-                            '▲',
-                            style: TextStyle(
-                              color: Color(0xFF00FF88),
-                              fontSize: 11,
-                              shadows: [Shadow(color: Color(0xFF00FF88), blurRadius: 8)],
-                            ),
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            '¡Presióname para un buen rato!',
-                            style: TextStyle(
-                              color: const Color(0xFF00FF88).withOpacity(0.90),
-                              fontSize: 11,
-                              fontFamily: 'monospace',
-                              fontWeight: FontWeight.bold,
-                              letterSpacing: 0.5,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        'toca el logo  ·  10 pts mínimo',
-                        style: TextStyle(
-                          color: const Color(0xFF00FF88).withOpacity(0.45),
-                          fontSize: 9,
-                          fontFamily: 'monospace',
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(width: 8),
-                  const Text('🕹️', style: TextStyle(fontSize: 22)),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  String _formatPrice(dynamic price) {
-    if (price == null) return 'N/A';
-    return '\$${(price as num).toStringAsFixed(2)}';
-  }
 }
 
 class _AddToCartButton extends StatefulWidget {
@@ -1371,7 +1367,6 @@ class _PixelCharacterPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final w = size.width;
-    final h = size.height;
     final px = w / 7; // ~4px per pixel unit
 
     void rect(double x, double y, double pw, double ph, Color c) {
