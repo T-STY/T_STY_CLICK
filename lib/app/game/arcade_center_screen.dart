@@ -21,7 +21,8 @@ import 'traffic_hopper_screen.dart';
 
 // ─── Settings enums ──────────────────────────────────────────────────────────
 
-enum ConsoleSkin  { gameBoy, psp, arcadeStick }
+enum ConsoleSkin  { gameBoy, psp, gba }
+enum ShellColor   { gray, midnight, indigo, crimson, navy, forest, rose }
 enum ColorTheme   { greenPhosphor, amberRetro, cyanCrypto, infernalRed }
 enum ButtonLayout { snes, xbox, ps4 }
 
@@ -202,9 +203,11 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
 
   // ── Console customisation ──────────────────────────────────────────────────
   ConsoleSkin  _skin          = ConsoleSkin.gameBoy;
+  ShellColor   _shellColor    = ShellColor.gray;
   ColorTheme   _colorTheme    = ColorTheme.greenPhosphor;
   ButtonLayout _buttonLayout  = ButtonLayout.snes;
   bool         _buttonBlackout = false;
+  int          _settingsCursor = 0;
 
   // Theme accent colour (used everywhere terminal-green currently is)
   Color get _accent {
@@ -243,8 +246,21 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
     }
   }
 
+  // Shell body gradient — top/bottom/border colors for the console body
+  ({Color top, Color bot, Color bdr}) get _shellGradient {
+    switch (_shellColor) {
+      case ShellColor.gray:     return (top: const Color(0xFFD4D4D4), bot: const Color(0xFFAAAAAA), bdr: const Color(0xFF888888));
+      case ShellColor.midnight: return (top: const Color(0xFF252525), bot: const Color(0xFF151515), bdr: const Color(0xFF3A3A3A));
+      case ShellColor.indigo:   return (top: const Color(0xFF4A3A6A), bot: const Color(0xFF2A1A4A), bdr: const Color(0xFF6A5A8A));
+      case ShellColor.crimson:  return (top: const Color(0xFF6A1A1A), bot: const Color(0xFF4A0A0A), bdr: const Color(0xFF8A3A3A));
+      case ShellColor.navy:     return (top: const Color(0xFF1A2A4A), bot: const Color(0xFF0A1A2A), bdr: const Color(0xFF3A4A6A));
+      case ShellColor.forest:   return (top: const Color(0xFF1A3A1A), bot: const Color(0xFF0A2A0A), bdr: const Color(0xFF3A5A3A));
+      case ShellColor.rose:     return (top: const Color(0xFF5A2A3A), bot: const Color(0xFF3A1A2A), bdr: const Color(0xFF7A4A5A));
+    }
+  }
+
   void _applyOrientation() {
-    if (_skin == ConsoleSkin.psp) {
+    if (_skin == ConsoleSkin.psp || _skin == ConsoleSkin.gba) {
       SystemChrome.setPreferredOrientations([
         DeviceOrientation.landscapeLeft,
         DeviceOrientation.landscapeRight,
@@ -271,12 +287,13 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
   @override
   void initState() {
     super.initState();
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     _ctrl = ArcadeInputController();
     _saldo = widget.currentSaldo;
     _ctrl.addListener(_handleShellEvent);
     _loadHighScores();
     _fetchUserName();
-    _applyOrientation();
+    _loadPreferences(); // calls _applyOrientation after loading
     // Advance boot lines every 420 ms
     _splashTimer = Timer.periodic(const Duration(milliseconds: 420), (t) {
       if (!mounted) { t.cancel(); return; }
@@ -284,7 +301,7 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
         if (_splashLine < _kBootLines.length + 1) {
           _splashLine++;
         } else {
-          t.cancel(); // wait for A/Start press
+          t.cancel();
         }
       });
     });
@@ -320,9 +337,104 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
     _recordTimer?.cancel();
     _ctrl.removeListener(_handleShellEvent);
     _ctrl.dispose();
-    // Restore portrait when leaving arcade
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.manual, overlays: [SystemUiOverlay.top]);
     SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
     super.dispose();
+  }
+
+  Future<void> _loadPreferences() async {
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('users').doc(widget.userId)
+          .collection('preferences').doc('arcade').get();
+      if (!mounted || !doc.exists) { _applyOrientation(); return; }
+      final d = doc.data()!;
+      setState(() {
+        _skin = ConsoleSkin.values.firstWhere(
+            (e) => e.name == d['skin'], orElse: () => ConsoleSkin.gameBoy);
+        _shellColor = ShellColor.values.firstWhere(
+            (e) => e.name == d['shellColor'], orElse: () => ShellColor.gray);
+        _colorTheme = ColorTheme.values.firstWhere(
+            (e) => e.name == d['colorTheme'], orElse: () => ColorTheme.greenPhosphor);
+        _buttonLayout = ButtonLayout.values.firstWhere(
+            (e) => e.name == d['buttonLayout'], orElse: () => ButtonLayout.snes);
+        _buttonBlackout = d['buttonBlackout'] as bool? ?? false;
+      });
+      _applyOrientation();
+    } catch (_) { _applyOrientation(); }
+  }
+
+  Future<void> _savePreferences() async {
+    try {
+      await FirebaseFirestore.instance
+          .collection('users').doc(widget.userId)
+          .collection('preferences').doc('arcade')
+          .set({
+        'skin': _skin.name,
+        'shellColor': _shellColor.name,
+        'colorTheme': _colorTheme.name,
+        'buttonLayout': _buttonLayout.name,
+        'buttonBlackout': _buttonBlackout,
+      });
+    } catch (_) {}
+  }
+
+  void _activateSetting(int idx) {
+    setState(() {
+      switch (idx) {
+        // SKIN (0-2)
+        case 0: _skin = ConsoleSkin.gameBoy; _applyOrientation();
+        case 1: _skin = ConsoleSkin.psp; _applyOrientation();
+        case 2: _skin = ConsoleSkin.gba; _applyOrientation();
+        // SHELL COLOR (3-9)
+        case 3: _shellColor = ShellColor.gray;
+        case 4: _shellColor = ShellColor.midnight;
+        case 5: _shellColor = ShellColor.indigo;
+        case 6: _shellColor = ShellColor.crimson;
+        case 7: _shellColor = ShellColor.navy;
+        case 8: _shellColor = ShellColor.forest;
+        case 9: _shellColor = ShellColor.rose;
+        // ACCENT COLOR THEME (10-13)
+        case 10: _colorTheme = ColorTheme.greenPhosphor;
+        case 11: _colorTheme = ColorTheme.amberRetro;
+        case 12: _colorTheme = ColorTheme.cyanCrypto;
+        case 13: _colorTheme = ColorTheme.infernalRed;
+        // BUTTON LAYOUT (14-16)
+        case 14: _buttonLayout = ButtonLayout.snes;
+        case 15: _buttonLayout = ButtonLayout.xbox;
+        case 16: _buttonLayout = ButtonLayout.ps4;
+        // BUTTON DISPLAY (17-18)
+        case 17: _buttonBlackout = false;
+        case 18: _buttonBlackout = true;
+      }
+    });
+    _savePreferences();
+  }
+
+  bool _isCursorOn(int idx) => _settingsCursor == idx;
+  bool _isSettingActive(int idx) {
+    switch (idx) {
+      case 0: return _skin == ConsoleSkin.gameBoy;
+      case 1: return _skin == ConsoleSkin.psp;
+      case 2: return _skin == ConsoleSkin.gba;
+      case 3: return _shellColor == ShellColor.gray;
+      case 4: return _shellColor == ShellColor.midnight;
+      case 5: return _shellColor == ShellColor.indigo;
+      case 6: return _shellColor == ShellColor.crimson;
+      case 7: return _shellColor == ShellColor.navy;
+      case 8: return _shellColor == ShellColor.forest;
+      case 9: return _shellColor == ShellColor.rose;
+      case 10: return _colorTheme == ColorTheme.greenPhosphor;
+      case 11: return _colorTheme == ColorTheme.amberRetro;
+      case 12: return _colorTheme == ColorTheme.cyanCrypto;
+      case 13: return _colorTheme == ColorTheme.infernalRed;
+      case 14: return _buttonLayout == ButtonLayout.snes;
+      case 15: return _buttonLayout == ButtonLayout.xbox;
+      case 16: return _buttonLayout == ButtonLayout.ps4;
+      case 17: return !_buttonBlackout;
+      case 18: return _buttonBlackout;
+      default: return false;
+    }
   }
 
   void _handleShellEvent() {
@@ -341,12 +453,25 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
 
     if (_activeGame == null) {
       if (_showSettings) {
-        if (btn == ArcadeButton.select || btn == ArcadeButton.b) {
-          setState(() => _showSettings = false);
+        // Settings navigation
+        const totalOpts = 19; // 3 skins + 7 shell colors + 4 themes + 3 layouts + 2 display
+        switch (btn) {
+          case ArcadeButton.up:
+            setState(() => _settingsCursor = (_settingsCursor - 1 + totalOpts) % totalOpts);
+          case ArcadeButton.down:
+            setState(() => _settingsCursor = (_settingsCursor + 1) % totalOpts);
+          case ArcadeButton.a:
+          case ArcadeButton.start:
+            _activateSetting(_settingsCursor);
+          case ArcadeButton.b:
+          case ArcadeButton.select:
+            setState(() => _showSettings = false);
+          default: break;
         }
         return;
       }
-      final n = kArcadeGames.length;
+      // Hub list navigation (games + settings row)
+      final n = kArcadeGames.length + 1; // +1 for settings row
       switch (btn) {
         case ArcadeButton.left:
         case ArcadeButton.up:
@@ -356,11 +481,17 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
           setState(() => _selectedIndex = (_selectedIndex + 1) % n);
         case ArcadeButton.a:
         case ArcadeButton.start:
-          _launchSelected();
+          if (_selectedIndex == kArcadeGames.length) {
+            setState(() => _showSettings = true);
+          } else {
+            _launchSelected();
+          }
+        case ArcadeButton.y:
+          // Y toggles settings from anywhere in the hub
+          setState(() { _selectedIndex = kArcadeGames.length; _showSettings = !_showSettings; });
         case ArcadeButton.select:
           Navigator.pop(context);
-        default:
-          break;
+        default: break;
       }
     } else {
       if (btn == ArcadeButton.select) {
@@ -405,43 +536,25 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
-          child: _buildConsoleBody(),
-        ),
+      body: Padding(
+        padding: const EdgeInsets.all(4),
+        child: _buildConsoleBody(),
       ),
     );
   }
 
   Widget _buildConsoleBody() {
     if (_skin == ConsoleSkin.psp) return _buildConsoleBodyPsp();
-
-    // Skin palette
-    final Color bodyTop, bodyBot, bodyBdr;
-    switch (_skin) {
-      case ConsoleSkin.gameBoy:
-        bodyTop = const Color(0xFFD4D4D4);
-        bodyBot = const Color(0xFFAAAAAA);
-        bodyBdr = const Color(0xFF888888);
-      case ConsoleSkin.arcadeStick:
-        bodyTop = const Color(0xFF1E1A2E);
-        bodyBot = const Color(0xFF110E1F);
-        bodyBdr = const Color(0xFF3D3560);
-      case ConsoleSkin.psp:
-        bodyTop = const Color(0xFF252525); // unreachable, handled above
-        bodyBot = const Color(0xFF151515);
-        bodyBdr = const Color(0xFF3A3A3A);
-    }
-
+    if (_skin == ConsoleSkin.gba) return _buildConsoleBodyGba();
+    final sg = _shellGradient;
     return Container(
       decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topLeft, end: Alignment.bottomRight,
-          colors: [bodyTop, bodyBot],
+          colors: [sg.top, sg.bot],
         ),
         borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: bodyBdr, width: 1.5),
+        border: Border.all(color: sg.bdr, width: 1.5),
         boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.30),
             blurRadius: 20, spreadRadius: 1, offset: const Offset(0, 4))],
       ),
@@ -462,53 +575,123 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
     );
   }
 
-  // PSP skin — landscape layout: D-pad | screen | ABXY
+  // PSP skin — landscape layout with shoulder buttons, analog nub, D-pad | screen | ABXY
   Widget _buildConsoleBodyPsp() {
+    final sg = _shellGradient;
+    final ac = _accent;
     return Container(
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
+        gradient: LinearGradient(
           begin: Alignment.topLeft, end: Alignment.bottomRight,
-          colors: [Color(0xFF252525), Color(0xFF151515)],
+          colors: [sg.top, sg.bot],
         ),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFF3A3A3A), width: 1.5),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: sg.bdr, width: 1.5),
         boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.40),
             blurRadius: 20, spreadRadius: 1, offset: const Offset(0, 4))],
       ),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
-        child: Column(children: [
-          _buildTopStrip(),
-          const SizedBox(height: 6),
-          Expanded(
+      child: Column(children: [
+        // ── Shoulder buttons bar ──────────────────────────────────────────────
+        _PspShoulderBar(shellGradient: sg, accent: ac),
+        // ── Main body ─────────────────────────────────────────────────────────
+        Expanded(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(8, 4, 8, 4),
             child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // Left side: D-pad + SELECT
-                Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                  _buildDPad(),
-                  const SizedBox(height: 6),
-                  _ConsoleMetaButton(label: 'SELECT',
-                      btn: ArcadeButton.select, controller: _ctrl),
-                ]),
-                const SizedBox(width: 8),
-                // Centre: screen
+                // Left controls: analog nub (top) + D-pad (bottom)
+                SizedBox(
+                  width: 110,
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      _PspNub(controller: _ctrl),
+                      const SizedBox(height: 4),
+                      _ConsoleDPad(controller: _ctrl, joystick: false, size: 100),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 6),
+                // Center: screen
                 Expanded(child: _buildScreenBezel()),
-                const SizedBox(width: 8),
-                // Right side: ABXY + START
-                Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                  _buildABXYCluster(),
-                  const SizedBox(height: 6),
-                  _ConsoleMetaButton(label: 'START',
-                      btn: ArcadeButton.start, controller: _ctrl),
-                ]),
+                const SizedBox(width: 6),
+                // Right controls: ABXY cluster
+                SizedBox(
+                  width: 110,
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      _buildABXYCluster(size: 36),
+                    ],
+                  ),
+                ),
               ],
             ),
           ),
-          const SizedBox(height: 4),
-          _buildSpeakerDots(),
-        ]),
+        ),
+        // ── Bottom strip: SELECT, home button, START ──────────────────────────
+        _PspBottomBar(controller: _ctrl, shellGradient: sg, accent: ac),
+      ]),
+    );
+  }
+
+  // GBA skin — landscape layout with shoulder buttons, D-pad | screen | ABXY
+  Widget _buildConsoleBodyGba() {
+    final sg = _shellGradient;
+    final ac = _accent;
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft, end: Alignment.bottomRight,
+          colors: [sg.top, sg.bot],
+        ),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: sg.bdr, width: 1.5),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.40),
+            blurRadius: 20, spreadRadius: 1, offset: const Offset(0, 4))],
       ),
+      child: Column(children: [
+        // ── Top row: painted L and R shoulder buttons + label ─────────────────
+        _GbaShoulderBar(shellGradient: sg, accent: ac),
+        // ── Main body ─────────────────────────────────────────────────────────
+        Expanded(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(8, 4, 8, 4),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                // Left: D-pad
+                SizedBox(
+                  width: 110,
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      _ConsoleDPad(controller: _ctrl, joystick: false, size: 110),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                // Center: screen
+                Expanded(child: _buildScreenBezel()),
+                const SizedBox(width: 8),
+                // Right: ABXY cluster
+                SizedBox(
+                  width: 110,
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      _buildABXYCluster(size: 40),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        // ── Bottom: SELECT, home indicator, START ─────────────────────────────
+        _GbaBottomBar(controller: _ctrl, shellGradient: sg, accent: ac),
+      ]),
     );
   }
 
@@ -516,12 +699,10 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
 
   Widget _buildTopStrip() {
     final ac = _accent;
-    // LED colour tracks accent (muted version)
-    final ledColor = ac.withOpacity(0.90);
-    // Body text colour depends on skin lightness
-    final labelColor = _skin == ConsoleSkin.gameBoy
-        ? const Color(0xFF444444)
-        : ac.withOpacity(0.70);
+    final sg = _shellGradient;
+    final isDark = sg.top.computeLuminance() < 0.3;
+    final labelColor = isDark ? ac.withOpacity(0.70) : const Color(0xFF444444);
+    final ledColor = ac;
     return Row(children: [
       Container(
         width: 7, height: 7,
@@ -536,23 +717,6 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
         style: TextStyle(color: labelColor, fontSize: 8,
             fontWeight: FontWeight.w700, fontFamily: 'monospace', letterSpacing: 0.5)),
       const Spacer(),
-      GestureDetector(
-        onTap: () => setState(() => _showSettings = !_showSettings),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-          decoration: BoxDecoration(
-            color: _showSettings ? ac.withOpacity(0.14) : Colors.transparent,
-            borderRadius: BorderRadius.circular(3),
-            border: Border.all(
-              color: ac.withOpacity(_showSettings ? 0.55 : 0.28), width: 0.8),
-          ),
-          child: Text('[⚙]',
-            style: TextStyle(
-              color: ac.withOpacity(_showSettings ? 1.0 : 0.55),
-              fontSize: 8, fontFamily: 'monospace', fontWeight: FontWeight.bold)),
-        ),
-      ),
-      const SizedBox(width: 6),
       Container(
         padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
         decoration: BoxDecoration(
@@ -602,6 +766,7 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
         Column(children: [
           _buildTerminalHeader(),
           Expanded(child: _buildTerminalGameList()),
+          _buildSettingsRow(),
           _buildTerminalHint(),
         ]),
         if (_showSettings) _buildSettingsPanel(),
@@ -817,8 +982,52 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
           const SizedBox(width: 10),
           _termHint('A', 'jugar'),
           const SizedBox(width: 10),
+          _termHint('[Y]', 'config'),
+          const SizedBox(width: 10),
           _termHint('SELECT', 'salir'),
         ],
+      ),
+    );
+  }
+
+  Widget _buildSettingsRow() {
+    final ac = _accent;
+    // Index for the settings row = kArcadeGames.length
+    final isSel = _selectedIndex == kArcadeGames.length && !_showSettings;
+    final isOpen = _showSettings;
+    return GestureDetector(
+      onTap: () => setState(() {
+        _selectedIndex = kArcadeGames.length;
+        _showSettings = !_showSettings;
+      }),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 80),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: (isSel || isOpen) ? ac.withOpacity(0.08) : Colors.transparent,
+          border: Border(
+            top: BorderSide(color: ac.withOpacity(0.15), width: 1),
+            left: BorderSide(color: (isSel || isOpen) ? ac : Colors.transparent, width: 2),
+          ),
+        ),
+        child: Row(children: [
+          Text('[⚙]', style: TextStyle(
+            color: isOpen ? ac : ac.withOpacity(0.60),
+            fontSize: 8, fontFamily: 'monospace', fontWeight: FontWeight.bold)),
+          const SizedBox(width: 8),
+          Text('CONFIGURACION', style: TextStyle(
+            color: (isSel || isOpen) ? Colors.white : Colors.white38,
+            fontSize: 8, fontFamily: 'monospace',
+            fontWeight: (isSel || isOpen) ? FontWeight.bold : FontWeight.normal,
+            shadows: isOpen ? [Shadow(color: ac, blurRadius: 5)] : null)),
+          const Spacer(),
+          if (isOpen)
+            Text('▶ ABIERTO', style: TextStyle(
+              color: ac, fontSize: 7, fontFamily: 'monospace'))
+          else
+            Text('▶ ABRIR', style: TextStyle(
+              color: ac.withOpacity(0.30), fontSize: 7, fontFamily: 'monospace')),
+        ]),
       ),
     );
   }
@@ -849,24 +1058,31 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
   // ── Settings panel (terminal slide-in, fully functional) ─────────────────
 
   // Helper type for an option row
-  Widget _optRow(String label, bool sel, VoidCallback onTap) {
+  Widget _optRow(String label, bool sel, bool cursor, VoidCallback onTap) {
     final ac = _accent;
     return GestureDetector(
       onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.only(bottom: 3),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 60),
+        padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 2),
+        decoration: BoxDecoration(
+          color: cursor ? ac.withOpacity(0.15) : Colors.transparent,
+          borderRadius: BorderRadius.circular(2),
+        ),
         child: Row(children: [
           Text(sel ? '> ' : '  ',
-            style: TextStyle(color: ac, fontSize: 8, fontFamily: 'monospace')),
+            style: TextStyle(
+              color: cursor ? Colors.white : ac,
+              fontSize: 8, fontFamily: 'monospace')),
           Text(label, style: TextStyle(
-            color: sel ? Colors.white70 : Colors.white30,
+            color: sel || cursor ? Colors.white : Colors.white30,
             fontSize: 7.5, fontFamily: 'monospace')),
           if (sel) ...[
             const SizedBox(width: 5),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 3),
               decoration: BoxDecoration(
-                border: Border.all(color: ac.withOpacity(0.45), width: 0.5),
+                border: Border.all(color: ac.withOpacity(0.55), width: 0.5),
                 borderRadius: BorderRadius.circular(2),
               ),
               child: Text('ON', style: TextStyle(
@@ -885,7 +1101,7 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
         Text(title, style: TextStyle(
           color: _accent, fontSize: 7, fontFamily: 'monospace',
           fontWeight: FontWeight.bold, letterSpacing: 0.5)),
-        const SizedBox(height: 4),
+        const SizedBox(height: 3),
         ...rows,
       ],
     );
@@ -893,28 +1109,34 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
 
   Widget _buildSettingsPanel() {
     final ac = _accent;
+    int idx = 0;
+    Widget opt(String label) {
+      final i = idx++;
+      return _optRow(label, _isSettingActive(i), _isCursorOn(i),
+          () => _activateSetting(i));
+    }
     return Positioned.fill(
       child: GestureDetector(
         onTap: () => setState(() => _showSettings = false),
         child: Container(
-          color: Colors.black.withOpacity(0.75),
+          color: Colors.black.withOpacity(0.80),
           child: Align(
             alignment: Alignment.centerRight,
             child: GestureDetector(
-              onTap: () {}, // prevent tap-through
+              onTap: () {},
               child: Container(
                 width: double.infinity,
-                margin: const EdgeInsets.fromLTRB(20, 0, 0, 0),
+                margin: const EdgeInsets.fromLTRB(18, 0, 0, 0),
                 padding: const EdgeInsets.fromLTRB(12, 10, 10, 12),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF030D03),
-                  border: Border(
-                    left: BorderSide(color: ac.withOpacity(0.45), width: 1)),
+                  color: const Color(0xFF020D02),
+                  border: Border(left: BorderSide(color: ac.withOpacity(0.50), width: 1)),
                 ),
                 child: SingleChildScrollView(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      // Header
                       Row(children: [
                         Text('> settings/', style: TextStyle(
                           color: ac, fontSize: 9,
@@ -922,65 +1144,70 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
                         const Spacer(),
                         GestureDetector(
                           onTap: () => setState(() => _showSettings = false),
-                          child: Text('[×] cerrar', style: TextStyle(
-                            color: ac.withOpacity(0.55),
-                            fontSize: 7, fontFamily: 'monospace')),
+                          child: Text('[B] cerrar', style: TextStyle(
+                            color: ac.withOpacity(0.55), fontSize: 7, fontFamily: 'monospace')),
                         ),
                       ]),
-                      const SizedBox(height: 6),
+                      const SizedBox(height: 5),
                       Container(height: 1, color: ac.withOpacity(0.18)),
-                      const SizedBox(height: 10),
+                      const SizedBox(height: 8),
 
-                      // ── Skin ──────────────────────────────────────────────
-                      _settingSection('SKIN / CONSOLA', [
-                        _optRow('GameBoy Classic', _skin == ConsoleSkin.gameBoy,
-                            () { setState(() { _skin = ConsoleSkin.gameBoy; _applyOrientation(); }); }),
-                        _optRow('PSP Landscape', _skin == ConsoleSkin.psp,
-                            () { setState(() { _skin = ConsoleSkin.psp; _applyOrientation(); }); }),
-                        _optRow('Arcade Stick', _skin == ConsoleSkin.arcadeStick,
-                            () { setState(() { _skin = ConsoleSkin.arcadeStick; _applyOrientation(); }); }),
+                      // SKIN
+                      _settingSection('SKIN / FORMA', [
+                        opt('GameBoy Classic'),
+                        opt('PSP Landscape'),
+                        opt('Game Boy Advance'),
                       ]),
-                      const SizedBox(height: 10),
+                      const SizedBox(height: 8),
 
-                      // ── Color theme ───────────────────────────────────────
-                      _settingSection('TEMA DE COLOR', [
-                        _optRow('Verde Fosforo', _colorTheme == ColorTheme.greenPhosphor,
-                            () => setState(() => _colorTheme = ColorTheme.greenPhosphor)),
-                        _optRow('Ambar Retro', _colorTheme == ColorTheme.amberRetro,
-                            () => setState(() => _colorTheme = ColorTheme.amberRetro)),
-                        _optRow('Cian Cripto', _colorTheme == ColorTheme.cyanCrypto,
-                            () => setState(() => _colorTheme = ColorTheme.cyanCrypto)),
-                        _optRow('Rojo Infernal', _colorTheme == ColorTheme.infernalRed,
-                            () => setState(() => _colorTheme = ColorTheme.infernalRed)),
+                      // SHELL COLOR
+                      _settingSection('COLOR DE SHELL', [
+                        opt('Gris Clasico'),
+                        opt('Negro Medianoche'),
+                        opt('Indigo'),
+                        opt('Rojo Escarlata'),
+                        opt('Azul Marina'),
+                        opt('Verde Selva'),
+                        opt('Rosa Oscuro'),
                       ]),
-                      const SizedBox(height: 10),
+                      const SizedBox(height: 8),
 
-                      // ── Button layout ─────────────────────────────────────
+                      // ACCENT COLOR
+                      _settingSection('ACENTO / FUENTES', [
+                        opt('Verde Fosforo'),
+                        opt('Ambar Retro'),
+                        opt('Cian Cripto'),
+                        opt('Rojo Infernal'),
+                      ]),
+                      const SizedBox(height: 8),
+
+                      // BUTTON LAYOUT
                       _settingSection('BOTONES / LAYOUT', [
-                        _optRow('SNES Classic  X/Y/A/B', _buttonLayout == ButtonLayout.snes,
-                            () => setState(() => _buttonLayout = ButtonLayout.snes)),
-                        _optRow('Xbox Style  Y/X/B/A', _buttonLayout == ButtonLayout.xbox,
-                            () => setState(() => _buttonLayout = ButtonLayout.xbox)),
-                        _optRow('PS4 Style  △/☐/○/✕', _buttonLayout == ButtonLayout.ps4,
-                            () => setState(() => _buttonLayout = ButtonLayout.ps4)),
+                        opt('SNES Classic  X/Y/A/B'),
+                        opt('Xbox Style  Y/X/B/A'),
+                        opt('PS4 Style  △/☐/○/✕'),
                       ]),
-                      const SizedBox(height: 10),
+                      const SizedBox(height: 8),
 
-                      // ── Button display ────────────────────────────────────
+                      // DISPLAY
                       _settingSection('DISPLAY BOTONES', [
-                        _optRow('Color solido', !_buttonBlackout,
-                            () => setState(() => _buttonBlackout = false)),
-                        _optRow('Blackout (letras iluminadas)', _buttonBlackout,
-                            () => setState(() => _buttonBlackout = true)),
+                        opt('Color solido'),
+                        opt('Blackout (letras iluminadas)'),
                       ]),
-                      const SizedBox(height: 14),
+                      const SizedBox(height: 12),
                       Container(height: 1, color: ac.withOpacity(0.10)),
                       const SizedBox(height: 5),
-                      Text('// v1.0 — mas skins proxim.',
-                        style: TextStyle(
-                          color: Colors.white.withOpacity(0.18),
-                          fontSize: 6.5, fontFamily: 'monospace',
-                          fontStyle: FontStyle.italic)),
+                      Row(children: [
+                        Text('▲▼', style: TextStyle(color: ac.withOpacity(0.50), fontSize: 7, fontFamily: 'monospace')),
+                        const SizedBox(width: 4),
+                        Text('navegar  ', style: const TextStyle(color: Colors.white24, fontSize: 7, fontFamily: 'monospace')),
+                        Text('A', style: TextStyle(color: ac.withOpacity(0.50), fontSize: 7, fontFamily: 'monospace')),
+                        const SizedBox(width: 4),
+                        Text('activar  ', style: const TextStyle(color: Colors.white24, fontSize: 7, fontFamily: 'monospace')),
+                        Text('B', style: TextStyle(color: ac.withOpacity(0.50), fontSize: 7, fontFamily: 'monospace')),
+                        const SizedBox(width: 4),
+                        Text('cerrar', style: const TextStyle(color: Colors.white24, fontSize: 7, fontFamily: 'monospace')),
+                      ]),
                     ],
                   ),
                 ),
@@ -1030,11 +1257,11 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
       controller: _ctrl,
       joystick: _activeGame?.supportsDiagonal ?? false);
 
-  Widget _buildABXYCluster() {
-    const btnSize = 48.0;
-    const gap     = 4.0;
-    const total   = btnSize * 3 + gap * 2;
-    final btns = _btnDefs; // [top, left, right, bottom]
+  Widget _buildABXYCluster({double size = 48.0}) {
+    final btnSize = size;
+    const gap = 4.0;
+    final total = btnSize * 3 + gap * 2;
+    final btns = _btnDefs;
     return SizedBox(
       width: total, height: total,
       child: Stack(alignment: Alignment.center, children: [
@@ -1586,7 +1813,8 @@ class _CartridgePainter extends CustomPainter {
 class _ConsoleDPad extends StatefulWidget {
   final ArcadeInputController controller;
   final bool joystick;
-  const _ConsoleDPad({required this.controller, this.joystick = false});
+  final double size;
+  const _ConsoleDPad({required this.controller, this.joystick = false, this.size = 144});
   @override State<_ConsoleDPad> createState() => _ConsoleDPadState();
 }
 
@@ -1597,7 +1825,7 @@ class _ConsoleDPadState extends State<_ConsoleDPad> {
   static const _dead = 24.0;
 
   List<ArcadeButton> _buttonsFor(Offset local) {
-    const cx = 72.0, cy = 72.0;
+    final cx = widget.size / 2, cy = widget.size / 2;
     final dx = local.dx - cx, dy = local.dy - cy;
     if (dx * dx + dy * dy < _dead * _dead) return const [];
     if (widget.joystick) {
@@ -1647,7 +1875,7 @@ class _ConsoleDPadState extends State<_ConsoleDPad> {
       // Joystick games → round D-pad (circular disc with cross embossed)
       // Cardinal games → classic plus-cross D-pad
       child: CustomPaint(
-        size: const Size(144, 144),
+        size: Size(widget.size, widget.size),
         painter: widget.joystick
             ? _RoundDPadPainter(active: _active)
             : _CrossDPadPainter(active: _active),
@@ -2087,6 +2315,283 @@ class _ConsoleMetaButtonState extends State<_ConsoleMetaButton> {
           style: TextStyle(
             color: _pressed ? Colors.white : const Color(0xFF222222),
             fontSize: 9, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
+      ),
+    );
+  }
+}
+
+// ─── PSP Analog Nub ───────────────────────────────────────────────────────────
+
+class _PspNub extends StatefulWidget {
+  final ArcadeInputController controller;
+  const _PspNub({required this.controller});
+  @override State<_PspNub> createState() => _PspNubState();
+}
+
+class _PspNubState extends State<_PspNub> {
+  Set<ArcadeButton> _active = const {};
+  static const _dead = 8.0;
+  static const _sz = 72.0;
+  static const _cx = _sz / 2, _cy = _sz / 2;
+
+  List<ArcadeButton> _buttonsFor(Offset local) {
+    final dx = local.dx - _cx, dy = local.dy - _cy;
+    if (dx * dx + dy * dy < _dead * _dead) return const [];
+    final angle = (atan2(dy, dx) * 180 / pi + 450) % 360;
+    if (angle < 22.5 || angle >= 337.5) return [ArcadeButton.up];
+    if (angle < 67.5)  return [ArcadeButton.up, ArcadeButton.right];
+    if (angle < 112.5) return [ArcadeButton.right];
+    if (angle < 157.5) return [ArcadeButton.down, ArcadeButton.right];
+    if (angle < 202.5) return [ArcadeButton.down];
+    if (angle < 247.5) return [ArcadeButton.down, ArcadeButton.left];
+    if (angle < 292.5) return [ArcadeButton.left];
+    return [ArcadeButton.up, ArcadeButton.left];
+  }
+
+  void _apply(List<ArcadeButton> next) {
+    final newSet = next.toSet();
+    for (final b in _active.difference(newSet)) widget.controller.release(b);
+    for (final b in newSet.difference(_active)) {
+      widget.controller.press(b);
+      HapticFeedback.lightImpact();
+    }
+    setState(() => _active = newSet);
+  }
+
+  void _release() {
+    for (final b in _active) widget.controller.release(b);
+    setState(() => _active = const {});
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Listener(
+      behavior: HitTestBehavior.opaque,
+      onPointerDown:   (e) => _apply(_buttonsFor(e.localPosition)),
+      onPointerMove:   (e) => _apply(_buttonsFor(e.localPosition)),
+      onPointerUp:     (_) => _release(),
+      onPointerCancel: (_) => _release(),
+      child: CustomPaint(
+        size: const Size(_sz, _sz * 0.55),
+        painter: _PspNubPainter(active: _active),
+      ),
+    );
+  }
+}
+
+class _PspNubPainter extends CustomPainter {
+  final Set<ArcadeButton> active;
+  const _PspNubPainter({required this.active});
+  @override bool shouldRepaint(_PspNubPainter o) => o.active != active;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final cx = size.width / 2, cy = size.height / 2;
+    final p = Paint()..isAntiAlias = true;
+    final pressed = active.isNotEmpty;
+
+    // Shadow
+    p.color = Colors.black.withOpacity(0.5);
+    canvas.drawOval(Rect.fromCenter(center: Offset(cx + 1, cy + 3),
+        width: size.width * 0.85, height: size.height * 0.80), p);
+
+    // Base oval
+    p.shader = LinearGradient(
+      begin: Alignment.topLeft, end: Alignment.bottomRight,
+      colors: pressed
+          ? [const Color(0xFF2A2A2A), const Color(0xFF1A1A1A)]
+          : [const Color(0xFF3A3A3A), const Color(0xFF252525)],
+    ).createShader(Rect.fromLTWH(0, 0, size.width, size.height));
+    canvas.drawOval(Rect.fromCenter(center: Offset(cx, cy),
+        width: size.width * 0.85, height: size.height * 0.78), p);
+    p.shader = null;
+
+    // Texture lines
+    p..color = Colors.white.withOpacity(0.07)
+     ..style = PaintingStyle.stroke
+     ..strokeWidth = 0.8;
+    for (double y = cy - size.height * 0.22; y < cy + size.height * 0.22; y += 3.5) {
+      final halfW = size.width * 0.38 * (1 - ((y - cy).abs() / (size.height * 0.40)));
+      canvas.drawLine(Offset(cx - halfW, y), Offset(cx + halfW, y), p);
+    }
+
+    // Top highlight
+    p..color = Colors.white.withOpacity(pressed ? 0.05 : 0.18)
+     ..style = PaintingStyle.stroke
+     ..strokeWidth = 1.5;
+    canvas.drawArc(Rect.fromCenter(center: Offset(cx, cy),
+        width: size.width * 0.78, height: size.height * 0.68),
+        pi * 1.15, pi * 0.70, false, p);
+  }
+}
+
+// ─── PSP shoulder bar ─────────────────────────────────────────────────────────
+
+class _PspShoulderBar extends StatelessWidget {
+  final ({Color top, Color bot, Color bdr}) shellGradient;
+  final Color accent;
+  const _PspShoulderBar({required this.shellGradient, required this.accent});
+
+  @override
+  Widget build(BuildContext context) {
+    final sg = shellGradient;
+    return Container(
+      height: 22,
+      decoration: BoxDecoration(
+        color: sg.bdr,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
+      ),
+      child: Row(children: [
+        _ShoulderBtn(label: 'L', align: CrossAxisAlignment.start, sg: sg),
+        Expanded(child: Center(
+          child: Text('PSP-2000',
+            style: TextStyle(color: accent.withOpacity(0.55), fontSize: 7,
+                letterSpacing: 2, fontFamily: 'monospace')),
+        )),
+        _ShoulderBtn(label: 'R', align: CrossAxisAlignment.end, sg: sg),
+      ]),
+    );
+  }
+}
+
+// ─── PSP bottom bar ───────────────────────────────────────────────────────────
+
+class _PspBottomBar extends StatelessWidget {
+  final ArcadeInputController controller;
+  final ({Color top, Color bot, Color bdr}) shellGradient;
+  final Color accent;
+  const _PspBottomBar({required this.controller, required this.shellGradient, required this.accent});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 30,
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      decoration: BoxDecoration(
+        color: shellGradient.bdr.withOpacity(0.7),
+        borderRadius: const BorderRadius.vertical(bottom: Radius.circular(14)),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          _ConsoleMetaButton(label: 'SELECT', btn: ArcadeButton.select, controller: controller),
+          Container(
+            width: 18, height: 18,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: shellGradient.bdr,
+              border: Border.all(color: accent.withOpacity(0.5), width: 1),
+              boxShadow: [BoxShadow(color: accent.withOpacity(0.25), blurRadius: 6)],
+            ),
+            child: Center(child: Container(
+              width: 8, height: 8,
+              decoration: BoxDecoration(shape: BoxShape.circle,
+                  color: accent.withOpacity(0.6)),
+            )),
+          ),
+          _ConsoleMetaButton(label: 'START', btn: ArcadeButton.start, controller: controller),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── GBA shoulder bar ─────────────────────────────────────────────────────────
+
+class _GbaShoulderBar extends StatelessWidget {
+  final ({Color top, Color bot, Color bdr}) shellGradient;
+  final Color accent;
+  const _GbaShoulderBar({required this.shellGradient, required this.accent});
+
+  @override
+  Widget build(BuildContext context) {
+    final sg = shellGradient;
+    return Container(
+      height: 20,
+      decoration: BoxDecoration(
+        color: sg.bdr,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
+      ),
+      child: Row(children: [
+        _ShoulderBtn(label: 'L', align: CrossAxisAlignment.start, sg: sg),
+        Expanded(child: Center(
+          child: Text('GAME BOY ADVANCE',
+            style: TextStyle(color: accent.withOpacity(0.55), fontSize: 6,
+                letterSpacing: 1.8, fontFamily: 'monospace')),
+        )),
+        _ShoulderBtn(label: 'R', align: CrossAxisAlignment.end, sg: sg),
+      ]),
+    );
+  }
+}
+
+// ─── GBA bottom bar ───────────────────────────────────────────────────────────
+
+class _GbaBottomBar extends StatelessWidget {
+  final ArcadeInputController controller;
+  final ({Color top, Color bot, Color bdr}) shellGradient;
+  final Color accent;
+  const _GbaBottomBar({required this.controller, required this.shellGradient, required this.accent});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 26,
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      decoration: BoxDecoration(
+        color: shellGradient.bdr.withOpacity(0.7),
+        borderRadius: const BorderRadius.vertical(bottom: Radius.circular(14)),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          _ConsoleMetaButton(label: 'SELECT', btn: ArcadeButton.select, controller: controller),
+          Container(
+            width: 22, height: 8,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(4),
+              color: accent.withOpacity(0.3),
+              border: Border.all(color: accent.withOpacity(0.6), width: 0.8),
+              boxShadow: [BoxShadow(color: accent.withOpacity(0.4), blurRadius: 6)],
+            ),
+          ),
+          _ConsoleMetaButton(label: 'START', btn: ArcadeButton.start, controller: controller),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Shared shoulder button chip ──────────────────────────────────────────────
+
+class _ShoulderBtn extends StatelessWidget {
+  final String label;
+  final CrossAxisAlignment align;
+  final ({Color top, Color bot, Color bdr}) sg;
+  const _ShoulderBtn({required this.label, required this.align, required this.sg});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 48,
+      alignment: align == CrossAxisAlignment.start ? Alignment.centerLeft : Alignment.centerRight,
+      padding: const EdgeInsets.symmetric(horizontal: 6),
+      child: Container(
+        width: 36, height: 16,
+        decoration: BoxDecoration(
+          color: sg.bot,
+          borderRadius: label == 'L'
+              ? const BorderRadius.only(topLeft: Radius.circular(6), bottomRight: Radius.circular(4))
+              : const BorderRadius.only(topRight: Radius.circular(6), bottomLeft: Radius.circular(4)),
+          border: Border.all(color: sg.bdr, width: 0.8),
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.3), blurRadius: 3)],
+        ),
+        alignment: Alignment.center,
+        child: Text(label,
+          style: const TextStyle(color: Colors.white70, fontSize: 8,
+              fontWeight: FontWeight.bold, letterSpacing: 1)),
       ),
     );
   }
