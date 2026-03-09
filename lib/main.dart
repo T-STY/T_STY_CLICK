@@ -41,6 +41,7 @@ Future<void> main() async {
     SystemUiMode.manual,
     overlays: [SystemUiOverlay.top],
   );
+  SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
 
   await FirebaseAppCheck.instance.activate(
     androidProvider: AndroidProvider.debug,

@@ -19,6 +19,20 @@ import 'space_shooter_screen.dart';
 import 'tetris_game_screen.dart';
 import 'traffic_hopper_screen.dart';
 
+// ─── Settings enums ──────────────────────────────────────────────────────────
+
+enum ConsoleSkin  { gameBoy, psp, arcadeStick }
+enum ColorTheme   { greenPhosphor, amberRetro, cyanCrypto, infernalRed }
+enum ButtonLayout { snes, xbox, ps4 }
+
+// Per-position button definition (label + color + underlying ArcadeButton)
+class _BtnDef {
+  final String label;
+  final Color  color;
+  final ArcadeButton btn;
+  const _BtnDef(this.label, this.color, this.btn);
+}
+
 // ─── Palette ──────────────────────────────────────────────────────────────────
 
 const _kBodyTop  = Color(0xFFD4D4D4);
@@ -186,6 +200,60 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
   Timer? _recordTimer;
   bool _showSettings = false;
 
+  // ── Console customisation ──────────────────────────────────────────────────
+  ConsoleSkin  _skin          = ConsoleSkin.gameBoy;
+  ColorTheme   _colorTheme    = ColorTheme.greenPhosphor;
+  ButtonLayout _buttonLayout  = ButtonLayout.snes;
+  bool         _buttonBlackout = false;
+
+  // Theme accent colour (used everywhere terminal-green currently is)
+  Color get _accent {
+    switch (_colorTheme) {
+      case ColorTheme.greenPhosphor: return const Color(0xFF00FF88);
+      case ColorTheme.amberRetro:    return const Color(0xFFFFB347);
+      case ColorTheme.cyanCrypto:    return const Color(0xFF00DDFF);
+      case ColorTheme.infernalRed:   return const Color(0xFFFF4455);
+    }
+  }
+
+  // Button cluster layout — [top, left, right, bottom]
+  List<_BtnDef> get _btnDefs {
+    switch (_buttonLayout) {
+      case ButtonLayout.snes:
+        return const [
+          _BtnDef('X', Color(0xFF1E88E5), ArcadeButton.x),
+          _BtnDef('Y', Color(0xFF43A047), ArcadeButton.y),
+          _BtnDef('A', Color(0xFFE53935), ArcadeButton.a),
+          _BtnDef('B', Color(0xFFFFB300), ArcadeButton.b),
+        ];
+      case ButtonLayout.xbox:
+        return const [
+          _BtnDef('Y', Color(0xFFFFCC00), ArcadeButton.x),
+          _BtnDef('X', Color(0xFF107EC4), ArcadeButton.y),
+          _BtnDef('B', Color(0xFFD32F2F), ArcadeButton.a),
+          _BtnDef('A', Color(0xFF107C10), ArcadeButton.b),
+        ];
+      case ButtonLayout.ps4:
+        return const [
+          _BtnDef('△', Color(0xFF00C896), ArcadeButton.x),
+          _BtnDef('☐', Color(0xFFCC66AA), ArcadeButton.y),
+          _BtnDef('○', Color(0xFFDD2222), ArcadeButton.a),
+          _BtnDef('✕', Color(0xFF4488CC), ArcadeButton.b),
+        ];
+    }
+  }
+
+  void _applyOrientation() {
+    if (_skin == ConsoleSkin.psp) {
+      SystemChrome.setPreferredOrientations([
+        DeviceOrientation.landscapeLeft,
+        DeviceOrientation.landscapeRight,
+      ]);
+    } else {
+      SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
+    }
+  }
+
   // ── Splash / power-on ──────────────────────────────────────────────────────
   bool _splashDone = false;
   int _splashLine = 0;          // 0-6: animate boot lines one by one
@@ -208,6 +276,7 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
     _ctrl.addListener(_handleShellEvent);
     _loadHighScores();
     _fetchUserName();
+    _applyOrientation();
     // Advance boot lines every 420 ms
     _splashTimer = Timer.periodic(const Duration(milliseconds: 420), (t) {
       if (!mounted) { t.cancel(); return; }
@@ -251,6 +320,8 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
     _recordTimer?.cancel();
     _ctrl.removeListener(_handleShellEvent);
     _ctrl.dispose();
+    // Restore portrait when leaving arcade
+    SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
     super.dispose();
   }
 
@@ -344,14 +415,33 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
   }
 
   Widget _buildConsoleBody() {
+    if (_skin == ConsoleSkin.psp) return _buildConsoleBodyPsp();
+
+    // Skin palette
+    final Color bodyTop, bodyBot, bodyBdr;
+    switch (_skin) {
+      case ConsoleSkin.gameBoy:
+        bodyTop = const Color(0xFFD4D4D4);
+        bodyBot = const Color(0xFFAAAAAA);
+        bodyBdr = const Color(0xFF888888);
+      case ConsoleSkin.arcadeStick:
+        bodyTop = const Color(0xFF1E1A2E);
+        bodyBot = const Color(0xFF110E1F);
+        bodyBdr = const Color(0xFF3D3560);
+      case ConsoleSkin.psp:
+        bodyTop = const Color(0xFF252525); // unreachable, handled above
+        bodyBot = const Color(0xFF151515);
+        bodyBdr = const Color(0xFF3A3A3A);
+    }
+
     return Container(
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
+        gradient: LinearGradient(
           begin: Alignment.topLeft, end: Alignment.bottomRight,
-          colors: [_kBodyTop, _kBodyBot],
+          colors: [bodyTop, bodyBot],
         ),
         borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: _kBodyBdr, width: 1.5),
+        border: Border.all(color: bodyBdr, width: 1.5),
         boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.30),
             blurRadius: 20, spreadRadius: 1, offset: const Offset(0, 4))],
       ),
@@ -372,21 +462,78 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
     );
   }
 
+  // PSP skin — landscape layout: D-pad | screen | ABXY
+  Widget _buildConsoleBodyPsp() {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft, end: Alignment.bottomRight,
+          colors: [Color(0xFF252525), Color(0xFF151515)],
+        ),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFF3A3A3A), width: 1.5),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.40),
+            blurRadius: 20, spreadRadius: 1, offset: const Offset(0, 4))],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+        child: Column(children: [
+          _buildTopStrip(),
+          const SizedBox(height: 6),
+          Expanded(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                // Left side: D-pad + SELECT
+                Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                  _buildDPad(),
+                  const SizedBox(height: 6),
+                  _ConsoleMetaButton(label: 'SELECT',
+                      btn: ArcadeButton.select, controller: _ctrl),
+                ]),
+                const SizedBox(width: 8),
+                // Centre: screen
+                Expanded(child: _buildScreenBezel()),
+                const SizedBox(width: 8),
+                // Right side: ABXY + START
+                Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                  _buildABXYCluster(),
+                  const SizedBox(height: 6),
+                  _ConsoleMetaButton(label: 'START',
+                      btn: ArcadeButton.start, controller: _ctrl),
+                ]),
+              ],
+            ),
+          ),
+          const SizedBox(height: 4),
+          _buildSpeakerDots(),
+        ]),
+      ),
+    );
+  }
+
   // ── Top strip ─────────────────────────────────────────────────────────────
 
   Widget _buildTopStrip() {
+    final ac = _accent;
+    // LED colour tracks accent (muted version)
+    final ledColor = ac.withOpacity(0.90);
+    // Body text colour depends on skin lightness
+    final labelColor = _skin == ConsoleSkin.gameBoy
+        ? const Color(0xFF444444)
+        : ac.withOpacity(0.70);
     return Row(children: [
       Container(
         width: 7, height: 7,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          color: const Color(0xFF69F0AE),
-          boxShadow: [BoxShadow(color: const Color(0xFF69F0AE).withOpacity(0.8), blurRadius: 6)],
+          color: ledColor,
+          boxShadow: [BoxShadow(color: ledColor.withOpacity(0.8), blurRadius: 6)],
         ),
       ),
       const SizedBox(width: 6),
-      const Text('root@arcade:~\$',
-        style: TextStyle(color: Color(0xFF00BB66), fontSize: 8,
+      Text('root@arcade:~\$',
+        style: TextStyle(color: labelColor, fontSize: 8,
             fontWeight: FontWeight.w700, fontFamily: 'monospace', letterSpacing: 0.5)),
       const Spacer(),
       GestureDetector(
@@ -394,17 +541,14 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
           decoration: BoxDecoration(
-            color: _showSettings
-                ? const Color(0xFF00FF88).withOpacity(0.14)
-                : Colors.transparent,
+            color: _showSettings ? ac.withOpacity(0.14) : Colors.transparent,
             borderRadius: BorderRadius.circular(3),
             border: Border.all(
-              color: const Color(0xFF00FF88).withOpacity(_showSettings ? 0.55 : 0.28),
-              width: 0.8),
+              color: ac.withOpacity(_showSettings ? 0.55 : 0.28), width: 0.8),
           ),
           child: Text('[⚙]',
             style: TextStyle(
-              color: const Color(0xFF00FF88).withOpacity(_showSettings ? 1.0 : 0.55),
+              color: ac.withOpacity(_showSettings ? 1.0 : 0.55),
               fontSize: 8, fontFamily: 'monospace', fontWeight: FontWeight.bold)),
         ),
       ),
@@ -417,7 +561,7 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
           border: Border.all(color: Colors.black26),
         ),
         child: Text('💰 ${_saldo.toStringAsFixed(0)}',
-          style: const TextStyle(color: Color(0xFF444444), fontSize: 8, fontWeight: FontWeight.w600)),
+          style: TextStyle(color: labelColor, fontSize: 8, fontWeight: FontWeight.w600)),
       ),
     ]);
   }
@@ -440,7 +584,7 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
           // CRT scanline + vignette overlay
           Positioned.fill(
             child: IgnorePointer(
-              child: CustomPaint(painter: _CrtOverlayPainter()),
+              child: CustomPaint(painter: _CrtOverlayPainter(phosphor: _accent)),
             ),
           ),
         ]),
@@ -468,6 +612,7 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
   // ── CRT Power-on splash ───────────────────────────────────────────────────
 
   Widget _buildSplashScreen() {
+    final ac = _accent;
     final showWelcome = _splashLine >= _kBootLines.length + 1;
     return Container(
       color: Colors.black,
@@ -475,61 +620,56 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header
-          const Text('ARCADE CENTER OS  v1.0.0',
-            style: TextStyle(color: Color(0xFF00FF88), fontSize: 9,
+          Text('ARCADE CENTER OS  v1.0.0',
+            style: TextStyle(color: ac, fontSize: 9,
                 fontFamily: 'monospace', fontWeight: FontWeight.bold,
                 letterSpacing: 1.5)),
           const SizedBox(height: 2),
-          Container(height: 1, color: const Color(0xFF00FF88).withOpacity(0.35)),
+          Container(height: 1, color: ac.withOpacity(0.35)),
           const SizedBox(height: 8),
-          // Boot lines (appear one by one)
           for (int i = 0; i < _kBootLines.length; i++)
             if (i < _splashLine)
               Padding(
                 padding: const EdgeInsets.only(bottom: 4),
                 child: Text(_kBootLines[i],
-                  style: const TextStyle(color: Color(0xFF44FF88), fontSize: 8,
+                  style: TextStyle(color: ac.withOpacity(0.80), fontSize: 8,
                       fontFamily: 'monospace')),
               ),
           const Spacer(),
-          // Welcome message (appears after all boot lines)
           if (showWelcome) ...[
-            Container(height: 1, color: const Color(0xFF00FF88).withOpacity(0.25)),
+            Container(height: 1, color: ac.withOpacity(0.25)),
             const SizedBox(height: 12),
             Center(
               child: Column(children: [
                 Text('¡BIENVENIDO,',
-                  style: const TextStyle(color: Color(0xFF00FF88), fontSize: 13,
+                  style: TextStyle(color: ac, fontSize: 13,
                       fontFamily: 'monospace', fontWeight: FontWeight.bold,
                       letterSpacing: 2)),
-                Text(_userName.isEmpty ? '...' : _userName.toUpperCase() + '!',
-                  style: const TextStyle(color: Colors.white, fontSize: 22,
+                Text(_userName.isEmpty ? '...' : '${_userName.toUpperCase()}!',
+                  style: TextStyle(color: Colors.white, fontSize: 22,
                       fontFamily: 'monospace', fontWeight: FontWeight.w900,
                       letterSpacing: 3,
-                      shadows: [Shadow(color: Color(0xFF00FF88), blurRadius: 14)])),
+                      shadows: [Shadow(color: ac, blurRadius: 14)])),
               ]),
             ),
             const SizedBox(height: 16),
             Center(
               child: Text('[ A ]  Continuar',
                 style: TextStyle(
-                  color: const Color(0xFF00FF88).withOpacity(0.70),
+                  color: ac.withOpacity(0.70),
                   fontSize: 8, fontFamily: 'monospace', letterSpacing: 2)),
             ),
           ] else ...[
-            // Blinking cursor while booting
             Row(children: [
-              const Text('> ',
-                style: TextStyle(color: Color(0xFF00FF88), fontSize: 8, fontFamily: 'monospace')),
-              Container(width: 6, height: 10, color: const Color(0xFF00FF88).withOpacity(0.80)),
+              Text('> ', style: TextStyle(color: ac, fontSize: 8, fontFamily: 'monospace')),
+              Container(width: 6, height: 10, color: ac.withOpacity(0.80)),
             ]),
           ],
           const SizedBox(height: 6),
-          Container(height: 1, color: const Color(0xFF00FF88).withOpacity(0.15)),
+          Container(height: 1, color: ac.withOpacity(0.15)),
           const SizedBox(height: 4),
           Text('ARCADE CENTER OS  ©2025',
-            style: TextStyle(color: const Color(0xFF00FF88).withOpacity(0.30),
+            style: TextStyle(color: ac.withOpacity(0.30),
                 fontSize: 7, fontFamily: 'monospace')),
         ],
       ),
@@ -539,21 +679,22 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
   // ── Terminal-style game list ───────────────────────────────────────────────
 
   Widget _buildTerminalHeader() {
+    final ac = _accent;
     final unlocked = kArcadeGames.where((g) => !g.locked).length;
     return Container(
       padding: const EdgeInsets.fromLTRB(10, 5, 10, 4),
       decoration: BoxDecoration(
         border: Border(
-          bottom: BorderSide(color: const Color(0xFF00FF88).withOpacity(0.18), width: 1)),
+          bottom: BorderSide(color: ac.withOpacity(0.18), width: 1)),
       ),
       child: Row(children: [
-        const Text('> ls games/', style: TextStyle(
-          color: Color(0xFF00FF88), fontSize: 8, fontFamily: 'monospace',
+        Text('> ls games/', style: TextStyle(
+          color: ac, fontSize: 8, fontFamily: 'monospace',
           fontWeight: FontWeight.bold)),
         const Spacer(),
         Text('$unlocked/${kArcadeGames.length} ACTIVOS',
           style: TextStyle(
-            color: const Color(0xFF00FF88).withOpacity(0.40),
+            color: ac.withOpacity(0.40),
             fontSize: 7, fontFamily: 'monospace')),
       ]),
     );
@@ -667,7 +808,7 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
       decoration: BoxDecoration(
         color: const Color(0xFF020802),
         border: Border(
-          top: BorderSide(color: const Color(0xFF00FF88).withOpacity(0.15), width: 1)),
+          top: BorderSide(color: _accent.withOpacity(0.15), width: 1)),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -682,137 +823,172 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
     );
   }
 
-  Widget _termHint(String key, String label) => Row(
-    mainAxisSize: MainAxisSize.min,
-    children: [
-      Container(
-        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-        decoration: BoxDecoration(
-          color: const Color(0xFF001A00),
-          borderRadius: BorderRadius.circular(2),
-          border: Border.all(
-            color: const Color(0xFF00FF88).withOpacity(0.35), width: 0.5),
+  Widget _termHint(String key, String label) {
+    final ac = _accent;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+          decoration: BoxDecoration(
+            color: ac.withOpacity(0.06),
+            borderRadius: BorderRadius.circular(2),
+            border: Border.all(color: ac.withOpacity(0.35), width: 0.5),
+          ),
+          child: Text(key, style: TextStyle(
+            color: ac.withOpacity(0.85), fontSize: 6,
+            fontFamily: 'monospace', fontWeight: FontWeight.bold)),
         ),
-        child: Text(key, style: const TextStyle(
-          color: Color(0xFF88FF88), fontSize: 6,
-          fontFamily: 'monospace', fontWeight: FontWeight.bold)),
-      ),
-      const SizedBox(width: 3),
-      Text(label, style: const TextStyle(
-        color: Colors.white30, fontSize: 6, fontFamily: 'monospace')),
-    ],
-  );
+        const SizedBox(width: 3),
+        Text(label, style: const TextStyle(
+          color: Colors.white30, fontSize: 6, fontFamily: 'monospace')),
+      ],
+    );
+  }
 
-  // ── Settings panel (terminal slide-in) ────────────────────────────────────
+  // ── Settings panel (terminal slide-in, fully functional) ─────────────────
+
+  // Helper type for an option row
+  Widget _optRow(String label, bool sel, VoidCallback onTap) {
+    final ac = _accent;
+    return GestureDetector(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.only(bottom: 3),
+        child: Row(children: [
+          Text(sel ? '> ' : '  ',
+            style: TextStyle(color: ac, fontSize: 8, fontFamily: 'monospace')),
+          Text(label, style: TextStyle(
+            color: sel ? Colors.white70 : Colors.white30,
+            fontSize: 7.5, fontFamily: 'monospace')),
+          if (sel) ...[
+            const SizedBox(width: 5),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 3),
+              decoration: BoxDecoration(
+                border: Border.all(color: ac.withOpacity(0.45), width: 0.5),
+                borderRadius: BorderRadius.circular(2),
+              ),
+              child: Text('ON', style: TextStyle(
+                color: ac, fontSize: 6, fontFamily: 'monospace')),
+            ),
+          ],
+        ]),
+      ),
+    );
+  }
+
+  Widget _settingSection(String title, List<Widget> rows) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(title, style: TextStyle(
+          color: _accent, fontSize: 7, fontFamily: 'monospace',
+          fontWeight: FontWeight.bold, letterSpacing: 0.5)),
+        const SizedBox(height: 4),
+        ...rows,
+      ],
+    );
+  }
 
   Widget _buildSettingsPanel() {
+    final ac = _accent;
     return Positioned.fill(
       child: GestureDetector(
         onTap: () => setState(() => _showSettings = false),
         child: Container(
-          color: Colors.black.withOpacity(0.72),
+          color: Colors.black.withOpacity(0.75),
           child: Align(
             alignment: Alignment.centerRight,
             child: GestureDetector(
-              onTap: () {}, // prevent tap-through to dismiss
+              onTap: () {}, // prevent tap-through
               child: Container(
                 width: double.infinity,
-                margin: const EdgeInsets.fromLTRB(28, 0, 0, 0),
+                margin: const EdgeInsets.fromLTRB(20, 0, 0, 0),
                 padding: const EdgeInsets.fromLTRB(12, 10, 10, 12),
                 decoration: BoxDecoration(
                   color: const Color(0xFF030D03),
                   border: Border(
-                    left: BorderSide(
-                      color: const Color(0xFF00FF88).withOpacity(0.45), width: 1)),
+                    left: BorderSide(color: ac.withOpacity(0.45), width: 1)),
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(children: [
-                      const Text('> settings/', style: TextStyle(
-                        color: Color(0xFF00FF88), fontSize: 9,
-                        fontFamily: 'monospace', fontWeight: FontWeight.bold)),
-                      const Spacer(),
-                      GestureDetector(
-                        onTap: () => setState(() => _showSettings = false),
-                        child: Text('[B] cerrar', style: TextStyle(
-                          color: const Color(0xFF00FF88).withOpacity(0.55),
-                          fontSize: 7, fontFamily: 'monospace')),
-                      ),
-                    ]),
-                    const SizedBox(height: 6),
-                    Container(height: 1,
-                      color: const Color(0xFF00FF88).withOpacity(0.18)),
-                    const SizedBox(height: 10),
-                    _settingSection('SKIN / CONSOLA', const [
-                      _SettingOption('GameBoy Classic', true),
-                      _SettingOption('PSP Landscape', false),
-                      _SettingOption('Arcade Stick', false),
-                    ]),
-                    const SizedBox(height: 10),
-                    _settingSection('TEMA DE COLOR', const [
-                      _SettingOption('Verde Fosforo', true),
-                      _SettingOption('Ambar Retro', false),
-                      _SettingOption('Cian Cripto', false),
-                      _SettingOption('Rojo Infernal', false),
-                    ]),
-                    const SizedBox(height: 10),
-                    _settingSection('CONTROLES', const [
-                      _SettingOption('D-Pad Virtual', true),
-                      _SettingOption('Joystick + Botones', false),
-                    ]),
-                    const Spacer(),
-                    Container(height: 1,
-                      color: const Color(0xFF00FF88).withOpacity(0.10)),
-                    const SizedBox(height: 5),
-                    Text('// Proximas funciones — mas opciones',
-                      style: TextStyle(
-                        color: Colors.white.withOpacity(0.20),
-                        fontSize: 6.5, fontFamily: 'monospace',
-                        fontStyle: FontStyle.italic)),
-                  ],
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(children: [
+                        Text('> settings/', style: TextStyle(
+                          color: ac, fontSize: 9,
+                          fontFamily: 'monospace', fontWeight: FontWeight.bold)),
+                        const Spacer(),
+                        GestureDetector(
+                          onTap: () => setState(() => _showSettings = false),
+                          child: Text('[×] cerrar', style: TextStyle(
+                            color: ac.withOpacity(0.55),
+                            fontSize: 7, fontFamily: 'monospace')),
+                        ),
+                      ]),
+                      const SizedBox(height: 6),
+                      Container(height: 1, color: ac.withOpacity(0.18)),
+                      const SizedBox(height: 10),
+
+                      // ── Skin ──────────────────────────────────────────────
+                      _settingSection('SKIN / CONSOLA', [
+                        _optRow('GameBoy Classic', _skin == ConsoleSkin.gameBoy,
+                            () { setState(() { _skin = ConsoleSkin.gameBoy; _applyOrientation(); }); }),
+                        _optRow('PSP Landscape', _skin == ConsoleSkin.psp,
+                            () { setState(() { _skin = ConsoleSkin.psp; _applyOrientation(); }); }),
+                        _optRow('Arcade Stick', _skin == ConsoleSkin.arcadeStick,
+                            () { setState(() { _skin = ConsoleSkin.arcadeStick; _applyOrientation(); }); }),
+                      ]),
+                      const SizedBox(height: 10),
+
+                      // ── Color theme ───────────────────────────────────────
+                      _settingSection('TEMA DE COLOR', [
+                        _optRow('Verde Fosforo', _colorTheme == ColorTheme.greenPhosphor,
+                            () => setState(() => _colorTheme = ColorTheme.greenPhosphor)),
+                        _optRow('Ambar Retro', _colorTheme == ColorTheme.amberRetro,
+                            () => setState(() => _colorTheme = ColorTheme.amberRetro)),
+                        _optRow('Cian Cripto', _colorTheme == ColorTheme.cyanCrypto,
+                            () => setState(() => _colorTheme = ColorTheme.cyanCrypto)),
+                        _optRow('Rojo Infernal', _colorTheme == ColorTheme.infernalRed,
+                            () => setState(() => _colorTheme = ColorTheme.infernalRed)),
+                      ]),
+                      const SizedBox(height: 10),
+
+                      // ── Button layout ─────────────────────────────────────
+                      _settingSection('BOTONES / LAYOUT', [
+                        _optRow('SNES Classic  X/Y/A/B', _buttonLayout == ButtonLayout.snes,
+                            () => setState(() => _buttonLayout = ButtonLayout.snes)),
+                        _optRow('Xbox Style  Y/X/B/A', _buttonLayout == ButtonLayout.xbox,
+                            () => setState(() => _buttonLayout = ButtonLayout.xbox)),
+                        _optRow('PS4 Style  △/☐/○/✕', _buttonLayout == ButtonLayout.ps4,
+                            () => setState(() => _buttonLayout = ButtonLayout.ps4)),
+                      ]),
+                      const SizedBox(height: 10),
+
+                      // ── Button display ────────────────────────────────────
+                      _settingSection('DISPLAY BOTONES', [
+                        _optRow('Color solido', !_buttonBlackout,
+                            () => setState(() => _buttonBlackout = false)),
+                        _optRow('Blackout (letras iluminadas)', _buttonBlackout,
+                            () => setState(() => _buttonBlackout = true)),
+                      ]),
+                      const SizedBox(height: 14),
+                      Container(height: 1, color: ac.withOpacity(0.10)),
+                      const SizedBox(height: 5),
+                      Text('// v1.0 — mas skins proxim.',
+                        style: TextStyle(
+                          color: Colors.white.withOpacity(0.18),
+                          fontSize: 6.5, fontFamily: 'monospace',
+                          fontStyle: FontStyle.italic)),
+                    ],
+                  ),
                 ),
               ),
             ),
           ),
         ),
       ),
-    );
-  }
-
-  Widget _settingSection(String title, List<_SettingOption> options) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(title, style: const TextStyle(
-          color: Color(0xFF00FF88), fontSize: 7,
-          fontFamily: 'monospace', fontWeight: FontWeight.bold,
-          letterSpacing: 0.5)),
-        const SizedBox(height: 4),
-        ...options.map((o) => Padding(
-          padding: const EdgeInsets.only(bottom: 3),
-          child: Row(children: [
-            Text(o.selected ? '> ' : '  ', style: const TextStyle(
-              color: Color(0xFF00FF88), fontSize: 8, fontFamily: 'monospace')),
-            Text(o.label, style: TextStyle(
-              color: o.selected ? Colors.white70 : Colors.white24,
-              fontSize: 7.5, fontFamily: 'monospace')),
-            if (o.selected) ...[
-              const SizedBox(width: 5),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 3),
-                decoration: BoxDecoration(
-                  border: Border.all(
-                    color: const Color(0xFF00FF88).withOpacity(0.45), width: 0.5),
-                  borderRadius: BorderRadius.circular(2),
-                ),
-                child: const Text('ON', style: TextStyle(
-                  color: Color(0xFF00FF88), fontSize: 6, fontFamily: 'monospace')),
-              ),
-            ],
-          ]),
-        )),
-      ],
     );
   }
 
@@ -858,21 +1034,22 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
     const btnSize = 48.0;
     const gap     = 4.0;
     const total   = btnSize * 3 + gap * 2;
+    final btns = _btnDefs; // [top, left, right, bottom]
     return SizedBox(
       width: total, height: total,
       child: Stack(alignment: Alignment.center, children: [
         Positioned(top: 0, left: total / 2 - btnSize / 2,
-            child: _ConsoleActionButton(label: 'X', btn: ArcadeButton.x,
-                color: _kBtnX, controller: _ctrl, size: btnSize)),
+            child: _ConsoleActionButton(label: btns[0].label, btn: btns[0].btn,
+                color: btns[0].color, controller: _ctrl, size: btnSize, blackout: _buttonBlackout)),
         Positioned(left: 0, top: total / 2 - btnSize / 2,
-            child: _ConsoleActionButton(label: 'Y', btn: ArcadeButton.y,
-                color: _kBtnY, controller: _ctrl, size: btnSize)),
+            child: _ConsoleActionButton(label: btns[1].label, btn: btns[1].btn,
+                color: btns[1].color, controller: _ctrl, size: btnSize, blackout: _buttonBlackout)),
         Positioned(right: 0, top: total / 2 - btnSize / 2,
-            child: _ConsoleActionButton(label: 'A', btn: ArcadeButton.a,
-                color: _kBtnA, controller: _ctrl, size: btnSize)),
+            child: _ConsoleActionButton(label: btns[2].label, btn: btns[2].btn,
+                color: btns[2].color, controller: _ctrl, size: btnSize, blackout: _buttonBlackout)),
         Positioned(bottom: 0, left: total / 2 - btnSize / 2,
-            child: _ConsoleActionButton(label: 'B', btn: ArcadeButton.b,
-                color: _kBtnB, controller: _ctrl, size: btnSize)),
+            child: _ConsoleActionButton(label: btns[3].label, btn: btns[3].btn,
+                color: btns[3].color, controller: _ctrl, size: btnSize, blackout: _buttonBlackout)),
       ]),
     );
   }
@@ -893,14 +1070,6 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
       ],
     );
   }
-}
-
-// ─── Settings option data ─────────────────────────────────────────────────────
-
-class _SettingOption {
-  final String label;
-  final bool selected;
-  const _SettingOption(this.label, this.selected);
 }
 
 // ─── TCG-style Card Painter ───────────────────────────────────────────────────
@@ -1835,8 +2004,10 @@ class _ConsoleActionButton extends StatefulWidget {
   final Color color;
   final ArcadeInputController controller;
   final double size;
+  final bool blackout;
   const _ConsoleActionButton({required this.label, required this.btn,
-      required this.color, required this.controller, required this.size});
+      required this.color, required this.controller, required this.size,
+      this.blackout = false});
   @override State<_ConsoleActionButton> createState() => _ConsoleActionButtonState();
 }
 
@@ -1844,6 +2015,8 @@ class _ConsoleActionButtonState extends State<_ConsoleActionButton> {
   bool _pressed = false;
   @override
   Widget build(BuildContext context) {
+    final c = widget.color;
+    final isBlackout = widget.blackout;
     return GestureDetector(
       onTapDown: (_) { setState(() => _pressed = true); HapticFeedback.selectionClick(); widget.controller.press(widget.btn); },
       onTapUp:   (_) { setState(() => _pressed = false); widget.controller.release(widget.btn); },
@@ -1853,16 +2026,29 @@ class _ConsoleActionButtonState extends State<_ConsoleActionButton> {
         width: widget.size, height: widget.size,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          color: _pressed ? widget.color.withOpacity(0.55) : widget.color,
+          color: isBlackout
+              ? (_pressed ? const Color(0xFF1A1A1A) : Colors.black)
+              : (_pressed ? c.withOpacity(0.55) : c),
+          border: isBlackout
+              ? Border.all(color: c.withOpacity(_pressed ? 0.55 : 0.30), width: 1.2)
+              : null,
           boxShadow: _pressed ? [] : [
-            BoxShadow(color: widget.color.withOpacity(0.5), blurRadius: 8, offset: const Offset(0, 3)),
+            BoxShadow(
+              color: c.withOpacity(isBlackout ? 0.75 : 0.50),
+              blurRadius: isBlackout ? 14 : 8,
+              offset: const Offset(0, 3)),
             BoxShadow(color: Colors.black54, blurRadius: 4, offset: const Offset(0, 2)),
           ],
         ),
         alignment: Alignment.center,
         child: Text(widget.label,
-          style: TextStyle(color: _pressed ? Colors.white70 : Colors.white,
-              fontWeight: FontWeight.bold, fontSize: 15)),
+          style: TextStyle(
+            color: isBlackout ? c : (_pressed ? Colors.white70 : Colors.white),
+            fontWeight: FontWeight.bold,
+            fontSize: 15,
+            shadows: isBlackout
+                ? [Shadow(color: c, blurRadius: _pressed ? 18 : 12)]
+                : null)),
       ),
     );
   }
@@ -1909,10 +2095,11 @@ class _ConsoleMetaButtonState extends State<_ConsoleMetaButton> {
 // ─── CRT scanline + vignette overlay ─────────────────────────────────────────
 
 class _CrtOverlayPainter extends CustomPainter {
-  const _CrtOverlayPainter();
+  final Color phosphor;
+  const _CrtOverlayPainter({this.phosphor = const Color(0xFF00FF88)});
 
   @override
-  bool shouldRepaint(_CrtOverlayPainter _) => false;
+  bool shouldRepaint(_CrtOverlayPainter old) => old.phosphor != phosphor;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -1940,8 +2127,8 @@ class _CrtOverlayPainter extends CustomPainter {
       ..isAntiAlias = true;
     canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), vignette);
 
-    // Subtle green phosphor tint
-    p.color = const Color(0xFF00FF88).withOpacity(0.022);
+    // Subtle phosphor tint (colour matches active theme)
+    p.color = phosphor.withOpacity(0.022);
     p.isAntiAlias = true;
     canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), p);
   }

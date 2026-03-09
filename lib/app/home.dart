@@ -68,15 +68,12 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
   // ─── Game entry ────────────────────────────────────────────────────────────
   int  _tapCount   = 0;          // needs 3 taps to launch
   bool _shaking    = false;
-  bool _imploding  = false;      // implosion animation active
   // Firestore data cached after validation, used by terminal page
   String?            _pendingUid;
   DocumentReference? _pendingRewardsRef;
   double             _pendingSaldo = 0;
   late AnimationController _shakeCtrl;
   late Animation<double>   _shakeAnim;
-  late AnimationController _implodeCtrl;  // drives logo implosion (scale+fade)
-  late Animation<double>   _implodeAnim;
 
   @override
   void initState() {
@@ -91,8 +88,6 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
       TweenSequenceItem(tween: Tween(begin: -4.0, end: 0.0), weight: 1),
     ]).animate(CurvedAnimation(parent: _shakeCtrl, curve: Curves.linear));
 
-    _implodeCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 600));
-    _implodeAnim = CurvedAnimation(parent: _implodeCtrl, curve: Curves.easeIn);
   }
 
   @override
@@ -101,7 +96,6 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
     _searchController.dispose();
     _pageController.dispose();
     _shakeCtrl.dispose();
-    _implodeCtrl.dispose();
     super.dispose();
   }
 
@@ -191,7 +185,7 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
   // ─── Game entry ─────────────────────────────────────────────────────────────
 
   void _handleLogoTap() {
-    if (_shaking || _imploding) return;
+    if (_shaking) return;
     _tapCount++;
     _shaking = true;
     _shakeCtrl.forward(from: 0).then((_) {
@@ -242,25 +236,16 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
     _pendingUid        = uid;
     _pendingRewardsRef = rewardsDoc.reference;
     _pendingSaldo      = saldo;
-    _startImplosion();
+    _startFadeOverlay();
   }
 
-  // Step 1 — logo implodes (scale+fade, 600ms)
-  void _startImplosion() {
-    setState(() => _imploding = true);
-    _implodeCtrl.forward(from: 0).then((_) {
-      if (!mounted) return;
-      _startFadeOverlay();
-    });
-  }
-
-  // Step 2 — full-app smooth pulse-to-black overlay via root Overlay
+  // Full-app smooth CRT-dying fade to black, covers nav bar via root Overlay
   void _startFadeOverlay() {
     OverlayEntry? entry;
     late AnimationController fadeCtrl;
     fadeCtrl = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 3000),
+      duration: const Duration(milliseconds: 2550),
     );
     // CRT dying: slowly dims, briefly holds, dims more, brief partial recovery,
     // final collapse to black — never goes back toward white
@@ -308,13 +293,7 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
           reverseTransitionDuration: Duration.zero,
         ),
       ).then((_) {
-        if (mounted) {
-          setState(() {
-            _imploding = false;
-            _implodeCtrl.reset();
-            _tapCount  = 0;
-          });
-        }
+        if (mounted) setState(() => _tapCount = 0);
       });
       // Brief delay lets terminal render before we pull the overlay
       Future.delayed(const Duration(milliseconds: 80), () {
@@ -348,32 +327,17 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
               width: 300,
               child: AspectRatio(
                 aspectRatio: 1 / 1,
-                child: _imploding
-                    ? AnimatedBuilder(
-                        animation: _implodeAnim,
-                        builder: (_, child) => Transform.scale(
-                          scale: (1.0 - _implodeAnim.value * 0.97).clamp(0.0, 1.0),
-                          child: Opacity(
-                            opacity: (1.0 - _implodeAnim.value * 1.8).clamp(0.0, 1.0),
-                            child: child,
-                          ),
-                        ),
-                        child: Image.asset(
-                          isDarkMode ? AppImages.logowhite : AppImages.logo,
-                          fit: BoxFit.contain,
-                        ),
-                      )
-                    : AnimatedBuilder(
-                        animation: _shakeAnim,
-                        builder: (_, child) => Transform.translate(
-                          offset: Offset(_shakeAnim.value, 0),
-                          child: child,
-                        ),
-                        child: Image.asset(
-                          isDarkMode ? AppImages.logowhite : AppImages.logo,
-                          fit: BoxFit.contain,
-                        ),
-                      ),
+                child: AnimatedBuilder(
+                    animation: _shakeAnim,
+                    builder: (_, child) => Transform.translate(
+                      offset: Offset(_shakeAnim.value, 0),
+                      child: child,
+                    ),
+                    child: Image.asset(
+                      isDarkMode ? AppImages.logowhite : AppImages.logo,
+                      fit: BoxFit.contain,
+                    ),
+                  ),
               ),
             ),
           ),
