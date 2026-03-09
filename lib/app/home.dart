@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math';
 import 'dart:ui';
 
 import 'package:algolia/algolia.dart';
@@ -53,7 +54,7 @@ class Home extends StatefulWidget {
   State<Home> createState() => _HomeState();
 }
 
-class _HomeState extends State<Home> {
+class _HomeState extends State<Home> with TickerProviderStateMixin {
   final TextEditingController _searchController = TextEditingController();
   String _searchText = '';
   List<AlgoliaObjectSnapshot> _searchResults = [];
@@ -65,14 +66,32 @@ class _HomeState extends State<Home> {
 
   final PageController _pageController = PageController();
 
-  // ─── Hidden game trigger ───────────────────────────────────────────────────
-  int _logoTapCount = 0;
-  DateTime? _lastLogoTap;
+  // ─── Game entry ────────────────────────────────────────────────────────────
+  bool _showGameHint = true;       // hint callout near logo
+  bool _shaking = false;           // prevent double-taps during shake
+  late AnimationController _shakeCtrl;   // logo horizontal shake
+  late Animation<double> _shakeAnim;
+  late AnimationController _hintBobCtrl; // hint character bobbing
 
   @override
   void initState() {
     super.initState();
     _searchController.addListener(_onSearchChanged);
+
+    // Logo shake: horizontal oscillation → 7 snaps over 550ms
+    _shakeCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 550));
+    _shakeAnim = TweenSequence<double>([
+      TweenSequenceItem(tween: Tween(begin: 0.0, end: -10.0), weight: 1),
+      TweenSequenceItem(tween: Tween(begin: -10.0, end: 10.0), weight: 2),
+      TweenSequenceItem(tween: Tween(begin: 10.0, end: -8.0), weight: 2),
+      TweenSequenceItem(tween: Tween(begin: -8.0, end: 8.0), weight: 2),
+      TweenSequenceItem(tween: Tween(begin: 8.0, end: -4.0), weight: 2),
+      TweenSequenceItem(tween: Tween(begin: -4.0, end: 0.0), weight: 1),
+    ]).animate(CurvedAnimation(parent: _shakeCtrl, curve: Curves.linear));
+
+    // Hint character: slow continuous bob (up/down 6px)
+    _hintBobCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 1100))
+      ..repeat(reverse: true);
   }
 
   @override
@@ -80,6 +99,8 @@ class _HomeState extends State<Home> {
     _searchController.removeListener(_onSearchChanged);
     _searchController.dispose();
     _pageController.dispose();
+    _shakeCtrl.dispose();
+    _hintBobCtrl.dispose();
     super.dispose();
   }
 
@@ -166,21 +187,16 @@ class _HomeState extends State<Home> {
     });
   }
 
-  // ─── Hidden slot machine game ──────────────────────────────────────────────
+  // ─── Game entry ─────────────────────────────────────────────────────────────
 
   void _handleLogoTap() {
-    final now = DateTime.now();
-    if (_lastLogoTap == null ||
-        now.difference(_lastLogoTap!) > const Duration(seconds: 2)) {
-      _logoTapCount = 1;
-    } else {
-      _logoTapCount++;
-    }
-    _lastLogoTap = now;
-    if (_logoTapCount >= 3) {
-      _logoTapCount = 0;
+    if (_shaking) return;
+    _shaking = true;
+    setState(() => _showGameHint = false);
+    _shakeCtrl.forward(from: 0).then((_) {
+      _shaking = false;
       _launchGame();
-    }
+    });
   }
 
   Future<void> _launchGame() async {
@@ -218,14 +234,17 @@ class _HomeState extends State<Home> {
 
     if (!mounted) return;
 
+    // Launch via animated transition screen
     Navigator.push(
       context,
-      customPageRoute(
-        ArcadeCenterScreen(
+      PageRouteBuilder(
+        pageBuilder: (ctx, _, __) => _ArcadeLaunchPage(
           userId: uid,
           rewardsDocRef: rewardsDoc.reference,
           currentSaldo: saldo,
         ),
+        transitionDuration: Duration.zero,
+        reverseTransitionDuration: Duration.zero,
       ),
     );
   }
@@ -246,16 +265,20 @@ class _HomeState extends State<Home> {
         appBar: AppBar(
           scrolledUnderElevation: 0,
           backgroundColor: Colors.transparent,
-          title: Padding(
-            padding: const EdgeInsets.all(0),
-            child: SizedBox(
-              height: 180,
-              width: 300,
-              child: AspectRatio(
-                aspectRatio: 1 / 1,
-                child: GestureDetector(
-                  onTap: _handleLogoTap,
-                  behavior: HitTestBehavior.opaque,
+          title: SizedBox(
+            height: 180,
+            width: 300,
+            child: AspectRatio(
+              aspectRatio: 1 / 1,
+              child: GestureDetector(
+                onTap: _handleLogoTap,
+                behavior: HitTestBehavior.opaque,
+                child: AnimatedBuilder(
+                  animation: _shakeAnim,
+                  builder: (_, child) => Transform.translate(
+                    offset: Offset(_shakeAnim.value, 0),
+                    child: child,
+                  ),
                   child: Image.asset(
                     isDarkMode ? AppImages.logowhite : AppImages.logo,
                     fit: BoxFit.contain,
@@ -273,6 +296,8 @@ class _HomeState extends State<Home> {
         )
             : Column(
           children: [
+            // ── Game hint callout ──────────────────────────────────────────
+            if (_showGameHint) _buildGameHint(),
             Padding(
               padding: const EdgeInsets.all(8.0),
               child: Row(
@@ -735,6 +760,89 @@ class FirestoreProductGrid extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+
+  // ─── Game hint callout ──────────────────────────────────────────────────────
+  Widget _buildGameHint() {
+    return AnimatedBuilder(
+      animation: _hintBobCtrl,
+      builder: (_, __) {
+        final bob = (_hintBobCtrl.value - 0.5) * 8;
+        return Transform.translate(
+          offset: Offset(0, bob),
+          child: GestureDetector(
+            onTap: _handleLogoTap,
+            child: Container(
+              margin: const EdgeInsets.fromLTRB(16, 2, 16, 0),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              decoration: BoxDecoration(
+                color: const Color(0xFF07000F),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: const Color(0xFF00FF88).withOpacity(0.55),
+                  width: 1.2,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF00FF88).withOpacity(0.15),
+                    blurRadius: 12,
+                    spreadRadius: 1,
+                  ),
+                ],
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  _PixelCharacter(phase: _hintBobCtrl.value),
+                  const SizedBox(width: 10),
+                  Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          const Text(
+                            '▲',
+                            style: TextStyle(
+                              color: Color(0xFF00FF88),
+                              fontSize: 11,
+                              shadows: [Shadow(color: Color(0xFF00FF88), blurRadius: 8)],
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            '¡Presióname para un buen rato!',
+                            style: TextStyle(
+                              color: const Color(0xFF00FF88).withOpacity(0.90),
+                              fontSize: 11,
+                              fontFamily: 'monospace',
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'toca el logo  ·  10 pts mínimo',
+                        style: TextStyle(
+                          color: const Color(0xFF00FF88).withOpacity(0.45),
+                          fontSize: 9,
+                          fontFamily: 'monospace',
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(width: 8),
+                  const Text('🕹️', style: TextStyle(fontSize: 22)),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -1239,5 +1347,257 @@ class _AddToCartButtonState extends State<_AddToCartButton> {
   String _formatPrice(dynamic price) {
     if (price == null) return 'N/A';
     return '\$${(price as num).toStringAsFixed(2)}';
+  }
+}
+// ─── Pixel character hint widget ─────────────────────────────────────────────
+class _PixelCharacter extends StatelessWidget {
+  final double phase; // 0..1 animation phase for arm wave
+
+  const _PixelCharacter({required this.phase});
+
+  @override
+  Widget build(BuildContext context) {
+    return CustomPaint(
+      size: const Size(28, 36),
+      painter: _PixelCharacterPainter(phase: phase),
+    );
+  }
+}
+
+class _PixelCharacterPainter extends CustomPainter {
+  final double phase;
+  const _PixelCharacterPainter({required this.phase});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width;
+    final h = size.height;
+    final px = w / 7; // ~4px per pixel unit
+
+    void rect(double x, double y, double pw, double ph, Color c) {
+      canvas.drawRect(
+        Rect.fromLTWH(x * px, y * px, pw * px, ph * px),
+        Paint()..color = c,
+      );
+    }
+
+    // Head
+    rect(2, 0, 3, 3, const Color(0xFF00FF88));
+    // Eyes
+    rect(2.4, 0.6, 0.6, 0.6, const Color(0xFF07000F));
+    rect(3.8, 0.6, 0.6, 0.6, const Color(0xFF07000F));
+    // Smile
+    rect(2.6, 1.8, 1.6, 0.4, const Color(0xFF07000F));
+
+    // Body
+    rect(2, 3, 3, 3, const Color(0xFF00CC66));
+
+    // Arms — left arm static, right arm waves with phase
+    final armRaise = (phase * 2.0).clamp(0.0, 1.0); // 0..1 pointing up
+    rect(0.5, 3 + 1.5 * (1 - armRaise), 1.5, 0.8, const Color(0xFF00FF88));
+    rect(5, 3, 1.5, 0.8, const Color(0xFF00FF88));
+
+    // Legs
+    rect(2.2, 6, 1.0, 2.5, const Color(0xFF00AA55));
+    rect(3.8, 6, 1.0, 2.5, const Color(0xFF00AA55));
+  }
+
+  @override
+  bool shouldRepaint(_PixelCharacterPainter old) => old.phase != phase;
+}
+
+// ─── Arcade launch transition page ───────────────────────────────────────────
+class _ArcadeLaunchPage extends StatefulWidget {
+  final String userId;
+  final DocumentReference rewardsDocRef;
+  final double currentSaldo;
+
+  const _ArcadeLaunchPage({
+    required this.userId,
+    required this.rewardsDocRef,
+    required this.currentSaldo,
+  });
+
+  @override
+  State<_ArcadeLaunchPage> createState() => _ArcadeLaunchPageState();
+}
+
+class _ArcadeLaunchPageState extends State<_ArcadeLaunchPage> {
+  // Phase 0: flicker; Phase 1: boot lines; Phase 2: navigate
+  int _phase = 0;
+  bool _screenLight = true;
+  int _flickerCount = 0;
+  final List<String> _visibleLines = [];
+  Timer? _flickerTimer;
+  Timer? _bootTimer;
+
+  static const _bootLines = [
+    'ARCADE OS v2.4.1 [BUILD 20260309]',
+    'Initializing display adapter........OK',
+    'Loading cartridge ROM................OK',
+    'Scanning input controllers...........OK',
+    'Mounting game filesystem.............OK',
+    'Checking high score database.........OK',
+    'Allocating framebuffer (240×160).....OK',
+    'Starting audio subsystem.............OK',
+    '> BIENVENIDO AL ARCADE CENTER <',
+    '',
+    '¡QUE EMPIECE EL JUEGO!',
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _startFlicker();
+  }
+
+  void _startFlicker() {
+    _flickerTimer = Timer.periodic(const Duration(milliseconds: 80), (t) {
+      if (!mounted) { t.cancel(); return; }
+      setState(() => _screenLight = !_screenLight);
+      _flickerCount++;
+      if (_flickerCount >= 12) {
+        t.cancel();
+        setState(() {
+          _screenLight = false;
+          _phase = 1;
+        });
+        _startBootLines();
+      }
+    });
+  }
+
+  void _startBootLines() {
+    int lineIdx = 0;
+    _bootTimer = Timer.periodic(const Duration(milliseconds: 120), (t) {
+      if (!mounted) { t.cancel(); return; }
+      if (lineIdx < _bootLines.length) {
+        setState(() => _visibleLines.add(_bootLines[lineIdx]));
+        lineIdx++;
+      } else {
+        t.cancel();
+        Future.delayed(const Duration(milliseconds: 500), _launchArcade);
+      }
+    });
+  }
+
+  void _launchArcade() {
+    if (!mounted) return;
+    Navigator.pushReplacement(
+      context,
+      PageRouteBuilder(
+        pageBuilder: (ctx, _, __) => ArcadeCenterScreen(
+          userId: widget.userId,
+          rewardsDocRef: widget.rewardsDocRef,
+          currentSaldo: widget.currentSaldo,
+        ),
+        transitionDuration: Duration.zero,
+        reverseTransitionDuration: Duration.zero,
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _flickerTimer?.cancel();
+    _bootTimer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Phase 0: flicker — alternating white/black
+    if (_phase == 0) {
+      return Scaffold(
+        backgroundColor: _screenLight ? Colors.white : Colors.black,
+        body: const SizedBox.expand(),
+      );
+    }
+
+    // Phase 1: black terminal with scrolling boot lines
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SizedBox(height: 16),
+              ..._visibleLines.map((line) => _TermLine(text: line)),
+              // blinking cursor
+              const _BlinkCursor(),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// Single terminal output line
+class _TermLine extends StatelessWidget {
+  final String text;
+  const _TermLine({required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    final isHighlight = text.startsWith('>') || text.startsWith('¡');
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 3),
+      child: Text(
+        text,
+        style: TextStyle(
+          color: isHighlight ? const Color(0xFF00FF88) : const Color(0xFF22DD66),
+          fontSize: isHighlight ? 13 : 11,
+          fontFamily: 'monospace',
+          fontWeight: isHighlight ? FontWeight.bold : FontWeight.normal,
+          letterSpacing: 0.5,
+          shadows: isHighlight
+              ? [const Shadow(color: Color(0xFF00FF88), blurRadius: 10)]
+              : null,
+        ),
+      ),
+    );
+  }
+}
+
+// Blinking underscore cursor
+class _BlinkCursor extends StatefulWidget {
+  const _BlinkCursor();
+  @override
+  State<_BlinkCursor> createState() => _BlinkCursorState();
+}
+
+class _BlinkCursorState extends State<_BlinkCursor> with SingleTickerProviderStateMixin {
+  late AnimationController _ctrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 500))
+      ..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _ctrl,
+      builder: (_, __) => Text(
+        _ctrl.value > 0.5 ? '_' : ' ',
+        style: const TextStyle(
+          color: Color(0xFF00FF88),
+          fontSize: 12,
+          fontFamily: 'monospace',
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+    );
   }
 }
