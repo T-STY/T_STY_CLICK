@@ -1375,9 +1375,10 @@ class _ArcadeLaunchPageState extends State<_ArcadeLaunchPage> {
   _TermPhase _phase = _TermPhase.booting;
   final List<String> _visibleLines = [];
   Timer? _lineTimer;
-  String? _expectedKey;           // fetched from Firestore
+  String? _expectedKey;
   final TextEditingController _keyCtrl = TextEditingController();
   final FocusNode _keyFocus = FocusNode();
+  final ScrollController _scrollCtrl = ScrollController();
 
   // ── Boot sequence ──────────────────────────────────────────────────────────
   static const _bootLines = [
@@ -1457,16 +1458,26 @@ class _ArcadeLaunchPageState extends State<_ArcadeLaunchPage> {
     } catch (_) { /* non-critical */ }
   }
 
+  void _scrollToBottom() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollCtrl.hasClients) {
+        _scrollCtrl.jumpTo(_scrollCtrl.position.maxScrollExtent);
+      }
+    });
+  }
+
   void _startBootLines() {
     int idx = 0;
     _lineTimer = Timer.periodic(const Duration(milliseconds: 230), (t) {
       if (!mounted) { t.cancel(); return; }
       if (idx < _bootLines.length) {
         setState(() => _visibleLines.add(_bootLines[idx]));
+        _scrollToBottom();
         idx++;
       } else {
         t.cancel();
         setState(() => _phase = _TermPhase.awaitingKey);
+        _scrollToBottom();
         Future.delayed(const Duration(milliseconds: 200), () {
           if (mounted) _keyFocus.requestFocus();
         });
@@ -1491,6 +1502,7 @@ class _ArcadeLaunchPageState extends State<_ArcadeLaunchPage> {
         _visibleLines.add('');
         _keyCtrl.clear();
       });
+      _scrollToBottom();
       Future.delayed(const Duration(milliseconds: 1400), () {
         if (!mounted) return;
         setState(() {
@@ -1499,6 +1511,7 @@ class _ArcadeLaunchPageState extends State<_ArcadeLaunchPage> {
           _visibleLines.removeLast();
           _visibleLines.removeLast();
         });
+        _scrollToBottom();
         _keyFocus.requestFocus();
       });
     }
@@ -1509,11 +1522,13 @@ class _ArcadeLaunchPageState extends State<_ArcadeLaunchPage> {
       _phase = _TermPhase.hacking;
       _visibleLines.clear();
     });
+    _scrollToBottom();
     int idx = 0;
     _lineTimer = Timer.periodic(const Duration(milliseconds: 130), (t) {
       if (!mounted) { t.cancel(); return; }
       if (idx < _hackerLines.length) {
         setState(() => _visibleLines.add(_hackerLines[idx]));
+        _scrollToBottom();
         idx++;
       } else {
         t.cancel();
@@ -1543,21 +1558,22 @@ class _ArcadeLaunchPageState extends State<_ArcadeLaunchPage> {
     _lineTimer?.cancel();
     _keyCtrl.dispose();
     _keyFocus.dispose();
+    _scrollCtrl.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final isInputPhase = _phase == _TermPhase.awaitingKey || _phase == _TermPhase.keyError;
+    final isHacker     = _phase == _TermPhase.hacking;
+
     return Scaffold(
       backgroundColor: const Color(0xFF010D01),
-      // Keep keyboard from resizing the layout
       resizeToAvoidBottomInset: true,
       body: Stack(
         children: [
           Positioned.fill(
-            child: IgnorePointer(
-              child: CustomPaint(painter: _CrtScanlinePainter()),
-            ),
+            child: IgnorePointer(child: CustomPaint(painter: _CrtScanlinePainter())),
           ),
           Positioned.fill(
             child: IgnorePointer(
@@ -1572,25 +1588,28 @@ class _ArcadeLaunchPageState extends State<_ArcadeLaunchPage> {
               ),
             ),
           ),
+          // Content: anchored to bottom, scrolls upward as lines fill
           SafeArea(
-            child: SingleChildScrollView(
-              reverse: true,   // keeps latest lines visible when keyboard opens
-              padding: const EdgeInsets.fromLTRB(18, 14, 18, 14),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  ..._visibleLines.map((l) => _TermLine(
-                    text: l,
-                    isHacker: _phase == _TermPhase.hacking,
-                  )),
-                  // Keyword input — shown only while awaiting / after error
-                  if (_phase == _TermPhase.awaitingKey || _phase == _TermPhase.keyError)
-                    _buildKeyInput(),
-                  const SizedBox(height: 6),
-                  if (_phase != _TermPhase.awaitingKey && _phase != _TermPhase.keyError)
-                    const _BlinkCursor(),
-                ],
-              ),
+            child: LayoutBuilder(
+              builder: (ctx, constraints) {
+                return SingleChildScrollView(
+                  controller: _scrollCtrl,
+                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+                  child: ConstrainedBox(
+                    // minHeight = full viewport so short content sits at bottom
+                    constraints: BoxConstraints(minHeight: constraints.maxHeight - 28),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        ..._visibleLines.map((l) => _TermLine(text: l, isHacker: isHacker)),
+                        if (isInputPhase) _buildKeyInput(),
+                        if (!isInputPhase) const _BlinkCursor(),
+                      ],
+                    ),
+                  ),
+                );
+              },
             ),
           ),
         ],
@@ -1598,57 +1617,55 @@ class _ArcadeLaunchPageState extends State<_ArcadeLaunchPage> {
     );
   }
 
+  // Input row — completely blends with terminal: no borders, no backgrounds
   Widget _buildKeyInput() {
-    return Padding(
-      padding: const EdgeInsets.only(top: 4),
-      child: TextField(
-        controller: _keyCtrl,
-        focusNode: _keyFocus,
-        onSubmitted: (_) => _checkKey(),
-        style: const TextStyle(
-          color: Color(0xFF00FF88),
-          fontFamily: 'monospace',
-          fontSize: 11,
-          letterSpacing: 1.2,
-          shadows: [Shadow(color: Color(0xFF00FF88), blurRadius: 6)],
-        ),
-        cursorColor: const Color(0xFF00FF88),
-        cursorWidth: 8,
-        decoration: InputDecoration(
-          isDense: true,
-          contentPadding: const EdgeInsets.symmetric(vertical: 6),
-          border: InputBorder.none,
-          enabledBorder: const UnderlineInputBorder(
-            borderSide: BorderSide(color: Color(0xFF00884422), width: 1),
-          ),
-          focusedBorder: const UnderlineInputBorder(
-            borderSide: BorderSide(color: Color(0xFF00FF88), width: 1.2),
-          ),
-          prefixText: r' C:\> ACCESS_CODE: ',
-          prefixStyle: const TextStyle(
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        // Static prompt prefix — same style as a command line
+        const Text(
+          r' C:\> ACCESS_CODE: ',
+          style: TextStyle(
             color: Color(0xFF88FFBB),
             fontFamily: 'monospace',
             fontSize: 11,
             fontWeight: FontWeight.bold,
+            letterSpacing: 0.6,
+            height: 1.35,
             shadows: [Shadow(color: Color(0xFF00FF88), blurRadius: 8)],
           ),
-          suffixIcon: GestureDetector(
-            onTap: _checkKey,
-            child: const Padding(
-              padding: EdgeInsets.only(bottom: 4),
-              child: Text(
-                '↵',
-                style: TextStyle(
-                  color: Color(0xFF00FF88),
-                  fontSize: 16,
-                  fontFamily: 'monospace',
-                  shadows: [Shadow(color: Color(0xFF00FF88), blurRadius: 8)],
-                ),
-              ),
+        ),
+        Expanded(
+          child: TextField(
+            controller: _keyCtrl,
+            focusNode: _keyFocus,
+            onSubmitted: (_) => _checkKey(),
+            autofocus: false,
+            style: const TextStyle(
+              color: Color(0xFF00FF88),
+              fontFamily: 'monospace',
+              fontSize: 11,
+              letterSpacing: 0.6,
+              height: 1.35,
+              shadows: [Shadow(color: Color(0xFF00FF88), blurRadius: 5)],
+            ),
+            cursorColor: const Color(0xFF00FF88),
+            cursorWidth: 7,
+            cursorHeight: 13,
+            decoration: const InputDecoration(
+              border: InputBorder.none,
+              enabledBorder: InputBorder.none,
+              focusedBorder: InputBorder.none,
+              errorBorder: InputBorder.none,
+              disabledBorder: InputBorder.none,
+              fillColor: Colors.transparent,
+              filled: false,
+              isDense: true,
+              contentPadding: EdgeInsets.zero,
             ),
           ),
         ),
-      ),
+      ],
     );
   }
 }
