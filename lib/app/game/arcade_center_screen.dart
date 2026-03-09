@@ -184,6 +184,7 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
   final List<int> _highScores = List.filled(12, 0);
   int? _newRecordIndex;
   Timer? _recordTimer;
+  bool _showSettings = false;
 
   // ── Splash / power-on ──────────────────────────────────────────────────────
   bool _splashDone = false;
@@ -268,17 +269,20 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
     }
 
     if (_activeGame == null) {
-      const cols = 3; // neon grid columns
+      if (_showSettings) {
+        if (btn == ArcadeButton.select || btn == ArcadeButton.b) {
+          setState(() => _showSettings = false);
+        }
+        return;
+      }
       final n = kArcadeGames.length;
       switch (btn) {
         case ArcadeButton.left:
+        case ArcadeButton.up:
           setState(() => _selectedIndex = (_selectedIndex - 1 + n) % n);
         case ArcadeButton.right:
-          setState(() => _selectedIndex = (_selectedIndex + 1) % n);
-        case ArcadeButton.up:
-          setState(() => _selectedIndex = (_selectedIndex - cols + n) % n);
         case ArcadeButton.down:
-          setState(() => _selectedIndex = (_selectedIndex + cols) % n);
+          setState(() => _selectedIndex = (_selectedIndex + 1) % n);
         case ArcadeButton.a:
         case ArcadeButton.start:
           _launchSelected();
@@ -380,20 +384,40 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
           boxShadow: [BoxShadow(color: const Color(0xFF69F0AE).withOpacity(0.8), blurRadius: 6)],
         ),
       ),
-      const SizedBox(width: 8),
-      const Text('ARCADE CENTER',
-        style: TextStyle(color: Color(0xFF555555), fontSize: 9,
-            fontWeight: FontWeight.w700, letterSpacing: 3)),
+      const SizedBox(width: 6),
+      const Text('root@arcade:~\$',
+        style: TextStyle(color: Color(0xFF00BB66), fontSize: 8,
+            fontWeight: FontWeight.w700, fontFamily: 'monospace', letterSpacing: 0.5)),
       const Spacer(),
+      GestureDetector(
+        onTap: () => setState(() => _showSettings = !_showSettings),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+          decoration: BoxDecoration(
+            color: _showSettings
+                ? const Color(0xFF00FF88).withOpacity(0.14)
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(3),
+            border: Border.all(
+              color: const Color(0xFF00FF88).withOpacity(_showSettings ? 0.55 : 0.28),
+              width: 0.8),
+          ),
+          child: Text('[⚙]',
+            style: TextStyle(
+              color: const Color(0xFF00FF88).withOpacity(_showSettings ? 1.0 : 0.55),
+              fontSize: 8, fontFamily: 'monospace', fontWeight: FontWeight.bold)),
+        ),
+      ),
+      const SizedBox(width: 6),
       Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
         decoration: BoxDecoration(
           color: Colors.black.withOpacity(0.10),
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(8),
           border: Border.all(color: Colors.black26),
         ),
-        child: Text('💰 ${_saldo.toStringAsFixed(0)} pts',
-          style: const TextStyle(color: Color(0xFF333333), fontSize: 9, fontWeight: FontWeight.w600)),
+        child: Text('💰 ${_saldo.toStringAsFixed(0)}',
+          style: const TextStyle(color: Color(0xFF444444), fontSize: 8, fontWeight: FontWeight.w600)),
       ),
     ]);
   }
@@ -429,10 +453,14 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
   Widget _buildNeonGrid() {
     if (!_splashDone) return _buildSplashScreen();
     return Container(
-      color: const Color(0xFF07000F),
-      child: Column(children: [
-        Expanded(child: _buildGameGrid()),
-        _buildGridHint(),
+      color: const Color(0xFF050A05),
+      child: Stack(children: [
+        Column(children: [
+          _buildTerminalHeader(),
+          Expanded(child: _buildTerminalGameList()),
+          _buildTerminalHint(),
+        ]),
+        if (_showSettings) _buildSettingsPanel(),
       ]),
     );
   }
@@ -508,227 +536,285 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
     );
   }
 
-  Widget _buildGameGrid() {
-    return GridView.builder(
-      physics: const NeverScrollableScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(5, 5, 5, 0),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 3,
-        mainAxisSpacing: 5,
-        crossAxisSpacing: 5,
-        childAspectRatio: 0.82,
+  // ── Terminal-style game list ───────────────────────────────────────────────
+
+  Widget _buildTerminalHeader() {
+    final unlocked = kArcadeGames.where((g) => !g.locked).length;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(10, 5, 10, 4),
+      decoration: BoxDecoration(
+        border: Border(
+          bottom: BorderSide(color: const Color(0xFF00FF88).withOpacity(0.18), width: 1)),
       ),
-      itemCount: kArcadeGames.length,
-      itemBuilder: (_, i) {
-        final game = kArcadeGames[i];
-        if (game.locked) return _buildLockedCard(game, i, i == _selectedIndex);
-        return _buildNeonCard(game, i, i == _selectedIndex, 0, 0);
-      },
+      child: Row(children: [
+        const Text('> ls games/', style: TextStyle(
+          color: Color(0xFF00FF88), fontSize: 8, fontFamily: 'monospace',
+          fontWeight: FontWeight.bold)),
+        const Spacer(),
+        Text('$unlocked/${kArcadeGames.length} ACTIVOS',
+          style: TextStyle(
+            color: const Color(0xFF00FF88).withOpacity(0.40),
+            fontSize: 7, fontFamily: 'monospace')),
+      ]),
     );
   }
 
-  Widget _buildNeonCard(ArcadeGameDef def, int index, bool selected, double w, double h) {
-    final neon = _kNeonColors[index];
-    final gradColors = _kCardGradients[index];
-    final isRecord = _newRecordIndex == index;
-    final borderColor = isRecord ? Colors.amber : (selected ? neon : neon.withOpacity(0.30));
-    final borderWidth = selected ? 1.8 : 1.0;
+  Widget _buildTerminalGameList() {
+    return ListView.builder(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      itemCount: kArcadeGames.length,
+      itemBuilder: (_, i) => _buildTerminalRow(kArcadeGames[i], i, i == _selectedIndex),
+    );
+  }
 
+  Widget _buildTerminalRow(ArcadeGameDef game, int index, bool selected) {
+    final neon = _kNeonColors[index];
+    final isRecord = _newRecordIndex == index;
+    final score = _highScores[index];
+    final numStr = '[${(index + 1).toString().padLeft(2, '0')}]';
+
+    if (game.locked) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        color: selected ? const Color(0xFF0D0D0D) : Colors.transparent,
+        child: Row(children: [
+          Text(numStr, style: const TextStyle(
+            color: Colors.white12, fontSize: 8, fontFamily: 'monospace')),
+          const SizedBox(width: 6),
+          Text(game.emoji, style: const TextStyle(fontSize: 9)),
+          const SizedBox(width: 6),
+          Expanded(child: Text(game.title, style: const TextStyle(
+            color: Colors.white24, fontSize: 8, fontFamily: 'monospace'),
+            overflow: TextOverflow.ellipsis)),
+          const Text('[LOCKED]', style: TextStyle(
+            color: Color(0xFF552222), fontSize: 7, fontFamily: 'monospace')),
+        ]),
+      );
+    }
+
+    final scoreStr = score > 0 ? 'HI:$score' : 'HI:---';
     return GestureDetector(
       onTap: () => setState(() => _selectedIndex = index),
       onDoubleTap: selected ? _launchSelected : null,
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 130),
+        duration: const Duration(milliseconds: 80),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
         decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft, end: Alignment.bottomRight,
-            colors: gradColors,
-          ),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: borderColor, width: borderWidth),
-          boxShadow: selected ? [
-            BoxShadow(color: neon.withOpacity(0.45), blurRadius: 14, spreadRadius: 0),
-            BoxShadow(color: neon.withOpacity(0.15), blurRadius: 28, spreadRadius: 2),
-          ] : [
-            BoxShadow(color: neon.withOpacity(0.10), blurRadius: 5),
-          ],
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(9),
-          child: Stack(children: [
-            // Neon accent bar at top
-            Positioned(top: 0, left: 0, right: 0,
-              child: Container(
-                height: selected ? 3.0 : 2.0,
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [neon.withOpacity(selected ? 0.90 : 0.40), Colors.transparent],
-                  ),
-                ),
-              ),
-            ),
-            // Subtle corner glow
-            Positioned(top: 0, right: 0,
-              child: Container(
-                width: 32, height: 32,
-                decoration: BoxDecoration(
-                  gradient: RadialGradient(
-                    colors: [neon.withOpacity(selected ? 0.18 : 0.08), Colors.transparent],
-                  ),
-                ),
-              ),
-            ),
-            // Record burst
-            if (isRecord)
-              Positioned(top: 6, left: 0, right: 0,
-                child: Center(
-                  child: Text('⚡ RÉCORD ⚡',
-                    style: TextStyle(color: Colors.amber, fontSize: 6.0,
-                      fontFamily: 'monospace', fontWeight: FontWeight.bold,
-                      shadows: [Shadow(color: Colors.amber, blurRadius: 10)]),
-                  ),
-                ),
-              ),
-            // Main content
-            Positioned.fill(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  AnimatedDefaultTextStyle(
-                    duration: const Duration(milliseconds: 130),
-                    style: TextStyle(fontSize: selected ? 26 : 20),
-                    child: Text(def.emoji),
-                  ),
-                  const SizedBox(height: 3),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 4),
-                    child: Text(def.title,
-                      textAlign: TextAlign.center,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: selected ? neon : Colors.white60,
-                        fontSize: selected ? 7.5 : 6.5,
-                        fontWeight: FontWeight.bold,
-                        fontFamily: 'monospace',
-                        letterSpacing: 0.3,
-                        shadows: selected ? [Shadow(color: neon, blurRadius: 8)] : null,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  if (_highScores[index] > 0)
-                    Text('★ ${_highScores[index]}',
-                      style: TextStyle(
-                        color: selected ? Colors.amber : Colors.amber.withOpacity(0.50),
-                        fontSize: 6.0, fontFamily: 'monospace',
-                        shadows: selected ? [const Shadow(color: Colors.amber, blurRadius: 6)] : null,
-                      )),
-                  if (selected) ...[
-                    const SizedBox(height: 4),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                      child: Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.symmetric(vertical: 3),
-                        decoration: BoxDecoration(
-                          color: neon.withOpacity(0.12),
-                          border: Border.all(color: neon.withOpacity(0.70), width: 1),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: Text('▶ JUGAR',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: neon, fontSize: 6.5, fontFamily: 'monospace',
-                            fontWeight: FontWeight.bold,
-                            shadows: [Shadow(color: neon, blurRadius: 6)])),
-                      ),
-                    ),
-                  ] else
-                    const SizedBox(height: 5),
-                ],
-              ),
-            ),
-          ]),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildLockedCard(ArcadeGameDef def, int index, bool selected) {
-    final neon = _kNeonColors[index];
-    return GestureDetector(
-      onTap: () => setState(() => _selectedIndex = index),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 130),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft, end: Alignment.bottomRight,
-            colors: [const Color(0xFF0A0A0A), const Color(0xFF050505)],
-          ),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(
-            color: selected ? neon.withOpacity(0.30) : Colors.white.withOpacity(0.06),
-            width: 1.0,
+          color: selected ? neon.withOpacity(0.08) : Colors.transparent,
+          border: Border(
+            left: BorderSide(
+              color: selected ? neon : Colors.transparent,
+              width: 2),
           ),
         ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(def.emoji,
-              style: TextStyle(fontSize: 20, color: Colors.white.withOpacity(0.08))),
-            const SizedBox(height: 2),
-            const Text('🔒', style: TextStyle(fontSize: 14)),
-            const SizedBox(height: 4),
-            Text('PRÓXIMO',
+        child: Row(children: [
+          Text(numStr, style: TextStyle(
+            color: selected ? neon : Colors.white30,
+            fontSize: 8, fontFamily: 'monospace',
+            fontWeight: selected ? FontWeight.bold : FontWeight.normal)),
+          const SizedBox(width: 5),
+          Text(game.emoji, style: TextStyle(fontSize: selected ? 12 : 10)),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(game.title,
+              overflow: TextOverflow.ellipsis,
               style: TextStyle(
-                color: neon.withOpacity(selected ? 0.45 : 0.20),
-                fontSize: 6, fontFamily: 'monospace', letterSpacing: 0.5,
-                fontWeight: FontWeight.bold)),
-          ],
-        ),
+                color: selected ? Colors.white : Colors.white54,
+                fontSize: selected ? 8.5 : 8,
+                fontFamily: 'monospace',
+                fontWeight: selected ? FontWeight.bold : FontWeight.normal,
+                shadows: selected ? [Shadow(color: neon, blurRadius: 5)] : null,
+              )),
+          ),
+          const SizedBox(width: 4),
+          Text(scoreStr, style: TextStyle(
+            color: score > 0
+                ? Colors.amber.withOpacity(selected ? 0.90 : 0.45)
+                : Colors.white18,
+            fontSize: 7, fontFamily: 'monospace')),
+          const SizedBox(width: 5),
+          if (isRecord)
+            Text('⚡REC', style: TextStyle(
+              color: Colors.amber, fontSize: 7, fontFamily: 'monospace',
+              shadows: [Shadow(color: Colors.amber, blurRadius: 8)]))
+          else if (selected)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+              decoration: BoxDecoration(
+                color: neon.withOpacity(0.12),
+                border: Border.all(color: neon.withOpacity(0.65), width: 0.8),
+                borderRadius: BorderRadius.circular(2),
+              ),
+              child: Text('[RUN]', style: TextStyle(
+                color: neon, fontSize: 7, fontFamily: 'monospace',
+                fontWeight: FontWeight.bold)))
+          else
+            SizedBox(
+              width: 30,
+              child: Text('....', style: TextStyle(
+                color: Colors.white.withOpacity(0.08),
+                fontSize: 7, fontFamily: 'monospace'))),
+        ]),
       ),
     );
   }
 
-  Widget _buildGridHint() {
+  Widget _buildGameGrid() => _buildTerminalGameList();
+
+  Widget _buildTerminalHint() {
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      decoration: const BoxDecoration(
-        color: Color(0xFF08001A),
-        border: Border(top: BorderSide(color: Color(0x33AA44FF), width: 1)),
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      decoration: BoxDecoration(
+        color: const Color(0xFF020802),
+        border: Border(
+          top: BorderSide(color: const Color(0xFF00FF88).withOpacity(0.15), width: 1)),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          _hintChip('◄►▲▼', 'navegar'),
+          _termHint('▲▼', 'navegar'),
           const SizedBox(width: 10),
-          _hintChip('A', 'jugar'),
+          _termHint('A', 'jugar'),
           const SizedBox(width: 10),
-          _hintChip('SELECT', 'salir'),
+          _termHint('SELECT', 'salir'),
         ],
       ),
     );
   }
 
-  Widget _hintChip(String key, String label) => Row(
+  Widget _termHint(String key, String label) => Row(
     mainAxisSize: MainAxisSize.min,
     children: [
       Container(
         padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
         decoration: BoxDecoration(
-          color: const Color(0xFF220044),
-          borderRadius: BorderRadius.circular(3),
-          border: Border.all(color: const Color(0x55AA44FF), width: 0.5),
+          color: const Color(0xFF001A00),
+          borderRadius: BorderRadius.circular(2),
+          border: Border.all(
+            color: const Color(0xFF00FF88).withOpacity(0.35), width: 0.5),
         ),
         child: Text(key, style: const TextStyle(
-          color: Color(0xFFAA88FF), fontSize: 6, fontFamily: 'monospace', fontWeight: FontWeight.bold)),
+          color: Color(0xFF88FF88), fontSize: 6,
+          fontFamily: 'monospace', fontWeight: FontWeight.bold)),
       ),
       const SizedBox(width: 3),
       Text(label, style: const TextStyle(
         color: Colors.white30, fontSize: 6, fontFamily: 'monospace')),
     ],
   );
+
+  // ── Settings panel (terminal slide-in) ────────────────────────────────────
+
+  Widget _buildSettingsPanel() {
+    return Positioned.fill(
+      child: GestureDetector(
+        onTap: () => setState(() => _showSettings = false),
+        child: Container(
+          color: Colors.black.withOpacity(0.72),
+          child: Align(
+            alignment: Alignment.centerRight,
+            child: GestureDetector(
+              onTap: () {}, // prevent tap-through to dismiss
+              child: Container(
+                width: double.infinity,
+                margin: const EdgeInsets.fromLTRB(28, 0, 0, 0),
+                padding: const EdgeInsets.fromLTRB(12, 10, 10, 12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF030D03),
+                  border: Border(
+                    left: BorderSide(
+                      color: const Color(0xFF00FF88).withOpacity(0.45), width: 1)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(children: [
+                      const Text('> settings/', style: TextStyle(
+                        color: Color(0xFF00FF88), fontSize: 9,
+                        fontFamily: 'monospace', fontWeight: FontWeight.bold)),
+                      const Spacer(),
+                      GestureDetector(
+                        onTap: () => setState(() => _showSettings = false),
+                        child: Text('[B] cerrar', style: TextStyle(
+                          color: const Color(0xFF00FF88).withOpacity(0.55),
+                          fontSize: 7, fontFamily: 'monospace')),
+                      ),
+                    ]),
+                    const SizedBox(height: 6),
+                    Container(height: 1,
+                      color: const Color(0xFF00FF88).withOpacity(0.18)),
+                    const SizedBox(height: 10),
+                    _settingSection('SKIN / CONSOLA', const [
+                      _SettingOption('GameBoy Classic', true),
+                      _SettingOption('PSP Landscape', false),
+                      _SettingOption('Arcade Stick', false),
+                    ]),
+                    const SizedBox(height: 10),
+                    _settingSection('TEMA DE COLOR', const [
+                      _SettingOption('Verde Fosforo', true),
+                      _SettingOption('Ambar Retro', false),
+                      _SettingOption('Cian Cripto', false),
+                      _SettingOption('Rojo Infernal', false),
+                    ]),
+                    const SizedBox(height: 10),
+                    _settingSection('CONTROLES', const [
+                      _SettingOption('D-Pad Virtual', true),
+                      _SettingOption('Joystick + Botones', false),
+                    ]),
+                    const Spacer(),
+                    Container(height: 1,
+                      color: const Color(0xFF00FF88).withOpacity(0.10)),
+                    const SizedBox(height: 5),
+                    Text('// Proximas funciones — mas opciones',
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.20),
+                        fontSize: 6.5, fontFamily: 'monospace',
+                        fontStyle: FontStyle.italic)),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _settingSection(String title, List<_SettingOption> options) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(title, style: const TextStyle(
+          color: Color(0xFF00FF88), fontSize: 7,
+          fontFamily: 'monospace', fontWeight: FontWeight.bold,
+          letterSpacing: 0.5)),
+        const SizedBox(height: 4),
+        ...options.map((o) => Padding(
+          padding: const EdgeInsets.only(bottom: 3),
+          child: Row(children: [
+            Text(o.selected ? '> ' : '  ', style: const TextStyle(
+              color: Color(0xFF00FF88), fontSize: 8, fontFamily: 'monospace')),
+            Text(o.label, style: TextStyle(
+              color: o.selected ? Colors.white70 : Colors.white24,
+              fontSize: 7.5, fontFamily: 'monospace')),
+            if (o.selected) ...[
+              const SizedBox(width: 5),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 3),
+                decoration: BoxDecoration(
+                  border: Border.all(
+                    color: const Color(0xFF00FF88).withOpacity(0.45), width: 0.5),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+                child: const Text('ON', style: TextStyle(
+                  color: Color(0xFF00FF88), fontSize: 6, fontFamily: 'monospace')),
+              ),
+            ],
+          ]),
+        )),
+      ],
+    );
+  }
 
   Widget _buildActiveGame() {
     return _activeGame!.builder!(
@@ -807,6 +893,14 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
       ],
     );
   }
+}
+
+// ─── Settings option data ─────────────────────────────────────────────────────
+
+class _SettingOption {
+  final String label;
+  final bool selected;
+  const _SettingOption(this.label, this.selected);
 }
 
 // ─── TCG-style Card Painter ───────────────────────────────────────────────────
