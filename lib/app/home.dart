@@ -260,20 +260,21 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
     late AnimationController fadeCtrl;
     fadeCtrl = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 2400),
+      duration: const Duration(milliseconds: 3000),
     );
-    // Smooth: fade to black → breathe back → fade to black → breathe → stay black
+    // CRT dying: slowly dims, briefly holds, dims more, brief partial recovery,
+    // final collapse to black — never goes back toward white
     final anim = TweenSequence<double>([
-      TweenSequenceItem(tween: Tween(begin: 0.0, end: 1.0)
-          .chain(CurveTween(curve: Curves.easeInOut)), weight: 22),
-      TweenSequenceItem(tween: Tween(begin: 1.0, end: 0.12)
-          .chain(CurveTween(curve: Curves.easeInOut)), weight: 18),
-      TweenSequenceItem(tween: Tween(begin: 0.12, end: 1.0)
-          .chain(CurveTween(curve: Curves.easeInOut)), weight: 28),
-      TweenSequenceItem(tween: Tween(begin: 1.0, end: 0.04)
-          .chain(CurveTween(curve: Curves.easeInOut)), weight: 14),
-      TweenSequenceItem(tween: Tween(begin: 0.04, end: 1.0)
-          .chain(CurveTween(curve: Curves.easeInOut)), weight: 18),
+      TweenSequenceItem(tween: Tween(begin: 0.0, end: 0.65)
+          .chain(CurveTween(curve: Curves.easeIn)), weight: 28),
+      TweenSequenceItem(tween: Tween(begin: 0.65, end: 0.50)
+          .chain(CurveTween(curve: Curves.easeInOut)), weight: 12), // brief partial recovery
+      TweenSequenceItem(tween: Tween(begin: 0.50, end: 0.82)
+          .chain(CurveTween(curve: Curves.easeIn)), weight: 20),
+      TweenSequenceItem(tween: Tween(begin: 0.82, end: 0.68)
+          .chain(CurveTween(curve: Curves.easeInOut)), weight: 10), // one last gasp
+      TweenSequenceItem(tween: Tween(begin: 0.68, end: 1.0)
+          .chain(CurveTween(curve: Curves.easeIn)), weight: 30),
     ]).animate(fadeCtrl);
 
     entry = OverlayEntry(
@@ -1409,34 +1410,32 @@ class _ArcadeLaunchPageState extends State<_ArcadeLaunchPage> {
   // ── Hacker script (shown after correct key) ────────────────────────────────
   static const _hackerLines = [
     '',
-    r' C:\> cls',
-    ' ...CLEARING TERMINAL...',
+    r' C:\> cls && ./h4ck.sh --silent --escalate',
     '',
-    ' ██╗  ██╗ █████╗  ██████╗██╗  ██╗███████╗██████╗ ',
-    ' ██║  ██║██╔══██╗██╔════╝██║ ██╔╝██╔════╝██╔══██╗',
-    ' ███████║███████║██║     █████╔╝ █████╗  ██║  ██║',
-    ' ██╔══██║██╔══██║██║     ██╔═██╗ ██╔══╝  ██║  ██║',
-    ' ██║  ██║██║  ██║╚██████╗██║  ██╗███████╗██████╔╝',
-    ' ╚═╝  ╚═╝╚═╝  ╚═╝ ╚═════╝╚═╝  ╚═╝╚══════╝╚═════╝ ',
+    ' /-----------------------------------------\\',
+    ' |   *** KERNEL EXPLOIT INJECTED ***       |',
+    ' |   >>  ROOT ACCESS  :  GRANTED  <<       |',
+    ' |   >>  SECURITY     :  DISABLED <<       |',
+    ' \\-----------------------------------------/',
     '',
-    r' C:\> ./exploit.sh --target=arcade --silent --root',
+    ' [>] Bypassing auth layer ........... DONE',
+    ' [>] Injecting root payload ......... DONE',
+    ' [>] Disabling security modules ..... DONE',
+    ' [>] Escalating privileges .......... [ROOT]',
+    ' [>] Patching kernel memory ......... DONE',
+    ' [>] Planting backdoor .............. DONE',
+    ' [>] Wiping access logs ............. DONE',
     '',
-    ' [>] Bypassing auth layer ............... DONE',
-    ' [>] Injecting root payload ............. DONE',
-    ' [>] Disabling security modules ......... DONE',
-    ' [>] Escalating privileges .............. [ROOT]',
-    ' [>] Patching kernel memory ............. DONE',
-    ' [>] Loading exploit modules ............ DONE',
-    '',
-    ' ████████████████████████████████████ 100%',
+    ' Progress: [####################] 100%',
     '',
     ' [!!!] SISTEMA COMPROMETIDO',
     ' [!!!] CONTROL TOTAL OBTENIDO',
     ' [!!!] DATOS EXFILTRADOS: 2.4 GB',
+    ' [!!!] HUELLAS BORRADAS',
     '',
     r' C:\> launch_arcade --god-mode --override',
     '',
-    ' > ¡ARCADE CENTER INICIANDO EN MODO DIOS!',
+    ' > ARCADE CENTER INICIANDO EN MODO DIOS...',
   ];
 
   @override
@@ -1478,9 +1477,6 @@ class _ArcadeLaunchPageState extends State<_ArcadeLaunchPage> {
         t.cancel();
         setState(() => _phase = _TermPhase.awaitingKey);
         _scrollToBottom();
-        Future.delayed(const Duration(milliseconds: 200), () {
-          if (mounted) _keyFocus.requestFocus();
-        });
       }
     });
   }
@@ -1594,10 +1590,10 @@ class _ArcadeLaunchPageState extends State<_ArcadeLaunchPage> {
               builder: (ctx, constraints) {
                 return SingleChildScrollView(
                   controller: _scrollCtrl,
-                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+                  padding: const EdgeInsets.fromLTRB(18, 14, 18, 28),
                   child: ConstrainedBox(
                     // minHeight = full viewport so short content sits at bottom
-                    constraints: BoxConstraints(minHeight: constraints.maxHeight - 28),
+                    constraints: BoxConstraints(minHeight: constraints.maxHeight - 48),
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.end,
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1617,9 +1613,11 @@ class _ArcadeLaunchPageState extends State<_ArcadeLaunchPage> {
     );
   }
 
-  // Input row — completely blends with terminal: no borders, no backgrounds
+  // Input row — tap anywhere on it to open keyboard; blends with terminal
   Widget _buildKeyInput() {
-    return Row(
+    return GestureDetector(
+      onTap: () => _keyFocus.requestFocus(),
+      child: Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         // Static prompt prefix — same style as a command line
@@ -1666,7 +1664,8 @@ class _ArcadeLaunchPageState extends State<_ArcadeLaunchPage> {
           ),
         ),
       ],
-    );
+    ),   // Row
+    );   // GestureDetector
   }
 }
 
