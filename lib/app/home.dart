@@ -66,31 +66,41 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
   final PageController _pageController = PageController();
 
   // ─── Game entry ────────────────────────────────────────────────────────────
-  bool _showGameHint = true;       // hint callout near logo
-  bool _shaking = false;           // prevent double-taps during shake
-  late AnimationController _shakeCtrl;   // logo horizontal shake
-  late Animation<double> _shakeAnim;
-  late AnimationController _hintBobCtrl; // hint character bobbing
+  bool _showGameHint = true;
+  int  _tapCount    = 0;           // needs 3 taps to launch
+  bool _shaking     = false;
+  bool _shattering  = false;
+  bool _launching   = false;       // flicker overlay active
+  double _flickerAlpha = 0.0;
+  Timer? _launchFlickerTimer;
+  // Firestore data cached after validation, used by terminal page
+  String?            _pendingUid;
+  DocumentReference? _pendingRewardsRef;
+  double             _pendingSaldo = 0;
+  late AnimationController _shakeCtrl;
+  late Animation<double>   _shakeAnim;
+  late AnimationController _hintBobCtrl;
+  late AnimationController _shatterCtrl;
+  late Animation<double>   _shatterAnim;
 
   @override
   void initState() {
     super.initState();
     _searchController.addListener(_onSearchChanged);
 
-    // Logo shake: horizontal oscillation → 7 snaps over 550ms
-    _shakeCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 550));
+    _shakeCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 380));
     _shakeAnim = TweenSequence<double>([
-      TweenSequenceItem(tween: Tween(begin: 0.0, end: -10.0), weight: 1),
-      TweenSequenceItem(tween: Tween(begin: -10.0, end: 10.0), weight: 2),
-      TweenSequenceItem(tween: Tween(begin: 10.0, end: -8.0), weight: 2),
-      TweenSequenceItem(tween: Tween(begin: -8.0, end: 8.0), weight: 2),
-      TweenSequenceItem(tween: Tween(begin: 8.0, end: -4.0), weight: 2),
+      TweenSequenceItem(tween: Tween(begin: 0.0, end: -7.0), weight: 1),
+      TweenSequenceItem(tween: Tween(begin: -7.0, end: 7.0), weight: 2),
+      TweenSequenceItem(tween: Tween(begin: 7.0, end: -4.0), weight: 2),
       TweenSequenceItem(tween: Tween(begin: -4.0, end: 0.0), weight: 1),
     ]).animate(CurvedAnimation(parent: _shakeCtrl, curve: Curves.linear));
 
-    // Hint character: slow continuous bob (up/down 6px)
-    _hintBobCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 1100))
+    _hintBobCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 1400))
       ..repeat(reverse: true);
+
+    _shatterCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 800));
+    _shatterAnim = CurvedAnimation(parent: _shatterCtrl, curve: Curves.easeIn);
   }
 
   @override
@@ -100,6 +110,8 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
     _pageController.dispose();
     _shakeCtrl.dispose();
     _hintBobCtrl.dispose();
+    _shatterCtrl.dispose();
+    _launchFlickerTimer?.cancel();
     super.dispose();
   }
 
@@ -189,12 +201,18 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
   // ─── Game entry ─────────────────────────────────────────────────────────────
 
   void _handleLogoTap() {
-    if (_shaking) return;
+    if (_shaking || _shattering || _launching) return;
+    _tapCount++;
     _shaking = true;
     setState(() => _showGameHint = false);
     _shakeCtrl.forward(from: 0).then((_) {
       _shaking = false;
-      _launchGame();
+      if (_tapCount >= 3) {
+        _tapCount = 0;
+        _launchGame();
+      } else {
+        setState(() {}); // redraw tap dots
+      }
     });
   }
 
@@ -230,29 +248,79 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
             : (raw as double? ?? 0.0);
 
     if (saldo < 10) return;
-
     if (!mounted) return;
 
-    // Launch via animated transition screen
+    _pendingUid        = uid;
+    _pendingRewardsRef = rewardsDoc.reference;
+    _pendingSaldo      = saldo;
+    _startShatter();
+  }
+
+  void _startShatter() {
+    setState(() => _shattering = true);
+    _shatterCtrl.forward(from: 0).then((_) {
+      if (!mounted) return;
+      _startLaunchFlicker();
+    });
+  }
+
+  // Flicker pattern: brightness values 0..1 overlaid on top of the main UI
+  static const _kFlickerPattern = [
+    0.55, 0.05, 0.80, 0.10, 0.60, 0.03,
+    0.40, 0.02, 0.70, 0.02, 0.30, 0.01,
+    0.50, 0.01, 0.20, 0.00, 0.00, 0.00,
+    1.00, // solid black → navigate
+  ];
+
+  void _startLaunchFlicker() {
+    int step = 0;
+    setState(() { _launching = true; _flickerAlpha = _kFlickerPattern[0]; });
+    _launchFlickerTimer = Timer.periodic(const Duration(milliseconds: 120), (t) {
+      if (!mounted) { t.cancel(); return; }
+      step++;
+      if (step < _kFlickerPattern.length - 1) {
+        setState(() => _flickerAlpha = _kFlickerPattern[step]);
+      } else {
+        t.cancel();
+        setState(() => _flickerAlpha = 1.0);
+        Future.delayed(const Duration(milliseconds: 250), _navigateToTerminal);
+      }
+    });
+  }
+
+  void _navigateToTerminal() {
+    if (!mounted) return;
     Navigator.push(
       context,
       PageRouteBuilder(
         pageBuilder: (ctx, _, __) => _ArcadeLaunchPage(
-          userId: uid,
-          rewardsDocRef: rewardsDoc.reference,
-          currentSaldo: saldo,
+          userId: _pendingUid!,
+          rewardsDocRef: _pendingRewardsRef!,
+          currentSaldo: _pendingSaldo,
         ),
         transitionDuration: Duration.zero,
         reverseTransitionDuration: Duration.zero,
       ),
-    );
+    ).then((_) {
+      if (!mounted) return;
+      setState(() {
+        _shattering  = false;
+        _launching   = false;
+        _flickerAlpha = 0.0;
+        _shatterCtrl.reset();
+        _tapCount    = 0;
+        _showGameHint = true;
+      });
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
-    return PopScope(
+    return Stack(
+      children: [
+      PopScope(
       canPop: !_showRecipeDetail,
       onPopInvokedWithResult: (didPop, result) {
         if (didPop) return;
@@ -264,26 +332,72 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
         appBar: AppBar(
           scrolledUnderElevation: 0,
           backgroundColor: Colors.transparent,
-          title: SizedBox(
-            height: 180,
-            width: 300,
-            child: AspectRatio(
-              aspectRatio: 1 / 1,
-              child: GestureDetector(
-                onTap: _handleLogoTap,
-                behavior: HitTestBehavior.opaque,
-                child: AnimatedBuilder(
-                  animation: _shakeAnim,
-                  builder: (_, child) => Transform.translate(
-                    offset: Offset(_shakeAnim.value, 0),
-                    child: child,
-                  ),
-                  child: Image.asset(
-                    isDarkMode ? AppImages.logowhite : AppImages.logo,
-                    fit: BoxFit.contain,
-                  ),
+          title: GestureDetector(
+            onTap: _handleLogoTap,
+            behavior: HitTestBehavior.opaque,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SizedBox(
+                  height: 50,
+                  width: 160,
+                  child: _shattering
+                      ? AnimatedBuilder(
+                          animation: _shatterAnim,
+                          builder: (_, child) => Stack(
+                            children: [
+                              Opacity(
+                                opacity: (1.0 - _shatterAnim.value * 3.0).clamp(0.0, 1.0),
+                                child: child,
+                              ),
+                              CustomPaint(
+                                size: const Size(160, 50),
+                                painter: _LogoShatterPainter(
+                                  progress: _shatterAnim.value,
+                                  isDarkMode: isDarkMode,
+                                ),
+                              ),
+                            ],
+                          ),
+                          child: Image.asset(
+                            isDarkMode ? AppImages.logowhite : AppImages.logo,
+                            fit: BoxFit.contain,
+                          ),
+                        )
+                      : AnimatedBuilder(
+                          animation: _shakeAnim,
+                          builder: (_, child) => Transform.translate(
+                            offset: Offset(_shakeAnim.value, 0),
+                            child: child,
+                          ),
+                          child: Image.asset(
+                            isDarkMode ? AppImages.logowhite : AppImages.logo,
+                            fit: BoxFit.contain,
+                          ),
+                        ),
                 ),
-              ),
+                // Tap-count pips — only shown after first tap
+                if (_tapCount > 0 && !_shattering)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 3),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: List.generate(3, (i) => Container(
+                        width: 5, height: 5,
+                        margin: const EdgeInsets.symmetric(horizontal: 2.5),
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: i < _tapCount
+                              ? const Color(0xFF00FF88)
+                              : const Color(0xFF00FF88).withValues(alpha: 0.18),
+                          boxShadow: i < _tapCount ? [
+                            const BoxShadow(color: Color(0xFF00FF88), blurRadius: 5),
+                          ] : null,
+                        ),
+                      )),
+                    ),
+                  ),
+              ],
             ),
           ),
           centerTitle: true,
@@ -364,6 +478,15 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
           ],
         ),
       ),
+    ),
+      // Screen-flicker overlay — drawn on top of the live UI
+      if (_launching)
+        Positioned.fill(
+          child: IgnorePointer(
+            child: ColoredBox(color: Colors.black.withValues(alpha: _flickerAlpha)),
+          ),
+        ),
+      ],
     );
   }
 
@@ -561,81 +684,36 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
     );
   }
 
-  // ─── Game hint callout ──────────────────────────────────────────────────────
+  // ─── Game hint callout — discreet small pill ────────────────────────────────
   Widget _buildGameHint() {
     return AnimatedBuilder(
       animation: _hintBobCtrl,
       builder: (_, __) {
-        final bob = (_hintBobCtrl.value - 0.5) * 8;
+        final bob = (_hintBobCtrl.value - 0.5) * 3;
         return Transform.translate(
           offset: Offset(0, bob),
-          child: GestureDetector(
-            onTap: _handleLogoTap,
-            child: Container(
-              margin: const EdgeInsets.fromLTRB(16, 2, 16, 0),
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-              decoration: BoxDecoration(
-                color: const Color(0xFF07000F),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(
-                  color: const Color(0xFF00FF88).withValues(alpha: 0.55),
-                  width: 1.2,
+          child: Center(
+            child: GestureDetector(
+              onTap: _handleLogoTap,
+              child: Container(
+                margin: const EdgeInsets.only(top: 1, bottom: 2),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: const Color(0xFF00FF88).withValues(alpha: 0.25),
+                    width: 0.7,
+                  ),
                 ),
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(0xFF00FF88).withValues(alpha: 0.15),
-                    blurRadius: 12,
-                    spreadRadius: 1,
+                child: Text(
+                  '🕹  toca el logo × 3',
+                  style: TextStyle(
+                    color: const Color(0xFF00FF88).withValues(alpha: 0.38),
+                    fontSize: 9,
+                    fontFamily: 'monospace',
+                    letterSpacing: 0.3,
                   ),
-                ],
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  _PixelCharacter(phase: _hintBobCtrl.value),
-                  const SizedBox(width: 10),
-                  Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          const Text(
-                            '▲',
-                            style: TextStyle(
-                              color: Color(0xFF00FF88),
-                              fontSize: 11,
-                              shadows: [Shadow(color: Color(0xFF00FF88), blurRadius: 8)],
-                            ),
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            '¡Presióname para un buen rato!',
-                            style: TextStyle(
-                              color: const Color(0xFF00FF88).withValues(alpha: 0.90),
-                              fontSize: 11,
-                              fontFamily: 'monospace',
-                              fontWeight: FontWeight.bold,
-                              letterSpacing: 0.5,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        'toca el logo  ·  10 pts mínimo',
-                        style: TextStyle(
-                          color: const Color(0xFF00FF88).withValues(alpha: 0.45),
-                          fontSize: 9,
-                          fontFamily: 'monospace',
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(width: 8),
-                  const Text('🕹️', style: TextStyle(fontSize: 22)),
-                ],
+                ),
               ),
             ),
           ),
@@ -1348,60 +1426,63 @@ class _AddToCartButtonState extends State<_AddToCartButton> {
     return '\$${(price as num).toStringAsFixed(2)}';
   }
 }
-// ─── Pixel character hint widget ─────────────────────────────────────────────
-class _PixelCharacter extends StatelessWidget {
-  final double phase; // 0..1 animation phase for arm wave
+// ─── Logo shatter effect ──────────────────────────────────────────────────────
+// Pre-defined shard grid (normX, normY, velX, velY, rotSpeed)
+// Each shard starts at (normX*w, normY*h) and moves outward with gravity.
+const _kShards = [
+  (0.10, 0.25, -0.55, -0.50, -1.8),
+  (0.30, 0.20, -0.15, -0.60,  1.4),
+  (0.50, 0.20,  0.00, -0.65, -0.9),
+  (0.70, 0.20,  0.20, -0.55,  1.1),
+  (0.90, 0.25,  0.60, -0.45, -1.6),
+  (0.10, 0.50, -0.65, -0.10,  0.9),
+  (0.30, 0.50, -0.20, -0.15, -1.3),
+  (0.50, 0.50,  0.00,  0.05,  1.0),
+  (0.70, 0.50,  0.25, -0.10, -0.7),
+  (0.90, 0.50,  0.70,  0.00,  1.5),
+  (0.10, 0.80, -0.45,  0.35, -1.1),
+  (0.30, 0.80, -0.10,  0.45,  0.8),
+  (0.50, 0.80,  0.00,  0.55, -1.4),
+  (0.70, 0.80,  0.20,  0.45,  0.9),
+  (0.90, 0.80,  0.65,  0.35, -1.0),
+];
 
-  const _PixelCharacter({required this.phase});
-
-  @override
-  Widget build(BuildContext context) {
-    return CustomPaint(
-      size: const Size(28, 36),
-      painter: _PixelCharacterPainter(phase: phase),
-    );
-  }
-}
-
-class _PixelCharacterPainter extends CustomPainter {
-  final double phase;
-  const _PixelCharacterPainter({required this.phase});
+class _LogoShatterPainter extends CustomPainter {
+  final double progress;
+  final bool   isDarkMode;
+  const _LogoShatterPainter({required this.progress, required this.isDarkMode});
 
   @override
   void paint(Canvas canvas, Size size) {
-    final w = size.width;
-    final px = w / 7; // ~4px per pixel unit
+    if (progress <= 0) return;
+    final shardW = size.width  / 5 * 0.80;
+    final shardH = size.height / 3 * 0.80;
+    final gravity = progress * progress * size.height * 0.8;
+    final opacity = (1.0 - progress * 1.2).clamp(0.0, 1.0);
+    final baseColor = isDarkMode ? Colors.white : const Color(0xFF1A7A2A);
+    final paint = Paint()
+      ..color = baseColor.withValues(alpha: opacity)
+      ..style = PaintingStyle.fill;
 
-    void rect(double x, double y, double pw, double ph, Color c) {
-      canvas.drawRect(
-        Rect.fromLTWH(x * px, y * px, pw * px, ph * px),
-        Paint()..color = c,
+    for (final (nx, ny, vx, vy, rot) in _kShards) {
+      final cx = nx * size.width  + vx * size.width  * progress;
+      final cy = ny * size.height + vy * size.height * progress + gravity;
+      canvas.save();
+      canvas.translate(cx, cy);
+      canvas.rotate(rot * progress);
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromCenter(center: Offset.zero, width: shardW, height: shardH),
+          const Radius.circular(2),
+        ),
+        paint,
       );
+      canvas.restore();
     }
-
-    // Head
-    rect(2, 0, 3, 3, const Color(0xFF00FF88));
-    // Eyes
-    rect(2.4, 0.6, 0.6, 0.6, const Color(0xFF07000F));
-    rect(3.8, 0.6, 0.6, 0.6, const Color(0xFF07000F));
-    // Smile
-    rect(2.6, 1.8, 1.6, 0.4, const Color(0xFF07000F));
-
-    // Body
-    rect(2, 3, 3, 3, const Color(0xFF00CC66));
-
-    // Arms — left arm static, right arm waves with phase
-    final armRaise = (phase * 2.0).clamp(0.0, 1.0); // 0..1 pointing up
-    rect(0.5, 3 + 1.5 * (1 - armRaise), 1.5, 0.8, const Color(0xFF00FF88));
-    rect(5, 3, 1.5, 0.8, const Color(0xFF00FF88));
-
-    // Legs
-    rect(2.2, 6, 1.0, 2.5, const Color(0xFF00AA55));
-    rect(3.8, 6, 1.0, 2.5, const Color(0xFF00AA55));
   }
 
   @override
-  bool shouldRepaint(_PixelCharacterPainter old) => old.phase != phase;
+  bool shouldRepaint(_LogoShatterPainter old) => old.progress != progress;
 }
 
 // ─── Arcade launch transition page ───────────────────────────────────────────
@@ -1421,60 +1502,51 @@ class _ArcadeLaunchPage extends StatefulWidget {
 }
 
 class _ArcadeLaunchPageState extends State<_ArcadeLaunchPage> {
-  // Phase 0: flicker; Phase 1: boot lines; Phase 2: navigate
-  int _phase = 0;
-  bool _screenLight = true;
-  int _flickerCount = 0;
   final List<String> _visibleLines = [];
-  Timer? _flickerTimer;
   Timer? _bootTimer;
 
+  // Realistic boot sequence: blank/header lines, commands, status output
   static const _bootLines = [
-    'ARCADE OS v2.4.1 [BUILD 20260309]',
-    'Initializing display adapter........OK',
-    'Loading cartridge ROM................OK',
-    'Scanning input controllers...........OK',
-    'Mounting game filesystem.............OK',
-    'Checking high score database.........OK',
-    'Allocating framebuffer (240×160).....OK',
-    'Starting audio subsystem.............OK',
-    '> BIENVENIDO AL ARCADE CENTER <',
-    '',
-    '¡QUE EMPIECE EL JUEGO!',
+    r'',
+    r' ╔══════════════════════════════════╗',
+    r' ║   ARCADE OS  v2.4  [2026-03-09]  ║',
+    r' ╚══════════════════════════════════╝',
+    r'',
+    r' CPU: MC68000 @ 8 MHz    RAM: 512 KB',
+    r' BIOS: 1.0.4              ROM: OK',
+    r'',
+    r' C:\> boot.bat',
+    r'',
+    r' Checking display adapter ........ [ OK ]',
+    r' Loading ROM bank 0x0000 ......... [ OK ]',
+    r' Input controller check .......... [ OK ]',
+    r' Mounting /arcade/fs ............. [ OK ]',
+    r' Scoreboard sync ................. [ OK ]',
+    r' Allocating framebuffer .......... [ OK ]',
+    r' Audio subsystem ................. [ OK ]',
+    r'',
+    r' C:\> start_arcade --saldo=OK',
+    r'',
+    r'  *** BIENVENIDO AL ARCADE CENTER ***',
+    r'  *** ¡QUE EMPIECE EL JUEGO!     ***',
   ];
 
   @override
   void initState() {
     super.initState();
-    _startFlicker();
-  }
-
-  void _startFlicker() {
-    _flickerTimer = Timer.periodic(const Duration(milliseconds: 80), (t) {
-      if (!mounted) { t.cancel(); return; }
-      setState(() => _screenLight = !_screenLight);
-      _flickerCount++;
-      if (_flickerCount >= 12) {
-        t.cancel();
-        setState(() {
-          _screenLight = false;
-          _phase = 1;
-        });
-        _startBootLines();
-      }
-    });
+    _startBootLines();
   }
 
   void _startBootLines() {
     int lineIdx = 0;
-    _bootTimer = Timer.periodic(const Duration(milliseconds: 120), (t) {
+    _bootTimer = Timer.periodic(const Duration(milliseconds: 160), (t) {
       if (!mounted) { t.cancel(); return; }
       if (lineIdx < _bootLines.length) {
         setState(() => _visibleLines.add(_bootLines[lineIdx]));
         lineIdx++;
       } else {
         t.cancel();
-        Future.delayed(const Duration(milliseconds: 500), _launchArcade);
+        Future.delayed(const Duration(milliseconds: 700), _launchArcade);
       }
     });
   }
@@ -1497,63 +1569,106 @@ class _ArcadeLaunchPageState extends State<_ArcadeLaunchPage> {
 
   @override
   void dispose() {
-    _flickerTimer?.cancel();
     _bootTimer?.cancel();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    // Phase 0: flicker — alternating white/black
-    if (_phase == 0) {
-      return Scaffold(
-        backgroundColor: _screenLight ? Colors.white : Colors.black,
-        body: const SizedBox.expand(),
-      );
-    }
-
-    // Phase 1: black terminal with scrolling boot lines
     return Scaffold(
-      backgroundColor: Colors.black,
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: 16),
-              ..._visibleLines.map((line) => _TermLine(text: line)),
-              // blinking cursor
-              const _BlinkCursor(),
-            ],
+      backgroundColor: const Color(0xFF010D01),
+      body: Stack(
+        children: [
+          // CRT scanline overlay
+          Positioned.fill(
+            child: IgnorePointer(
+              child: CustomPaint(painter: _CrtScanlinePainter()),
+            ),
           ),
-        ),
+          // Vignette — darker at screen edges
+          Positioned.fill(
+            child: IgnorePointer(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: RadialGradient(
+                    center: Alignment.center,
+                    radius: 1.1,
+                    colors: [
+                      Colors.transparent,
+                      Colors.black.withValues(alpha: 0.65),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+          // Terminal content
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(18, 14, 18, 14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  ..._visibleLines.map((line) => _TermLine(text: line)),
+                  const _BlinkCursor(),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
 }
 
-// Single terminal output line
+// Single terminal output line with phosphor-glow styling
 class _TermLine extends StatelessWidget {
   final String text;
   const _TermLine({required this.text});
 
   @override
   Widget build(BuildContext context) {
-    final isHighlight = text.startsWith('>') || text.startsWith('¡');
+    final isBig    = text.contains('***') || text.contains('╔');
+    final isCmd    = text.trimLeft().startsWith(r'C:\>');
+    final isEmpty  = text.trim().isEmpty;
+
+    final Color color;
+    final double size;
+    final FontWeight weight;
+    final List<Shadow>? shadows;
+
+    if (isBig) {
+      color   = const Color(0xFF00FF88);
+      size    = 12;
+      weight  = FontWeight.bold;
+      shadows = const [
+        Shadow(color: Color(0xFF00FF88), blurRadius: 16),
+        Shadow(color: Color(0xFF00FF88), blurRadius: 6),
+      ];
+    } else if (isCmd) {
+      color   = const Color(0xFF88FFBB);
+      size    = 11;
+      weight  = FontWeight.bold;
+      shadows = const [Shadow(color: Color(0xFF00FF88), blurRadius: 8)];
+    } else {
+      color   = const Color(0xFF1EBB42);
+      size    = 11;
+      weight  = FontWeight.normal;
+      shadows = const [Shadow(color: Color(0xFF00AA33), blurRadius: 4)];
+    }
+
     return Padding(
-      padding: const EdgeInsets.only(bottom: 3),
+      padding: EdgeInsets.only(bottom: isEmpty ? 4 : 1.5),
       child: Text(
         text,
         style: TextStyle(
-          color: isHighlight ? const Color(0xFF00FF88) : const Color(0xFF22DD66),
-          fontSize: isHighlight ? 13 : 11,
+          color: color,
+          fontSize: size,
           fontFamily: 'monospace',
-          fontWeight: isHighlight ? FontWeight.bold : FontWeight.normal,
-          letterSpacing: 0.5,
-          shadows: isHighlight
-              ? [const Shadow(color: Color(0xFF00FF88), blurRadius: 10)]
-              : null,
+          fontWeight: weight,
+          letterSpacing: 0.6,
+          height: 1.35,
+          shadows: shadows,
         ),
       ),
     );
@@ -1598,4 +1713,22 @@ class _BlinkCursorState extends State<_BlinkCursor> with SingleTickerProviderSta
       ),
     );
   }
+}
+
+// ─── CRT scanline overlay for terminal screen ────────────────────────────────
+class _CrtScanlinePainter extends CustomPainter {
+  const _CrtScanlinePainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.black.withValues(alpha: 0.18)
+      ..strokeWidth = 1.0;
+    for (double y = 0; y < size.height; y += 3) {
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_CrtScanlinePainter _) => false;
 }
