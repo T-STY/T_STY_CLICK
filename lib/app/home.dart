@@ -66,22 +66,17 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
   final PageController _pageController = PageController();
 
   // ─── Game entry ────────────────────────────────────────────────────────────
-  bool _showGameHint = true;
-  int  _tapCount    = 0;           // needs 3 taps to launch
-  bool _shaking     = false;
-  bool _shattering  = false;
-  bool _launching   = false;       // flicker overlay active
-  double _flickerAlpha = 0.0;
-  Timer? _launchFlickerTimer;
+  int  _tapCount   = 0;          // needs 3 taps to launch
+  bool _shaking    = false;
+  bool _imploding  = false;      // implosion animation active
   // Firestore data cached after validation, used by terminal page
   String?            _pendingUid;
   DocumentReference? _pendingRewardsRef;
   double             _pendingSaldo = 0;
   late AnimationController _shakeCtrl;
   late Animation<double>   _shakeAnim;
-  late AnimationController _hintBobCtrl;
-  late AnimationController _shatterCtrl;
-  late Animation<double>   _shatterAnim;
+  late AnimationController _implodeCtrl;  // drives logo implosion (scale+fade)
+  late Animation<double>   _implodeAnim;
 
   @override
   void initState() {
@@ -96,11 +91,8 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
       TweenSequenceItem(tween: Tween(begin: -4.0, end: 0.0), weight: 1),
     ]).animate(CurvedAnimation(parent: _shakeCtrl, curve: Curves.linear));
 
-    _hintBobCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 1400))
-      ..repeat(reverse: true);
-
-    _shatterCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 800));
-    _shatterAnim = CurvedAnimation(parent: _shatterCtrl, curve: Curves.easeIn);
+    _implodeCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 600));
+    _implodeAnim = CurvedAnimation(parent: _implodeCtrl, curve: Curves.easeIn);
   }
 
   @override
@@ -109,9 +101,7 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
     _searchController.dispose();
     _pageController.dispose();
     _shakeCtrl.dispose();
-    _hintBobCtrl.dispose();
-    _shatterCtrl.dispose();
-    _launchFlickerTimer?.cancel();
+    _implodeCtrl.dispose();
     super.dispose();
   }
 
@@ -201,17 +191,16 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
   // ─── Game entry ─────────────────────────────────────────────────────────────
 
   void _handleLogoTap() {
-    if (_shaking || _shattering || _launching) return;
+    if (_shaking || _imploding) return;
     _tapCount++;
     _shaking = true;
-    setState(() => _showGameHint = false);
     _shakeCtrl.forward(from: 0).then((_) {
       _shaking = false;
       if (_tapCount >= 3) {
         _tapCount = 0;
         _launchGame();
       } else {
-        setState(() {}); // redraw tap dots
+        setState(() {}); // redraw pips
       }
     });
   }
@@ -253,63 +242,83 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
     _pendingUid        = uid;
     _pendingRewardsRef = rewardsDoc.reference;
     _pendingSaldo      = saldo;
-    _startShatter();
+    _startImplosion();
   }
 
-  void _startShatter() {
-    setState(() => _shattering = true);
-    _shatterCtrl.forward(from: 0).then((_) {
+  // Step 1 — logo implodes (scale+fade, 600ms)
+  void _startImplosion() {
+    setState(() => _imploding = true);
+    _implodeCtrl.forward(from: 0).then((_) {
       if (!mounted) return;
-      _startLaunchFlicker();
+      _startFadeOverlay();
     });
   }
 
-  // Flicker pattern: brightness values 0..1 overlaid on top of the main UI
-  static const _kFlickerPattern = [
-    0.55, 0.05, 0.80, 0.10, 0.60, 0.03,
-    0.40, 0.02, 0.70, 0.02, 0.30, 0.01,
-    0.50, 0.01, 0.20, 0.00, 0.00, 0.00,
-    1.00, // solid black → navigate
-  ];
+  // Step 2 — full-app smooth pulse-to-black overlay via root Overlay
+  void _startFadeOverlay() {
+    OverlayEntry? entry;
+    late AnimationController fadeCtrl;
+    fadeCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2400),
+    );
+    // Smooth: fade to black → breathe back → fade to black → breathe → stay black
+    final anim = TweenSequence<double>([
+      TweenSequenceItem(tween: Tween(begin: 0.0, end: 1.0)
+          .chain(CurveTween(curve: Curves.easeInOut)), weight: 22),
+      TweenSequenceItem(tween: Tween(begin: 1.0, end: 0.12)
+          .chain(CurveTween(curve: Curves.easeInOut)), weight: 18),
+      TweenSequenceItem(tween: Tween(begin: 0.12, end: 1.0)
+          .chain(CurveTween(curve: Curves.easeInOut)), weight: 28),
+      TweenSequenceItem(tween: Tween(begin: 1.0, end: 0.04)
+          .chain(CurveTween(curve: Curves.easeInOut)), weight: 14),
+      TweenSequenceItem(tween: Tween(begin: 0.04, end: 1.0)
+          .chain(CurveTween(curve: Curves.easeInOut)), weight: 18),
+    ]).animate(fadeCtrl);
 
-  void _startLaunchFlicker() {
-    int step = 0;
-    setState(() { _launching = true; _flickerAlpha = _kFlickerPattern[0]; });
-    _launchFlickerTimer = Timer.periodic(const Duration(milliseconds: 120), (t) {
-      if (!mounted) { t.cancel(); return; }
-      step++;
-      if (step < _kFlickerPattern.length - 1) {
-        setState(() => _flickerAlpha = _kFlickerPattern[step]);
-      } else {
-        t.cancel();
-        setState(() => _flickerAlpha = 1.0);
-        Future.delayed(const Duration(milliseconds: 250), _navigateToTerminal);
-      }
-    });
-  }
-
-  void _navigateToTerminal() {
-    if (!mounted) return;
-    Navigator.push(
-      context,
-      PageRouteBuilder(
-        pageBuilder: (ctx, _, __) => _ArcadeLaunchPage(
-          userId: _pendingUid!,
-          rewardsDocRef: _pendingRewardsRef!,
-          currentSaldo: _pendingSaldo,
+    entry = OverlayEntry(
+      builder: (_) => AnimatedBuilder(
+        animation: anim,
+        builder: (_, __) => IgnorePointer(
+          child: Container(color: Colors.black.withValues(alpha: anim.value)),
         ),
-        transitionDuration: Duration.zero,
-        reverseTransitionDuration: Duration.zero,
       ),
-    ).then((_) {
-      if (!mounted) return;
-      setState(() {
-        _shattering  = false;
-        _launching   = false;
-        _flickerAlpha = 0.0;
-        _shatterCtrl.reset();
-        _tapCount    = 0;
-        _showGameHint = true;
+    );
+
+    // Insert into root overlay so it covers nav bar + everything
+    Overlay.of(context, rootOverlay: true).insert(entry!);
+
+    fadeCtrl.forward().then((_) {
+      if (!mounted) {
+        entry?.remove();
+        fadeCtrl.dispose();
+        return;
+      }
+      // Navigate while screen is black, then remove overlay
+      Navigator.push(
+        context,
+        PageRouteBuilder(
+          pageBuilder: (ctx, _, __) => _ArcadeLaunchPage(
+            userId: _pendingUid!,
+            rewardsDocRef: _pendingRewardsRef!,
+            currentSaldo: _pendingSaldo,
+          ),
+          transitionDuration: Duration.zero,
+          reverseTransitionDuration: Duration.zero,
+        ),
+      ).then((_) {
+        if (mounted) {
+          setState(() {
+            _imploding = false;
+            _implodeCtrl.reset();
+            _tapCount  = 0;
+          });
+        }
+      });
+      // Brief delay lets terminal render before we pull the overlay
+      Future.delayed(const Duration(milliseconds: 80), () {
+        entry?.remove();
+        fadeCtrl.dispose();
       });
     });
   }
@@ -318,9 +327,7 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
   Widget build(BuildContext context) {
     final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
-    return Stack(
-      children: [
-      PopScope(
+    return PopScope(
       canPop: !_showRecipeDetail,
       onPopInvokedWithResult: (didPop, result) {
         if (didPop) return;
@@ -335,69 +342,38 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
           title: GestureDetector(
             onTap: _handleLogoTap,
             behavior: HitTestBehavior.opaque,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                SizedBox(
-                  height: 50,
-                  width: 160,
-                  child: _shattering
-                      ? AnimatedBuilder(
-                          animation: _shatterAnim,
-                          builder: (_, child) => Stack(
-                            children: [
-                              Opacity(
-                                opacity: (1.0 - _shatterAnim.value * 3.0).clamp(0.0, 1.0),
-                                child: child,
-                              ),
-                              CustomPaint(
-                                size: const Size(160, 50),
-                                painter: _LogoShatterPainter(
-                                  progress: _shatterAnim.value,
-                                  isDarkMode: isDarkMode,
-                                ),
-                              ),
-                            ],
-                          ),
-                          child: Image.asset(
-                            isDarkMode ? AppImages.logowhite : AppImages.logo,
-                            fit: BoxFit.contain,
-                          ),
-                        )
-                      : AnimatedBuilder(
-                          animation: _shakeAnim,
-                          builder: (_, child) => Transform.translate(
-                            offset: Offset(_shakeAnim.value, 0),
+            child: SizedBox(
+              height: 180,
+              width: 300,
+              child: AspectRatio(
+                aspectRatio: 1 / 1,
+                child: _imploding
+                    ? AnimatedBuilder(
+                        animation: _implodeAnim,
+                        builder: (_, child) => Transform.scale(
+                          scale: (1.0 - _implodeAnim.value * 0.97).clamp(0.0, 1.0),
+                          child: Opacity(
+                            opacity: (1.0 - _implodeAnim.value * 1.8).clamp(0.0, 1.0),
                             child: child,
                           ),
-                          child: Image.asset(
-                            isDarkMode ? AppImages.logowhite : AppImages.logo,
-                            fit: BoxFit.contain,
-                          ),
                         ),
-                ),
-                // Tap-count pips — only shown after first tap
-                if (_tapCount > 0 && !_shattering)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 3),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: List.generate(3, (i) => Container(
-                        width: 5, height: 5,
-                        margin: const EdgeInsets.symmetric(horizontal: 2.5),
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: i < _tapCount
-                              ? const Color(0xFF00FF88)
-                              : const Color(0xFF00FF88).withValues(alpha: 0.18),
-                          boxShadow: i < _tapCount ? [
-                            const BoxShadow(color: Color(0xFF00FF88), blurRadius: 5),
-                          ] : null,
+                        child: Image.asset(
+                          isDarkMode ? AppImages.logowhite : AppImages.logo,
+                          fit: BoxFit.contain,
                         ),
-                      )),
-                    ),
-                  ),
-              ],
+                      )
+                    : AnimatedBuilder(
+                        animation: _shakeAnim,
+                        builder: (_, child) => Transform.translate(
+                          offset: Offset(_shakeAnim.value, 0),
+                          child: child,
+                        ),
+                        child: Image.asset(
+                          isDarkMode ? AppImages.logowhite : AppImages.logo,
+                          fit: BoxFit.contain,
+                        ),
+                      ),
+              ),
             ),
           ),
           centerTitle: true,
@@ -409,8 +385,6 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
         )
             : Column(
           children: [
-            // ── Game hint callout ──────────────────────────────────────────
-            if (_showGameHint) _buildGameHint(),
             Padding(
               padding: const EdgeInsets.all(8.0),
               child: Row(
@@ -478,15 +452,6 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
           ],
         ),
       ),
-    ),
-      // Screen-flicker overlay — drawn on top of the live UI
-      if (_launching)
-        Positioned.fill(
-          child: IgnorePointer(
-            child: ColoredBox(color: Colors.black.withValues(alpha: _flickerAlpha)),
-          ),
-        ),
-      ],
     );
   }
 
@@ -681,44 +646,6 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
           ),
         ),
       ),
-    );
-  }
-
-  // ─── Game hint callout — discreet small pill ────────────────────────────────
-  Widget _buildGameHint() {
-    return AnimatedBuilder(
-      animation: _hintBobCtrl,
-      builder: (_, __) {
-        final bob = (_hintBobCtrl.value - 0.5) * 3;
-        return Transform.translate(
-          offset: Offset(0, bob),
-          child: Center(
-            child: GestureDetector(
-              onTap: _handleLogoTap,
-              child: Container(
-                margin: const EdgeInsets.only(top: 1, bottom: 2),
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(
-                    color: const Color(0xFF00FF88).withValues(alpha: 0.25),
-                    width: 0.7,
-                  ),
-                ),
-                child: Text(
-                  '🕹  toca el logo × 3',
-                  style: TextStyle(
-                    color: const Color(0xFF00FF88).withValues(alpha: 0.38),
-                    fontSize: 9,
-                    fontFamily: 'monospace',
-                    letterSpacing: 0.3,
-                  ),
-                ),
-              ),
-            ),
-          ),
-        );
-      },
     );
   }
 
@@ -1426,66 +1353,9 @@ class _AddToCartButtonState extends State<_AddToCartButton> {
     return '\$${(price as num).toStringAsFixed(2)}';
   }
 }
-// ─── Logo shatter effect ──────────────────────────────────────────────────────
-// Pre-defined shard grid (normX, normY, velX, velY, rotSpeed)
-// Each shard starts at (normX*w, normY*h) and moves outward with gravity.
-const _kShards = [
-  (0.10, 0.25, -0.55, -0.50, -1.8),
-  (0.30, 0.20, -0.15, -0.60,  1.4),
-  (0.50, 0.20,  0.00, -0.65, -0.9),
-  (0.70, 0.20,  0.20, -0.55,  1.1),
-  (0.90, 0.25,  0.60, -0.45, -1.6),
-  (0.10, 0.50, -0.65, -0.10,  0.9),
-  (0.30, 0.50, -0.20, -0.15, -1.3),
-  (0.50, 0.50,  0.00,  0.05,  1.0),
-  (0.70, 0.50,  0.25, -0.10, -0.7),
-  (0.90, 0.50,  0.70,  0.00,  1.5),
-  (0.10, 0.80, -0.45,  0.35, -1.1),
-  (0.30, 0.80, -0.10,  0.45,  0.8),
-  (0.50, 0.80,  0.00,  0.55, -1.4),
-  (0.70, 0.80,  0.20,  0.45,  0.9),
-  (0.90, 0.80,  0.65,  0.35, -1.0),
-];
-
-class _LogoShatterPainter extends CustomPainter {
-  final double progress;
-  final bool   isDarkMode;
-  const _LogoShatterPainter({required this.progress, required this.isDarkMode});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    if (progress <= 0) return;
-    final shardW = size.width  / 5 * 0.80;
-    final shardH = size.height / 3 * 0.80;
-    final gravity = progress * progress * size.height * 0.8;
-    final opacity = (1.0 - progress * 1.2).clamp(0.0, 1.0);
-    final baseColor = isDarkMode ? Colors.white : const Color(0xFF1A7A2A);
-    final paint = Paint()
-      ..color = baseColor.withValues(alpha: opacity)
-      ..style = PaintingStyle.fill;
-
-    for (final (nx, ny, vx, vy, rot) in _kShards) {
-      final cx = nx * size.width  + vx * size.width  * progress;
-      final cy = ny * size.height + vy * size.height * progress + gravity;
-      canvas.save();
-      canvas.translate(cx, cy);
-      canvas.rotate(rot * progress);
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(
-          Rect.fromCenter(center: Offset.zero, width: shardW, height: shardH),
-          const Radius.circular(2),
-        ),
-        paint,
-      );
-      canvas.restore();
-    }
-  }
-
-  @override
-  bool shouldRepaint(_LogoShatterPainter old) => old.progress != progress;
-}
-
 // ─── Arcade launch transition page ───────────────────────────────────────────
+enum _TermPhase { booting, awaitingKey, keyError, hacking }
+
 class _ArcadeLaunchPage extends StatefulWidget {
   final String userId;
   final DocumentReference rewardsDocRef;
@@ -1502,51 +1372,152 @@ class _ArcadeLaunchPage extends StatefulWidget {
 }
 
 class _ArcadeLaunchPageState extends State<_ArcadeLaunchPage> {
+  _TermPhase _phase = _TermPhase.booting;
   final List<String> _visibleLines = [];
-  Timer? _bootTimer;
+  Timer? _lineTimer;
+  String? _expectedKey;           // fetched from Firestore
+  final TextEditingController _keyCtrl = TextEditingController();
+  final FocusNode _keyFocus = FocusNode();
 
-  // Realistic boot sequence: blank/header lines, commands, status output
+  // ── Boot sequence ──────────────────────────────────────────────────────────
   static const _bootLines = [
-    r'',
-    r' ╔══════════════════════════════════╗',
-    r' ║   ARCADE OS  v2.4  [2026-03-09]  ║',
-    r' ╚══════════════════════════════════╝',
-    r'',
-    r' CPU: MC68000 @ 8 MHz    RAM: 512 KB',
-    r' BIOS: 1.0.4              ROM: OK',
-    r'',
+    '',
+    ' ╔══════════════════════════════════╗',
+    ' ║   ARCADE OS  v2.4  [2026-03-09]  ║',
+    ' ╚══════════════════════════════════╝',
+    '',
+    ' CPU: MC68000 @ 8 MHz    RAM: 512 KB',
+    ' BIOS: 1.0.4              ROM: OK',
+    '',
     r' C:\> boot.bat',
-    r'',
-    r' Checking display adapter ........ [ OK ]',
-    r' Loading ROM bank 0x0000 ......... [ OK ]',
-    r' Input controller check .......... [ OK ]',
-    r' Mounting /arcade/fs ............. [ OK ]',
-    r' Scoreboard sync ................. [ OK ]',
-    r' Allocating framebuffer .......... [ OK ]',
-    r' Audio subsystem ................. [ OK ]',
-    r'',
-    r' C:\> start_arcade --saldo=OK',
-    r'',
-    r'  *** BIENVENIDO AL ARCADE CENTER ***',
-    r'  *** ¡QUE EMPIECE EL JUEGO!     ***',
+    '',
+    ' Checking display adapter ....... [ OK ]',
+    ' Loading ROM bank 0x0000 ........ [ OK ]',
+    ' Input controller check ......... [ OK ]',
+    ' Mounting /arcade/fs ............ [ OK ]',
+    ' Scoreboard sync ................ [ OK ]',
+    ' Allocating framebuffer ......... [ OK ]',
+    ' Audio subsystem ................ [ OK ]',
+    '',
+    r' C:\> authenticate --require-key',
+    '',
+    ' [!] AUTHORIZED ACCESS ONLY',
+    ' [!] ENTER CONFIRMATION CODE TO CONTINUE',
+  ];
+
+  // ── Hacker script (shown after correct key) ────────────────────────────────
+  static const _hackerLines = [
+    '',
+    r' C:\> cls',
+    ' ...CLEARING TERMINAL...',
+    '',
+    ' ██╗  ██╗ █████╗  ██████╗██╗  ██╗███████╗██████╗ ',
+    ' ██║  ██║██╔══██╗██╔════╝██║ ██╔╝██╔════╝██╔══██╗',
+    ' ███████║███████║██║     █████╔╝ █████╗  ██║  ██║',
+    ' ██╔══██║██╔══██║██║     ██╔═██╗ ██╔══╝  ██║  ██║',
+    ' ██║  ██║██║  ██║╚██████╗██║  ██╗███████╗██████╔╝',
+    ' ╚═╝  ╚═╝╚═╝  ╚═╝ ╚═════╝╚═╝  ╚═╝╚══════╝╚═════╝ ',
+    '',
+    r' C:\> ./exploit.sh --target=arcade --silent --root',
+    '',
+    ' [>] Bypassing auth layer ............... DONE',
+    ' [>] Injecting root payload ............. DONE',
+    ' [>] Disabling security modules ......... DONE',
+    ' [>] Escalating privileges .............. [ROOT]',
+    ' [>] Patching kernel memory ............. DONE',
+    ' [>] Loading exploit modules ............ DONE',
+    '',
+    ' ████████████████████████████████████ 100%',
+    '',
+    ' [!!!] SISTEMA COMPROMETIDO',
+    ' [!!!] CONTROL TOTAL OBTENIDO',
+    ' [!!!] DATOS EXFILTRADOS: 2.4 GB',
+    '',
+    r' C:\> launch_arcade --god-mode --override',
+    '',
+    ' > ¡ARCADE CENTER INICIANDO EN MODO DIOS!',
   ];
 
   @override
   void initState() {
     super.initState();
+    _fetchKey();
     _startBootLines();
   }
 
+  Future<void> _fetchKey() async {
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('settings')
+          .doc('store')
+          .get();
+      if (mounted) {
+        setState(() => _expectedKey = (doc.data()?['key_word'] as String?)?.trim().toLowerCase());
+      }
+    } catch (_) { /* non-critical */ }
+  }
+
   void _startBootLines() {
-    int lineIdx = 0;
-    _bootTimer = Timer.periodic(const Duration(milliseconds: 160), (t) {
+    int idx = 0;
+    _lineTimer = Timer.periodic(const Duration(milliseconds: 230), (t) {
       if (!mounted) { t.cancel(); return; }
-      if (lineIdx < _bootLines.length) {
-        setState(() => _visibleLines.add(_bootLines[lineIdx]));
-        lineIdx++;
+      if (idx < _bootLines.length) {
+        setState(() => _visibleLines.add(_bootLines[idx]));
+        idx++;
       } else {
         t.cancel();
-        Future.delayed(const Duration(milliseconds: 700), _launchArcade);
+        setState(() => _phase = _TermPhase.awaitingKey);
+        Future.delayed(const Duration(milliseconds: 200), () {
+          if (mounted) _keyFocus.requestFocus();
+        });
+      }
+    });
+  }
+
+  void _checkKey() {
+    final input = _keyCtrl.text.trim().toLowerCase();
+    if (_expectedKey == null || _expectedKey!.isEmpty) {
+      // Key not loaded yet or not set — allow through
+      _startHackerScript();
+      return;
+    }
+    if (input == _expectedKey) {
+      _startHackerScript();
+    } else {
+      setState(() {
+        _phase = _TermPhase.keyError;
+        _visibleLines.add('');
+        _visibleLines.add(' [!!!] CÓDIGO INCORRECTO — ACCESO DENEGADO');
+        _visibleLines.add('');
+        _keyCtrl.clear();
+      });
+      Future.delayed(const Duration(milliseconds: 1400), () {
+        if (!mounted) return;
+        setState(() {
+          _phase = _TermPhase.awaitingKey;
+          _visibleLines.removeLast();
+          _visibleLines.removeLast();
+          _visibleLines.removeLast();
+        });
+        _keyFocus.requestFocus();
+      });
+    }
+  }
+
+  void _startHackerScript() {
+    setState(() {
+      _phase = _TermPhase.hacking;
+      _visibleLines.clear();
+    });
+    int idx = 0;
+    _lineTimer = Timer.periodic(const Duration(milliseconds: 130), (t) {
+      if (!mounted) { t.cancel(); return; }
+      if (idx < _hackerLines.length) {
+        setState(() => _visibleLines.add(_hackerLines[idx]));
+        idx++;
+      } else {
+        t.cancel();
+        Future.delayed(const Duration(milliseconds: 900), _launchArcade);
       }
     });
   }
@@ -1569,7 +1540,9 @@ class _ArcadeLaunchPageState extends State<_ArcadeLaunchPage> {
 
   @override
   void dispose() {
-    _bootTimer?.cancel();
+    _lineTimer?.cancel();
+    _keyCtrl.dispose();
+    _keyFocus.dispose();
     super.dispose();
   }
 
@@ -1577,15 +1550,15 @@ class _ArcadeLaunchPageState extends State<_ArcadeLaunchPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFF010D01),
+      // Keep keyboard from resizing the layout
+      resizeToAvoidBottomInset: true,
       body: Stack(
         children: [
-          // CRT scanline overlay
           Positioned.fill(
             child: IgnorePointer(
               child: CustomPaint(painter: _CrtScanlinePainter()),
             ),
           ),
-          // Vignette — darker at screen edges
           Positioned.fill(
             child: IgnorePointer(
               child: DecoratedBox(
@@ -1593,24 +1566,29 @@ class _ArcadeLaunchPageState extends State<_ArcadeLaunchPage> {
                   gradient: RadialGradient(
                     center: Alignment.center,
                     radius: 1.1,
-                    colors: [
-                      Colors.transparent,
-                      Colors.black.withValues(alpha: 0.65),
-                    ],
+                    colors: [Colors.transparent, Colors.black.withValues(alpha: 0.65)],
                   ),
                 ),
               ),
             ),
           ),
-          // Terminal content
           SafeArea(
-            child: Padding(
+            child: SingleChildScrollView(
+              reverse: true,   // keeps latest lines visible when keyboard opens
               padding: const EdgeInsets.fromLTRB(18, 14, 18, 14),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  ..._visibleLines.map((line) => _TermLine(text: line)),
-                  const _BlinkCursor(),
+                  ..._visibleLines.map((l) => _TermLine(
+                    text: l,
+                    isHacker: _phase == _TermPhase.hacking,
+                  )),
+                  // Keyword input — shown only while awaiting / after error
+                  if (_phase == _TermPhase.awaitingKey || _phase == _TermPhase.keyError)
+                    _buildKeyInput(),
+                  const SizedBox(height: 6),
+                  if (_phase != _TermPhase.awaitingKey && _phase != _TermPhase.keyError)
+                    const _BlinkCursor(),
                 ],
               ),
             ),
@@ -1619,40 +1597,99 @@ class _ArcadeLaunchPageState extends State<_ArcadeLaunchPage> {
       ),
     );
   }
+
+  Widget _buildKeyInput() {
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: TextField(
+        controller: _keyCtrl,
+        focusNode: _keyFocus,
+        onSubmitted: (_) => _checkKey(),
+        style: const TextStyle(
+          color: Color(0xFF00FF88),
+          fontFamily: 'monospace',
+          fontSize: 11,
+          letterSpacing: 1.2,
+          shadows: [Shadow(color: Color(0xFF00FF88), blurRadius: 6)],
+        ),
+        cursorColor: const Color(0xFF00FF88),
+        cursorWidth: 8,
+        decoration: InputDecoration(
+          isDense: true,
+          contentPadding: const EdgeInsets.symmetric(vertical: 6),
+          border: InputBorder.none,
+          enabledBorder: const UnderlineInputBorder(
+            borderSide: BorderSide(color: Color(0xFF00884422), width: 1),
+          ),
+          focusedBorder: const UnderlineInputBorder(
+            borderSide: BorderSide(color: Color(0xFF00FF88), width: 1.2),
+          ),
+          prefixText: r' C:\> ACCESS_CODE: ',
+          prefixStyle: const TextStyle(
+            color: Color(0xFF88FFBB),
+            fontFamily: 'monospace',
+            fontSize: 11,
+            fontWeight: FontWeight.bold,
+            shadows: [Shadow(color: Color(0xFF00FF88), blurRadius: 8)],
+          ),
+          suffixIcon: GestureDetector(
+            onTap: _checkKey,
+            child: const Padding(
+              padding: EdgeInsets.only(bottom: 4),
+              child: Text(
+                '↵',
+                style: TextStyle(
+                  color: Color(0xFF00FF88),
+                  fontSize: 16,
+                  fontFamily: 'monospace',
+                  shadows: [Shadow(color: Color(0xFF00FF88), blurRadius: 8)],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
-// Single terminal output line with phosphor-glow styling
+// ── Terminal line widget ───────────────────────────────────────────────────────
 class _TermLine extends StatelessWidget {
   final String text;
-  const _TermLine({required this.text});
+  final bool isHacker;
+  const _TermLine({required this.text, this.isHacker = false});
 
   @override
   Widget build(BuildContext context) {
-    final isBig    = text.contains('***') || text.contains('╔');
-    final isCmd    = text.trimLeft().startsWith(r'C:\>');
-    final isEmpty  = text.trim().isEmpty;
+    final isDanger  = isHacker && (text.contains('[!!!]') || text.contains('COMPROMETIDO')
+        || text.contains('DIOS') || text.contains('DATOS'));
+    final isBanner  = text.contains('╔') || text.contains('║') || text.contains('╚')
+        || text.contains('██') || text.contains('***');
+    final isCmd     = text.trimLeft().startsWith(r'C:\>') || text.trimLeft().startsWith('[>]');
+    final isEmpty   = text.trim().isEmpty;
 
     final Color color;
-    final double size;
     final FontWeight weight;
-    final List<Shadow>? shadows;
+    final List<Shadow> shadows;
 
-    if (isBig) {
-      color   = const Color(0xFF00FF88);
-      size    = 12;
+    if (isDanger) {
+      color   = const Color(0xFFFF3322);
       weight  = FontWeight.bold;
-      shadows = const [
-        Shadow(color: Color(0xFF00FF88), blurRadius: 16),
-        Shadow(color: Color(0xFF00FF88), blurRadius: 6),
-      ];
+      shadows = const [Shadow(color: Color(0xFFFF3322), blurRadius: 18), Shadow(color: Color(0xFFFF3322), blurRadius: 6)];
+    } else if (isBanner && isHacker) {
+      color   = const Color(0xFF00FF88);
+      weight  = FontWeight.bold;
+      shadows = const [Shadow(color: Color(0xFF00FF88), blurRadius: 20), Shadow(color: Color(0xFF00FF88), blurRadius: 8)];
+    } else if (isBanner) {
+      color   = const Color(0xFF00FF88);
+      weight  = FontWeight.bold;
+      shadows = const [Shadow(color: Color(0xFF00FF88), blurRadius: 14), Shadow(color: Color(0xFF00FF88), blurRadius: 5)];
     } else if (isCmd) {
       color   = const Color(0xFF88FFBB);
-      size    = 11;
       weight  = FontWeight.bold;
       shadows = const [Shadow(color: Color(0xFF00FF88), blurRadius: 8)];
     } else {
       color   = const Color(0xFF1EBB42);
-      size    = 11;
       weight  = FontWeight.normal;
       shadows = const [Shadow(color: Color(0xFF00AA33), blurRadius: 4)];
     }
@@ -1663,7 +1700,7 @@ class _TermLine extends StatelessWidget {
         text,
         style: TextStyle(
           color: color,
-          fontSize: size,
+          fontSize: 11,
           fontFamily: 'monospace',
           fontWeight: weight,
           letterSpacing: 0.6,
@@ -1675,7 +1712,7 @@ class _TermLine extends StatelessWidget {
   }
 }
 
-// Blinking underscore cursor
+// ── Blinking cursor ────────────────────────────────────────────────────────────
 class _BlinkCursor extends StatefulWidget {
   const _BlinkCursor();
   @override
@@ -1688,27 +1725,24 @@ class _BlinkCursorState extends State<_BlinkCursor> with SingleTickerProviderSta
   @override
   void initState() {
     super.initState();
-    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 500))
+    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 520))
       ..repeat(reverse: true);
   }
 
   @override
-  void dispose() {
-    _ctrl.dispose();
-    super.dispose();
-  }
+  void dispose() { _ctrl.dispose(); super.dispose(); }
 
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
       animation: _ctrl,
       builder: (_, __) => Text(
-        _ctrl.value > 0.5 ? '_' : ' ',
+        _ctrl.value > 0.5 ? '█' : ' ',
         style: const TextStyle(
           color: Color(0xFF00FF88),
           fontSize: 12,
           fontFamily: 'monospace',
-          fontWeight: FontWeight.bold,
+          shadows: [Shadow(color: Color(0xFF00FF88), blurRadius: 8)],
         ),
       ),
     );
