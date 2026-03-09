@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:math';
 import 'dart:ui';
 
 import 'package:algolia/algolia.dart';
@@ -846,6 +845,10 @@ class FirestoreProductGrid extends StatelessWidget {
     );
   }
 
+  String _formatPrice(dynamic price) {
+    if (price == null) return 'N/A';
+    return '\$${(price as num).toStringAsFixed(2)}';
+  }
 }
 
 class _AddToCartButton extends StatefulWidget {
