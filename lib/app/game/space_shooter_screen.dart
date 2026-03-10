@@ -1006,7 +1006,11 @@ class _MiniShipPainter extends CustomPainter {
       ..lineTo(w * 0.08, h * 0.72)
       ..close();
     canvas.drawPath(hull, Paint()
-      ..shader = _ShooterPainter._miniShipGradient.createShader(Rect.fromLTWH(0, 0, w, h)));
+      ..shader = const LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [Color(0xFF00AAFF), Color(0xFF003388)],
+      ).createShader(Rect.fromLTWH(0, 0, w, h)));
     // Wing accents
     canvas.drawPath(
       Path()
