@@ -375,6 +375,17 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
         duration: const Duration(milliseconds: 300), curve: Curves.easeOut);
   }
 
+  void _ensureSettingVisible(int idx) {
+    if (idx < 0 || idx >= _settingKeys.length) return;
+    final ctx = _settingKeys[idx].currentContext;
+    if (ctx != null) {
+      Scrollable.ensureVisible(ctx,
+          duration: const Duration(milliseconds: 250),
+          curve: Curves.easeOut,
+          alignment: 0.5);
+    }
+  }
+
   Future<void> _loadPreferences() async {
     try {
       final doc = await FirebaseFirestore.instance
@@ -447,6 +458,9 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
         case 17: _buttonDisplay = ButtonDisplay.solid;
         case 18: _buttonDisplay = ButtonDisplay.blackout;
         case 19: _buttonDisplay = ButtonDisplay.clear;
+        // LANGUAGE (20-21)
+        case 20: _language = AppLanguage.spanish;
+        case 21: _language = AppLanguage.english;
       }
     });
     _savePreferences();
@@ -475,6 +489,8 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
       case 17: return _buttonDisplay == ButtonDisplay.solid;
       case 18: return _buttonDisplay == ButtonDisplay.blackout;
       case 19: return _buttonDisplay == ButtonDisplay.clear;
+      case 20: return _language == AppLanguage.spanish;
+      case 21: return _language == AppLanguage.english;
       default: return false;
     }
   }
@@ -484,7 +500,7 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
     if (event == null || !event.isDown) return;
     final btn = event.button;
 
-    // Splash intercept — any confirm button dismisses the splash
+    // Splash intercept
     if (!_splashDone) {
       if (btn == ArcadeButton.a || btn == ArcadeButton.start) {
         _splashTimer?.cancel();
@@ -494,37 +510,52 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
     }
 
     if (_activeGame == null) {
-      if (_hubCategory == 3) {
-        // Config category — navigate settings
-        const totalOpts = 20; // 3 skins + 7 shell colors + 4 themes + 3 layouts + 3 display
+      const totalOpts = 22; // 3+7+4+3+3+2 = 22 settings rows
+
+      if (_headerFocused) {
+        // ── Header level: L/R switches tab, DOWN enters content ─────────────
         switch (btn) {
-          case ArcadeButton.up:
-            setState(() => _settingsCursor = (_settingsCursor - 1 + totalOpts) % totalOpts);
-          case ArcadeButton.down:
-            setState(() => _settingsCursor = (_settingsCursor + 1) % totalOpts);
           case ArcadeButton.left:
-            setState(() => _hubCategory = 2);
-          case ArcadeButton.a:
-          case ArcadeButton.start:
-            _activateSetting(_settingsCursor);
+            if (_hubCategory > 0) setState(() { _hubCategory -= 1; });
+          case ArcadeButton.right:
+            if (_hubCategory < 3) setState(() { _hubCategory += 1; });
+          case ArcadeButton.down:
+            setState(() { _headerFocused = false; _settingsCursor = 0; });
           case ArcadeButton.select:
             Navigator.pop(context);
           default: break;
         }
         return;
       }
-      // Hub navigation
+
+      // ── Content level ────────────────────────────────────────────────────
       switch (btn) {
-        case ArcadeButton.left:
-          if (_hubCategory > 0) setState(() => _hubCategory -= 1);
-        case ArcadeButton.right:
-          if (_hubCategory < 3) setState(() => _hubCategory += 1);
         case ArcadeButton.up:
+          if (_hubCategory == 3) {
+            // Settings: move cursor up; if at top, return to header
+            if (_settingsCursor == 0) {
+              setState(() => _headerFocused = true);
+            } else {
+              setState(() {
+                _settingsCursor = (_settingsCursor - 1 + totalOpts) % totalOpts;
+              });
+              _ensureSettingVisible(_settingsCursor);
+            }
+          } else {
+            // Other tabs: return to header on up
+            setState(() => _headerFocused = true);
+          }
+        case ArcadeButton.down:
+          if (_hubCategory == 3) {
+            setState(() => _settingsCursor = (_settingsCursor + 1) % totalOpts);
+            _ensureSettingVisible(_settingsCursor);
+          }
+        case ArcadeButton.left:
           if (_hubCategory == 1) {
             setState(() => _selectedIndex = max(0, _selectedIndex - 1));
             _scrollCarouselToSelected();
           }
-        case ArcadeButton.down:
+        case ArcadeButton.right:
           if (_hubCategory == 1) {
             setState(() => _selectedIndex = min(kArcadeGames.length - 1, _selectedIndex + 1));
             _scrollCarouselToSelected();
@@ -533,8 +564,10 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
         case ArcadeButton.start:
           if (_hubCategory == 1) _launchSelected();
           else if (_hubCategory == 0 && _lastPlayedIndex != null) {
-            setState(() { _hubCategory = 1; _selectedIndex = _lastPlayedIndex!; });
+            setState(() { _hubCategory = 1; _selectedIndex = _lastPlayedIndex!; _headerFocused = false; });
             _launchSelected();
+          } else if (_hubCategory == 3) {
+            _activateSetting(_settingsCursor);
           }
         case ArcadeButton.select:
           Navigator.pop(context);
@@ -809,14 +842,11 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
     if (!_splashDone) return _buildSplashScreen();
     return Stack(children: [
       Positioned.fill(child: _buildHubBackground()),
-      SafeArea(
-        bottom: false,
-        child: Column(children: [
-          _buildHubCategoryBar(),
-          Expanded(child: _buildHubContent()),
-          _buildHubHintBar(),
-        ]),
-      ),
+      Column(children: [
+        _buildHubCategoryBar(),
+        Expanded(child: _buildHubContent()),
+        _buildHubHintBar(),
+      ]),
     ]);
   }
 
@@ -869,15 +899,12 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
     );
   }
 
-  static const _kHubCats  = ['RECENT', 'GAMES', 'PROFILE', 'SETTINGS'];
-  static const _kHubIcons = ['🕐', '🎮', '👤', '⚙'];
-
   Widget _buildHubCategoryBar() {
     final ac = _accent;
     const icons  = ['🕐', '🎮', '👤', '⚙'];
-    const labels = ['RECENT', 'GAMES', 'PROFILE', 'SETTINGS'];
+    final labels = [_t('RECIENTE','RECENT'), _t('JUEGOS','GAMES'), _t('PERFIL','PROFILE'), _t('AJUSTES','SETTINGS')];
     return Padding(
-      padding: const EdgeInsets.fromLTRB(10, 8, 10, 6),
+      padding: const EdgeInsets.fromLTRB(10, 4, 10, 4),
       child: Row(children: [
         // Pill tabs
         ...List.generate(4, (i) {
@@ -891,7 +918,7 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
                   horizontal: sel ? 10 : 7, vertical: sel ? 5 : 4),
               decoration: BoxDecoration(
                 color: sel
-                    ? ac.withOpacity(0.22)
+                    ? ac.withOpacity(_headerFocused ? 0.30 : 0.15)
                     : Colors.white.withOpacity(0.06),
                 borderRadius: BorderRadius.circular(20),
                 border: Border.all(
@@ -901,8 +928,8 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
                   width: sel ? 1.0 : 0.6,
                 ),
                 boxShadow: sel
-                    ? [BoxShadow(color: ac.withOpacity(0.22),
-                        blurRadius: 10, spreadRadius: -2)]
+                    ? [BoxShadow(color: ac.withOpacity(_headerFocused ? 0.45 : 0.18),
+                        blurRadius: _headerFocused ? 14 : 8, spreadRadius: -2)]
                     : [],
               ),
               child: Row(mainAxisSize: MainAxisSize.min, children: [
@@ -951,10 +978,10 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
   Widget _buildHubHintBar() {
     final ac = _accent;
     final items = _hubCategory == 1
-        ? [('◀▶', 'browse'), ('A', 'play'), ('SEL', 'exit')]
+        ? [('◀▶', _t('navegar','browse')), ('A', _t('jugar','play')), ('SEL', _t('salir','exit'))]
         : _hubCategory == 3
-        ? [('▲▼', 'nav'), ('A', 'select'), ('◀', 'back'), ('SEL', 'exit')]
-        : [('◀▶', 'switch'), ('SEL', 'exit')];
+        ? [('▲▼', _t('nav','nav')), ('A', _t('confirmar','select')), ('▲', _t('volver','back')), ('SEL', _t('salir','exit'))]
+        : [('◀▶', _t('cambiar','switch')), ('SEL', _t('salir','exit'))];
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 12),
       decoration: BoxDecoration(
@@ -1059,9 +1086,15 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
               Padding(
                 padding: const EdgeInsets.all(14),
                 child: Row(children: [
-                  Text(game.emoji,
-                      style: const TextStyle(fontSize: 38,
-                          shadows: [Shadow(color: Colors.black45, blurRadius: 6)])),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(10),
+                    child: SizedBox(
+                      width: 52, height: 44,
+                      child: CustomPaint(
+                        painter: _CartridgePainter(index: idx, selected: false),
+                      ),
+                    ),
+                  ),
                   const SizedBox(width: 14),
                   Expanded(
                     child: Column(mainAxisAlignment: MainAxisAlignment.center,
@@ -1193,14 +1226,20 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Top row: big emoji + status badges
+                  // Top row: game art preview + status badges
                   Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text(game.emoji,
-                        style: const TextStyle(fontSize: 42,
-                            shadows: [Shadow(color: Colors.black45, blurRadius: 8)])),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(10),
+                      child: SizedBox(
+                        width: 62, height: 52,
+                        child: CustomPaint(
+                          painter: _CartridgePainter(index: idx, selected: false),
+                        ),
+                      ),
+                    ),
                     const Spacer(),
                     if (game.locked)
-                      _heroBadge('LOCKED', Colors.redAccent)
+                      _heroBadge(_t('BLOQUEADO','LOCKED'), Colors.redAccent)
                     else if (_newRecordIndex == idx)
                       _heroBadge('⚡ RECORD', Colors.amber),
                   ]),
@@ -1284,7 +1323,6 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
           final game = kArcadeGames[i];
           final sel  = _selectedIndex == i;
           final neon = _kNeonColors[i % _kNeonColors.length];
-          final grad = _kCardGradients[i % _kCardGradients.length];
           return GestureDetector(
             onTap: () {
               setState(() => _selectedIndex = i);
@@ -1298,11 +1336,6 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
               margin: EdgeInsets.only(right: 6, top: sel ? 0 : 5, bottom: sel ? 0 : 5),
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(12),
-                gradient: sel
-                    ? LinearGradient(colors: grad,
-                        begin: Alignment.topLeft, end: Alignment.bottomRight)
-                    : null,
-                color: sel ? null : Colors.white.withOpacity(0.06),
                 border: Border.all(
                   color: sel
                       ? neon.withOpacity(0.85)
@@ -1314,15 +1347,21 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
                         blurRadius: 10, spreadRadius: -1)]
                     : [],
               ),
-              alignment: Alignment.center,
-              child: Stack(alignment: Alignment.center, children: [
-                Text(game.emoji, style: TextStyle(fontSize: sel ? 22 : 17)),
-                if (game.locked)
-                  Positioned(right: 2, top: 2,
-                    child: Text('🔒',
-                        style: TextStyle(fontSize: 8,
-                            color: Colors.white.withOpacity(0.6)))),
-              ]),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(11),
+                child: Stack(children: [
+                  Positioned.fill(
+                    child: CustomPaint(
+                      painter: _CartridgePainter(index: i, selected: sel),
+                    ),
+                  ),
+                  if (game.locked)
+                    Positioned(right: 2, top: 2,
+                      child: Text('🔒',
+                          style: TextStyle(fontSize: 8,
+                              color: Colors.white.withOpacity(0.6)))),
+                ]),
+              ),
             ),
           );
         },
@@ -1425,7 +1464,15 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
                       margin: const EdgeInsets.only(right: 8),
                       decoration: BoxDecoration(
                           color: neon, borderRadius: BorderRadius.circular(2))),
-                  Text(g.emoji, style: const TextStyle(fontSize: 12)),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(4),
+                    child: SizedBox(
+                      width: 20, height: 18,
+                      child: CustomPaint(
+                        painter: _CartridgePainter(index: i, selected: false),
+                      ),
+                    ),
+                  ),
                   const SizedBox(width: 8),
                   Expanded(child: Text(g.title,
                       style: const TextStyle(color: Colors.white70, fontSize: 8),
@@ -1495,51 +1542,55 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
     Widget opt(String label, {bool locked = false}) {
       final i = idx++;
       if (locked) {
-        return _settingsOptRow(label, false, false, null, locked: true);
+        return _settingsOptRow(label, false, false, null, locked: true, rowKey: _settingKeys[i]);
       }
       return _settingsOptRow(label, _isSettingActive(i), _isCursorOn(i),
-          () => _activateSetting(i));
+          () => _activateSetting(i), rowKey: _settingKeys[i]);
     }
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        _settingGroup('CONSOLE SKIN', [
-          opt('GameBoy Classic'),
-          opt('PSP Landscape', locked: true),
-          opt('Game Boy Advance', locked: true),
+        _settingGroup(_t('APARIENCIA', 'CONSOLE SKIN'), [
+          opt(_t('GameBoy Clásico', 'GameBoy Classic')),
+          opt(_t('PSP Apaisado', 'PSP Landscape'), locked: true),
+          opt(_t('Game Boy Advance', 'Game Boy Advance'), locked: true),
         ]),
-        _settingGroup('SHELL COLOR', [
-          opt('Classic Gray'),
-          opt('Midnight Black'),
-          opt('Indigo'),
-          opt('Crimson Red'),
-          opt('Navy Blue'),
-          opt('Forest Green'),
-          opt('Dark Rose'),
+        _settingGroup(_t('COLOR DEL CUERPO', 'SHELL COLOR'), [
+          opt(_t('Gris Clásico', 'Classic Gray')),
+          opt(_t('Negro Medianoche', 'Midnight Black')),
+          opt('Índigo'),
+          opt(_t('Rojo Carmesí', 'Crimson Red')),
+          opt(_t('Azul Marino', 'Navy Blue')),
+          opt(_t('Verde Bosque', 'Forest Green')),
+          opt(_t('Rosa Oscuro', 'Dark Rose')),
         ]),
-        _settingGroup('ACCENT COLOR', [
-          opt('Phosphor Green'),
-          opt('Amber Retro'),
-          opt('Cyan Crypto'),
-          opt('Infernal Red'),
+        _settingGroup(_t('COLOR ACENTO', 'ACCENT COLOR'), [
+          opt(_t('Verde Fósforo', 'Phosphor Green')),
+          opt(_t('Ámbar Retro', 'Amber Retro')),
+          opt(_t('Cyan Cripto', 'Cyan Crypto')),
+          opt(_t('Rojo Infernal', 'Infernal Red')),
         ]),
-        _settingGroup('BUTTON LAYOUT', [
-          opt('SNES Classic  X/Y/A/B'),
-          opt('Xbox Style  Y/X/B/A'),
-          opt('PS4 Style  △/☐/○/✕'),
+        _settingGroup(_t('BOTONES', 'BUTTON LAYOUT'), [
+          opt('SNES  X/Y/A/B'),
+          opt('Xbox  Y/X/B/A'),
+          opt('PS4  △/☐/○/✕'),
         ]),
-        _settingGroup('BUTTON DISPLAY', [
-          opt('Solid Color'),
-          opt('Blackout (neon glow)'),
-          opt('Crystal Clear (glass)'),
+        _settingGroup(_t('DISPLAY BOTONES', 'BUTTON DISPLAY'), [
+          opt(_t('Color Sólido', 'Solid Color')),
+          opt(_t('Oscuro (brillo neón)', 'Blackout (neon glow)')),
+          opt(_t('Cristal transparente', 'Crystal Clear (glass)')),
+        ]),
+        _settingGroup(_t('IDIOMA', 'LANGUAGE'), [
+          opt('Español'),
+          opt('English'),
         ]),
         const SizedBox(height: 6),
         Row(children: [
-          Text('▲▼ navigate  ', style: TextStyle(
+          Text('▲▼ ${_t('navegar', 'navigate')}  ', style: TextStyle(
               color: Colors.white.withOpacity(0.30), fontSize: 7)),
           Text('A', style: TextStyle(color: ac.withOpacity(0.60), fontSize: 7,
               fontWeight: FontWeight.bold)),
-          Text(' select  ◀ back', style: TextStyle(
+          Text('  ${_t('confirmar', 'select')}  ▲ ${_t('volver', 'back')}', style: TextStyle(
               color: Colors.white.withOpacity(0.30), fontSize: 7)),
         ]),
       ]),
@@ -1567,9 +1618,10 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
   }
 
   Widget _settingsOptRow(String label, bool active, bool cursor,
-      VoidCallback? onTap, {bool locked = false}) {
+      VoidCallback? onTap, {bool locked = false, Key? rowKey}) {
     final ac = _accent;
     return GestureDetector(
+      key: rowKey,
       onTap: locked ? null : onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 80),
@@ -1669,7 +1721,7 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
             ),
             const SizedBox(height: 16),
             Center(
-              child: Text('[ A ]  Continuar',
+              child: Text(_t('[ A ]  Continuar', '[ A ]  Continue'),
                 style: TextStyle(
                   color: ac.withOpacity(0.70),
                   fontSize: 8, fontFamily: 'monospace', letterSpacing: 2)),
@@ -1705,13 +1757,13 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
 
   Widget _buildSelectStartStrip() {
     return Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-      _ConsoleMetaButton(label: 'SELECT', btn: ArcadeButton.select, controller: _ctrl),
+      _ConsoleMetaButton(label: 'SELECT', btn: ArcadeButton.select, controller: _ctrl, shellColor: _metaColor),
       const SizedBox(width: 16),
       Container(width: 8, height: 8,
         decoration: BoxDecoration(shape: BoxShape.circle,
             color: Colors.white12, border: Border.all(color: Colors.white24))),
       const SizedBox(width: 16),
-      _ConsoleMetaButton(label: 'START', btn: ArcadeButton.start, controller: _ctrl),
+      _ConsoleMetaButton(label: 'START', btn: ArcadeButton.start, controller: _ctrl, shellColor: _metaColor),
     ]);
   }
 
@@ -2440,10 +2492,10 @@ class _CrossDPadPainter extends CustomPainter {
     drawArm(Rect.fromLTWH(cx + half - 2, cy - half, cx - half + 2, arm),
         tr: r, br: r, btn: ArcadeButton.right);
 
-    // Centre fill (dark disc)
-    p.color = const Color(0xFF151515);
+    // Centre fill (same shade as arms so all areas look uniform)
+    p.color = const Color(0xFF222222);
     canvas.drawRect(Rect.fromLTWH(cx - half, cy - half, arm, arm), p);
-    p.color = const Color(0xFF1E1E1E);
+    p.color = const Color(0xFF262626);
     canvas.drawCircle(Offset(cx, cy), half * 0.55, p);
     p..color = Colors.white.withOpacity(0.05)
       ..style = PaintingStyle.stroke
@@ -2796,7 +2848,8 @@ class _ConsoleMetaButton extends StatefulWidget {
   final String label;
   final ArcadeButton btn;
   final ArcadeInputController controller;
-  const _ConsoleMetaButton({required this.label, required this.btn, required this.controller});
+  final Color? shellColor;
+  const _ConsoleMetaButton({required this.label, required this.btn, required this.controller, this.shellColor});
   @override State<_ConsoleMetaButton> createState() => _ConsoleMetaButtonState();
 }
 
@@ -2812,16 +2865,18 @@ class _ConsoleMetaButtonState extends State<_ConsoleMetaButton> {
         duration: const Duration(milliseconds: 40),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
         decoration: BoxDecoration(
-          color: _pressed ? const Color(0xFF707070) : _kMeta,
+          color: _pressed
+              ? (widget.shellColor?.withOpacity(0.55) ?? const Color(0xFF707070))
+              : (widget.shellColor ?? _kMeta),
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: Colors.black.withOpacity(0.18)),
+          border: Border.all(color: Colors.black.withOpacity(0.22)),
           boxShadow: _pressed ? [] : [
-            BoxShadow(color: Colors.black.withOpacity(0.25), blurRadius: 4, offset: const Offset(0, 2)),
+            BoxShadow(color: Colors.black.withOpacity(0.30), blurRadius: 5, offset: const Offset(0, 2)),
           ],
         ),
         child: Text(widget.label,
           style: TextStyle(
-            color: _pressed ? Colors.white : const Color(0xFF222222),
+            color: _pressed ? Colors.white : (widget.shellColor != null && widget.shellColor!.computeLuminance() < 0.3 ? Colors.white70 : const Color(0xFF222222)),
             fontSize: 9, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
       ),
     );
