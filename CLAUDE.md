@@ -31,7 +31,7 @@ A handheld arcade emulator UI built in Flutter. All games are rendered via
 | 5 (row1,col2) | `raycaster` | 🔥 | **Cripta Maldita** | Doom-style FPS |
 | 6 (row2,col0) | `hopper` | 🐸 | **Rana Saltarina** | Frogger — frog 10% smaller (scale 0.90) |
 | 7 (row2,col1) | `snake` | 🐍 | **Víbora Veloz** | Snake |
-| 8 (row2,col2) | `flappy` | 🕊️ | **Vuelo Kamikaze** | Flappy Bird |
+| 8 (row2,col2) | `flappy` | ✈️ | **Kamikaze Flight** | Flappy Bird |
 
 In-game titles also updated in each screen's start overlay.
 
