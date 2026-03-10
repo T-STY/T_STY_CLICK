@@ -27,7 +27,6 @@ enum ColorTheme     { greenPhosphor, amberRetro, cyanCrypto, infernalRed }
 enum ButtonLayout   { snes, xbox, ps4 }
 enum ButtonDisplay  { solid, blackout, clear }
 enum AppLanguage   { spanish, english }
-enum DPadStyle     { classic, colorful }
 
 // Per-position button definition (label + color + underlying ArcadeButton)
 class _BtnDef {
@@ -201,7 +200,7 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
   int _selectedIndex = 0;
   int _hubCategory = 1;   // 0=reciente, 1=biblioteca, 2=perfil, 3=config
   final ScrollController _carouselCtrl = ScrollController();
-  final List<GlobalKey> _settingKeys = List.generate(24, (_) => GlobalKey());
+  final List<GlobalKey> _settingKeys = List.generate(22, (_) => GlobalKey());
   int? _lastPlayedIndex;
   ArcadeGameDef? _activeGame;
   final List<int> _highScores = List.filled(12, 0);
@@ -216,7 +215,6 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
   ButtonDisplay  _buttonDisplay  = ButtonDisplay.solid;
   int            _settingsCursor = 0;
   AppLanguage    _language       = AppLanguage.spanish;
-  DPadStyle      _dpadStyle      = DPadStyle.classic;
   bool _headerFocused = true;  // true = d-pad navigates category tabs; false = navigates content
 
   // Theme accent colour (used everywhere terminal-green currently is)
@@ -430,8 +428,6 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
             orElse: () => oldBlackout ? ButtonDisplay.blackout : ButtonDisplay.solid);
         _language = AppLanguage.values.firstWhere(
             (e) => e.name == d['language'], orElse: () => AppLanguage.spanish);
-        _dpadStyle = DPadStyle.values.firstWhere(
-            (e) => e.name == d['dpadStyle'], orElse: () => DPadStyle.classic);
       });
       _applyOrientation();
     } catch (_) { _applyOrientation(); }
@@ -449,7 +445,6 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
         'buttonLayout': _buttonLayout.name,
         'buttonDisplay': _buttonDisplay.name,
         'language': _language.name,
-        'dpadStyle': _dpadStyle.name,
       });
     } catch (_) {}
   }
@@ -485,9 +480,6 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
         // LANGUAGE (20-21)
         case 20: _language = AppLanguage.spanish;
         case 21: _language = AppLanguage.english;
-        // DPAD STYLE (22-23)
-        case 22: _dpadStyle = DPadStyle.classic;
-        case 23: _dpadStyle = DPadStyle.colorful;
       }
     });
     _savePreferences();
@@ -520,8 +512,6 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
       case 19: return _buttonDisplay == ButtonDisplay.clear;
       case 20: return _language == AppLanguage.spanish;
       case 21: return _language == AppLanguage.english;
-      case 22: return _dpadStyle == DPadStyle.classic;
-      case 23: return _dpadStyle == DPadStyle.colorful;
       default: return false;
     }
   }
@@ -541,7 +531,7 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
     }
 
     if (_activeGame == null) {
-      const totalOpts = 24; // 3+7+4+3+3+2+2 = 24 settings rows
+      const totalOpts = 22; // 3+7+4+3+3+2 = 22 settings rows
 
       if (_headerFocused) {
         // ── Header level: L/R switches tab, DOWN enters content ─────────────
@@ -1620,10 +1610,6 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
           opt('Español'),
           opt('English'),
         ]),
-        _settingGroup(_t('ESTILO DPAD', 'DPAD STYLE'), [
-          opt(_t('Clásico', 'Classic')),
-          opt(_t('Colorido', 'Colorful')),
-        ]),
         const SizedBox(height: 6),
         Row(children: [
           Text('▲▼ ${_t('navegar', 'navigate')}  ', style: TextStyle(
@@ -1877,8 +1863,7 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
   Widget _buildDPad() => _ConsoleDPad(
       controller: _ctrl,
       joystick: _activeGame?.supportsDiagonal ?? false,
-      accent: _accent,
-      dpadStyle: _dpadStyle);
+      accent: _accent);
 
   Widget _buildABXYCluster({double size = 48.0}) {
     final btnSize = size;
@@ -1954,56 +1939,80 @@ class _HeroDemoGameState extends State<_HeroDemoGame> {
   }
 
   void _botPlay() {
-    // Release everything first
     for (final b in ArcadeButton.values) _bot.release(b);
+
+    // Phase 0 — alternate A / Start for the first 10 ticks to get past start screens
+    if (_tick <= 10) {
+      if (_tick % 2 == 0) _bot.press(ArcadeButton.a);
+      else _bot.press(ArcadeButton.start);
+      return;
+    }
+
+    final t = _tick - 10; // tick index after startup
     switch (widget.game.id) {
       case 'flappy':
-        if (_tick % 13 < 3) _bot.press(ArcadeButton.a);
-      case 'runner':
-        if (_tick % 18 < 3) _bot.press(ArcadeButton.a);
+        // Flap every ~7 ticks (840 ms) — steady rhythm keeps bird airborne
+        if (t % 7 < 2) _bot.press(ArcadeButton.a);
       case 'tetris':
-        final phase = _tick % 10;
-        if (phase < 2)      _bot.press(ArcadeButton.left);
-        else if (phase < 4) _bot.press(ArcadeButton.right);
-        else if (phase == 5) _bot.press(ArcadeButton.a);
-        if (_tick % 22 < 2) _bot.press(ArcadeButton.down);
+        // Nudge pieces left/right and rotate; occasional soft-drop
+        final phase = t % 14;
+        if (phase < 3)       _bot.press(ArcadeButton.left);
+        else if (phase < 6)  _bot.press(ArcadeButton.right);
+        else if (phase == 7) _bot.press(ArcadeButton.a); // rotate
+        if (t % 30 < 2)      _bot.press(ArcadeButton.down);
       case 'snake':
-        const dirs = [ArcadeButton.right, ArcadeButton.right, ArcadeButton.down,
-            ArcadeButton.right, ArcadeButton.up,  ArcadeButton.right];
-        _bot.press(dirs[(_tick ~/ 9) % dirs.length]);
+        // Rectangular band — right×14, down×4, left×14, up×4, repeat
+        // Keeps snake in a horizontal strip and avoids immediate wall death
+        const _snakePattern = [
+          ArcadeButton.right, ArcadeButton.right, ArcadeButton.right, ArcadeButton.right,
+          ArcadeButton.right, ArcadeButton.right, ArcadeButton.right, ArcadeButton.right,
+          ArcadeButton.right, ArcadeButton.right, ArcadeButton.right, ArcadeButton.right,
+          ArcadeButton.right, ArcadeButton.right,
+          ArcadeButton.down, ArcadeButton.down, ArcadeButton.down, ArcadeButton.down,
+          ArcadeButton.left, ArcadeButton.left, ArcadeButton.left, ArcadeButton.left,
+          ArcadeButton.left, ArcadeButton.left, ArcadeButton.left, ArcadeButton.left,
+          ArcadeButton.left, ArcadeButton.left, ArcadeButton.left, ArcadeButton.left,
+          ArcadeButton.left, ArcadeButton.left,
+          ArcadeButton.up, ArcadeButton.up, ArcadeButton.up, ArcadeButton.up,
+        ];
+        _bot.press(_snakePattern[t % _snakePattern.length]);
       case 'shooter':
-        _bot.press(ArcadeButton.a);
-        final ph = _tick % 18;
-        if (ph < 5) _bot.press(ArcadeButton.left);
-        else if (ph < 10) _bot.press(ArcadeButton.right);
+        _bot.press(ArcadeButton.a); // always shooting
+        final ph = t % 20;
+        if (ph < 7)       _bot.press(ArcadeButton.left);
+        else if (ph < 14) _bot.press(ArcadeButton.right);
       case 'maze':
-        const d = [ArcadeButton.right, ArcadeButton.down, ArcadeButton.left, ArcadeButton.up];
-        _bot.press(d[(_tick ~/ 14) % d.length]);
+        // Hold each direction long enough to traverse a corridor
+        const _mazeDirs = [ArcadeButton.right, ArcadeButton.down,
+            ArcadeButton.left, ArcadeButton.up];
+        _bot.press(_mazeDirs[(t ~/ 20) % _mazeDirs.length]);
       case 'hopper':
-        if (_tick % 14 < 3) _bot.press(ArcadeButton.up);
-        else if ((_tick ~/ 14) % 3 == 1) _bot.press(ArcadeButton.left);
-        else if ((_tick ~/ 14) % 3 == 2) _bot.press(ArcadeButton.right);
+        // Hop up frequently; dodge left/right in between
+        if (t % 10 < 3)              _bot.press(ArcadeButton.up);
+        else if ((t ~/ 10) % 4 == 1) _bot.press(ArcadeButton.left);
+        else if ((t ~/ 10) % 4 == 3) _bot.press(ArcadeButton.right);
       case 'breakout':
       case 'pong':
-        if ((_tick ~/ 13) % 2 == 0) _bot.press(ArcadeButton.left);
+        if ((t ~/ 13) % 2 == 0) _bot.press(ArcadeButton.left);
         else _bot.press(ArcadeButton.right);
       case 'raycaster':
+        // Walk forward constantly; sweep right now and then; fire regularly
         _bot.press(ArcadeButton.up);
-        if (_tick % 22 < 5) _bot.press(ArcadeButton.right);
-        if (_tick % 45 < 3) _bot.press(ArcadeButton.a);
+        if (t % 35 < 10) _bot.press(ArcadeButton.right);
+        if (t % 12 < 3)  _bot.press(ArcadeButton.a);
       case 'match3':
-        final p2 = _tick % 16;
-        if (p2 < 4) _bot.press(ArcadeButton.right);
-        else if (p2 < 8) _bot.press(ArcadeButton.down);
-        else if (p2 < 10) _bot.press(ArcadeButton.a);
+        final p2 = t % 22;
+        if (p2 < 5)       _bot.press(ArcadeButton.right);
+        else if (p2 < 10) _bot.press(ArcadeButton.down);
+        else if (p2 < 12) _bot.press(ArcadeButton.a);
       case 'logic':
-        final p3 = _tick % 20;
-        if (p3 < 4)  _bot.press(ArcadeButton.right);
-        else if (p3 < 8) _bot.press(ArcadeButton.down);
-        else if (p3 < 10) _bot.press(ArcadeButton.a);
+        final p3 = t % 26;
+        if (p3 < 5)       _bot.press(ArcadeButton.right);
+        else if (p3 < 10) _bot.press(ArcadeButton.down);
+        else if (p3 < 12) _bot.press(ArcadeButton.a);
       default:
         const ds = [ArcadeButton.right, ArcadeButton.down, ArcadeButton.left, ArcadeButton.up];
-        _bot.press(ds[(_tick ~/ 10) % ds.length]);
+        _bot.press(ds[(t ~/ 12) % ds.length]);
     }
   }
 
@@ -2562,10 +2571,8 @@ class _ConsoleDPad extends StatefulWidget {
   final bool joystick;
   final double size;
   final Color accent;
-  final DPadStyle dpadStyle;
   const _ConsoleDPad({required this.controller, this.joystick = false,
-      this.size = 144, this.accent = const Color(0xFF00FF88),
-      this.dpadStyle = DPadStyle.classic});
+      this.size = 144, this.accent = const Color(0xFF00FF88)});
   @override State<_ConsoleDPad> createState() => _ConsoleDPadState();
 }
 
@@ -2629,9 +2636,7 @@ class _ConsoleDPadState extends State<_ConsoleDPad> {
         size: Size(widget.size, widget.size),
         painter: widget.joystick
             ? _RoundDPadPainter(active: _active, accent: widget.accent)
-            : widget.dpadStyle == DPadStyle.colorful
-                ? _ColorfulDPadPainter(active: _active, accent: widget.accent)
-                : _CrossDPadPainter(active: _active, accent: widget.accent),
+            : _CrossDPadPainter(active: _active, accent: widget.accent),
       ),
     );
   }
@@ -2650,77 +2655,86 @@ class _CrossDPadPainter extends CustomPainter {
 
   bool _lit(ArcadeButton b) => active.contains(b);
 
+  // Build one-piece cross via union of two rounded rectangles.
+  // The rounded corners of each bar create natural concave junctions — exactly
+  // how a real injection-moulded d-pad looks.
+  Path _crossPath(Size size) {
+    final cx = size.width / 2, cy = size.height / 2;
+    final arm = size.width * 0.36;
+    final half = arm / 2;
+    const r = 9.0;
+    final horiz = Path()..addRRect(RRect.fromRectAndRadius(
+        Rect.fromLTWH(0, cy - half, size.width, arm), Radius.circular(r)));
+    final vert  = Path()..addRRect(RRect.fromRectAndRadius(
+        Rect.fromLTWH(cx - half, 0, arm, size.height), Radius.circular(r)));
+    return Path.combine(PathOperation.union, horiz, vert);
+  }
+
   @override
   void paint(Canvas canvas, Size size) {
     final cx = size.width / 2, cy = size.height / 2;
-    const arm = 50.0, half = arm / 2;
-    const r = 10.0;
+    final arm = size.width * 0.36;
+    final half = arm / 2;
     final p = Paint()..isAntiAlias = true;
+    final cross = _crossPath(size);
 
-    // ── Outer subtle glow ring when any button pressed ─────────────────────────
+    // Outer accent glow when any button active
     if (active.isNotEmpty) {
-      p.color = accent.withOpacity(0.10);
-      p.maskFilter = const MaskFilter.blur(BlurStyle.normal, 12);
-      canvas.drawCircle(Offset(cx, cy), size.width * 0.45, p);
+      p..color = accent.withOpacity(0.13)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 14);
+      canvas.drawPath(cross, p);
       p.maskFilter = null;
     }
 
-    void drawArm(Rect rect, {double tl=0,double tr=0,double bl=0,double br=0, ArcadeButton? btn}) {
-      final isLit = btn != null && _lit(btn);
-      // Shadow/depth
-      p.color = Colors.black.withOpacity(0.50);
-      canvas.drawRRect(RRect.fromRectAndCorners(rect.shift(const Offset(0, 2)),
-          topLeft: Radius.circular(tl), topRight: Radius.circular(tr),
-          bottomLeft: Radius.circular(bl), bottomRight: Radius.circular(br)), p);
-      // Base
-      if (isLit) {
-        p.shader = LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight,
-            colors: [accent.withOpacity(0.85), accent.withOpacity(0.55)]
-        ).createShader(rect);
-      } else {
-        p.shader = const LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight,
-            colors: [Color(0xFF2A2A2A), Color(0xFF181818)]
-        ).createShader(Rect.fromLTWH(0, 0, 200, 200));
-      }
-      canvas.drawRRect(RRect.fromRectAndCorners(rect,
-          topLeft: Radius.circular(tl), topRight: Radius.circular(tr),
-          bottomLeft: Radius.circular(bl), bottomRight: Radius.circular(br)), p);
-      p.shader = null;
-      // Accent inner glow when lit
-      if (isLit) {
-        p..color = accent.withOpacity(0.30)
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6);
-        canvas.drawRRect(RRect.fromRectAndCorners(rect,
-            topLeft: Radius.circular(tl), topRight: Radius.circular(tr),
-            bottomLeft: Radius.circular(bl), bottomRight: Radius.circular(br)), p);
-        p.maskFilter = null;
-      }
-    }
+    // Drop shadow
+    p..color = Colors.black.withOpacity(0.55)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+    canvas.save();
+    canvas.translate(0, 2);
+    canvas.drawPath(cross, p);
+    canvas.restore();
+    p.maskFilter = null;
 
-    // Draw four arms — exact edges, no overlap
-    drawArm(Rect.fromLTWH(cx - half, 0, arm, cy - half),
-        tl: r, tr: r, btn: ArcadeButton.up);
-    drawArm(Rect.fromLTWH(cx - half, cy + half, arm, cy - half),
-        bl: r, br: r, btn: ArcadeButton.down);
-    drawArm(Rect.fromLTWH(0, cy - half, cx - half, arm),
-        tl: r, bl: r, btn: ArcadeButton.left);
-    drawArm(Rect.fromLTWH(cx + half, cy - half, cx - half, arm),
-        tr: r, br: r, btn: ArcadeButton.right);
-
-    // Centre fill — same gradient as arms, no hub circle
-    p.shader = const LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight,
-        colors: [Color(0xFF2A2A2A), Color(0xFF181818)]
-    ).createShader(Rect.fromLTWH(0, 0, 200, 200));
-    canvas.drawRect(Rect.fromLTWH(cx - half, cy - half, arm, arm), p);
+    // Base fill — single gradient across the whole cross (one piece)
+    p.shader = const LinearGradient(
+      begin: Alignment.topLeft, end: Alignment.bottomRight,
+      colors: [Color(0xFF2E2E2E), Color(0xFF171717)],
+    ).createShader(Rect.fromLTWH(0, 0, size.width, size.height));
+    canvas.drawPath(cross, p);
     p.shader = null;
+
+    // Per-arm highlight — clip to cross so it never bleeds outside the shape
+    canvas.save();
+    canvas.clipPath(cross);
+    final armRects = {
+      ArcadeButton.up:    Rect.fromLTWH(cx - half, 0,   arm, cy),
+      ArcadeButton.down:  Rect.fromLTWH(cx - half, cy,  arm, cy),
+      ArcadeButton.left:  Rect.fromLTWH(0,  cy - half,  cx,  arm),
+      ArcadeButton.right: Rect.fromLTWH(cx, cy - half,  cx,  arm),
+    };
+    for (final entry in armRects.entries) {
+      if (!_lit(entry.key)) continue;
+      p.shader = LinearGradient(
+        begin: Alignment.topLeft, end: Alignment.bottomRight,
+        colors: [accent.withOpacity(0.90), accent.withOpacity(0.50)],
+      ).createShader(entry.value);
+      canvas.drawRect(entry.value, p);
+      p.shader = null;
+    }
+    canvas.restore();
+
+    // Thin surface rim
+    p..color = Colors.white.withOpacity(0.08)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.0;
+    canvas.drawPath(cross, p);
+    p.style = PaintingStyle.fill;
 
     // ── Chevron arrows ─────────────────────────────────────────────────────────
     void drawChevron(List<Offset> pts, ArcadeButton btn) {
       final isLit = _lit(btn);
       p.color = isLit ? accent : Colors.white.withOpacity(0.45);
-      if (isLit) {
-        p.maskFilter = MaskFilter.blur(BlurStyle.normal, 3);
-      }
+      if (isLit) p.maskFilter = MaskFilter.blur(BlurStyle.normal, 3);
       final path = Path()..moveTo(pts[0].dx, pts[0].dy);
       for (int i = 1; i < pts.length; i++) path.lineTo(pts[i].dx, pts[i].dy);
       path.close();
@@ -2748,98 +2762,6 @@ class _CrossDPadPainter extends CustomPainter {
         Offset(size.width - 30, cy + 3), Offset(size.width - 26, cy + 3),
         Offset(size.width - 26, cy + 8)],
         ArcadeButton.right);
-  }
-}
-
-// ─── Colorful 4-segment D-pad (Switch-style) ─────────────────────────────────
-
-class _ColorfulDPadPainter extends CustomPainter {
-  final Set<ArcadeButton> active;
-  final Color accent;
-  const _ColorfulDPadPainter({required this.active, this.accent = const Color(0xFF00FF88)});
-
-  @override
-  bool shouldRepaint(_ColorfulDPadPainter o) =>
-      o.active.length != active.length || !o.active.containsAll(active) || o.accent != accent;
-
-  bool _lit(ArcadeButton b) => active.contains(b);
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final cx = size.width / 2, cy = size.height / 2;
-    final R = size.width / 2;
-    final p = Paint()..isAntiAlias = true;
-
-    // Dark circle background
-    p.color = const Color(0xFF1A1A1A);
-    canvas.drawCircle(Offset(cx, cy), R - 1, p);
-    p..color = Colors.black.withOpacity(0.60)..style = PaintingStyle.stroke..strokeWidth = 2;
-    canvas.drawCircle(Offset(cx, cy), R - 1, p);
-    p.style = PaintingStyle.fill;
-
-    // Segment colors: up=blue, left=green, right=red, down=yellow
-    final segColors = {
-      ArcadeButton.up:    const Color(0xFF2A7FD0),
-      ArcadeButton.left:  const Color(0xFF3DAA4A),
-      ArcadeButton.right: const Color(0xFFCC3333),
-      ArcadeButton.down:  const Color(0xFFDDAA00),
-    };
-    final segAngles = {
-      ArcadeButton.up:    -pi / 2,
-      ArcadeButton.right: 0.0,
-      ArcadeButton.down:  pi / 2,
-      ArcadeButton.left:  pi,
-    };
-
-    // Draw each segment as a "house" shape (rounded pentagon)
-    for (final btn in [ArcadeButton.up, ArcadeButton.right, ArcadeButton.down, ArcadeButton.left]) {
-      final isLit = _lit(btn);
-      final baseColor = segColors[btn]!;
-      final angle = segAngles[btn]!;
-      final color = isLit ? baseColor : baseColor.withOpacity(0.75);
-
-      canvas.save();
-      canvas.translate(cx, cy);
-      canvas.rotate(angle);
-
-      // Pentagon segment clipped to quarter-circle
-      final segPath = Path();
-      const halfAngle = pi * 0.47;
-      segPath.moveTo(0, 0);
-      segPath.arcTo(Rect.fromCircle(center: Offset.zero, radius: R - 2),
-          -pi / 2 - halfAngle / 2, halfAngle, false);
-      segPath.close();
-
-      p.color = color;
-      canvas.drawPath(segPath, p);
-
-      // Lighter top-center highlight
-      p.color = Colors.white.withOpacity(isLit ? 0.25 : 0.12);
-      canvas.drawPath(segPath, p);
-
-      // Arrow triangle pointing outward
-      const arrowDist = 0.62;
-      const s = 7.0;
-      p.color = Colors.white.withOpacity(isLit ? 0.95 : 0.70);
-      if (isLit) {
-        p.maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
-      }
-      canvas.drawPath(Path()
-          ..moveTo(0, -(R * arrowDist))
-          ..lineTo(-s, -(R * arrowDist) + s * 1.5)
-          ..lineTo(s, -(R * arrowDist) + s * 1.5)
-          ..close(), p);
-      p.maskFilter = null;
-
-      canvas.restore();
-    }
-
-    // Center cap
-    p.color = const Color(0xFF1A1A1A);
-    canvas.drawCircle(Offset(cx, cy), R * 0.20, p);
-    p..color = Colors.white.withOpacity(0.08)..style = PaintingStyle.stroke..strokeWidth = 1;
-    canvas.drawCircle(Offset(cx, cy), R * 0.20, p);
-    p.style = PaintingStyle.fill;
   }
 }
 
