@@ -36,9 +36,78 @@ const _kLavaCells = <List<int>>[
   [13, 10], [13, 11],
 ];
 
+// ─── Realm 1 — Las Catacumbas (winding tunnels) ───────────────────────────────
+const _kMap1 = <List<int>>[
+  [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+  [1,0,0,0,0,0,0,1,0,0,0,0,0,0,0,1],
+  [1,0,1,1,0,1,0,1,0,1,1,0,1,0,1,1],
+  [1,0,1,0,0,0,0,0,0,0,0,0,0,1,0,1],
+  [1,0,1,0,1,1,1,0,1,1,0,1,0,1,0,1],
+  [1,0,0,0,1,0,0,0,0,0,0,1,0,0,0,1],
+  [1,1,0,1,1,0,1,1,0,1,0,0,1,0,1,1],
+  [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+  [1,0,1,0,0,1,1,0,0,1,1,0,0,1,0,1],
+  [1,0,1,0,1,0,0,0,0,0,0,1,0,1,0,1],
+  [1,0,0,0,1,0,1,1,1,1,0,1,0,0,0,1],
+  [1,0,1,0,0,0,0,0,0,0,0,0,0,1,0,1],
+  [1,1,1,0,1,0,1,0,0,1,0,1,0,1,1,1],
+  [1,0,0,0,1,0,0,0,0,0,0,1,0,0,0,1],
+  [1,0,0,0,0,0,0,1,1,0,0,0,0,0,0,1],
+  [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+];
+
+// ─── Realm 2 — El Abismo (open hellscape with pillars) ────────────────────────
+const _kMap2 = <List<int>>[
+  [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+  [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+  [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+  [1,0,0,1,0,0,0,0,0,0,0,0,1,0,0,1],
+  [1,0,0,0,0,0,1,0,0,1,0,0,0,0,0,1],
+  [1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1],
+  [1,0,0,1,0,0,0,0,0,0,0,0,1,0,0,1],
+  [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+  [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+  [1,0,0,1,0,0,0,0,0,0,0,0,1,0,0,1],
+  [1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1],
+  [1,0,0,0,0,0,1,0,0,1,0,0,0,0,0,1],
+  [1,0,0,1,0,0,0,0,0,0,0,0,1,0,0,1],
+  [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+  [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+  [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+];
+
+// ─── Realm 3 — El Núcleo del Infierno (brutal ring labyrinth) ─────────────────
+const _kMap3 = <List<int>>[
+  [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+  [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+  [1,0,1,1,0,0,1,0,0,1,0,0,1,1,0,1],
+  [1,0,1,0,0,1,0,0,0,0,1,0,0,1,0,1],
+  [1,0,0,0,1,0,0,0,0,0,0,1,0,0,0,1],
+  [1,0,0,1,0,0,0,1,1,0,0,0,1,0,0,1],
+  [1,0,1,0,0,0,1,0,0,1,0,0,0,1,0,1],
+  [1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1],
+  [1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1],
+  [1,0,1,0,0,0,1,0,0,1,0,0,0,1,0,1],
+  [1,0,0,1,0,0,0,1,1,0,0,0,1,0,0,1],
+  [1,0,0,0,1,0,0,0,0,0,0,1,0,0,0,1],
+  [1,0,1,0,0,1,0,0,0,0,1,0,0,1,0,1],
+  [1,0,1,1,0,0,1,0,0,1,0,0,1,1,0,1],
+  [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+  [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+];
+
+// All realm maps indexed by realm number
+const _kMaps = [_kMap, _kMap1, _kMap2, _kMap3];
+
+// Realm flavor data
+const _kRealmNames  = ['La Cripta',             'Las Catacumbas',         'El Abismo',              'El Núcleo del Infierno'];
+const _kRealmTaglines = ['Las sombras te acechan…', '¡Los muertos caminan!', 'El vacío te llama…',     '¡No hay escapatoria!'];
+// Player spawn per realm
+const _kRealmSpawn = [[2.5, 2.5], [1.5, 1.5], [2.5, 2.5], [2.5, 2.5]];
+
 // ─── Enemy types ──────────────────────────────────────────────────────────────
 
-enum _EnemyType { demon, cacodemon, skeleton }
+enum _EnemyType { demon, cacodemon, skeleton, troll }
 
 class _Enemy {
   double x, y;
@@ -54,11 +123,16 @@ class _Enemy {
         alive = true,
         hitFlash = 0;
 
+  // Troll teleport state
+  double teleportTimer = 2.5;
+  double teleportFlash = 0.0; // 1 = just teleported (visual flicker)
+
   static double _baseHp(_EnemyType t) {
     switch (t) {
       case _EnemyType.demon:     return 3;
       case _EnemyType.cacodemon: return 2;
       case _EnemyType.skeleton:  return 1;
+      case _EnemyType.troll:     return 10; // incredibly hard to kill
     }
   }
 
@@ -68,23 +142,46 @@ class _Enemy {
       case _EnemyType.demon:     return 0.58;
       case _EnemyType.cacodemon: return 0.60;
       case _EnemyType.skeleton:  return 0.60;
+      case _EnemyType.troll:     return 0.52; // squat and wide
     }
   }
 
-  double get speed => type == _EnemyType.skeleton ? 0.65
-      : (type == _EnemyType.cacodemon ? 1.1 : 1.0);
+  double get speed {
+    switch (type) {
+      case _EnemyType.skeleton:  return 0.65;
+      case _EnemyType.cacodemon: return 1.1;
+      case _EnemyType.troll:     return 1.6; // fast and sneaky
+      default:                   return 1.0;
+    }
+  }
 
-  double get _baseDamage => type == _EnemyType.skeleton ? 15.0
-      : (type == _EnemyType.cacodemon ? 7.0 : 10.0);
+  double get _baseDamage {
+    switch (type) {
+      case _EnemyType.skeleton:  return 15.0;
+      case _EnemyType.cacodemon: return 7.0;
+      case _EnemyType.troll:     return 22.0; // brutal
+      default:                   return 10.0;
+    }
+  }
 
   /// Damage increases 15% per wave (caps at 3×)
   double get damage => (_baseDamage * (1.0 + (wave - 1) * 0.15)).clamp(0, _baseDamage * 3);
 
   // ── Ranged attack params (0 = melee only) ──────────────────────────────────
-  double get attackRange    => type == _EnemyType.skeleton ? 7.0
-      : (type == _EnemyType.cacodemon ? 5.5 : 0.0);
-  double get attackInterval => type == _EnemyType.skeleton ? 1.8
-      : (type == _EnemyType.cacodemon ? 2.4 : 0.0);
+  double get attackRange {
+    switch (type) {
+      case _EnemyType.skeleton:  return 7.0;
+      case _EnemyType.cacodemon: return 5.5;
+      default:                   return 0.0; // melee
+    }
+  }
+  double get attackInterval {
+    switch (type) {
+      case _EnemyType.skeleton:  return 1.8;
+      case _EnemyType.cacodemon: return 2.4;
+      default:                   return 0.0;
+    }
+  }
   double get projectileDmg  => type == _EnemyType.skeleton
       ? (10.0 * (1.0 + (wave - 1) * 0.15)).clamp(0, 30.0)
       : (type == _EnemyType.cacodemon
@@ -182,6 +279,14 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
   String _waveFlavorText = '';
   bool _relicActive = false;
   double _relicX = 7.5, _relicY = 7.5;
+
+  // ── Realm system ────────────────────────────────────────────────────────────
+  int _currentRealm = 0;
+  double _realmTransitionTimer = 0;
+
+  List<List<int>> get _currentMap => _kMaps[_currentRealm.clamp(0, _kMaps.length - 1)];
+
+  bool get _megaAlive => _enemies.any((e) => e.alive && e.isMega);
 
   final List<_Enemy> _enemies = [];
   final List<_Projectile> _projectiles = [];
@@ -331,6 +436,8 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
       _dimTimer = 4.0 + _rng.nextDouble() * 6.0;
       _waveFlavorText = '';
       _relicActive = false;
+      _currentRealm = 0;
+      _realmTransitionTimer = 0;
       _state = _GameState.playing;
     });
     _spawnWave(1);
@@ -344,8 +451,13 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
   _EnemyType _randomType(int wave) {
     if (wave == 1) return _EnemyType.demon;
     if (wave == 2) return _rng.nextBool() ? _EnemyType.demon : _EnemyType.cacodemon;
+    // Troll appears from wave 5+ with increasing probability
+    if (wave >= 5) {
+      final trollChance = ((wave - 4) * 0.08).clamp(0.0, 0.30);
+      if (_rng.nextDouble() < trollChance) return _EnemyType.troll;
+    }
     final r = _rng.nextInt(3);
-    return _EnemyType.values[r];
+    return _EnemyType.values[r]; // demon, cacodemon, skeleton
   }
 
   void _spawnWave(int wave) {
@@ -366,17 +478,23 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
       _enemies.add(_Enemy(8.5, 3.5, type: _EnemyType.demon, wave: wave * 2, isMega: true));
     }
 
+    final map = _currentMap;
     final count = wave + 3;
     int spawned = 0, tries = 0;
     while (spawned < count && tries < 500) {
       tries++;
       final cx = 1 + _rng.nextInt(_kMapW - 2);
       final cy = 1 + _rng.nextInt(_kMapH - 2);
-      if (_kMap[cy][cx] == 1) continue;
+      if (map[cy][cx] == 1) continue;
       final ex = cx + 0.5, ey = cy + 0.5;
       final dx = ex - _posX, dy = ey - _posY;
       if (dx * dx + dy * dy < 9) continue;
-      _enemies.add(_Enemy(ex, ey, type: _randomType(wave), wave: wave));
+      final enemy = _Enemy(ex, ey, type: _randomType(wave), wave: wave);
+      // Randomize initial troll teleport timer
+      if (enemy.type == _EnemyType.troll) {
+        enemy.teleportTimer = 1.5 + _rng.nextDouble() * 2.5;
+      }
+      _enemies.add(enemy);
       spawned++;
     }
   }
@@ -441,12 +559,13 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
     final dx = x1 - x0, dy = y1 - y0;
     final steps = (dx.abs() + dy.abs()) * 4; // sample density
     if (steps < 1) return true;
+    final map = _currentMap;
     for (int i = 1; i < steps; i++) {
       final t = i / steps;
       final mx = (x0 + dx * t).floor();
       final my = (y0 + dy * t).floor();
       if (mx < 0 || mx >= _kMapW || my < 0 || my >= _kMapH) return false;
-      if (_kMap[my][mx] == 1) return false;
+      if (map[my][mx] == 1) return false;
     }
     return true;
   }
@@ -483,6 +602,20 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
     _ammo += 30;
     _health = (_health + 15).clamp(0, 100.0); // +15 HP regen on clear
 
+    // Realm transition every 10 waves
+    final newRealm = ((_wave - 1) ~/ 10).clamp(0, _kMaps.length - 1);
+    if (newRealm > _currentRealm) {
+      _currentRealm = newRealm;
+      _realmTransitionTimer = 4.0;
+      // Teleport player to new realm spawn
+      final spawn = _kRealmSpawn[_currentRealm];
+      _posX = spawn[0]; _posY = spawn[1];
+      _dirX = 1.0; _dirY = 0.0;
+      _planeX = 0.0; _planeY = 0.66;
+      // Full heal on realm change
+      _health = 100.0;
+    }
+
     // Shotgun: unlock at wave 2, +6 shells every wave thereafter
     if (_wave == 2) {
       _shotgunUnlocked = true;
@@ -505,8 +638,10 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
     }
 
     final isBoss = _wave % 5 == 0;
-    _waveFlavorText = _getFlavorText(_wave, isBoss);
-    _waveBannerTimer = isBoss ? 4.0 : 2.5;
+    _waveFlavorText = _realmTransitionTimer > 0
+        ? '⚡ ¡NUEVO REINO DESBLOQUEADO! ⚡'
+        : _getFlavorText(_wave, isBoss);
+    _waveBannerTimer = (isBoss || _realmTransitionTimer > 0) ? 4.0 : 2.5;
 
     _saldo += 1;
     widget.onSaldoChanged(_saldo);
@@ -588,17 +723,18 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
     if (_weapon == _WeaponType.smg && c.isHeld(ArcadeButton.a)) {
       _fireSmg();
     }
+    final map = _currentMap;
     if (c.isHeld(ArcadeButton.up)) {
       final nx = _posX + _dirX * _moveSpeed * dt;
       final ny = _posY + _dirY * _moveSpeed * dt;
-      if (_kMap[_posY.floor()][nx.floor()] == 0) _posX = nx;
-      if (_kMap[ny.floor()][_posX.floor()] == 0) _posY = ny;
+      if (map[_posY.floor()][nx.floor()] == 0) _posX = nx;
+      if (map[ny.floor()][_posX.floor()] == 0) _posY = ny;
     }
     if (c.isHeld(ArcadeButton.down)) {
       final nx = _posX - _dirX * _moveSpeed * dt;
       final ny = _posY - _dirY * _moveSpeed * dt;
-      if (_kMap[_posY.floor()][nx.floor()] == 0) _posX = nx;
-      if (_kMap[ny.floor()][_posX.floor()] == 0) _posY = ny;
+      if (map[_posY.floor()][nx.floor()] == 0) _posX = nx;
+      if (map[ny.floor()][_posX.floor()] == 0) _posY = ny;
     }
     if (c.isHeld(ArcadeButton.left)) _rotate(-_rotSpeed * dt);
     if (c.isHeld(ArcadeButton.right)) _rotate(_rotSpeed * dt);
@@ -616,13 +752,40 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
 
   void _updateEnemies(double dt) {
     final eBaseSpeed = 0.7 + _wave * 0.15;
+    final map = _currentMap;
     for (final e in _enemies) {
       if (!e.alive) continue;
+
+      // ── Troll: teleport logic ──────────────────────────────────────────────
+      if (e.type == _EnemyType.troll) {
+        e.teleportTimer -= dt;
+        if (e.teleportFlash > 0) e.teleportFlash = (e.teleportFlash - dt * 4.0).clamp(0, 1);
+        if (e.teleportTimer <= 0) {
+          // Teleport to a random valid location
+          int tries = 0;
+          while (tries++ < 200) {
+            final tx = 1.5 + _rng.nextDouble() * (_kMapW - 3);
+            final ty = 1.5 + _rng.nextDouble() * (_kMapH - 3);
+            final mx = tx.floor(), my = ty.floor();
+            if (mx < 0 || mx >= _kMapW || my < 0 || my >= _kMapH) continue;
+            if (map[my][mx] == 1) continue;
+            final ddx = tx - _posX, ddy = ty - _posY;
+            final dSq = ddx * ddx + ddy * ddy;
+            if (dSq < 4.0 || dSq > 64.0) continue; // not too close or too far
+            e.x = tx; e.y = ty;
+            e.teleportFlash = 1.0;
+            e.teleportTimer = 3.0 + _rng.nextDouble() * 3.0;
+            HapticFeedback.selectionClick();
+            break;
+          }
+        }
+      }
+
       final dx = _posX - e.x, dy = _posY - e.y;
       final dist = sqrt(dx * dx + dy * dy);
 
       if (e.attackRange == 0) {
-        // ── Demon: pure melee ──────────────────────────────────────────────
+        // ── Melee (demon / troll) ──────────────────────────────────────────
         if (dist < 0.5) {
           if (!_modGodMode) _health -= e.damage * dt;
           _hitFlash = (_hitFlash + dt * 3).clamp(0, 1);
@@ -653,18 +816,20 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
 
       const kER = 0.32; // enemy collision radius — prevents clipping into walls
       final spd = eBaseSpeed * e.speed;
+      if (dist < 0.01) continue;
       final nx = e.x + (dx / dist) * spd * dt;
       final ny = e.y + (dy / dist) * spd * dt;
-      final nxOk = _kMap[e.y.floor()][(nx - kER).floor()] == 0 &&
-                   _kMap[e.y.floor()][(nx + kER).floor()] == 0;
-      final nyOk = _kMap[(ny - kER).floor()][e.x.floor()] == 0 &&
-                   _kMap[(ny + kER).floor()][e.x.floor()] == 0;
+      final nxOk = map[e.y.floor()][(nx - kER).floor()] == 0 &&
+                   map[e.y.floor()][(nx + kER).floor()] == 0;
+      final nyOk = map[(ny - kER).floor()][e.x.floor()] == 0 &&
+                   map[(ny + kER).floor()][e.x.floor()] == 0;
       if (nxOk) e.x = nx;
       if (nyOk) e.y = ny;
     }
   }
 
   void _updateProjectiles(double dt) {
+    final map = _currentMap;
     for (final p in _projectiles) {
       if (!p.alive) continue;
       p.x += p.dx * p.speed * dt;
@@ -673,7 +838,7 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
 
       // Wall collision
       final mx = p.x.floor(), my = p.y.floor();
-      if (mx < 0 || mx >= _kMapW || my < 0 || my >= _kMapH || _kMap[my][mx] == 1) {
+      if (mx < 0 || mx >= _kMapW || my < 0 || my >= _kMapH || map[my][mx] == 1) {
         p.alive = false;
         continue;
       }
@@ -702,6 +867,7 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
     if (_hitFlash > 0) _hitFlash = (_hitFlash - dt * 2.5).clamp(0, 1);
     if (_shootFlash > 0) _shootFlash = (_shootFlash - dt * 10.0).clamp(0, 1);
     if (_waveBannerTimer > 0) _waveBannerTimer -= dt;
+    if (_realmTransitionTimer > 0) _realmTransitionTimer -= dt;
     if (_dimFlash > 0) _dimFlash = (_dimFlash - dt * 1.8).clamp(0, 1);
     // Atmospheric dim: random darkness pulses every 4-10 seconds
     _dimTimer -= dt;
@@ -777,6 +943,9 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
               relicActive: _relicActive,
               relicX: _relicX,
               relicY: _relicY,
+              currentMap: _currentMap,
+              realmIdx: _currentRealm,
+              megaAlive: _megaAlive,
             ),
           ),
         ),
@@ -791,41 +960,60 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
 
   Widget _buildWaveBanner() {
     final isBoss = _wave % 5 == 0;
+    final isRealm = _realmTransitionTimer > 0 && _waveBannerTimer > 0;
+    final borderColor = isRealm
+        ? const Color(0xFF00DDFF)
+        : isBoss ? const Color(0xFFFF6600) : const Color(0xFFCC2200);
+    final titleColor = isRealm
+        ? const Color(0xFF00FFDD)
+        : isBoss ? const Color(0xFFFF8800) : Colors.white;
+    final subColor = isRealm
+        ? const Color(0xFF0099BB)
+        : isBoss ? const Color(0xFFFF4400) : const Color(0xFFAA4422);
+
     return Center(
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
         decoration: BoxDecoration(
-          color: Colors.black.withOpacity(0.85),
-          border: Border.all(
-            color: isBoss ? const Color(0xFFFF6600) : const Color(0xFFCC2200),
-            width: isBoss ? 3 : 2,
-          ),
+          color: Colors.black.withOpacity(0.90),
+          border: Border.all(color: borderColor, width: isRealm ? 3 : (isBoss ? 3 : 2)),
           borderRadius: BorderRadius.circular(8),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(
-              isBoss ? '⚡ OLEADA JEFE $_wave ⚡' : '¡OLEADA $_wave!',
-              style: TextStyle(
-                color: isBoss ? const Color(0xFFFF8800) : Colors.white,
-                fontSize: isBoss ? 30 : 36,
-                fontWeight: FontWeight.bold,
-                fontFamily: 'monospace',
-                letterSpacing: 4,
-              ),
-            ),
-            if (_waveFlavorText.isNotEmpty) ...[
-              const SizedBox(height: 6),
+            if (isRealm) ...[
+              Text('🌀  NUEVO REINO  🌀',
+                style: const TextStyle(
+                  color: Color(0xFF00FFDD), fontSize: 24,
+                  fontWeight: FontWeight.bold, fontFamily: 'monospace', letterSpacing: 3)),
+              const SizedBox(height: 4),
+              Text(_kRealmNames[_currentRealm],
+                style: const TextStyle(
+                  color: Color(0xFFAAFFFF), fontSize: 18,
+                  fontWeight: FontWeight.bold, fontFamily: 'monospace', letterSpacing: 2)),
+              const SizedBox(height: 4),
+              Text(_kRealmTaglines[_currentRealm],
+                style: const TextStyle(
+                  color: Color(0xFF006688), fontSize: 11, fontFamily: 'monospace')),
+            ] else ...[
               Text(
-                _waveFlavorText,
+                isBoss ? '⚡ OLEADA JEFE $_wave ⚡' : '¡OLEADA $_wave!',
                 style: TextStyle(
-                  color: isBoss ? const Color(0xFFFF4400) : const Color(0xFFAA4422),
-                  fontSize: 12,
+                  color: titleColor,
+                  fontSize: isBoss ? 30 : 36,
+                  fontWeight: FontWeight.bold,
                   fontFamily: 'monospace',
-                  letterSpacing: 1,
+                  letterSpacing: 4,
                 ),
               ),
+              if (_waveFlavorText.isNotEmpty) ...[
+                const SizedBox(height: 6),
+                Text(
+                  _waveFlavorText,
+                  style: TextStyle(color: subColor, fontSize: 12, fontFamily: 'monospace', letterSpacing: 1),
+                ),
+              ],
             ],
           ],
         ),
@@ -1037,6 +1225,9 @@ class _RaycasterPainter extends CustomPainter {
   final bool isFiring, showHud;
   final bool relicActive;
   final double relicX, relicY;
+  final List<List<int>> currentMap;
+  final int realmIdx;
+  final bool megaAlive;
 
   const _RaycasterPainter({
     required this.posX, required this.posY,
@@ -1055,6 +1246,9 @@ class _RaycasterPainter extends CustomPainter {
     required this.time,
     required this.relicActive,
     required this.relicX, required this.relicY,
+    required this.currentMap,
+    required this.realmIdx,
+    required this.megaAlive,
   });
 
   @override
@@ -1076,7 +1270,7 @@ class _RaycasterPainter extends CustomPainter {
       _drawHud(canvas, size);
       _drawCrosshair(canvas, size);
       _drawWeapon(canvas, size, isFiring);
-      _drawRadar(canvas, size);
+      if (!megaAlive) _drawRadar(canvas, size);
     }
   }
 
@@ -1087,29 +1281,81 @@ class _RaycasterPainter extends CustomPainter {
     final cH = size.height / 2;
     final fY = size.height / 2;
 
-    // Ceiling — horizontal banding from pitch-black at top to dark stone near horizon
-    const ceilingBands = [
-      (0.00, 0.12, Color(0xFF030101)),
-      (0.12, 0.30, Color(0xFF080303)),
-      (0.30, 0.55, Color(0xFF0E0505)),
-      (0.55, 0.78, Color(0xFF140707)),
-      (0.78, 0.92, Color(0xFF1A0909)),
-      (0.92, 1.00, Color(0xFF1F0B0B)),
-    ];
+    // Realm-themed ceiling bands
+    final ceilingBands = switch (realmIdx) {
+      1 => const [ // Las Catacumbas — cold blue-grey
+        (0.00, 0.12, Color(0xFF010203)),
+        (0.12, 0.30, Color(0xFF020408)),
+        (0.30, 0.55, Color(0xFF04060E)),
+        (0.55, 0.78, Color(0xFF060914)),
+        (0.78, 0.92, Color(0xFF080C1A)),
+        (0.92, 1.00, Color(0xFF0A0F1F)),
+      ],
+      2 => const [ // El Abismo — deep purple
+        (0.00, 0.12, Color(0xFF010002)),
+        (0.12, 0.30, Color(0xFF030006)),
+        (0.30, 0.55, Color(0xFF06000D)),
+        (0.55, 0.78, Color(0xFF0A0014)),
+        (0.78, 0.92, Color(0xFF0E001A)),
+        (0.92, 1.00, Color(0xFF11001F)),
+      ],
+      3 => const [ // El Núcleo — hellfire orange
+        (0.00, 0.12, Color(0xFF020100)),
+        (0.12, 0.30, Color(0xFF060300)),
+        (0.30, 0.55, Color(0xFF0D0600)),
+        (0.55, 0.78, Color(0xFF140900)),
+        (0.78, 0.92, Color(0xFF1A0C00)),
+        (0.92, 1.00, Color(0xFF200E00)),
+      ],
+      _ => const [ // La Cripta — original red
+        (0.00, 0.12, Color(0xFF030101)),
+        (0.12, 0.30, Color(0xFF080303)),
+        (0.30, 0.55, Color(0xFF0E0505)),
+        (0.55, 0.78, Color(0xFF140707)),
+        (0.78, 0.92, Color(0xFF1A0909)),
+        (0.92, 1.00, Color(0xFF1F0B0B)),
+      ],
+    };
     for (final band in ceilingBands) {
       p.color = band.$3;
       canvas.drawRect(Rect.fromLTWH(0, cH * band.$1, size.width, cH * (band.$2 - band.$1) + 1), p);
     }
 
-    // Floor — stepped distance shading (distant=lighter, near camera=darker)
-    const floorBands = [
-      (0.00, 0.06, Color(0xFF190900)),
-      (0.06, 0.16, Color(0xFF150700)),
-      (0.16, 0.32, Color(0xFF110500)),
-      (0.32, 0.55, Color(0xFF0D0400)),
-      (0.55, 0.78, Color(0xFF0A0300)),
-      (0.78, 1.00, Color(0xFF070200)),
-    ];
+    // Realm-themed floor bands
+    final floorBands = switch (realmIdx) {
+      1 => const [ // Las Catacumbas — cold stone
+        (0.00, 0.06, Color(0xFF070915)),
+        (0.06, 0.16, Color(0xFF060811)),
+        (0.16, 0.32, Color(0xFF05060D)),
+        (0.32, 0.55, Color(0xFF04050A)),
+        (0.55, 0.78, Color(0xFF030407)),
+        (0.78, 1.00, Color(0xFF020304)),
+      ],
+      2 => const [ // El Abismo — dark void
+        (0.00, 0.06, Color(0xFF0D0015)),
+        (0.06, 0.16, Color(0xFF0A0011)),
+        (0.16, 0.32, Color(0xFF07000D)),
+        (0.32, 0.55, Color(0xFF05000A)),
+        (0.55, 0.78, Color(0xFF030007)),
+        (0.78, 1.00, Color(0xFF020004)),
+      ],
+      3 => const [ // El Núcleo — volcanic floor
+        (0.00, 0.06, Color(0xFF1A0500)),
+        (0.06, 0.16, Color(0xFF150400)),
+        (0.16, 0.32, Color(0xFF110300)),
+        (0.32, 0.55, Color(0xFF0D0200)),
+        (0.55, 0.78, Color(0xFF0A0200)),
+        (0.78, 1.00, Color(0xFF070100)),
+      ],
+      _ => const [ // La Cripta — original
+        (0.00, 0.06, Color(0xFF190900)),
+        (0.06, 0.16, Color(0xFF150700)),
+        (0.16, 0.32, Color(0xFF110500)),
+        (0.32, 0.55, Color(0xFF0D0400)),
+        (0.55, 0.78, Color(0xFF0A0300)),
+        (0.78, 1.00, Color(0xFF070200)),
+      ],
+    };
     for (final band in floorBands) {
       p.color = band.$3;
       canvas.drawRect(Rect.fromLTWH(0, fY + cH * band.$1, size.width, cH * (band.$2 - band.$1) + 1), p);
@@ -1196,7 +1442,7 @@ class _RaycasterPainter extends CustomPainter {
           sideDistY += deltaDistY; mapY += stepY; side = 1;
         }
         if (mapX < 0 || mapX >= _kMapW || mapY < 0 || mapY >= _kMapH) break;
-        if (_kMap[mapY][mapX] == 1) break;
+        if (currentMap[mapY][mapX] == 1) break;
       }
 
       final perpWallDist = side == 0 ? sideDistX - deltaDistX : sideDistY - deltaDistY;
@@ -1208,10 +1454,26 @@ class _RaycasterPainter extends CustomPainter {
       final deY = (halfH + wallHPx * 0.5).clamp(0.0, size.height);
       final sliceH = (deY - dsY).clamp(0.5, size.height);
 
-      // Stone block colour — N/S sides slightly darker
-      final int baseR = side == 0 ? 0x82 : 0x58;
-      final int baseG = side == 0 ? 0x1E : 0x12;
-      final int baseB = side == 0 ? 0x0A : 0x06;
+      // Stone block colour — realm-themed, N/S sides slightly darker
+      final int baseR, baseG, baseB;
+      switch (realmIdx) {
+        case 1: // Las Catacumbas — bluish-grey stone
+          baseR = side == 0 ? 0x44 : 0x2E;
+          baseG = side == 0 ? 0x44 : 0x2E;
+          baseB = side == 0 ? 0x66 : 0x44;
+        case 2: // El Abismo — volcanic purple
+          baseR = side == 0 ? 0x55 : 0x38;
+          baseG = side == 0 ? 0x10 : 0x08;
+          baseB = side == 0 ? 0x55 : 0x38;
+        case 3: // El Núcleo — hellfire orange-gold
+          baseR = side == 0 ? 0x88 : 0x5A;
+          baseG = side == 0 ? 0x38 : 0x22;
+          baseB = side == 0 ? 0x00 : 0x00;
+        default: // La Cripta — original reddish stone
+          baseR = side == 0 ? 0x82 : 0x58;
+          baseG = side == 0 ? 0x1E : 0x12;
+          baseB = side == 0 ? 0x0A : 0x06;
+      }
 
       // Distance fog
       final br = (1.0 / (1.0 + perpWallDist * 0.28)).clamp(0.08, 1.0);
@@ -1275,14 +1537,25 @@ class _RaycasterPainter extends CustomPainter {
       final spriteHPx = (size.height / transformY * e.spriteScale).clamp(2.0, size.height * 0.92);
       final spriteWCols = (spriteHPx / pxW).round().clamp(2, numCols);
 
-      // Cacodemon floats/bobs vertically (in pixels, smooth)
-      final bobOffsetPx = e.type == _EnemyType.cacodemon
-          ? sin(time * 2.8 + e.x * 1.3) * 3.0 * pxH
-          : 0.0;
+      // Vertical offsets per enemy type:
+      // - Cacodemon floats/bobs
+      // - Demon / skeleton / troll: shift DOWN so feet touch the ground
+      final double bobOffsetPx;
+      final double groundShiftPx;
+      if (e.type == _EnemyType.cacodemon) {
+        bobOffsetPx = sin(time * 2.8 + e.x * 1.3) * 3.0 * pxH;
+        groundShiftPx = 0.0;
+      } else {
+        bobOffsetPx = 0.0;
+        // Shift sprite down so the feet (bottom of 80% body) reach the sprite box bottom
+        // kPad=0.10 for demon; we use a general formula: shift = (1 - scale) / (2 * scale) * spriteHPx
+        final scale = e.spriteScale;
+        groundShiftPx = spriteHPx * (1.0 - scale) / (2.0 * scale);
+      }
 
       final drawStartX = screenX - spriteWCols ~/ 2;
-      final by = (halfH - spriteHPx * 0.5 + bobOffsetPx).clamp(0.0, size.height - 1.0);
-      final endY = (halfH + spriteHPx * 0.5 + bobOffsetPx).clamp(1.0, size.height);
+      final by = (halfH - spriteHPx * 0.5 + bobOffsetPx + groundShiftPx).clamp(0.0, size.height - 1.0);
+      final endY = (halfH + spriteHPx * 0.5 + bobOffsetPx + groundShiftPx).clamp(1.0, size.height);
       final sh = endY - by;
       final v = sh / 20.0; // vertical unit within sprite
       final flash = e.hitFlash;
@@ -1296,11 +1569,13 @@ class _RaycasterPainter extends CustomPainter {
 
         switch (e.type) {
           case _EnemyType.demon:
-            _drawDemonColumn(canvas, sp, sx, pxW, by, sh, v, frac, e.hp, flash, e.isMega);
+            _drawDemonColumn(canvas, sp, sx, pxW, by, sh, v, frac, e.hp, flash, e.isMega, time);
           case _EnemyType.cacodemon:
             _drawCacoDemonColumn(canvas, sp, sx, pxW, by, sh, v, frac, e.hp, flash);
           case _EnemyType.skeleton:
-            _drawSkeletonColumn(canvas, sp, sx, pxW, by, sh, v, frac, e.hp, flash);
+            _drawSkeletonColumn(canvas, sp, sx, pxW, by, sh, v, frac, e.hp, flash, time);
+          case _EnemyType.troll:
+            _drawTrollColumn(canvas, sp, sx, pxW, by, sh, v, frac, e.hp, flash, e.teleportFlash, time);
         }
       }
 
@@ -1364,18 +1639,19 @@ class _RaycasterPainter extends CustomPainter {
 
   void _drawDemonColumn(Canvas canvas, Paint sp, int sx, double pxW,
       double by, double sh, double v, double frac, double hp, double flash,
-      [bool isMega = false]) {
+      [bool isMega = false, double time = 0]) {
     if (isMega) {
       _drawMegaDemonColumn(canvas, sp, sx, pxW, by, sh, v, frac, hp, flash);
       return;
     }
-    // 20 % shorter: demon occupies center 80 % of the column height (10 % gap top + bottom)
+    // 20% shorter: demon occupies center 80% of the column height
     const kPad = 0.10;
-    if (v < 0.01) return; // degenerate sprite only
-    // Compressed helpers — all row offsets and heights are expressed in these
-    // units so the demon fills exactly 80 % of the column
+    if (v < 0.01) return;
     double vy(double row) => by + v * (kPad * 20 + row * 0.80);
     double vh(double rows) => v * rows * 0.80;
+
+    // Walk animation — legs and arms swing based on time
+    final walkCycle = sin(time * 5.5); // -1 to 1
 
     final Color body, detail, eye, mouth;
     if (hp >= 3) {
@@ -1469,33 +1745,34 @@ class _RaycasterPainter extends CustomPainter {
       }
     }
 
-    // ── Arms — wide reach, clawed tips (frac 2-18 % and 82-98 %, rows 5-14) ──
-    if ((frac >= 0.02 && frac <= 0.18) || (frac >= 0.82 && frac <= 0.98)) {
-      sp.color = detail;
-      canvas.drawRect(Rect.fromLTWH(x, vy(5), pxW, vh(9)), sp);
-      // Arm outer highlight
-      if ((frac >= 0.02 && frac <= 0.10) || (frac >= 0.90 && frac <= 0.98)) {
-        sp.color = Color.fromARGB(255, (body.red * 1.55).clamp(0,255).round(), 0, 0);
-        canvas.drawRect(Rect.fromLTWH(x, vy(5.5), pxW, vh(4)), sp);
-      }
-      // Claws — bright spikes at arm bottom (rows 12-14)
-      sp.color = Colors.white.withOpacity(0.80);
-      canvas.drawRect(Rect.fromLTWH(x, vy(12.5), pxW, vh(1.5)), sp);
-    }
-
     // ── Arm-body junction shadow ──────────────────────────────────────────────
     if ((frac >= 0.16 && frac <= 0.20) || (frac >= 0.80 && frac <= 0.84)) {
       sp.color = Color.fromARGB(255, (body.red * 0.12).clamp(0,255).round(), 0, 0);
       canvas.drawRect(Rect.fromLTWH(x, vy(5), pxW, vh(9)), sp);
     }
 
-    // ── Legs (frac 26-42 % and 58-74 %, rows 14-20) ──────────────────────────
+    // ── Legs with walking animation ───────────────────────────────────────────
     if ((frac >= 0.26 && frac <= 0.42) || (frac >= 0.58 && frac <= 0.74)) {
+      final isLeft = frac <= 0.50;
+      final legOff  = (isLeft ? walkCycle : -walkCycle) * vh(1.8);
       sp.color = body;
-      canvas.drawRect(Rect.fromLTWH(x, vy(14), pxW, vh(6)), sp);
+      canvas.drawRect(Rect.fromLTWH(x, vy(14) + legOff, pxW, vh(6)), sp);
       // Knee cap highlight
-      sp.color = Color.fromARGB(255, (body.red * 1.40).clamp(0,255).round(), 0, 0);
-      canvas.drawRect(Rect.fromLTWH(x, vy(15.5), pxW, vh(1.0)), sp);
+      sp.color = Color.fromARGB(255, (body.red * 1.40).clamp(0, 255).round(), 0, 0);
+      canvas.drawRect(Rect.fromLTWH(x, vy(15.5) + legOff, pxW, vh(1.0)), sp);
+    }
+    // Arms swing opposite to legs
+    if ((frac >= 0.02 && frac <= 0.18) || (frac >= 0.82 && frac <= 0.98)) {
+      final isLeft = frac <= 0.50;
+      final armOff = (isLeft ? -walkCycle : walkCycle) * vh(1.5);
+      sp.color = detail;
+      canvas.drawRect(Rect.fromLTWH(x, vy(5) + armOff, pxW, vh(9)), sp);
+      if ((frac >= 0.02 && frac <= 0.10) || (frac >= 0.90 && frac <= 0.98)) {
+        sp.color = Color.fromARGB(255, (body.red * 1.55).clamp(0,255).round(), 0, 0);
+        canvas.drawRect(Rect.fromLTWH(x, vy(5.5) + armOff, pxW, vh(4)), sp);
+      }
+      sp.color = Colors.white.withOpacity(0.80);
+      canvas.drawRect(Rect.fromLTWH(x, vy(12.5) + armOff, pxW, vh(1.5)), sp);
     }
   }
 
@@ -1757,8 +2034,10 @@ class _RaycasterPainter extends CustomPainter {
   // ─── Skeleton ──────────────────────────────────────────────────────────────
 
   void _drawSkeletonColumn(Canvas canvas, Paint sp, int sx, double pxW,
-      double by, double sh, double v, double frac, double hp, double flash) {
+      double by, double sh, double v, double frac, double hp, double flash,
+      [double time = 0]) {
     final x = sx * pxW;
+    final walkCycle = sin(time * 4.5); // skeleton walks slower/jerkier
     final bone = Color.fromARGB(255, (0xE8 * (1 - flash) + 255 * flash).round(),
         (0xE4 * (1 - flash) + 255 * flash).round(), (0xCC * (1 - flash)).round());
     const dark = Color(0xFF111111);
@@ -1814,10 +2093,12 @@ class _RaycasterPainter extends CustomPainter {
       canvas.drawRect(Rect.fromLTWH(x, by + v * 5.5, pxW, v * 1), sp);
     }
 
-    // Arms: rows 6-12, cols 12-26% and 74-88%
+    // Arms with walking animation: rows 6-12
     if ((frac >= 0.12 && frac <= 0.26) || (frac >= 0.74 && frac <= 0.88)) {
+      final isLeft = frac <= 0.50;
+      final armOff = (isLeft ? -walkCycle : walkCycle) * v * 2.0;
       sp.color = bone;
-      canvas.drawRect(Rect.fromLTWH(x, by + v * 6, pxW, v * 6), sp);
+      canvas.drawRect(Rect.fromLTWH(x, by + v * 6 + armOff, pxW, v * 6), sp);
     }
 
     // Pelvis: rows 14-15.5, cols 28-72%
@@ -1826,10 +2107,117 @@ class _RaycasterPainter extends CustomPainter {
       canvas.drawRect(Rect.fromLTWH(x, by + v * 14, pxW, v * 1.5), sp);
     }
 
-    // Legs: rows 15.5-20, cols 32-46% and 54-68%
+    // Legs with walking animation: rows 15.5-20
     if ((frac >= 0.32 && frac <= 0.46) || (frac >= 0.54 && frac <= 0.68)) {
+      final isLeft = frac <= 0.50;
+      final legOff = (isLeft ? walkCycle : -walkCycle) * v * 1.8;
       sp.color = bone;
-      canvas.drawRect(Rect.fromLTWH(x, by + v * 15.5, pxW, v * 4.5), sp);
+      canvas.drawRect(Rect.fromLTWH(x, by + v * 15.5 + legOff, pxW, v * 4.5), sp);
+    }
+  }
+
+  // ─── Troll (teleporting sneaky berserker) ─────────────────────────────────────
+  // Squat, wide, hunched green-grey figure with beady red eyes. Flickers when
+  // recently teleported (teleportFlash > 0).
+
+  void _drawTrollColumn(Canvas canvas, Paint sp, int sx, double pxW,
+      double by, double sh, double v, double frac, double hp,
+      double flash, double teleportFlash, double time) {
+    if (v < 0.01) return;
+    final x = sx * pxW;
+
+    // Flicker effect after teleport — skip some columns randomly
+    if (teleportFlash > 0.1) {
+      // Use deterministic "random" based on frac+time to create shimmer
+      final shimmer = ((frac * 37.3 + time * 20.0) % 1.0);
+      if (shimmer < teleportFlash * 0.6) return;
+    }
+
+    // Color palette: mossy green skin, dark brown shadows, beady red eyes
+    final skinR = (0x44 + (255 - 0x44) * flash).round().clamp(0, 255);
+    final skinG = (0x6A * (1.0 - flash * 0.6)).round().clamp(0, 255);
+    final skin   = Color.fromARGB(255, skinR, skinG, 0x22);
+    final shadow = const Color(0xFF1A2A08);
+    final eyeCol = hp > 6
+        ? Color.fromARGB(255, (0xFF * (1 - flash * 0.3)).round(), 0, 0)
+        : Colors.white; // turns white when near death
+
+    // Walk cycle
+    final walkCycle = sin(time * 7.0); // trolls scurry fast
+
+    // ── Humped back / no-neck head (frac 20-80%, rows 0-5) ───────────────────
+    if (frac >= 0.20 && frac <= 0.80) {
+      sp.color = skin;
+      canvas.drawRect(Rect.fromLTWH(x, by + v * 0.5, pxW, v * 4.5), sp);
+      // Dark hump shadow at top
+      sp.color = shadow;
+      canvas.drawRect(Rect.fromLTWH(x, by + v * 0.5, pxW, v * 0.8), sp);
+    }
+
+    // ── Beady eyes (frac 32-42% and 58-68%, rows 1.2-2.5) ───────────────────
+    if ((frac >= 0.32 && frac <= 0.42) || (frac >= 0.58 && frac <= 0.68)) {
+      sp.color = eyeCol;
+      canvas.drawRect(Rect.fromLTWH(x, by + v * 1.2, pxW, v * 1.3), sp);
+      sp.color = Colors.white.withOpacity(0.7);
+      canvas.drawRect(Rect.fromLTWH(x, by + v * 1.3, pxW, v * 0.4), sp);
+    }
+
+    // ── Wide flat nose (frac 44-56%, rows 2.5-3.5) ───────────────────────────
+    if (frac >= 0.44 && frac <= 0.56) {
+      sp.color = Color.fromARGB(255, (skinR * 0.7).round(), (skinG * 0.5).round(), 0);
+      canvas.drawRect(Rect.fromLTWH(x, by + v * 2.5, pxW, v * 1.0), sp);
+    }
+
+    // ── Tusks (frac 30-40% and 60-70%, rows 3.8-5) ───────────────────────────
+    if ((frac >= 0.30 && frac <= 0.38) || (frac >= 0.62 && frac <= 0.70)) {
+      sp.color = const Color(0xFFDDCC88);
+      canvas.drawRect(Rect.fromLTWH(x, by + v * 3.8, pxW, v * 1.2), sp);
+    }
+
+    // ── Wide hunched body (frac 8-92%, rows 4-14) ────────────────────────────
+    if (frac >= 0.08 && frac <= 0.92) {
+      sp.color = skin;
+      canvas.drawRect(Rect.fromLTWH(x, by + v * 4.0, pxW, v * 10.0), sp);
+    }
+    // Hunched shoulder mounds
+    if ((frac >= 0.10 && frac <= 0.24) || (frac >= 0.76 && frac <= 0.90)) {
+      sp.color = Color.fromARGB(255, (skinR * 1.3).clamp(0,255).round(), (skinG * 1.3).clamp(0,255).round(), 0);
+      canvas.drawRect(Rect.fromLTWH(x, by + v * 3.5, pxW, v * 4.0), sp);
+    }
+    // Belly folds
+    if (frac >= 0.35 && frac <= 0.65) {
+      for (int f = 0; f < 3; f++) {
+        sp.color = f.isEven ? shadow : skin;
+        canvas.drawRect(Rect.fromLTWH(x, by + v * (6.5 + f * 2.0), pxW, v * 0.8), sp);
+      }
+    }
+
+    // ── Short stubby arms (frac 0-8% and 92-100%, rows 4-13) ─────────────────
+    if ((frac >= 0.00 && frac <= 0.08) || (frac >= 0.92 && frac <= 1.00)) {
+      final isLeft = frac <= 0.50;
+      final armOff = (isLeft ? -walkCycle : walkCycle) * v * 1.2;
+      sp.color = shadow;
+      canvas.drawRect(Rect.fromLTWH(x, by + v * 4.0 + armOff, pxW, v * 9.0), sp);
+      // Claw tips
+      sp.color = const Color(0xFFCCCC88);
+      canvas.drawRect(Rect.fromLTWH(x, by + v * 12.0 + armOff, pxW, v * 1.5), sp);
+    }
+
+    // ── Stumpy legs (frac 25-42% and 58-75%, rows 14-20) ─────────────────────
+    if ((frac >= 0.25 && frac <= 0.42) || (frac >= 0.58 && frac <= 0.75)) {
+      final isLeft = frac <= 0.50;
+      final legOff = (isLeft ? walkCycle : -walkCycle) * v * 1.4;
+      sp.color = skin;
+      canvas.drawRect(Rect.fromLTWH(x, by + v * 14 + legOff, pxW, v * 6.0), sp);
+      // Thick knee
+      sp.color = Color.fromARGB(255, (skinR * 1.4).clamp(0,255).round(), (skinG * 1.1).clamp(0,255).round(), 0);
+      canvas.drawRect(Rect.fromLTWH(x, by + v * 15.5 + legOff, pxW, v * 1.2), sp);
+    }
+
+    // ── Aura shimmer when near teleport cooldown ──────────────────────────────
+    if (teleportFlash > 0) {
+      sp.color = Color.fromARGB((teleportFlash * 80).round(), 0x88, 0xFF, 0x44);
+      canvas.drawRect(Rect.fromLTWH(x, by, pxW, sh), sp);
     }
   }
 
@@ -1876,6 +2264,18 @@ class _RaycasterPainter extends CustomPainter {
   // ── Screen effects ──────────────────────────────────────────────────────────
 
   void _drawScreenFx(Canvas canvas, Size size) {
+    // Mega-demon presence: heavy persistent darkness + pulsing red edges
+    if (megaAlive) {
+      canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height),
+        Paint()..color = const Color(0xFF080004).withOpacity(0.45)..isAntiAlias = false);
+      // Vignette pulse
+      final megaPulse = (0.3 + 0.15 * (time * 1.5 % 1.0)).clamp(0.0, 0.55);
+      final vp = Paint()..shader = RadialGradient(
+        center: Alignment.center, radius: 0.7,
+        colors: [const Color(0x00000000), Color.fromARGB((megaPulse * 200).round(), 0x44, 0x00, 0x22)],
+      ).createShader(Rect.fromLTWH(0, 0, size.width, size.height));
+      canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), vp);
+    }
     // Atmospheric darkness pulse (scary random dim)
     if (dimFlash > 0) {
       canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height),
@@ -1932,6 +2332,12 @@ class _RaycasterPainter extends CustomPainter {
     if (relicActive) {
       _hudText(canvas, '✨ RELICARIO', barX + 4, barY + 16,
           color: const Color(0xFF44FF88), size: 7);
+    }
+
+    // ── Mega-demon active warning ─────────────────────────────────────────────
+    if (megaAlive) {
+      _hudText(canvas, '☠ JEFE — RADAR INACTIVO', barX + 4, barY + 16,
+          color: const Color(0xFFFF00AA), size: 7);
     }
 
     // ── Kill counter ──────────────────────────────────────────────────────────
@@ -2042,7 +2448,10 @@ class _RaycasterPainter extends CustomPainter {
       final ry = cy + dy * scale;
       if ((rx - cx) * (rx - cx) + (ry - cy) * (ry - cy) > (radarR - 3) * (radarR - 3)) continue;
 
-      if (e.isMega) {
+      if (e.type == _EnemyType.troll) {
+        // Troll is sneaky — does NOT appear on radar
+        continue;
+      } else if (e.isMega) {
         // MEGA-DEMON: large pulsing void-purple skull-diamond with crown
         p.color = const Color(0xFF8800FF);
         final megaPath = Path()
