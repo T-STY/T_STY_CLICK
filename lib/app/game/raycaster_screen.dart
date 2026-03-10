@@ -612,11 +612,16 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
         if (dist <= e.minEngageRange) continue;
       }
 
+      const kER = 0.32; // enemy collision radius — prevents clipping into walls
       final spd = eBaseSpeed * e.speed;
       final nx = e.x + (dx / dist) * spd * dt;
       final ny = e.y + (dy / dist) * spd * dt;
-      if (_kMap[e.y.floor()][nx.floor()] == 0) e.x = nx;
-      if (_kMap[ny.floor()][e.x.floor()] == 0) e.y = ny;
+      final nxOk = _kMap[e.y.floor()][(nx - kER).floor()] == 0 &&
+                   _kMap[e.y.floor()][(nx + kER).floor()] == 0;
+      final nyOk = _kMap[(ny - kER).floor()][e.x.floor()] == 0 &&
+                   _kMap[(ny + kER).floor()][e.x.floor()] == 0;
+      if (nxOk) e.x = nx;
+      if (nyOk) e.y = ny;
     }
   }
 

@@ -627,6 +627,7 @@ class _TetrisScreenState extends State<TetrisScreen> {
             alignment: Alignment.center,
             child: Text(
               label,
+              textAlign: TextAlign.center,
               style: const TextStyle(
                 color: Colors.white,
                 fontSize: 15,
@@ -806,7 +807,9 @@ class _TetrisPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     // ── Layout calculations ──────────────────────────────────────────────────
-    final cellSize = (size.width * 0.60 / 10).floor().toDouble();
+    final cellSizeW = (size.width * 0.60 / 10).floor().toDouble();
+    final cellSizeH = (size.height * 0.92 / 20).floor().toDouble();
+    final cellSize = min(cellSizeW, cellSizeH);
     final boardW = cellSize * 10;
     final boardH = cellSize * 20;
     const boardX = 0.0;

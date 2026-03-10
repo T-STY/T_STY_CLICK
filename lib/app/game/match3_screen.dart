@@ -414,7 +414,7 @@ class _Match3ScreenState extends State<Match3Screen> with SingleTickerProviderSt
         LayoutBuilder(builder: (ctx, constraints) {
           final totalW = constraints.maxWidth;
           final totalH = constraints.maxHeight;
-          final headerH = 64.0 + MediaQuery.of(ctx).padding.top;
+          const headerH = 56.0;
           const footerH = 72.0;
           const hPad = 8.0;
           final boardH = totalH - headerH - footerH;
@@ -543,7 +543,7 @@ class _Match3ScreenState extends State<Match3Screen> with SingleTickerProviderSt
         boxShadow: const [BoxShadow(color: Colors.black54, blurRadius: 6, offset: Offset(0, 3))],
       ),
       child: Padding(
-          padding: EdgeInsets.fromLTRB(10, MediaQuery.of(context).padding.top + 4, 10, 6),
+          padding: const EdgeInsets.fromLTRB(10, 4, 10, 4),
           child: Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
             // Left: circular timer
             SizedBox(

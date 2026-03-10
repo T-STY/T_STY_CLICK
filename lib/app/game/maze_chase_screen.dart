@@ -544,6 +544,22 @@ class _MazeChasScreenState extends State<MazeChasScreen> {
   Widget build(BuildContext context) {
     return Stack(
       children: [
+        // Deep midnight purple spooky background gradient
+        Positioned.fill(
+          child: Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Color(0xFF0A0014), // near-black deep purple at top
+                  Color(0xFF110022), // midnight purple
+                  Color(0xFF0D001A), // dark indigo base
+                ],
+              ),
+            ),
+          ),
+        ),
         LayoutBuilder(
           builder: (context, constraints) {
             return CustomPaint(
@@ -577,130 +593,332 @@ class _MazeChasScreenState extends State<MazeChasScreen> {
   // ── Start overlay ──────────────────────────────────────────────────────────
 
   Widget _buildStartOverlay() {
-  return Positioned.fill(
-    child: Container(
-      color: const Color(0xEE000018),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Text('COMECOCOS',
-            style: TextStyle(
-              color: Color(0xFFFFFF00),
-              fontSize: 26,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 4,
-            )),
-          const SizedBox(height: 4),
-          const Text('● ● ● ● ● ● ● ● ●',
-            style: TextStyle(color: Color(0xFFFFFF00), fontSize: 8, letterSpacing: 4)),
-          const SizedBox(height: 20),
-          Container(
-            margin: const EdgeInsets.symmetric(horizontal: 28),
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              border: Border.all(color: const Color(0xFF0066FF), width: 2),
-              borderRadius: BorderRadius.circular(4),
-              color: const Color(0xFF000033),
-            ),
-            child: const Column(children: [
-              Text('D-pad: mover por el laberinto',
-                style: TextStyle(color: Colors.white70, fontSize: 12)),
-              SizedBox(height: 6),
-              Text('Come todos los puntos para pasar de nivel',
-                style: TextStyle(color: Colors.white54, fontSize: 11),
-                textAlign: TextAlign.center),
-              SizedBox(height: 6),
-              Text('Pastilla grande → ¡Fantasmas comestibles!',
-                style: TextStyle(color: Color(0xFF00CCFF), fontSize: 11),
-                textAlign: TextAlign.center),
-              SizedBox(height: 8),
-              Text('+1 PTO REAL POR NIVEL',
-                style: TextStyle(color: Color(0xFFFFFF00), fontSize: 12, fontWeight: FontWeight.bold)),
-            ]),
+    return Positioned.fill(
+      child: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color(0xF0000020), Color(0xF5000814), Color(0xF0001030)],
           ),
-          const SizedBox(height: 28),
-          const Text('👻  Cuidado con los fantasmas  👻',
-            style: TextStyle(color: Color(0xFFFF6699), fontSize: 12)),
-          const SizedBox(height: 16),
-          const Text('Presiona A o START para jugar',
-            style: TextStyle(color: Color(0xFF4444AA), fontSize: 12)),
-        ],
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            // Neon title with double shadow glow
+            Text(
+              'COMECOCOS',
+              style: TextStyle(
+                color: const Color(0xFFFFFF00),
+                fontSize: 28,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 5,
+                shadows: [
+                  Shadow(color: const Color(0xFFFFFF00).withOpacity(0.9), blurRadius: 16),
+                  Shadow(color: const Color(0xFFFFAA00).withOpacity(0.6), blurRadius: 32),
+                ],
+              ),
+            ),
+            const SizedBox(height: 6),
+            // Pellet dots row
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: List.generate(9, (i) => Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 3),
+                child: Container(
+                  width: 7,
+                  height: 7,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: const Color(0xFFFFFFAA),
+                    boxShadow: [
+                      BoxShadow(color: const Color(0xFFFFFF00).withOpacity(0.8), blurRadius: 6),
+                    ],
+                  ),
+                ),
+              )),
+            ),
+            const SizedBox(height: 22),
+            // Instructions card
+            Container(
+              margin: const EdgeInsets.symmetric(horizontal: 24),
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                border: Border.all(color: const Color(0xFF0080FF), width: 1.5),
+                borderRadius: BorderRadius.circular(12),
+                color: const Color(0xFF000830).withOpacity(0.95),
+                boxShadow: [
+                  BoxShadow(color: const Color(0xFF0080FF).withOpacity(0.3), blurRadius: 16),
+                ],
+              ),
+              child: Column(children: [
+                _instrRow('D-pad', 'Mover por el laberinto', const Color(0xFF00CCFF)),
+                const SizedBox(height: 8),
+                _instrRow('', 'Come todos los puntos para pasar de nivel', Colors.white70),
+                const SizedBox(height: 8),
+                _instrRow('Pastilla', '¡Fantasmas comestibles!', const Color(0xFF00FFAA)),
+                const SizedBox(height: 10),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF003300),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: const Color(0xFF00FF66), width: 1),
+                  ),
+                  child: const Text(
+                    '+1 PTO REAL POR NIVEL',
+                    style: TextStyle(
+                      color: Color(0xFF00FF88),
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 1,
+                    ),
+                  ),
+                ),
+              ]),
+            ),
+            const SizedBox(height: 24),
+            // Ghost warning row
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                _miniGhostIcon(const Color(0xFFFF4444)),
+                const SizedBox(width: 6),
+                const Text(
+                  'Cuidado con los fantasmas',
+                  style: TextStyle(color: Color(0xFFFF8888), fontSize: 12),
+                ),
+                const SizedBox(width: 6),
+                _miniGhostIcon(const Color(0xFFFF69B4)),
+              ],
+            ),
+            const SizedBox(height: 18),
+            // Press to start — pulsing style via blink
+            Text(
+              'Presiona A o START para jugar',
+              style: TextStyle(
+                color: const Color(0xFF6699FF),
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                shadows: [
+                  Shadow(color: const Color(0xFF0066FF).withOpacity(0.7), blurRadius: 10),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
-    ),
-  );
-}
+    );
+  }
+
+  Widget _instrRow(String label, String text, Color color) {
+    return Row(
+      children: [
+        if (label.isNotEmpty) ...[
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.15),
+              borderRadius: BorderRadius.circular(4),
+              border: Border.all(color: color.withOpacity(0.5), width: 1),
+            ),
+            child: Text(label, style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.bold)),
+          ),
+          const SizedBox(width: 8),
+        ],
+        Expanded(
+          child: Text(text, style: TextStyle(color: color, fontSize: 11), textAlign: TextAlign.center),
+        ),
+      ],
+    );
+  }
+
+  Widget _miniGhostIcon(Color color) {
+    return Container(
+      width: 14,
+      height: 16,
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(7)),
+        boxShadow: [BoxShadow(color: color.withOpacity(0.6), blurRadius: 6)],
+      ),
+    );
+  }
 
   // ── Game over overlay ──────────────────────────────────────────────────────
 
   Widget _buildGameOverOverlay() {
-  return Positioned.fill(
-    child: Container(
-      color: const Color(0xEE000018),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Text('👻', style: TextStyle(fontSize: 52)),
-          const SizedBox(height: 8),
-          const Text('ATRAPADO',
-            style: TextStyle(
-              color: Color(0xFFFF2266),
-              fontSize: 32,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 4,
-            )),
-          const SizedBox(height: 4),
-          const Text('Un fantasma te ha engullido',
-            style: TextStyle(color: Color(0xFF884466), fontSize: 11)),
-          const SizedBox(height: 20),
-          Text('Puntuación: $_score',
-            style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 4),
-          Text('Récord: $_hiScore',
-            style: const TextStyle(color: Color(0xFFFFFF00), fontSize: 14)),
-          const SizedBox(height: 28),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 32),
-            child: SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: _restart,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF0044BB),
-                  foregroundColor: Colors.white,
-                  shape: const StadiumBorder()),
-                child: const Text('Nueva Partida', style: TextStyle(fontWeight: FontWeight.bold)),
+    return Positioned.fill(
+      child: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              const Color(0xF2200010),
+              const Color(0xF5100005),
+              const Color(0xF2000010),
+            ],
+          ),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            // Large ghost emoji with glow container
+            Container(
+              width: 72,
+              height: 72,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(color: const Color(0xFFFF2266).withOpacity(0.5), blurRadius: 24),
+                ],
+              ),
+              child: const Center(child: Text('👻', style: TextStyle(fontSize: 52))),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              'ATRAPADO',
+              style: TextStyle(
+                color: const Color(0xFFFF2266),
+                fontSize: 34,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 5,
+                shadows: [
+                  Shadow(color: const Color(0xFFFF0044).withOpacity(0.9), blurRadius: 20),
+                  Shadow(color: const Color(0xFFFF0044).withOpacity(0.5), blurRadius: 40),
+                ],
               ),
             ),
-          ),
-        ],
+            const SizedBox(height: 4),
+            const Text(
+              'Un fantasma te ha engullido',
+              style: TextStyle(color: Color(0xFFAA5577), fontSize: 11),
+            ),
+            const SizedBox(height: 22),
+            // Score card
+            Container(
+              margin: const EdgeInsets.symmetric(horizontal: 32),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+              decoration: BoxDecoration(
+                border: Border.all(color: const Color(0xFF550022), width: 1.5),
+                borderRadius: BorderRadius.circular(12),
+                color: const Color(0xFF180010).withOpacity(0.9),
+                boxShadow: [
+                  BoxShadow(color: const Color(0xFFFF0066).withOpacity(0.15), blurRadius: 16),
+                ],
+              ),
+              child: Column(children: [
+                Text(
+                  '$_score',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 36,
+                    fontWeight: FontWeight.bold,
+                    shadows: [Shadow(color: Colors.white.withOpacity(0.3), blurRadius: 8)],
+                  ),
+                ),
+                const Text('PUNTOS', style: TextStyle(color: Color(0xFF886688), fontSize: 11, letterSpacing: 2)),
+                const SizedBox(height: 8),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Text('RÉCORD  ', style: TextStyle(color: Color(0xFF886688), fontSize: 12)),
+                    Text(
+                      '$_hiScore',
+                      style: TextStyle(
+                        color: const Color(0xFFFFFF00),
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        shadows: [Shadow(color: const Color(0xFFFFFF00).withOpacity(0.6), blurRadius: 8)],
+                      ),
+                    ),
+                  ],
+                ),
+              ]),
+            ),
+            const SizedBox(height: 24),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 32),
+              child: SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: _restart,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF0044BB),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    shadowColor: const Color(0xFF0080FF),
+                    elevation: 8,
+                  ),
+                  child: const Text(
+                    'Nueva Partida',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, letterSpacing: 1),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
-    ),
-  );
-}
+    );
+  }
 
   // ── Level complete overlay ─────────────────────────────────────────────────
 
   Widget _buildLevelCompleteOverlay() {
     return Positioned.fill(
       child: Container(
-        color: Colors.black.withOpacity(0.80),
+        decoration: BoxDecoration(
+          gradient: RadialGradient(
+            center: Alignment.center,
+            radius: 0.9,
+            colors: [
+              const Color(0xE5003322),
+              Colors.black.withOpacity(0.92),
+            ],
+          ),
+        ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Text(
-              '¡NIVEL $_level COMPLETADO!',
-              style: const TextStyle(
-                color: Color(0xFFFFFF00),
-                fontSize: 26,
+              '¡NIVEL $_level!',
+              style: TextStyle(
+                color: const Color(0xFF00FF88),
+                fontSize: 14,
                 fontWeight: FontWeight.bold,
-                letterSpacing: 2,
+                letterSpacing: 3,
+                shadows: [Shadow(color: const Color(0xFF00FF88).withOpacity(0.8), blurRadius: 16)],
               ),
-              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'COMPLETADO',
+              style: TextStyle(
+                color: const Color(0xFFFFFF00),
+                fontSize: 30,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 4,
+                shadows: [
+                  Shadow(color: const Color(0xFFFFFF00).withOpacity(0.9), blurRadius: 20),
+                  Shadow(color: const Color(0xFFFFAA00).withOpacity(0.5), blurRadius: 40),
+                ],
+              ),
             ),
             const SizedBox(height: 16),
-            const Text(
-              '+1 punto añadido',
-              style: TextStyle(color: Colors.white70, fontSize: 15),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: BoxDecoration(
+                color: const Color(0xFF002211),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0xFF00FF88).withOpacity(0.5), width: 1),
+              ),
+              child: const Text(
+                '+1 pto real añadido',
+                style: TextStyle(color: Color(0xFF00FF88), fontSize: 14, fontWeight: FontWeight.w500),
+              ),
             ),
           ],
         ),
@@ -710,15 +928,32 @@ class _MazeChasScreenState extends State<MazeChasScreen> {
 
   Widget _buildPauseOverlay() => Positioned.fill(
     child: Container(
-      color: const Color(0xCC000000),
-      child: const Column(
+      decoration: BoxDecoration(
+        color: const Color(0xCC000020),
+        backgroundBlendMode: BlendMode.darken,
+      ),
+      child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Text('⏸', style: TextStyle(fontSize: 48)),
-          SizedBox(height: 8),
-          Text('PAUSA', style: TextStyle(color: Color(0xFFFFFF00), fontSize: 28, fontWeight: FontWeight.bold, letterSpacing: 6)),
-          SizedBox(height: 16),
-          Text('START para continuar', style: TextStyle(color: Color(0xFF666600), fontSize: 12)),
+          const Text('⏸', style: TextStyle(fontSize: 48)),
+          const SizedBox(height: 10),
+          Text(
+            'PAUSA',
+            style: TextStyle(
+              color: const Color(0xFFFFFF00),
+              fontSize: 30,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 8,
+              shadows: [
+                Shadow(color: const Color(0xFFFFFF00).withOpacity(0.7), blurRadius: 16),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          const Text(
+            'START para continuar',
+            style: TextStyle(color: Color(0xFF888800), fontSize: 12, letterSpacing: 1),
+          ),
         ],
       ),
     ),
@@ -755,11 +990,51 @@ class _MazePainter extends CustomPainter {
     final offsetX = ((size.width - cs * _kMazeCols) / 2).floorToDouble();
     final offsetY = ((size.height - cs * _kMazeRows) / 2).floorToDouble();
 
-    final paint = Paint()..isAntiAlias = false;
+    // Background — deep midnight purple
+    final bgPaint = Paint()
+      ..shader = const LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [Color(0xFF0A0014), Color(0xFF110022), Color(0xFF0D001A)],
+      ).createShader(Rect.fromLTWH(0, 0, size.width, size.height));
+    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), bgPaint);
 
-    // Background
-    paint.color = const Color(0xFF000000);
-    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), paint);
+    // Subtle corner vignette
+    final vignettePaint = Paint()
+      ..shader = RadialGradient(
+        center: Alignment.center,
+        radius: 1.1,
+        colors: [
+          const Color(0x00000000),
+          const Color(0x88000000),
+        ],
+      ).createShader(Rect.fromLTWH(0, 0, size.width, size.height));
+    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), vignettePaint);
+
+    // Outer bezel glow — vivid cyan/purple double ring
+    final bezelRect = Rect.fromLTWH(
+      offsetX - 3, offsetY - 3,
+      cs * _kMazeCols + 6, cs * _kMazeRows + 6,
+    );
+    // Purple outer glow
+    final bezelGlowPaint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 4
+      ..color = const Color(0xFF9900FF)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(bezelRect, const Radius.circular(6)),
+      bezelGlowPaint,
+    );
+    // Cyan inner crisp line
+    final bezelPaint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.5
+      ..color = const Color(0xFF00FFFF);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(bezelRect, const Radius.circular(6)),
+      bezelPaint,
+    );
 
     // Draw cells
     for (int r = 0; r < _kMazeRows; r++) {
@@ -769,40 +1044,29 @@ class _MazePainter extends CustomPainter {
         final cell = grid[r][c];
 
         switch (cell) {
-          case 1: // Wall
-            paint.color = const Color(0xFF0033FF);
-            canvas.drawRect(Rect.fromLTWH(x, y, cs, cs), paint);
-          case 0: // Dot
-            paint.color = const Color(0xFFFFFFCC);
-            final dotSize = max(2.0, cs * 0.2);
-            canvas.drawRect(
-              Rect.fromLTWH(
-                x + (cs - dotSize) / 2,
-                y + (cs - dotSize) / 2,
-                dotSize,
-                dotSize,
-              ),
-              paint,
-            );
-          case 2: // Power pellet
-            if (pelletBlink) {
-              paint.color = const Color(0xFFFFFF00);
-              final pSize = cs * 0.5;
-              canvas.drawRect(
-                Rect.fromLTWH(
-                  x + (cs - pSize) / 2,
-                  y + (cs - pSize) / 2,
-                  pSize,
-                  pSize,
-                ),
-                paint,
-              );
-            }
-          case 3: // Ghost spawn area
-            paint.color = const Color(0xFF1A1A1A);
-            canvas.drawRect(Rect.fromLTWH(x, y, cs, cs), paint);
+          case 1: // Wall — neon blue with glow
+            _drawWall(canvas, x, y, cs, r, c);
+          case 0: // Regular dot — glowing circle
+            _drawDot(canvas, x, y, cs);
+          case 2: // Power pellet — pulsing glow
+            _drawPowerPellet(canvas, x, y, cs);
+          case 3: // Ghost spawn area — deep magenta tinted den
+            final spawnPaint = Paint()..color = const Color(0xFF12002A);
+            canvas.drawRect(Rect.fromLTWH(x, y, cs, cs), spawnPaint);
+            // Subtle tile grid for spawn zone
+            _drawFloorTile(canvas, x, y, cs, const Color(0xFF2A005A));
+            // Glowing magenta border
+            final spawnBorder = Paint()
+              ..style = PaintingStyle.stroke
+              ..strokeWidth = 0.8
+              ..color = const Color(0xFFCC00FF).withOpacity(0.5)
+              ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
+            canvas.drawRect(Rect.fromLTWH(x, y, cs, cs), spawnBorder);
           default:
-            break; // consumed cell (-1), draw nothing
+            // Consumed cell (-1) — dark floor with subtle tile pattern
+            final floorPaint = Paint()..color = const Color(0xFF0D001A);
+            canvas.drawRect(Rect.fromLTWH(x, y, cs, cs), floorPaint);
+            _drawFloorTile(canvas, x, y, cs, const Color(0xFF180030));
         }
       }
     }
@@ -816,8 +1080,139 @@ class _MazePainter extends CustomPainter {
     _drawPlayer(canvas, playerRow, playerCol, playerDir, offsetX, offsetY, cs);
 
     // Draw HUD
-    _drawHud(canvas, size, cs);
+    _drawHud(canvas, size, cs, offsetX, offsetY);
   }
+
+  // ─── Floor tile helper ────────────────────────────────────────────────────
+
+  void _drawFloorTile(Canvas canvas, double x, double y, double cs, Color lineColor) {
+    // Subtle grid tile lines — very faint for texture only
+    final tilePaint = Paint()
+      ..color = lineColor.withOpacity(0.4)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 0.5;
+    // Right edge
+    canvas.drawLine(Offset(x + cs, y), Offset(x + cs, y + cs), tilePaint);
+    // Bottom edge
+    canvas.drawLine(Offset(x, y + cs), Offset(x + cs, y + cs), tilePaint);
+  }
+
+  // ─── Wall drawing ────────────────────────────────────────────────────────
+
+  void _drawWall(Canvas canvas, double x, double y, double cs, int r, int c) {
+    final rect = Rect.fromLTWH(x, y, cs, cs);
+
+    // Deep dark purple wall interior fill
+    final fillPaint = Paint()..color = const Color(0xFF0D0020);
+    canvas.drawRect(rect, fillPaint);
+
+    // Inner wall surface gradient — purplish blue sheen
+    final wallShinePaint = Paint()
+      ..shader = LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [
+          const Color(0xFF1E0042).withOpacity(0.8),
+          const Color(0xFF0A0018).withOpacity(0.0),
+        ],
+      ).createShader(rect);
+    canvas.drawRect(rect, wallShinePaint);
+
+    // Determine which sides border a non-wall (open space)
+    final hasTop    = r > 0 && _kMap[r - 1][c] != 1;
+    final hasBottom = r < _kMazeRows - 1 && _kMap[r + 1][c] != 1;
+    final hasLeft   = c > 0 && _kMap[r][c - 1] != 1;
+    final hasRight  = c < _kMazeCols - 1 && _kMap[r][c + 1] != 1;
+
+    // Outer glow (cyan/purple alternating, based on position parity for variety)
+    final isEvenCell = (r + c) % 2 == 0;
+    final neonGlowColor = isEvenCell
+        ? const Color(0xFF00FFFF)   // cyan
+        : const Color(0xFFBB00FF);  // purple
+    final glowPaint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = max(1.5, cs * 0.14)
+      ..color = neonGlowColor.withOpacity(0.55)
+      ..maskFilter = MaskFilter.blur(BlurStyle.normal, cs * 0.18);
+
+    // Crisp neon line on top of glow
+    final borderPaint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = max(0.8, cs * 0.07)
+      ..color = neonGlowColor.withOpacity(0.9);
+
+    // Draw neon edges only on sides facing open space
+    if (hasTop) {
+      canvas.drawLine(Offset(x, y), Offset(x + cs, y), glowPaint);
+      canvas.drawLine(Offset(x, y), Offset(x + cs, y), borderPaint);
+    }
+    if (hasBottom) {
+      canvas.drawLine(Offset(x, y + cs), Offset(x + cs, y + cs), glowPaint);
+      canvas.drawLine(Offset(x, y + cs), Offset(x + cs, y + cs), borderPaint);
+    }
+    if (hasLeft) {
+      canvas.drawLine(Offset(x, y), Offset(x, y + cs), glowPaint);
+      canvas.drawLine(Offset(x, y), Offset(x, y + cs), borderPaint);
+    }
+    if (hasRight) {
+      canvas.drawLine(Offset(x + cs, y), Offset(x + cs, y + cs), glowPaint);
+      canvas.drawLine(Offset(x + cs, y), Offset(x + cs, y + cs), borderPaint);
+    }
+  }
+
+  // ─── Dot drawing ─────────────────────────────────────────────────────────
+
+  void _drawDot(Canvas canvas, double x, double y, double cs) {
+    final cx = x + cs / 2;
+    final cy = y + cs / 2;
+    final r = max(1.5, cs * 0.12);
+
+    // Soft outer glow
+    final glowPaint = Paint()
+      ..color = const Color(0xFFFFFFAA).withOpacity(0.25)
+      ..maskFilter = MaskFilter.blur(BlurStyle.normal, r * 2.5);
+    canvas.drawCircle(Offset(cx, cy), r * 2.2, glowPaint);
+
+    // Main dot with radial gradient
+    final dotPaint = Paint()
+      ..shader = RadialGradient(
+        colors: [Colors.white, const Color(0xFFFFFFAA)],
+      ).createShader(Rect.fromCircle(center: Offset(cx, cy), radius: r));
+    canvas.drawCircle(Offset(cx, cy), r, dotPaint);
+  }
+
+  // ─── Power pellet drawing ─────────────────────────────────────────────────
+
+  void _drawPowerPellet(Canvas canvas, double x, double y, double cs) {
+    final cx = x + cs / 2;
+    final cy = y + cs / 2;
+
+    // Pulsing size: slightly larger every other blink cycle
+    final baseR = cs * 0.22;
+    final r = pelletBlink ? baseR * 1.18 : baseR * 0.88;
+
+    // Outer halo glow
+    final haloPaint = Paint()
+      ..color = const Color(0xFFFFFF00).withOpacity(pelletBlink ? 0.3 : 0.15)
+      ..maskFilter = MaskFilter.blur(BlurStyle.normal, r * 3.5);
+    canvas.drawCircle(Offset(cx, cy), r * 3.0, haloPaint);
+
+    // Mid glow ring
+    final midGlowPaint = Paint()
+      ..color = const Color(0xFFFFDD00).withOpacity(0.5)
+      ..maskFilter = MaskFilter.blur(BlurStyle.normal, r * 1.5);
+    canvas.drawCircle(Offset(cx, cy), r * 1.8, midGlowPaint);
+
+    // Core white/yellow radial gradient
+    final corePaint = Paint()
+      ..shader = RadialGradient(
+        colors: [Colors.white, const Color(0xFFFFFF00), const Color(0xFFFFCC00)],
+        stops: const [0.0, 0.5, 1.0],
+      ).createShader(Rect.fromCircle(center: Offset(cx, cy), radius: r));
+    canvas.drawCircle(Offset(cx, cy), r, corePaint);
+  }
+
+  // ─── Ghost drawing ────────────────────────────────────────────────────────
 
   void _drawGhost(
     Canvas canvas,
@@ -826,65 +1221,147 @@ class _MazePainter extends CustomPainter {
     double offsetY,
     double cs,
   ) {
-    final paint = Paint()..isAntiAlias = false;
     final x = offsetX + g.col * cs;
     final y = offsetY + g.row * cs;
 
-    final bodyW = cs * 0.7;
-    final bodyH = cs * 0.8;
+    final bodyW = cs * 0.72;
+    final bodyH = cs * 0.78;
     final bx = x + (cs - bodyW) / 2;
     final by = y + (cs - bodyH) / 2;
 
-    // Ghost body color
+    // Ghost body color and gradient
     Color ghostColor;
+    Color ghostHighlight;
     if (g.scared) {
-      // Scared: alternate between blue and white if blinking
       ghostColor = scaredBlink
-          ? const Color(0xFFFFFFFF)
-          : const Color(0xFF0000CC);
+          ? const Color(0xFFBBBBFF)
+          : const Color(0xFF1111CC);
+      ghostHighlight = scaredBlink
+          ? Colors.white
+          : const Color(0xFF4444FF);
     } else {
       ghostColor = g.color;
+      // Lighten for highlight
+      final r = (ghostColor.red + 80).clamp(0, 255);
+      final gr = (ghostColor.green + 80).clamp(0, 255);
+      final b = (ghostColor.blue + 80).clamp(0, 255);
+      ghostHighlight = Color.fromARGB(255, r, gr, b);
     }
 
-    paint.color = ghostColor;
+    // Outer glow
+    final glowPaint = Paint()
+      ..color = ghostColor.withOpacity(0.35)
+      ..maskFilter = MaskFilter.blur(BlurStyle.normal, cs * 0.25);
+    canvas.drawOval(
+      Rect.fromLTWH(bx - 2, by - 2, bodyW + 4, bodyH + 4),
+      glowPaint,
+    );
 
-    // Top rounded part (upper half)
-    final topH = bodyH * 0.6;
-    canvas.drawRect(Rect.fromLTWH(bx, by, bodyW, topH), paint);
+    // Build ghost shape path: dome top + wavy skirt bottom
+    final path = Path();
 
-    // Bottom bumps: 3 rectangles
-    final bumpW = bodyW / 3;
-    final bumpH = bodyH * 0.4;
-    final bumpY = by + topH;
-    // bump 0 and bump 2 are drawn (gaps between are skipped)
-    canvas.drawRect(Rect.fromLTWH(bx, bumpY, bumpW, bumpH), paint);
-    canvas.drawRect(
-        Rect.fromLTWH(bx + bumpW * 2, bumpY, bumpW, bumpH), paint);
+    // Dome top (semi-circle)
+    final domeRadius = bodyW / 2;
+    final domeCenterX = bx + bodyW / 2;
+    final domeCenterY = by + domeRadius;
+    path.addArc(
+      Rect.fromCircle(center: Offset(domeCenterX, domeCenterY), radius: domeRadius),
+      pi, // start at left (180°)
+      pi, // sweep to right (180°) — upper semicircle
+    );
+
+    // Straight sides down to skirt
+    final skirtTop = by + domeRadius;
+    final skirtBottom = by + bodyH;
+    path.lineTo(bx + bodyW, skirtTop);
+
+    // Wavy skirt — sinusoidal bottom
+    const waveCount = 3;
+    final waveW = bodyW / waveCount;
+    final waveAmp = bodyH * 0.13;
+
+    // Right side down
+    path.lineTo(bx + bodyW, skirtBottom - waveAmp);
+
+    // Wave from right to left along bottom
+    for (int i = waveCount; i >= 0; i--) {
+      final wx = bx + i * waveW;
+      final wy = (i % 2 == 0)
+          ? skirtBottom - waveAmp * 0.2
+          : skirtBottom + waveAmp * 0.5;
+      path.lineTo(wx, wy);
+    }
+
+    // Left side up
+    path.lineTo(bx, skirtTop);
+    path.close();
+
+    // Body gradient paint
+    final bodyPaint = Paint()
+      ..shader = LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [ghostHighlight, ghostColor],
+        stops: const [0.0, 1.0],
+      ).createShader(Rect.fromLTWH(bx, by, bodyW, bodyH));
+    canvas.drawPath(path, bodyPaint);
 
     // Eyes
-    final eyeSize = max(2.0, cs * 0.12);
-    final pupilSize = max(1.0, eyeSize * 0.55);
+    final eyeR = max(2.0, cs * 0.1);
+    final leftEyeX = bx + bodyW * 0.28;
+    final rightEyeX = bx + bodyW * 0.68;
+    final eyeY = by + bodyH * 0.20;
 
-    final leftEyeX = bx + bodyW * 0.22;
-    final rightEyeX = bx + bodyW * 0.62;
-    final eyeY = by + bodyH * 0.15;
+    if (g.scared) {
+      // Scared: worried wide eyes with wavy mouth
+      final eyePaint = Paint()..color = Colors.white;
+      canvas.drawCircle(Offset(leftEyeX, eyeY), eyeR, eyePaint);
+      canvas.drawCircle(Offset(rightEyeX, eyeY), eyeR, eyePaint);
 
-    paint.color = Colors.white;
-    canvas.drawRect(
-        Rect.fromLTWH(leftEyeX, eyeY, eyeSize, eyeSize), paint);
-    canvas.drawRect(
-        Rect.fromLTWH(rightEyeX, eyeY, eyeSize, eyeSize), paint);
+      // Worried mouth: wavy line
+      final mouthPaint = Paint()
+        ..color = Colors.white.withOpacity(0.7)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = max(1.0, cs * 0.06)
+        ..strokeCap = StrokeCap.round;
+      final mouthPath = Path();
+      final mouthY = by + bodyH * 0.55;
+      final mouthX0 = bx + bodyW * 0.2;
+      final mouthX1 = bx + bodyW * 0.8;
+      final mouthW = mouthX1 - mouthX0;
+      mouthPath.moveTo(mouthX0, mouthY);
+      mouthPath.cubicTo(
+        mouthX0 + mouthW * 0.25, mouthY + cs * 0.08,
+        mouthX0 + mouthW * 0.5,  mouthY - cs * 0.08,
+        mouthX0 + mouthW * 0.75, mouthY + cs * 0.08,
+      );
+      mouthPath.lineTo(mouthX1, mouthY);
+      canvas.drawPath(mouthPath, mouthPaint);
+    } else {
+      // Normal eyes: white sclera + coloured pupil
+      final sclPaint = Paint()..color = Colors.white;
+      canvas.drawCircle(Offset(leftEyeX, eyeY), eyeR, sclPaint);
+      canvas.drawCircle(Offset(rightEyeX, eyeY), eyeR, sclPaint);
 
-    paint.color = Colors.black;
-    canvas.drawRect(
-        Rect.fromLTWH(leftEyeX + (eyeSize - pupilSize) / 2,
-            eyeY + (eyeSize - pupilSize) / 2, pupilSize, pupilSize),
-        paint);
-    canvas.drawRect(
-        Rect.fromLTWH(rightEyeX + (eyeSize - pupilSize) / 2,
-            eyeY + (eyeSize - pupilSize) / 2, pupilSize, pupilSize),
-        paint);
+      // Pupils — direction-tinted
+      final pupilColor = Color.alphaBlend(
+        ghostColor.withOpacity(0.7),
+        const Color(0xFF000066),
+      );
+      final pupilPaint = Paint()..color = pupilColor;
+      final pR = eyeR * 0.55;
+      canvas.drawCircle(Offset(leftEyeX, eyeY), pR, pupilPaint);
+      canvas.drawCircle(Offset(rightEyeX, eyeY), pR, pupilPaint);
+
+      // Tiny white glint dot
+      final glintPaint = Paint()..color = Colors.white.withOpacity(0.9);
+      final gR = pR * 0.35;
+      canvas.drawCircle(Offset(leftEyeX - pR * 0.3, eyeY - pR * 0.3), gR, glintPaint);
+      canvas.drawCircle(Offset(rightEyeX - pR * 0.3, eyeY - pR * 0.3), gR, glintPaint);
+    }
   }
+
+  // ─── Player (Pac-Man) drawing ─────────────────────────────────────────────
 
   void _drawPlayer(
     Canvas canvas,
@@ -895,74 +1372,263 @@ class _MazePainter extends CustomPainter {
     double offsetY,
     double cs,
   ) {
-    final paint = Paint()..isAntiAlias = false;
     final x = offsetX + col * cs;
     final y = offsetY + row * cs;
 
-    final bodySize = cs * 0.8;
-    final bx = x + (cs - bodySize) / 2;
-    final by = y + (cs - bodySize) / 2;
+    final radius = cs * 0.38;
+    final cx = x + cs / 2;
+    final cy = y + cs / 2;
 
-    // Yellow body
-    paint.color = const Color(0xFFFFFF00);
-    canvas.drawRect(Rect.fromLTWH(bx, by, bodySize, bodySize), paint);
+    // Outer glow
+    final glowPaint = Paint()
+      ..color = const Color(0xFFFFFF00).withOpacity(0.4)
+      ..maskFilter = MaskFilter.blur(BlurStyle.normal, radius * 1.2);
+    canvas.drawCircle(Offset(cx, cy), radius * 1.5, glowPaint);
 
-    // Pixel-art mouth: 3 small black squares in a wedge on the facing side
-    paint.color = const Color(0xFF000000);
-    final mSize = max(2.0, cs * 0.18);
+    // Mouth angle: wedge opens 30° each side from facing direction
+    // dir: 0=up, 1=right, 2=down, 3=left
+    const mouthHalf = 0.22; // radians (~12.6°) — thin open mouth
+    final dirAngle = [
+      -pi / 2, // up
+      0.0,     // right
+      pi / 2,  // down
+      pi,      // left
+    ][dir];
 
-    switch (dir) {
-      case 1: // right
-        final mx = bx + bodySize - mSize;
-        final midY = by + (bodySize - mSize) / 2;
-        canvas.drawRect(Rect.fromLTWH(mx, midY, mSize, mSize), paint);
-        canvas.drawRect(
-            Rect.fromLTWH(mx - mSize, midY - mSize, mSize, mSize), paint);
-        canvas.drawRect(
-            Rect.fromLTWH(mx - mSize, midY + mSize, mSize, mSize), paint);
-      case 3: // left
-        final mx = bx;
-        final midY = by + (bodySize - mSize) / 2;
-        canvas.drawRect(Rect.fromLTWH(mx, midY, mSize, mSize), paint);
-        canvas.drawRect(
-            Rect.fromLTWH(mx + mSize, midY - mSize, mSize, mSize), paint);
-        canvas.drawRect(
-            Rect.fromLTWH(mx + mSize, midY + mSize, mSize, mSize), paint);
-      case 0: // up
-        final my = by;
-        final midX = bx + (bodySize - mSize) / 2;
-        canvas.drawRect(Rect.fromLTWH(midX, my, mSize, mSize), paint);
-        canvas.drawRect(
-            Rect.fromLTWH(midX - mSize, my + mSize, mSize, mSize), paint);
-        canvas.drawRect(
-            Rect.fromLTWH(midX + mSize, my + mSize, mSize, mSize), paint);
-      case 2: // down
-        final my = by + bodySize - mSize;
-        final midX = bx + (bodySize - mSize) / 2;
-        canvas.drawRect(Rect.fromLTWH(midX, my, mSize, mSize), paint);
-        canvas.drawRect(
-            Rect.fromLTWH(midX - mSize, my - mSize, mSize, mSize), paint);
-        canvas.drawRect(
-            Rect.fromLTWH(midX + mSize, my - mSize, mSize, mSize), paint);
-    }
+    final startAngle = dirAngle + mouthHalf;
+    final sweepAngle = 2 * pi - 2 * mouthHalf;
+
+    // Radial gradient body: bright yellow center → gold edge
+    final bodyPaint = Paint()
+      ..shader = RadialGradient(
+        center: Alignment(-0.3, -0.3),
+        radius: 1.0,
+        colors: [
+          const Color(0xFFFFFFAA),
+          const Color(0xFFFFEE00),
+          const Color(0xFFFFAA00),
+        ],
+        stops: const [0.0, 0.55, 1.0],
+      ).createShader(Rect.fromCircle(center: Offset(cx, cy), radius: radius));
+
+    // Draw arc (mouth cutout handled by wedge shape)
+    final path = Path()
+      ..moveTo(cx, cy)
+      ..arcTo(
+        Rect.fromCircle(center: Offset(cx, cy), radius: radius),
+        startAngle,
+        sweepAngle,
+        false,
+      )
+      ..close();
+
+    canvas.drawPath(path, bodyPaint);
+
+    // Thin dark mouth line for crispness
+    final mouthPaint = Paint()
+      ..color = const Color(0xFF000814)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = max(0.8, cs * 0.04);
+    // upper jaw line
+    final ux = cx + cos(dirAngle + mouthHalf) * radius;
+    final uy = cy + sin(dirAngle + mouthHalf) * radius;
+    canvas.drawLine(Offset(cx, cy), Offset(ux, uy), mouthPaint);
+    // lower jaw line
+    final lx = cx + cos(dirAngle - mouthHalf) * radius;
+    final ly = cy + sin(dirAngle - mouthHalf) * radius;
+    canvas.drawLine(Offset(cx, cy), Offset(lx, ly), mouthPaint);
+
+    // Small white eye
+    final eyeAngle = dirAngle - pi / 2; // always above mouth direction
+    final eyeDist = radius * 0.5;
+    final ex = cx + cos(eyeAngle) * eyeDist * 0.6 - sin(eyeAngle) * eyeDist * 0.4;
+    final ey = cy + sin(eyeAngle) * eyeDist * 0.6 + cos(eyeAngle) * eyeDist * 0.4;
+    final eyePaint = Paint()..color = Colors.black87;
+    canvas.drawCircle(Offset(ex, ey), max(1.2, radius * 0.16), eyePaint);
+    // White glint
+    canvas.drawCircle(
+      Offset(ex - radius * 0.05, ey - radius * 0.05),
+      max(0.6, radius * 0.07),
+      Paint()..color = Colors.white,
+    );
   }
 
-  void _drawHud(Canvas canvas, Size size, double cs) {
+  // ─── HUD drawing ─────────────────────────────────────────────────────────
+
+  void _drawHud(Canvas canvas, Size size, double cs, double offsetX, double offsetY) {
+    // HUD positioned above the maze
+    final hudY = offsetY - cs * 1.3;
+    final hudH = cs * 1.1;
+
+    // HUD background bar
+    final hudBgPaint = Paint()
+      ..color = const Color(0xFF000D26).withOpacity(0.85);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(offsetX, hudY, cs * _kMazeCols, hudH),
+        const Radius.circular(4),
+      ),
+      hudBgPaint,
+    );
+
+    // HUD border glow
+    final hudBorderPaint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1
+      ..color = const Color(0xFF0055AA).withOpacity(0.7);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(offsetX, hudY, cs * _kMazeCols, hudH),
+        const Radius.circular(4),
+      ),
+      hudBorderPaint,
+    );
+
+    final textY = hudY + hudH / 2;
+    final fontSize = (cs * 0.52).clamp(8.0, 15.0);
+
+    // Score — left section, neon yellow
+    _paintHudText(
+      canvas,
+      'SCORE  $score',
+      Offset(offsetX + cs * 0.4, textY),
+      const Color(0xFFFFFF00),
+      fontSize,
+      bold: true,
+      glowColor: const Color(0xFFFFFF00),
+      align: TextAlign.left,
+    );
+
+    // Level — centre, neon cyan
+    _paintHudText(
+      canvas,
+      'NVL $level',
+      Offset(offsetX + cs * _kMazeCols / 2, textY),
+      const Color(0xFF00FFFF),
+      fontSize,
+      glowColor: const Color(0xFF00FFFF),
+      align: TextAlign.center,
+    );
+
+    // Lives — right section as mini Pac-Man icons
+    _drawLivesIcons(canvas, lives, offsetX + cs * (_kMazeCols - 0.5), textY, cs, fontSize);
+  }
+
+  void _paintHudText(
+    Canvas canvas,
+    String text,
+    Offset position,
+    Color color,
+    double fontSize, {
+    bool bold = false,
+    Color? glowColor,
+    TextAlign align = TextAlign.left,
+  }) {
+    // Glow pass
+    if (glowColor != null) {
+      final glowTp = TextPainter(
+        text: TextSpan(
+          text: text,
+          style: TextStyle(
+            color: glowColor.withOpacity(0.5),
+            fontSize: fontSize,
+            fontWeight: bold ? FontWeight.bold : FontWeight.normal,
+            fontFamily: 'monospace',
+            shadows: [Shadow(color: glowColor, blurRadius: 10)],
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+        textAlign: align,
+      )..layout();
+      double dx;
+      if (align == TextAlign.center) {
+        dx = position.dx - glowTp.width / 2;
+      } else if (align == TextAlign.right) {
+        dx = position.dx - glowTp.width;
+      } else {
+        dx = position.dx;
+      }
+      glowTp.paint(canvas, Offset(dx, position.dy - glowTp.height / 2));
+    }
+
+    // Main text
     final tp = TextPainter(
       text: TextSpan(
-        text: 'SCORE: $score   LIVES: $lives   LVL: $level',
+        text: text,
         style: TextStyle(
-          color: Colors.white,
-          fontSize: (cs * 0.55).clamp(9.0, 16.0),
-          fontWeight: FontWeight.bold,
+          color: color,
+          fontSize: fontSize,
+          fontWeight: bold ? FontWeight.bold : FontWeight.normal,
           fontFamily: 'monospace',
         ),
       ),
       textDirection: TextDirection.ltr,
-    )..layout(maxWidth: size.width);
+      textAlign: align,
+    )..layout();
 
-    final hudY = size.height - cs * 1.2;
-    tp.paint(canvas, Offset((size.width - tp.width) / 2, hudY));
+    double dx;
+    if (align == TextAlign.center) {
+      dx = position.dx - tp.width / 2;
+    } else if (align == TextAlign.right) {
+      dx = position.dx - tp.width;
+    } else {
+      dx = position.dx;
+    }
+    tp.paint(canvas, Offset(dx, position.dy - tp.height / 2));
+  }
+
+  void _drawLivesIcons(
+    Canvas canvas,
+    int lives,
+    double rightEdgeX,
+    double centerY,
+    double cs,
+    double fontSize,
+  ) {
+    final iconR = (cs * 0.22).clamp(3.0, 9.0);
+    final spacing = iconR * 2.6;
+    final count = lives.clamp(0, 5);
+
+    for (int i = 0; i < count; i++) {
+      final ix = rightEdgeX - (count - i) * spacing;
+      _drawMiniPacman(canvas, ix, centerY, iconR);
+    }
+
+    // Label
+    final labelTp = TextPainter(
+      text: TextSpan(
+        text: 'VIDAS',
+        style: TextStyle(
+          color: const Color(0xFF88AAFF),
+          fontSize: (fontSize * 0.75).clamp(6.0, 11.0),
+          fontFamily: 'monospace',
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    labelTp.paint(
+      canvas,
+      Offset(rightEdgeX - count * spacing - labelTp.width - 4, centerY - labelTp.height / 2),
+    );
+  }
+
+  void _drawMiniPacman(Canvas canvas, double cx, double cy, double r) {
+    final paint = Paint()
+      ..shader = RadialGradient(
+        colors: [const Color(0xFFFFFFAA), const Color(0xFFFFEE00), const Color(0xFFFFAA00)],
+        stops: const [0.0, 0.5, 1.0],
+      ).createShader(Rect.fromCircle(center: Offset(cx, cy), radius: r));
+
+    final path = Path()
+      ..moveTo(cx, cy)
+      ..arcTo(
+        Rect.fromCircle(center: Offset(cx, cy), radius: r),
+        0.3, // start after mouth
+        2 * pi - 0.6,
+        false,
+      )
+      ..close();
+    canvas.drawPath(path, paint);
   }
 
   @override
