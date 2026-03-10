@@ -81,6 +81,7 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
   late final Animation<double> _crtSquish;
   late final Animation<double> _crtLine;
   late final Animation<double> _crtFade;
+  OverlayEntry? _crtBlackOverlay; // covers nav bar during black-fade phase
 
   @override
   void initState() {
@@ -121,6 +122,8 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
     _pageController.dispose();
     _shakeCtrl.dispose();
     _crtCtrl.dispose();
+    _crtBlackOverlay?.remove();
+    _crtBlackOverlay = null;
     super.dispose();
   }
 
@@ -263,6 +266,17 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
     _pendingSaldo      = saldo;
     if (!_crtActive) {
       setState(() => _crtActive = true);
+      // Root overlay covers nav bar during the final black-fade phase
+      _crtBlackOverlay = OverlayEntry(
+        builder: (_) => AnimatedBuilder(
+          animation: _crtFade,
+          builder: (_, __) {
+            if (_crtFade.value <= 0.01) return const SizedBox.shrink();
+            return ColoredBox(color: Colors.black.withOpacity(_crtFade.value));
+          },
+        ),
+      );
+      Overlay.of(context, rootOverlay: true).insert(_crtBlackOverlay!);
       _crtCtrl.forward();
     }
   }
@@ -280,10 +294,17 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
         reverseTransitionDuration: Duration.zero,
       ),
     ).then((_) {
+      // Returning from arcade — overlay is already gone, just reset state
       if (mounted) {
         setState(() { _tapCount = 0; _crtActive = false; });
         _crtCtrl.reset();
       }
+    });
+    // Arcade terminal starts black — remove overlay shortly after push
+    // so the terminal renders underneath before the overlay lifts
+    Future.delayed(const Duration(milliseconds: 80), () {
+      _crtBlackOverlay?.remove();
+      _crtBlackOverlay = null;
     });
   }
 
@@ -403,7 +424,7 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
       ),
     );
 
-    // CRT TV-off animation: squishes the entire screen before navigating
+    // CRT squish + white-line flash (nav bar black-fade is handled by root overlay)
     return AnimatedBuilder(
       animation: _crtCtrl,
       builder: (ctx, child) {
@@ -417,9 +438,6 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
           if (_crtLine.value > 0.01)
             Positioned.fill(child: ColoredBox(
                 color: Colors.white.withOpacity(_crtLine.value * 0.92))),
-          if (_crtFade.value > 0.01)
-            Positioned.fill(child: ColoredBox(
-                color: Colors.black.withOpacity(_crtFade.value))),
         ]);
       },
       child: body,

@@ -508,16 +508,24 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
 
   void _processMovement(double dt) {
     final c = widget.controller;
-    // Aimbot: auto-rotate toward nearest visible enemy
+    // Aimbot: smooth assist — only nudges when enemy is within ~10 px of reticle.
+    // planeLength = 0.66; threshold = atan(10/halfW * planeLength) ≈ 0.037 rad
+    // (independent of frame size — uses angular proximity, not world distance).
     if (_modAimbot) {
       _Enemy? nearest;
-      double bestDist = double.infinity;
+      double bestAbsDiff = double.infinity;
       for (final e in _enemies) {
         if (!e.alive) continue;
         final dx = e.x - _posX, dy = e.y - _posY;
-        final d = sqrt(dx * dx + dy * dy);
-        if (d < bestDist && _hasLos(_posX, _posY, e.x, e.y)) {
-          bestDist = d;
+        final targetAngle = atan2(dy, dx);
+        final curAngle = atan2(_dirY, _dirX);
+        var diff = targetAngle - curAngle;
+        while (diff > pi)  diff -= 2 * pi;
+        while (diff < -pi) diff += 2 * pi;
+        // Only consider enemies that are roughly in front (|diff| < half-FOV ≈ 0.58)
+        if (diff.abs() < 0.58 && diff.abs() < bestAbsDiff &&
+            _hasLos(_posX, _posY, e.x, e.y)) {
+          bestAbsDiff = diff.abs();
           nearest = e;
         }
       }
@@ -528,8 +536,13 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
         var diff = targetAngle - curAngle;
         while (diff > pi)  diff -= 2 * pi;
         while (diff < -pi) diff += 2 * pi;
-        final step = (_rotSpeed * 2 * dt).clamp(0.0, diff.abs());
-        if (diff.abs() > 0.01) _rotate(diff > 0 ? step : -step);
+        // Only assist when enemy is within ~10 px of reticle centre
+        const kScreenThreshold = 0.037; // radians ≈ 10 px on a typical screen
+        if (diff.abs() < kScreenThreshold) {
+          // Smooth, gentle nudge — does not snap
+          final step = (_rotSpeed * 0.35 * dt).clamp(0.0, diff.abs());
+          if (diff.abs() > 0.002) _rotate(diff > 0 ? step : -step);
+        }
       }
     }
     // SMG: full-auto while A is held

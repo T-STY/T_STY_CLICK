@@ -671,11 +671,14 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen>
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      body: Padding(
-        padding: const EdgeInsets.all(4),
-        child: _buildConsoleBody(),
+    return PopScope(
+      canPop: false, // only the power-off button may exit
+      child: Scaffold(
+        backgroundColor: Colors.black,
+        body: Padding(
+          padding: const EdgeInsets.all(4),
+          child: _buildConsoleBody(),
+        ),
       ),
     );
   }
@@ -2761,25 +2764,6 @@ class _CrossDPadPainter extends CustomPainter {
     canvas.drawPath(cross, p);
     p.shader = null;
 
-    // Per-arm highlight — clip to cross so it never bleeds outside the shape
-    canvas.save();
-    canvas.clipPath(cross);
-    final armRects = {
-      ArcadeButton.up:    Rect.fromLTWH(cx - half, 0,   arm, cy),
-      ArcadeButton.down:  Rect.fromLTWH(cx - half, cy,  arm, cy),
-      ArcadeButton.left:  Rect.fromLTWH(0,  cy - half,  cx,  arm),
-      ArcadeButton.right: Rect.fromLTWH(cx, cy - half,  cx,  arm),
-    };
-    for (final entry in armRects.entries) {
-      if (!_lit(entry.key)) continue;
-      p.shader = LinearGradient(
-        begin: Alignment.topLeft, end: Alignment.bottomRight,
-        colors: [accent.withOpacity(0.90), accent.withOpacity(0.50)],
-      ).createShader(entry.value);
-      canvas.drawRect(entry.value, p);
-      p.shader = null;
-    }
-    canvas.restore();
 
     // Thin surface rim
     p..color = Colors.white.withOpacity(0.08)
@@ -2790,14 +2774,11 @@ class _CrossDPadPainter extends CustomPainter {
 
     // ── Chevron arrows ─────────────────────────────────────────────────────────
     void drawChevron(List<Offset> pts, ArcadeButton btn) {
-      final isLit = _lit(btn);
-      p.color = isLit ? accent : Colors.white.withOpacity(0.45);
-      if (isLit) p.maskFilter = MaskFilter.blur(BlurStyle.normal, 3);
+      p.color = Colors.white.withOpacity(0.45);
       final path = Path()..moveTo(pts[0].dx, pts[0].dy);
       for (int i = 1; i < pts.length; i++) path.lineTo(pts[i].dx, pts[i].dy);
       path.close();
       canvas.drawPath(path, p);
-      p.maskFilter = null;
     }
 
     // Up chevron
@@ -2842,14 +2823,6 @@ class _RoundDPadPainter extends CustomPainter {
     final R = size.width / 2 - 4;
     final p = Paint()..isAntiAlias = true;
 
-    // Outer glow ring when any direction active
-    if (active.isNotEmpty) {
-      p..color = accent.withOpacity(0.12)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10);
-      canvas.drawCircle(Offset(cx, cy), R + 4, p);
-      p.maskFilter = null;
-    }
-
     // Base disc shadow
     p.color = Colors.black.withOpacity(0.45);
     canvas.drawCircle(Offset(cx + 1, cy + 2), R, p);
@@ -2880,27 +2853,6 @@ class _RoundDPadPainter extends CustomPainter {
     }
     p.style = PaintingStyle.fill;
 
-    // Highlight active sectors
-    void drawSector(double startAngle, double sweepAngle, ArcadeButton btn) {
-      if (!_lit(btn)) return;
-      p.color = accent.withOpacity(0.30);
-      final path = Path()
-        ..moveTo(cx, cy)
-        ..arcTo(Rect.fromCircle(center: Offset(cx, cy), radius: R - 2),
-            startAngle, sweepAngle, false)
-        ..close();
-      canvas.drawPath(path, p);
-      p..color = accent.withOpacity(0.20)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6);
-      canvas.drawPath(path, p);
-      p.maskFilter = null;
-    }
-
-    drawSector(-pi / 2 - pi / 8, pi / 4, ArcadeButton.up);
-    drawSector(pi / 2 - pi / 8, pi / 4, ArcadeButton.down);
-    drawSector(pi - pi / 8, pi / 4, ArcadeButton.left);
-    drawSector(-pi / 8, pi / 4, ArcadeButton.right);
-
     // Inner disc / hub
     p.color = const Color(0xFF101010);
     canvas.drawCircle(Offset(cx, cy), R * 0.26, p);
@@ -2913,16 +2865,13 @@ class _RoundDPadPainter extends CustomPainter {
     // Cardinal direction arrows
     final arrR = R * 0.72;
     void drawArrow(double angle, ArcadeButton btn) {
-      final isLit = _lit(btn);
       canvas.save();
       canvas.translate(cx + cos(angle) * arrR, cy + sin(angle) * arrR);
       canvas.rotate(angle + pi / 2);
-      p.color = isLit ? accent : Colors.white.withOpacity(0.40);
-      if (isLit) p.maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
+      p.color = Colors.white.withOpacity(0.40);
       const s = 6.0;
       canvas.drawPath(Path()
           ..moveTo(0, -s)..lineTo(-s, s * 0.4)..lineTo(0, 0)..lineTo(s, s * 0.4)..close(), p);
-      p.maskFilter = null;
       canvas.restore();
     }
     drawArrow(-pi / 2, ArcadeButton.up);
