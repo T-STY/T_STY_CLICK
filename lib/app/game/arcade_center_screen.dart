@@ -841,7 +841,7 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen>
     final labelColor = isDark ? ac.withOpacity(0.70) : const Color(0xFF444444);
     final ledColor = ac;
     return Padding(
-      padding: const EdgeInsets.only(left: 12),
+      padding: const EdgeInsets.only(left: 32),
       child: GestureDetector(
         onTap: _triggerPowerOff,
         child: Row(children: [
@@ -1991,6 +1991,7 @@ class _HeroDemoGameState extends State<_HeroDemoGame> {
   @override
   void initState() {
     super.initState();
+    HighScoreService.setDemoMode(true);
     _bot = ArcadeInputController();
     _botTimer = Timer.periodic(const Duration(milliseconds: 120), (_) {
       if (!mounted) return;
@@ -2075,6 +2076,7 @@ class _HeroDemoGameState extends State<_HeroDemoGame> {
   void dispose() {
     _botTimer?.cancel();
     _bot.dispose();
+    HighScoreService.setDemoMode(false);
     super.dispose();
   }
 
@@ -2091,7 +2093,10 @@ class _HeroDemoGameState extends State<_HeroDemoGame> {
           child: AbsorbPointer(
             child: widget.game.builder!(
               userId: '${widget.userId}_demo',
-              rewardsDocRef: widget.rewardsDocRef,
+              // Sink doc: writes go to a harmless throwaway path, not the user's real doc
+              rewardsDocRef: FirebaseFirestore.instance
+                  .collection('_demo_sink')
+                  .doc('void'),
               currentSaldo: 99999,
               controller: _bot,
               onSaldoChanged: (_) {},

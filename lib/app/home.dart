@@ -75,6 +75,13 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
   late AnimationController _shakeCtrl;
   late Animation<double>   _shakeAnim;
 
+  // ── CRT TV-off animation (on 3rd logo tap) ─────────────────────────────────
+  bool _crtActive = false;
+  late final AnimationController _crtCtrl;
+  late final Animation<double> _crtSquish;
+  late final Animation<double> _crtLine;
+  late final Animation<double> _crtFade;
+
   @override
   void initState() {
     super.initState();
@@ -88,6 +95,23 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
       TweenSequenceItem(tween: Tween(begin: -4.0, end: 0.0), weight: 1),
     ]).animate(CurvedAnimation(parent: _shakeCtrl, curve: Curves.linear));
 
+    _crtCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 520));
+    _crtSquish = Tween<double>(begin: 1.0, end: 0.0).animate(
+        CurvedAnimation(parent: _crtCtrl,
+            curve: const Interval(0.0, 0.58, curve: Curves.easeIn)));
+    _crtLine = TweenSequence<double>([
+      TweenSequenceItem(tween: Tween(begin: 0.0, end: 1.0), weight: 1),
+      TweenSequenceItem(tween: Tween(begin: 1.0, end: 0.0), weight: 1),
+    ]).animate(CurvedAnimation(parent: _crtCtrl,
+        curve: const Interval(0.44, 0.80)));
+    _crtFade = Tween<double>(begin: 0.0, end: 1.0).animate(
+        CurvedAnimation(parent: _crtCtrl,
+            curve: const Interval(0.65, 1.0, curve: Curves.easeIn)));
+    _crtCtrl.addStatusListener((s) {
+      if (s == AnimationStatus.completed && _crtActive && mounted) {
+        _navigateToArcade();
+      }
+    });
   }
 
   @override
@@ -96,6 +120,7 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
     _searchController.dispose();
     _pageController.dispose();
     _shakeCtrl.dispose();
+    _crtCtrl.dispose();
     super.dispose();
   }
 
@@ -236,70 +261,29 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
     _pendingUid        = uid;
     _pendingRewardsRef = rewardsDoc.reference;
     _pendingSaldo      = saldo;
-    _startFadeOverlay();
+    if (!_crtActive) {
+      setState(() => _crtActive = true);
+      _crtCtrl.forward();
+    }
   }
 
-  // Full-app smooth CRT-dying fade to black, covers nav bar via root Overlay
-  void _startFadeOverlay() {
-    OverlayEntry? entry;
-    late AnimationController fadeCtrl;
-    fadeCtrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 2550),
-    );
-    // CRT dying: slowly dims, briefly holds, dims more, brief partial recovery,
-    // final collapse to black — never goes back toward white
-    final anim = TweenSequence<double>([
-      TweenSequenceItem(tween: Tween(begin: 0.0, end: 0.65)
-          .chain(CurveTween(curve: Curves.easeIn)), weight: 28),
-      TweenSequenceItem(tween: Tween(begin: 0.65, end: 0.50)
-          .chain(CurveTween(curve: Curves.easeInOut)), weight: 12), // brief partial recovery
-      TweenSequenceItem(tween: Tween(begin: 0.50, end: 0.82)
-          .chain(CurveTween(curve: Curves.easeIn)), weight: 20),
-      TweenSequenceItem(tween: Tween(begin: 0.82, end: 0.68)
-          .chain(CurveTween(curve: Curves.easeInOut)), weight: 10), // one last gasp
-      TweenSequenceItem(tween: Tween(begin: 0.68, end: 1.0)
-          .chain(CurveTween(curve: Curves.easeIn)), weight: 30),
-    ]).animate(fadeCtrl);
-
-    entry = OverlayEntry(
-      builder: (_) => AnimatedBuilder(
-        animation: anim,
-        builder: (_, __) => IgnorePointer(
-          child: Container(color: Colors.black.withValues(alpha: anim.value)),
+  void _navigateToArcade() {
+    Navigator.push(
+      context,
+      PageRouteBuilder(
+        pageBuilder: (ctx, _, __) => _ArcadeLaunchPage(
+          userId: _pendingUid!,
+          rewardsDocRef: _pendingRewardsRef!,
+          currentSaldo: _pendingSaldo,
         ),
+        transitionDuration: Duration.zero,
+        reverseTransitionDuration: Duration.zero,
       ),
-    );
-
-    // Insert into root overlay so it covers nav bar + everything
-    Overlay.of(context, rootOverlay: true).insert(entry!);
-
-    fadeCtrl.forward().then((_) {
-      if (!mounted) {
-        entry?.remove();
-        fadeCtrl.dispose();
-        return;
+    ).then((_) {
+      if (mounted) {
+        setState(() { _tapCount = 0; _crtActive = false; });
+        _crtCtrl.reset();
       }
-      // Navigate while screen is black, then remove overlay
-      Navigator.push(
-        context,
-        PageRouteBuilder(
-          pageBuilder: (ctx, _, __) => _ArcadeLaunchPage(
-            userId: _pendingUid!,
-            rewardsDocRef: _pendingRewardsRef!,
-            currentSaldo: _pendingSaldo,
-          ),
-          transitionDuration: Duration.zero,
-          reverseTransitionDuration: Duration.zero,
-        ),
-      ).then((_) {
-        if (mounted) setState(() => _tapCount = 0);
-      });
-      // Brief delay lets terminal render before we pull the overlay
-      Future.delayed(const Duration(milliseconds: 80), () {
-        entry?.remove();
-        fadeCtrl.dispose();
-      });
     });
   }
 
@@ -307,7 +291,7 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
   Widget build(BuildContext context) {
     final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
-    return PopScope(
+    final body = PopScope(
       canPop: !_showRecipeDetail,
       onPopInvokedWithResult: (didPop, result) {
         if (didPop) return;
@@ -417,6 +401,28 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
           ],
         ),
       ),
+    );
+
+    // CRT TV-off animation: squishes the entire screen before navigating
+    return AnimatedBuilder(
+      animation: _crtCtrl,
+      builder: (ctx, child) {
+        if (!_crtActive) return child!;
+        return Stack(children: [
+          Transform(
+            alignment: Alignment.center,
+            transform: Matrix4.diagonal3Values(1.0, _crtSquish.value, 1.0),
+            child: child!,
+          ),
+          if (_crtLine.value > 0.01)
+            Positioned.fill(child: ColoredBox(
+                color: Colors.white.withOpacity(_crtLine.value * 0.92))),
+          if (_crtFade.value > 0.01)
+            Positioned.fill(child: ColoredBox(
+                color: Colors.black.withOpacity(_crtFade.value))),
+        ]);
+      },
+      child: body,
     );
   }
 
@@ -1557,7 +1563,7 @@ class _ArcadeLaunchPageState extends State<_ArcadeLaunchPage> {
                   padding: const EdgeInsets.fromLTRB(18, 14, 18, 28),
                   child: ConstrainedBox(
                     // minHeight = full viewport so short content sits at bottom
-                    constraints: BoxConstraints(minHeight: constraints.maxHeight - 48),
+                    constraints: BoxConstraints(minWidth: double.infinity, minHeight: constraints.maxHeight - 48),
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.end,
                       crossAxisAlignment: CrossAxisAlignment.start,

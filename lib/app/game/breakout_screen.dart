@@ -125,7 +125,7 @@ class _BreakoutScreenState extends State<BreakoutScreen> {
     }
     if (_paused) return;
     if (_state == _BKState.start || _state == _BKState.levelClear ||
-        _state == _BKState.dead) {
+        _state == _BKState.dead || _state == _BKState.gameOver) {
       if (btn == ArcadeButton.a || btn == ArcadeButton.start) {
         if (_state == _BKState.dead) {
           _resetBall();

@@ -185,6 +185,23 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
   static const double _moveSpeed = 3.2;
   static const double _rotSpeed = 2.5;
 
+  // ── Hidden mod menu ─────────────────────────────────────────────────────────
+  // Sequence: ↑ ↑ ↓ ↓ ← → ← B  (8 buttons)
+  static const _kModSequence = [
+    ArcadeButton.up, ArcadeButton.up,
+    ArcadeButton.down, ArcadeButton.down,
+    ArcadeButton.left, ArcadeButton.right,
+    ArcadeButton.left, ArcadeButton.b,
+  ];
+  int _modSeqIdx = 0;         // how far into the konami sequence we are
+  bool _modMenuOpen = false;  // is the cheat menu showing?
+  int _modCursor = 0;         // selected cheat row (0-3)
+
+  bool _modUnlimitedAmmo = false;
+  bool _modAimbot       = false;
+  bool _modGodMode      = false;
+  bool _modInstantKill  = false;
+
   @override
   void initState() {
     super.initState();
@@ -216,6 +233,51 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
       }
       return;
     }
+    // ── Konami sequence tracker (works any time while playing) ─────────────────
+    if (event.isDown && _state == _GameState.playing) {
+      if (event.button == _kModSequence[_modSeqIdx]) {
+        _modSeqIdx++;
+        if (_modSeqIdx >= _kModSequence.length) {
+          _modSeqIdx = 0;
+          setState(() => _modMenuOpen = !_modMenuOpen);
+          HapticFeedback.heavyImpact();
+          return;
+        }
+      } else {
+        _modSeqIdx = (event.button == _kModSequence[0]) ? 1 : 0;
+      }
+    }
+
+    // ── Mod menu navigation ─────────────────────────────────────────────────
+    if (_modMenuOpen && event.isDown) {
+      switch (event.button) {
+        case ArcadeButton.up:
+          setState(() => _modCursor = (_modCursor - 1).clamp(0, 3));
+          return;
+        case ArcadeButton.down:
+          setState(() => _modCursor = (_modCursor + 1).clamp(0, 3));
+          return;
+        case ArcadeButton.a:
+          setState(() {
+            switch (_modCursor) {
+              case 0: _modUnlimitedAmmo = !_modUnlimitedAmmo;
+              case 1: _modAimbot       = !_modAimbot;
+              case 2: _modGodMode      = !_modGodMode;
+              case 3: _modInstantKill  = !_modInstantKill;
+            }
+          });
+          HapticFeedback.selectionClick();
+          return;
+        case ArcadeButton.b:
+        case ArcadeButton.start:
+          setState(() => _modMenuOpen = false);
+          return;
+        default:
+          break;
+      }
+    }
+    if (_modMenuOpen) return;
+
     if (event.isDown && event.button == ArcadeButton.start) {
       setState(() => _paused = !_paused);
       return;
@@ -318,7 +380,7 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
   void _firePistol() {
     if (_fireTimer > 0) return;
     if (_ammo <= 0) { HapticFeedback.lightImpact(); return; }
-    _ammo--;
+    if (!_modUnlimitedAmmo) _ammo--;
     _fireTimer = 0.25;
     _shootFlash = 1.0;
     HapticFeedback.lightImpact();
@@ -328,7 +390,7 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
   void _fireShotgun() {
     if (_fireTimer > 0) return;
     if (_shotgunAmmo <= 0) { HapticFeedback.lightImpact(); return; }
-    _shotgunAmmo--;
+    if (!_modUnlimitedAmmo) _shotgunAmmo--;
     _fireTimer = 0.55; // slower
     _shootFlash = 1.0;
     HapticFeedback.heavyImpact(); // bigger kick
@@ -348,7 +410,7 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
   void _fireSmg() {
     if (_fireTimer > 0) return;
     if (_smgAmmo <= 0) { HapticFeedback.lightImpact(); return; }
-    _smgAmmo--;
+    if (!_modUnlimitedAmmo) _smgAmmo--;
     _fireTimer = 0.08; // very fast
     _shootFlash = 0.6; // smaller flash for SMG
     HapticFeedback.lightImpact();
@@ -390,7 +452,7 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
       }
     }
     if (target != null) {
-      target.hp -= damage;
+      target.hp -= _modInstantKill ? 9999 : damage;
       target.hitFlash = 1.0;
       if (target.hp <= 0) {
         target.alive = false;
@@ -446,6 +508,30 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
 
   void _processMovement(double dt) {
     final c = widget.controller;
+    // Aimbot: auto-rotate toward nearest visible enemy
+    if (_modAimbot) {
+      _Enemy? nearest;
+      double bestDist = double.infinity;
+      for (final e in _enemies) {
+        if (!e.alive) continue;
+        final dx = e.x - _posX, dy = e.y - _posY;
+        final d = sqrt(dx * dx + dy * dy);
+        if (d < bestDist && _hasLos(_posX, _posY, e.x, e.y)) {
+          bestDist = d;
+          nearest = e;
+        }
+      }
+      if (nearest != null) {
+        final dx = nearest.x - _posX, dy = nearest.y - _posY;
+        final targetAngle = atan2(dy, dx);
+        final curAngle = atan2(_dirY, _dirX);
+        var diff = targetAngle - curAngle;
+        while (diff > pi)  diff -= 2 * pi;
+        while (diff < -pi) diff += 2 * pi;
+        final step = (_rotSpeed * 2 * dt).clamp(0.0, diff.abs());
+        if (diff.abs() > 0.01) _rotate(diff > 0 ? step : -step);
+      }
+    }
     // SMG: full-auto while A is held
     if (_weapon == _WeaponType.smg && c.isHeld(ArcadeButton.a)) {
       _fireSmg();
@@ -486,7 +572,7 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
       if (e.attackRange == 0) {
         // ── Demon: pure melee ──────────────────────────────────────────────
         if (dist < 0.5) {
-          _health -= e.damage * dt;
+          if (!_modGodMode) _health -= e.damage * dt;
           _hitFlash = (_hitFlash + dt * 3).clamp(0, 1);
           if (_damageCooldown <= 0) {
             HapticFeedback.lightImpact();
@@ -541,7 +627,7 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
       final pdx = _posX - p.x, pdy = _posY - p.y;
       if (pdx * pdx + pdy * pdy < 0.28 * 0.28) {
         p.alive = false;
-        _health -= p.damage;
+        if (!_modGodMode) _health -= p.damage;
         _hitFlash = (_hitFlash + 0.55).clamp(0.0, 1.0);
         if (_damageCooldown <= 0) {
           HapticFeedback.lightImpact();
@@ -628,6 +714,7 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
         if (_state == _GameState.start) _buildStartOverlay(),
         if (_state == _GameState.dead) _buildDeathOverlay(),
         if (_paused && _state == _GameState.playing) _buildPauseOverlay(),
+        if (_modMenuOpen) _buildModMenu(),
       ]),
     );
   }
@@ -777,6 +864,63 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
       ),
     ),
   );
+
+  Widget _buildModMenu() {
+    const labels = ['MUNICIÓN INFINITA', 'AIMBOT', 'MODO DIOS', 'MUERTE INSTANTÁNEA'];
+    final values = [_modUnlimitedAmmo, _modAimbot, _modGodMode, _modInstantKill];
+    return Positioned.fill(
+      child: Container(
+        color: const Color(0xE5000000),
+        child: Center(
+          child: Container(
+            width: 240,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+            decoration: BoxDecoration(
+              color: const Color(0xFF0A0A0A),
+              border: Border.all(color: const Color(0xFFCC2200), width: 2),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              const Text('— CHEAT MENU —',
+                style: TextStyle(color: Color(0xFFCC2200), fontSize: 12,
+                    fontWeight: FontWeight.bold, fontFamily: 'monospace',
+                    letterSpacing: 2)),
+              const SizedBox(height: 12),
+              ...List.generate(4, (i) {
+                final selected = _modCursor == i;
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 3),
+                  child: Row(children: [
+                    Text(selected ? '▶ ' : '  ',
+                      style: const TextStyle(color: Color(0xFFFF4400), fontSize: 12,
+                          fontFamily: 'monospace')),
+                    Expanded(
+                      child: Text(labels[i],
+                        style: TextStyle(
+                          color: selected ? Colors.white : const Color(0xFF888888),
+                          fontSize: 11, fontFamily: 'monospace',
+                          fontWeight: selected ? FontWeight.bold : FontWeight.normal,
+                        )),
+                    ),
+                    Text(values[i] ? 'ON ' : 'OFF',
+                      style: TextStyle(
+                        color: values[i] ? const Color(0xFF44FF44) : const Color(0xFF884444),
+                        fontSize: 11, fontFamily: 'monospace',
+                        fontWeight: FontWeight.bold,
+                      )),
+                  ]),
+                );
+              }),
+              const SizedBox(height: 12),
+              const Text('↑↓ navegar  A activar  B cerrar',
+                style: TextStyle(color: Color(0xFF444444), fontSize: 9,
+                    fontFamily: 'monospace')),
+            ]),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 // ─── Painter ──────────────────────────────────────────────────────────────────

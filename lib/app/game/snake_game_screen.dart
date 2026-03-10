@@ -80,6 +80,10 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> {
     final event = widget.controller.lastEvent;
     if (event == null || !event.isDown) return;
     final btn = event.button;
+    if (_isDead) {
+      if (btn == ArcadeButton.a || btn == ArcadeButton.start) _restart();
+      return;
+    }
     switch (btn) {
       case ArcadeButton.up:
         _tryChangeDir(_Direction.up);
