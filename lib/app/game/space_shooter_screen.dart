@@ -657,9 +657,9 @@ class _SpaceShooterScreenState extends State<SpaceShooterScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               _livesHud(_lives),
-              if (_shieldHits > 0) _neonChip('🛡 $_shieldHits', const Color(0xFF00E5FF)),
+              if (_shieldHits > 0) _neonPill('🛡 $_shieldHits', _kCyan),
               _scoreHud(_score),
-              if (_specialAmmo > 0) _neonChip('🔥 $_specialAmmo', const Color(0xFFFF9800)),
+              if (_specialAmmo > 0) _neonPill('🔥 $_specialAmmo', const Color(0xFFFF9800)),
               _waveHud(_wave),
             ],
           ),
@@ -709,20 +709,25 @@ class _SpaceShooterScreenState extends State<SpaceShooterScreen> {
     });
   }
 
-  Widget _neonChip(String t, Color color) => Container(
+  static const _kCyan = Color(0xFF00E5FF);
+  static const _kMagenta = Color(0xFFE040FB);
+
+  Widget _neonPill(String t, Color color, {double fontSize = 10, double letterSpacing = 0, double blurRadius = 6}) =>
+      Container(
         padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
         decoration: BoxDecoration(
           color: color.withOpacity(0.1),
           border: Border.all(color: color.withOpacity(0.6), width: 1),
           borderRadius: BorderRadius.circular(10),
-          boxShadow: [BoxShadow(color: color.withOpacity(0.25), blurRadius: 6)],
+          boxShadow: [BoxShadow(color: color.withOpacity(0.25), blurRadius: blurRadius)],
         ),
         child: Text(t,
             style: TextStyle(
                 color: color,
-                fontSize: 10,
+                fontSize: fontSize,
                 fontWeight: FontWeight.bold,
-                shadows: [Shadow(color: color, blurRadius: 6)])),
+                letterSpacing: letterSpacing,
+                shadows: [Shadow(color: color, blurRadius: blurRadius)])),
       );
 
   Widget _livesHud(int lives) => Row(
@@ -738,39 +743,9 @@ class _SpaceShooterScreenState extends State<SpaceShooterScreen> {
         painter: _MiniShipPainter(),
       );
 
-  Widget _scoreHud(int score) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-        decoration: BoxDecoration(
-          color: const Color(0xFF00E5FF).withOpacity(0.08),
-          border: Border.all(color: const Color(0xFF00E5FF).withOpacity(0.5), width: 1),
-          borderRadius: BorderRadius.circular(10),
-          boxShadow: [BoxShadow(color: const Color(0xFF00E5FF).withOpacity(0.2), blurRadius: 8)],
-        ),
-        child: Text('$score',
-            style: const TextStyle(
-                color: Color(0xFF00E5FF),
-                fontSize: 11,
-                fontWeight: FontWeight.bold,
-                letterSpacing: 1,
-                shadows: [Shadow(color: Color(0xFF00E5FF), blurRadius: 8)])),
-      );
+  Widget _scoreHud(int score) => _neonPill('$score', _kCyan, fontSize: 11, letterSpacing: 1, blurRadius: 8);
 
-  Widget _waveHud(int wave) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-        decoration: BoxDecoration(
-          color: const Color(0xFFE040FB).withOpacity(0.1),
-          border: Border.all(color: const Color(0xFFE040FB).withOpacity(0.6), width: 1),
-          borderRadius: BorderRadius.circular(10),
-          boxShadow: [BoxShadow(color: const Color(0xFFE040FB).withOpacity(0.25), blurRadius: 6)],
-        ),
-        child: Text('OLA $wave',
-            style: const TextStyle(
-                color: Color(0xFFE040FB),
-                fontSize: 10,
-                fontWeight: FontWeight.bold,
-                letterSpacing: 1,
-                shadows: [Shadow(color: Color(0xFFE040FB), blurRadius: 6)])),
-      );
+  Widget _waveHud(int wave) => _neonPill('OLA $wave', _kMagenta, letterSpacing: 1);
 
   Widget _buildStartOverlay() => Positioned.fill(
       child: Container(
@@ -1031,11 +1006,7 @@ class _MiniShipPainter extends CustomPainter {
       ..lineTo(w * 0.08, h * 0.72)
       ..close();
     canvas.drawPath(hull, Paint()
-      ..shader = LinearGradient(
-        begin: Alignment.topCenter,
-        end: Alignment.bottomCenter,
-        colors: [const Color(0xFF00AAFF), const Color(0xFF003388)],
-      ).createShader(Rect.fromLTWH(0, 0, w, h)));
+      ..shader = _ShooterPainter._miniShipGradient.createShader(Rect.fromLTWH(0, 0, w, h)));
     // Wing accents
     canvas.drawPath(
       Path()
@@ -1222,6 +1193,49 @@ class _ShooterPainter extends CustomPainter {
   static const double kShipW = 1.2;
   static const double kShipH = 1.0;
 
+  // Cached gradient definitions — createShader() is called per frame but the
+  // gradient object itself is only allocated once.
+  static const _shipGradient = LinearGradient(
+    begin: Alignment.topCenter,
+    end: Alignment.bottomCenter,
+    colors: [Color(0xFF00CCFF), Color(0xFF0033AA)],
+  );
+  static const _alienBurstGradient = LinearGradient(
+    begin: Alignment.topCenter,
+    end: Alignment.bottomCenter,
+    colors: [Color(0xFFDD88FF), Color(0xFF660099)],
+  );
+  static const _alienMissileGradient = LinearGradient(
+    begin: Alignment.topCenter,
+    end: Alignment.bottomCenter,
+    colors: [Color(0xFFFF6666), Color(0xFF880011)],
+  );
+  static const _alienBasicGradient = RadialGradient(
+    center: Alignment(-0.3, -0.4),
+    colors: [Color(0xFF44FF99), Color(0xFF006633)],
+  );
+  static const _alienScatterGradient = RadialGradient(
+    center: Alignment(-0.2, -0.3),
+    colors: [Color(0xFFFFAA00), Color(0xFF883300)],
+  );
+  static const _asteroidGradient = RadialGradient(
+    center: Alignment(-0.3, -0.4),
+    colors: [Color(0xFF9999BB), Color(0xFF33334A)],
+  );
+  static const _ammoPickupGradient = RadialGradient(
+    colors: [Color(0xFFFFDD44), Color(0xFFFF6600)],
+  );
+  static const _heartPickupGradient = LinearGradient(
+    begin: Alignment.topCenter,
+    end: Alignment.bottomCenter,
+    colors: [Color(0xFFFF88AA), Color(0xFFCC0044)],
+  );
+  static const _miniShipGradient = LinearGradient(
+    begin: Alignment.topCenter,
+    end: Alignment.bottomCenter,
+    colors: [Color(0xFF00AAFF), Color(0xFF003388)],
+  );
+
   const _ShooterPainter({
     required this.stars,
     required this.aliens,
@@ -1263,18 +1277,17 @@ class _ShooterPainter extends CustomPainter {
         const Color(0xFF001133), 0.15);
 
     // ── Animated starfield ────────────────────────────────────────────────────
+    final starPaint = Paint();
+    final sparkPaint = Paint()..strokeCap = StrokeCap.round;
     for (final s in stars) {
       final sx2 = wx(s.x, cs), sy2 = wy(s.y, cs);
-      canvas.drawCircle(
-        Offset(sx2, sy2), s.r * cs,
-        Paint()..color = Colors.white.withOpacity(s.opacity),
-      );
+      canvas.drawCircle(Offset(sx2, sy2), s.r * cs,
+          starPaint..color = Colors.white.withOpacity(s.opacity));
       // Bright stars get a subtle cross sparkle
       if (s.isBright) {
-        final sparkPaint = Paint()
+        sparkPaint
           ..color = Colors.white.withOpacity(s.opacity * 0.6)
-          ..strokeWidth = s.r * cs * 0.7
-          ..strokeCap = StrokeCap.round;
+          ..strokeWidth = s.r * cs * 0.7;
         final sparkLen = s.r * cs * 3.5;
         canvas.drawLine(Offset(sx2 - sparkLen, sy2), Offset(sx2 + sparkLen, sy2), sparkPaint);
         canvas.drawLine(Offset(sx2, sy2 - sparkLen), Offset(sx2, sy2 + sparkLen), sparkPaint);
@@ -1513,8 +1526,7 @@ class _ShooterPainter extends CustomPainter {
     path.close();
     canvas.drawPath(path, Paint()
       ..color = const Color(0xFFFF9800)
-      ..shader = RadialGradient(colors: [const Color(0xFFFFDD44), const Color(0xFFFF6600)])
-          .createShader(Rect.fromCircle(center: Offset(cx, cy), radius: sz)));
+      ..shader = _ammoPickupGradient.createShader(Rect.fromCircle(center: Offset(cx, cy), radius: sz)));
     canvas.drawPath(path, Paint()
       ..color = Colors.white.withOpacity(0.5)
       ..style = PaintingStyle.stroke
@@ -1529,10 +1541,7 @@ class _ShooterPainter extends CustomPainter {
     path.cubicTo(cx + sz * 1.2, cy - sz * 1.1, cx + sz * 1.2, cy - sz * 0.3, cx, cy + sz * 0.4);
     canvas.drawPath(path, Paint()
       ..color = const Color(0xFFFF3377)
-      ..shader = LinearGradient(
-        begin: Alignment.topCenter, end: Alignment.bottomCenter,
-        colors: [const Color(0xFFFF88AA), const Color(0xFFCC0044)],
-      ).createShader(Rect.fromLTWH(cx - sz, cy - sz, sz * 2, sz * 2)));
+      ..shader = _heartPickupGradient.createShader(Rect.fromLTWH(cx - sz, cy - sz, sz * 2, sz * 2)));
     canvas.drawPath(path, Paint()
       ..color = Colors.white.withOpacity(0.4)
       ..style = PaintingStyle.stroke
@@ -1595,11 +1604,7 @@ class _ShooterPainter extends CustomPainter {
       ..lineTo(shipX + sw * 0.04, shipY + sh * 0.70)
       ..close();
     canvas.drawPath(hull, Paint()
-      ..shader = LinearGradient(
-        begin: Alignment.topCenter,
-        end: Alignment.bottomCenter,
-        colors: [const Color(0xFF00CCFF), const Color(0xFF0033AA)],
-      ).createShader(Rect.fromLTWH(shipX, shipY, sw, sh)));
+      ..shader = _shipGradient.createShader(Rect.fromLTWH(shipX, shipY, sw, sh)));
 
     // Wing insets (dark panels)
     canvas.drawPath(
@@ -1662,7 +1667,7 @@ class _ShooterPainter extends CustomPainter {
     // Side thrusters
     for (final tx in [shipX, shipX + sw * 0.7]) {
       canvas.drawRect(
-        Rect.fromLTWH(tx + (tx == shipX ? 0 : 0), shipY + sh * 0.56, sw * 0.30, sh * 0.15),
+        Rect.fromLTWH(tx, shipY + sh * 0.56, sw * 0.30, sh * 0.15),
         Paint()..color = const Color(0xFF0055BB),
       );
     }
@@ -1704,10 +1709,7 @@ class _ShooterPainter extends CustomPainter {
     canvas.drawOval(
       Rect.fromLTWH(ax, ay + ah * 0.30, aw, ah * 0.70),
       Paint()
-        ..shader = RadialGradient(
-          center: const Alignment(-0.3, -0.4),
-          colors: [const Color(0xFF44FF99), const Color(0xFF006633)],
-        ).createShader(Rect.fromLTWH(ax, ay + ah * 0.30, aw, ah * 0.70)),
+        ..shader = _alienBasicGradient.createShader(Rect.fromLTWH(ax, ay + ah * 0.30, aw, ah * 0.70)),
     );
     // Dome
     canvas.drawOval(
@@ -1755,10 +1757,7 @@ class _ShooterPainter extends CustomPainter {
       ..lineTo(ax, ay + ah * 0.45)
       ..close();
     canvas.drawPath(body, Paint()
-      ..shader = LinearGradient(
-        begin: Alignment.topCenter, end: Alignment.bottomCenter,
-        colors: [const Color(0xFFDD88FF), const Color(0xFF660099)],
-      ).createShader(Rect.fromLTWH(ax, ay, aw, ah)));
+      ..shader = _alienBurstGradient.createShader(Rect.fromLTWH(ax, ay, aw, ah)));
     // Wing spikes
     canvas.drawPath(
       Path()
@@ -1822,10 +1821,7 @@ class _ShooterPainter extends CustomPainter {
     canvas.drawOval(
       Rect.fromLTWH(ax + aw * 0.08, ay + ah * 0.15, aw * 0.84, ah * 0.80),
       Paint()
-        ..shader = RadialGradient(
-          center: const Alignment(-0.2, -0.3),
-          colors: [const Color(0xFFFFAA00), const Color(0xFF883300)],
-        ).createShader(Rect.fromLTWH(ax, ay, aw, ah)),
+        ..shader = _alienScatterGradient.createShader(Rect.fromLTWH(ax, ay, aw, ah)),
     );
     // Carapace stripe
     canvas.drawOval(
@@ -1871,10 +1867,7 @@ class _ShooterPainter extends CustomPainter {
       ..lineTo(ax + aw * 0.22, ay + ah * 0.35)
       ..close();
     canvas.drawPath(body, Paint()
-      ..shader = LinearGradient(
-        begin: Alignment.topCenter, end: Alignment.bottomCenter,
-        colors: [const Color(0xFFFF6666), const Color(0xFF880011)],
-      ).createShader(Rect.fromLTWH(ax, ay, aw, ah)));
+      ..shader = _alienMissileGradient.createShader(Rect.fromLTWH(ax, ay, aw, ah)));
     // Dark center panel
     canvas.drawOval(
       Rect.fromLTWH(ax + aw * 0.27, ay + ah * 0.20, aw * 0.46, ah * 0.55),
@@ -1943,10 +1936,7 @@ class _ShooterPainter extends CustomPainter {
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4));
     // Body gradient
     canvas.drawPath(path, Paint()
-      ..shader = RadialGradient(
-        center: const Alignment(-0.3, -0.4),
-        colors: [const Color(0xFF9999BB), const Color(0xFF33334A)],
-      ).createShader(Rect.fromCircle(center: Offset.zero, radius: r)));
+      ..shader = _asteroidGradient.createShader(Rect.fromCircle(center: Offset.zero, radius: r)));
     // Crater details
     canvas.drawCircle(
       Offset(r * 0.25, -r * 0.3), r * 0.18,
