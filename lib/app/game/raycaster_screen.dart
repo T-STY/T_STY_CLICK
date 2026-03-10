@@ -53,13 +53,6 @@ const _kMap = <List<int>>[
   [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1], // 31 boundary
 ];
 
-const _kLavaCells0 = <List<int>>[
-  [14,14],[17,14],[14,17],[17,17],
-  [5,8],[15,8],[26,8],
-  [5,22],[15,22],[26,22],
-  [7,4],[25,4],[7,27],[25,27],
-];
-
 // Format: [mapX, mapY]  (mapX=col, mapY=row)
 const _kLavaTowers0 = <List<int>>[
   [12,12],[19,12],[12,19],[19,19],
@@ -100,12 +93,6 @@ const _kMap1 = <List<int>>[
   [1,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,1], // 29
   [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1], // 30
   [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1], // 31
-];
-
-const _kLavaCells1 = <List<int>>[
-  [15,14],[16,14],[15,17],[16,17],
-  [9,12],[23,12],[9,19],[23,19],
-  [5,8],[26,8],[5,22],[26,22],
 ];
 
 const _kLavaTowers1 = <List<int>>[
@@ -150,12 +137,6 @@ const _kMap2 = <List<int>>[
   [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1], // 31
 ];
 
-const _kLavaCells2 = <List<int>>[
-  [15,15],[16,15],[15,16],[16,16],
-  [8,13],[24,13],[8,18],[24,18],
-  [5,8],[26,8],[5,22],[26,22],
-];
-
 const _kLavaTowers2 = <List<int>>[
   [5,4],[25,4],[5,27],[25,27],
 ];
@@ -196,12 +177,6 @@ const _kMap3 = <List<int>>[
   [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1], // 31
 ];
 
-const _kLavaCells3 = <List<int>>[
-  [15,15],[16,15],[15,16],[16,16],
-  [15,11],[16,11],[15,20],[16,20],
-  [5,8],[26,8],[5,22],[26,22],
-];
-
 const _kLavaTowers3 = <List<int>>[
   [14,12],[17,12],
   [13,13],[18,13],
@@ -215,9 +190,6 @@ const _kLavaTowers3 = <List<int>>[
 
 // All realm maps indexed by realm number
 const _kMaps = [_kMap, _kMap1, _kMap2, _kMap3];
-
-// Lava cell pools per realm (floor decorations, do NOT block movement)
-const _kRealmLavaCells = [_kLavaCells0, _kLavaCells1, _kLavaCells2, _kLavaCells3];
 
 // Lava tower pillar positions per realm (interior wall cells rendered as lava columns)
 const _kRealmLavaTowers = [_kLavaTowers0, _kLavaTowers1, _kLavaTowers2, _kLavaTowers3];
@@ -252,9 +224,14 @@ class _Enemy {
   double crosshairTimer = 0.0; // seconds the player's crosshair has been on this troll
   double teleportFlash = 0.0;  // 1 = just teleported (visual flicker)
 
-  // Wall-steering navigation
-  double steerBias = 1.0;  // +1 or -1: which perpendicular direction to try
-  double stuckTimer = 0.0; // how long continuously blocked by a wall
+  // Wall-steering navigation (legacy fallback)
+  double steerBias = 1.0;
+  double stuckTimer = 0.0;
+
+  // A* pathfinding
+  List<List<int>> navPath = [];   // remaining grid cells to walk through
+  double pathTimer = 0.0;         // seconds since last path computation
+  static const double kPathInterval = 1.2; // recompute path every 1.2 s
 
   static double _baseHp(_EnemyType t) {
     switch (t) {
@@ -355,6 +332,15 @@ class _Projectile {
       required this.dx, required this.dy,
       required this.speed, required this.damage,
       required this.type});
+}
+
+// ─── A* node (internal pathfinding) ───────────────────────────────────────────
+
+class _ANode {
+  final int c, r, g, h;
+  final _ANode? parent;
+  int get f => g + h;
+  const _ANode(this.c, this.r, this.g, this.h, this.parent);
 }
 
 // ─── Weapon ───────────────────────────────────────────────────────────────────
@@ -700,6 +686,49 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
     _checkCenterHit(rDx, rDy, 10.0, damage: 1);
   }
 
+  // ── A* pathfinding on the tile grid ─────────────────────────────────────────
+  // Returns a list of [col, row] grid cells from start (exclusive) to goal
+  // (inclusive), or null if no path found within budget.
+  List<List<int>>? _astar(int sc, int sr, int gc, int gr, List<List<int>> map) {
+    if (sc == gc && sr == gr) return [];
+    // 4-directional neighbours
+    const dirs = [[0,-1],[0,1],[-1,0],[1,0]];
+    final open = <_ANode>[];
+    final closed = <int, _ANode>{}; // key = col*64+row
+    final start = _ANode(sc, sr, 0, (gc-sc).abs() + (gr-sr).abs(), null);
+    open.add(start);
+    while (open.isNotEmpty) {
+      // Pop lowest f
+      open.sort((a, b) => a.f.compareTo(b.f));
+      final cur = open.removeAt(0);
+      final key = cur.c * 64 + cur.r;
+      if (closed.containsKey(key)) continue;
+      closed[key] = cur;
+      if (cur.c == gc && cur.r == gr) {
+        // Reconstruct path
+        final path = <List<int>>[];
+        _ANode? n = cur;
+        while (n != null && !(n.c == sc && n.r == sr)) {
+          path.add([n.c, n.r]);
+          n = n.parent;
+        }
+        return path.reversed.toList();
+      }
+      if (closed.length > 512) break; // budget guard — map is 32×32
+      for (final d in dirs) {
+        final nc = cur.c + d[0], nr = cur.r + d[1];
+        if (nc < 1 || nc >= _kMapW - 1 || nr < 1 || nr >= _kMapH - 1) continue;
+        if (map[nr][nc] == 1) continue;
+        final nk = nc * 64 + nr;
+        if (closed.containsKey(nk)) continue;
+        final g = cur.g + 1;
+        final h = (gc - nc).abs() + (gr - nr).abs();
+        open.add(_ANode(nc, nr, g, h, cur));
+      }
+    }
+    return null; // no path
+  }
+
   /// Returns true if a clear line-of-sight exists from (x0,y0) to (x1,y1)
   bool _hasLos(double x0, double y0, double x1, double y1) {
     final dx = x1 - x0, dy = y1 - y0;
@@ -1015,44 +1044,76 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
         if (dist <= e.minEngageRange) continue;
       }
 
-      const kER = 0.32; // enemy collision radius — prevents clipping into walls
+      const kER = 0.32; // enemy collision radius
       final spd = eBaseSpeed * e.speed;
       if (dist < 0.01) continue;
-      final ndx = dx / dist, ndy = dy / dist;
+
+      // ── A* navigation — recompute path periodically ──────────────────────
+      e.pathTimer += dt;
+      final hasDirectLos = _hasLos(e.x, e.y, _posX, _posY);
+      final needsRepath = e.pathTimer >= _Enemy.kPathInterval
+          || (e.navPath.isEmpty && !hasDirectLos);
+      if (needsRepath) {
+        e.pathTimer = 0.0;
+        if (hasDirectLos) {
+          // Line of sight — clear stored path, head directly toward player
+          e.navPath = [];
+        } else {
+          // Compute A* path from enemy tile to player tile
+          final path = _astar(
+            e.x.floor(), e.y.floor(),
+            _posX.floor(), _posY.floor(),
+            map,
+          );
+          e.navPath = path ?? [];
+        }
+      }
+
+      // Determine movement direction: next path waypoint OR direct to player
+      double ndx, ndy;
+      if (e.navPath.isNotEmpty) {
+        final waypoint = e.navPath.first;
+        final wpX = waypoint[0] + 0.5, wpY = waypoint[1] + 0.5;
+        final wdx = wpX - e.x, wdy = wpY - e.y;
+        final wdist = sqrt(wdx * wdx + wdy * wdy);
+        if (wdist < 0.35) {
+          // Reached waypoint — advance to next
+          e.navPath = e.navPath.sublist(1);
+          if (e.navPath.isEmpty) { ndx = dx / dist; ndy = dy / dist; }
+          else {
+            final nw = e.navPath.first;
+            final nwx = nw[0] + 0.5 - e.x, nwy = nw[1] + 0.5 - e.y;
+            final nd = sqrt(nwx*nwx + nwy*nwy);
+            ndx = nd > 0.01 ? nwx/nd : dx/dist;
+            ndy = nd > 0.01 ? nwy/nd : dy/dist;
+          }
+        } else {
+          ndx = wdx / wdist; ndy = wdy / wdist;
+        }
+      } else {
+        ndx = dx / dist; ndy = dy / dist;
+      }
+
       final nx = e.x + ndx * spd * dt;
       final ny = e.y + ndy * spd * dt;
       final nxOk = map[e.y.floor()][(nx - kER).floor()] == 0 &&
                    map[e.y.floor()][(nx + kER).floor()] == 0;
       final nyOk = map[(ny - kER).floor()][e.x.floor()] == 0 &&
                    map[(ny + kER).floor()][e.x.floor()] == 0;
-
-      if (nxOk && nyOk) {
-        // Direct path clear — move and bleed off stuck timer
-        e.x = nx; e.y = ny;
-        e.stuckTimer = (e.stuckTimer - dt * 3.0).clamp(0.0, 2.0);
-      } else if (nxOk) {
-        e.x = nx;
-        e.stuckTimer = (e.stuckTimer - dt * 1.5).clamp(0.0, 2.0);
-      } else if (nyOk) {
-        e.y = ny;
-        e.stuckTimer = (e.stuckTimer - dt * 1.5).clamp(0.0, 2.0);
-      } else {
-        // Fully blocked — try perpendicular (wall-following)
+      if (nxOk) e.x = nx;
+      if (nyOk) e.y = ny;
+      // If still stuck, nudge perpendicular as fallback
+      if (!nxOk && !nyOk) {
         e.stuckTimer += dt;
-        if (e.stuckTimer > 0.45) {
-          e.steerBias = -e.steerBias; // flip side after 0.45 s stuck
-          e.stuckTimer = 0.0;
-        }
-        final perpX = -ndy * e.steerBias;
-        final perpY =  ndx * e.steerBias;
-        final snx = e.x + perpX * spd * dt;
-        final sny = e.y + perpY * spd * dt;
-        final snxOk = map[e.y.floor()][(snx - kER).floor()] == 0 &&
-                      map[e.y.floor()][(snx + kER).floor()] == 0;
-        final snyOk = map[(sny - kER).floor()][e.x.floor()] == 0 &&
-                      map[(sny + kER).floor()][e.x.floor()] == 0;
-        if (snxOk) e.x = snx;
-        if (snyOk) e.y = sny;
+        if (e.stuckTimer > 0.4) { e.steerBias = -e.steerBias; e.stuckTimer = 0; }
+        final px = -ndy * e.steerBias, py = ndx * e.steerBias;
+        final snx = e.x + px * spd * dt, sny = e.y + py * spd * dt;
+        if (map[e.y.floor()][(snx-kER).floor()] == 0 &&
+            map[e.y.floor()][(snx+kER).floor()] == 0) e.x = snx;
+        if (map[(sny-kER).floor()][e.x.floor()] == 0 &&
+            map[(sny+kER).floor()][e.x.floor()] == 0) e.y = sny;
+      } else {
+        e.stuckTimer = (e.stuckTimer - dt * 3).clamp(0, 2);
       }
     }
   }
@@ -1509,7 +1570,6 @@ class _RaycasterPainter extends CustomPainter {
 
     _drawCeilingAndFloor(canvas, size, pxW, pxH);
     _castWalls(canvas, size, pxW, pxH);
-    _drawLavaPools(canvas, size, pxW, pxH);
     _drawEnemySprites(canvas, size, pxW, pxH);
     _drawProjectiles(canvas, size, pxW, pxH);
     if (relicActive) _drawRelic(canvas, size, pxW, pxH);
@@ -1569,45 +1629,64 @@ class _RaycasterPainter extends CustomPainter {
       canvas.drawRect(Rect.fromLTWH(0, cH * band.$1, size.width, cH * (band.$2 - band.$1) + 1), p);
     }
 
-    // Realm-themed floor bands
+    // Realm-themed floor bands — near-horizon bands are significantly brighter
+    // than the ceiling to create clear visual separation between floor and sky.
     final floorBands = switch (realmIdx) {
-      1 => const [ // Las Catacumbas — cold stone floor
-        (0.00, 0.06, Color(0xFF0E1228)),
-        (0.06, 0.16, Color(0xFF0B0E1F)),
-        (0.16, 0.32, Color(0xFF080B17)),
-        (0.32, 0.55, Color(0xFF05080F)),
-        (0.55, 0.78, Color(0xFF03050A)),
-        (0.78, 1.00, Color(0xFF020305)),
+      1 => const [ // Las Catacumbas — cold stone floor (bright slate at horizon)
+        (0.00, 0.06, Color(0xFF3A4880)),  // bright blue-grey near horizon
+        (0.06, 0.16, Color(0xFF252F55)),
+        (0.16, 0.32, Color(0xFF16203A)),
+        (0.32, 0.55, Color(0xFF0D1428)),
+        (0.55, 0.78, Color(0xFF07091A)),
+        (0.78, 1.00, Color(0xFF03040D)),
       ],
-      2 => const [ // El Abismo — dark void floor
-        (0.00, 0.06, Color(0xFF14002A)),
-        (0.06, 0.16, Color(0xFF0F001F)),
-        (0.16, 0.32, Color(0xFF0A0015)),
-        (0.32, 0.55, Color(0xFF07000E)),
-        (0.55, 0.78, Color(0xFF040008)),
-        (0.78, 1.00, Color(0xFF020004)),
+      2 => const [ // El Abismo — void floor (vivid purple near horizon)
+        (0.00, 0.06, Color(0xFF5A00AA)),  // bright purple near horizon
+        (0.06, 0.16, Color(0xFF3C0072)),
+        (0.16, 0.32, Color(0xFF250048)),
+        (0.32, 0.55, Color(0xFF160030)),
+        (0.55, 0.78, Color(0xFF0A001C)),
+        (0.78, 1.00, Color(0xFF05000E)),
       ],
-      3 => const [ // El Núcleo — volcanic floor with lava glow
-        (0.00, 0.06, Color(0xFF3A0C00)),
-        (0.06, 0.16, Color(0xFF2A0800)),
-        (0.16, 0.32, Color(0xFF1C0500)),
-        (0.32, 0.55, Color(0xFF120300)),
-        (0.55, 0.78, Color(0xFF0C0200)),
-        (0.78, 1.00, Color(0xFF070100)),
+      3 => const [ // El Núcleo — volcanic floor (incandescent near horizon)
+        (0.00, 0.06, Color(0xFF9E3000)),  // hot volcanic glow near horizon
+        (0.06, 0.16, Color(0xFF6A1E00)),
+        (0.16, 0.32, Color(0xFF3E1000)),
+        (0.32, 0.55, Color(0xFF260A00)),
+        (0.55, 0.78, Color(0xFF160500)),
+        (0.78, 1.00, Color(0xFF0A0200)),
       ],
-      _ => const [ // La Cripta — stone floor with lava glow
-        (0.00, 0.06, Color(0xFF2E1400)),
-        (0.06, 0.16, Color(0xFF220E00)),
-        (0.16, 0.32, Color(0xFF180A00)),
-        (0.32, 0.55, Color(0xFF100600)),
-        (0.55, 0.78, Color(0xFF0B0400)),
-        (0.78, 1.00, Color(0xFF070200)),
+      _ => const [ // La Cripta — stone floor (warm amber glow near horizon)
+        (0.00, 0.06, Color(0xFF7A3C14)),  // warm stone glow near horizon
+        (0.06, 0.16, Color(0xFF502200)),
+        (0.16, 0.32, Color(0xFF321400)),
+        (0.32, 0.55, Color(0xFF200C00)),
+        (0.55, 0.78, Color(0xFF130600)),
+        (0.78, 1.00, Color(0xFF080300)),
       ],
     };
     for (final band in floorBands) {
       p.color = band.$3;
       canvas.drawRect(Rect.fromLTWH(0, fY + cH * band.$1, size.width, cH * (band.$2 - band.$1) + 1), p);
     }
+
+    // Horizon separator — thin bright line at the floor/ceiling boundary
+    // so the ground plane is always clearly distinct from the sky above.
+    final horizonColor = switch (realmIdx) {
+      1 => const Color(0xFF6070CC),  // cold blue-white
+      2 => const Color(0xFF9933FF),  // vivid purple
+      3 => const Color(0xFFFF6622),  // hellfire orange
+      _ => const Color(0xFFCC6622),  // amber lava line
+    };
+    p.color = horizonColor.withOpacity(0.55);
+    canvas.drawRect(Rect.fromLTWH(0, fY - 1.0, size.width, 2.0), p);
+    // Soft glow below horizon line
+    final hGlowPaint = Paint()
+      ..shader = LinearGradient(
+        begin: Alignment.topCenter, end: Alignment.bottomCenter,
+        colors: [horizonColor.withOpacity(0.28), const Color(0x00000000)],
+      ).createShader(Rect.fromLTWH(0, fY, size.width, cH * 0.10));
+    canvas.drawRect(Rect.fromLTWH(0, fY, size.width, cH * 0.10), hGlowPaint);
 
     // Blood pools (static dark splotches near ground)
     p.color = const Color(0xFF2A0400);
@@ -1712,11 +1791,39 @@ class _RaycasterPainter extends CustomPainter {
       final perpWallDist = side == 0 ? sideDistX - deltaDistX : sideDistY - deltaDistY;
       zBuf[x] = perpWallDist;
 
-      // ── Invisible boundary: map-edge walls blend into the void ─────────────
+      // ── Boundary bone-pile wall — bleached bone & skull texture ───────────
       final isBoundary = (mapX == 0 || mapX == _kMapW - 1 || mapY == 0 || mapY == _kMapH - 1);
       if (isBoundary) {
-        // Don't draw — the ceiling/floor colour already shows through, creating
-        // the illusion that the hellscape extends to infinity.
+        // Visible bone-pile boundary: pale yellowed-bone surface with dark gaps
+        final br = (1.0 / (1.0 + perpWallDist * 0.20)).clamp(0.05, 1.0);
+        // Sample a frac for the wall hit to create varied bone/gap texturing
+        double bWallX;
+        if (side == 0) {
+          bWallX = posY + perpWallDist * rayDirY;
+        } else {
+          bWallX = posX + perpWallDist * rayDirX;
+        }
+        bWallX -= bWallX.floor();
+        // Alternating bone segments and dark gaps (every ~12% of wall width)
+        final boneSeg = (bWallX * 8).floor();
+        final isDarkGap = boneSeg % 4 == 3; // every 4th segment is a dark gap
+        final boneShade = isDarkGap ? 0.25 : (boneSeg.isEven ? 1.0 : 0.80);
+        final boneR = (0xD4 * br * boneShade).round().clamp(0, 255);
+        final boneG = (0xC0 * br * boneShade).round().clamp(0, 255);
+        final boneB = (0x88 * br * boneShade).round().clamp(0, 255);
+        wallPaint.color = Color.fromRGBO(boneR, boneG, boneB, 1);
+        canvas.drawRect(Rect.fromLTWH(x * pxW, dsY, pxW + 0.5, sliceH), wallPaint);
+        // Skull eye-socket patches — dark ovals at regular intervals
+        if (perpWallDist < 8.0) {
+          final skullPhase = (bWallX * 3).floor();
+          if (skullPhase % 3 == 0) {
+            final eyeOp = (0.7 * br).clamp(0.0, 1.0);
+            wallPaint.color = Color.fromRGBO(0x18, 0x10, 0x08, eyeOp);
+            final eyeTop = dsY + sliceH * 0.22;
+            final eyeH = sliceH * 0.18;
+            canvas.drawRect(Rect.fromLTWH(x * pxW, eyeTop, pxW + 0.5, eyeH), wallPaint);
+          }
+        }
         continue;
       }
 
@@ -2337,57 +2444,6 @@ class _RaycasterPainter extends CustomPainter {
     }
   }
 
-  // ── Lava pool floor sprites ────────────────────────────────────────────────
-  // Projects lava cell positions onto the floor as glowing orange pools.
-
-  void _drawLavaPools(Canvas canvas, Size size, double pxW, double pxH) {
-    final lavaCells = _kRealmLavaCells[realmIdx.clamp(0, _kRealmLavaCells.length - 1)];
-    const numCols = 240;
-    final halfH = size.height * 0.5;
-    final invDet = 1.0 / (planeX * dirY - dirX * planeY);
-    final sp = Paint()..isAntiAlias = true;
-
-    for (final cell in lavaCells) {
-      final cx = cell[0] + 0.5 - posX;
-      final cy = cell[1] + 0.5 - posY;
-      final transformX = invDet * (dirY * cx - dirX * cy);
-      final transformY = invDet * (-planeY * cx + planeX * cy);
-      if (transformY <= 0.15) continue;
-
-      final screenCol = (numCols ~/ 2 * (1 + transformX / transformY)).round();
-      if (screenCol < 2 || screenCol >= numCols - 2) continue;
-
-      // Floor-level position: below horizon, scaled by distance
-      final projH = (size.height / transformY).clamp(1.0, size.height);
-      final floorY = halfH + projH * 0.50; // exactly at floor level
-
-      // Pool width in screen pixels — much wider than tall to look flat
-      final poolW = (projH / transformY * pxW * 5.0).clamp(3.0, size.width * 0.4);
-      final poolH = (projH * 0.08).clamp(2.0, 18.0);
-      final screenX = screenCol * pxW;
-
-      final pulse = 0.65 + sin(time * 2.2 + cell[0] * 1.7 + cell[1] * 0.9) * 0.35;
-      final dist = sqrt(cx * cx + cy * cy);
-      final alpha = ((0.35 * pulse) / (1.0 + dist * 0.25)).clamp(0.04, 0.55);
-
-      // Outer glow (wide orange haze)
-      sp.color = Color.fromARGB((alpha * 0.5 * 255).round(), 0xFF, 0x55, 0x00);
-      canvas.drawOval(
-          Rect.fromCenter(center: Offset(screenX, floorY),
-              width: poolW * 1.8, height: poolH * 2.5), sp);
-      // Mid pool
-      sp.color = Color.fromARGB((alpha * 255).round(), 0xFF, 0x88, 0x00);
-      canvas.drawOval(
-          Rect.fromCenter(center: Offset(screenX, floorY),
-              width: poolW, height: poolH), sp);
-      // Bright core
-      sp.color = Color.fromARGB(((alpha * 0.8 + 0.15) * 255).round().clamp(0, 255), 0xFF, 0xCC, 0x44);
-      canvas.drawOval(
-          Rect.fromCenter(center: Offset(screenX, floorY),
-              width: poolW * 0.35, height: poolH * 0.5), sp);
-    }
-  }
-
   // ─── Skeleton ──────────────────────────────────────────────────────────────
 
   void _drawSkeletonColumn(Canvas canvas, Paint sp, int sx, double pxW,
@@ -2946,7 +3002,7 @@ class _RaycasterPainter extends CustomPainter {
     canvas.save();
     // Barrel aimed toward crosshair (screen centre) from bottom-right anchor
     canvas.translate(size.width * 0.68, size.height * 0.95);
-    canvas.rotate(-0.42);
+    canvas.rotate(-0.245);
 
     final p = Paint()..isAntiAlias = false;
 
@@ -3076,7 +3132,7 @@ class _RaycasterPainter extends CustomPainter {
     canvas.save();
     // Barrel aimed toward crosshair (screen centre) from bottom-right anchor
     canvas.translate(size.width * 0.82, size.height * 0.95);
-    canvas.rotate(-0.55);
+    canvas.rotate(-0.375);
 
     final p = Paint()..isAntiAlias = false;
 
@@ -3209,7 +3265,7 @@ class _RaycasterPainter extends CustomPainter {
     canvas.save();
     // Barrel aimed toward crosshair (screen centre) from bottom-right anchor
     canvas.translate(size.width * 0.78, size.height * 0.95);
-    canvas.rotate(-0.50);
+    canvas.rotate(-0.325);
 
     final p = Paint()..isAntiAlias = false;
 

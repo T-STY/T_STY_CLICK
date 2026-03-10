@@ -40,9 +40,9 @@ In-game titles also updated in each screen's start overlay.
 ### Weapons
 | Weapon | Rotation | Anchor | Fire rate | Unlock | Ammo/wave | Notes |
 |---|---|---|---|---|---|---|
-| Pistol | -0.32 rad | (0.82w, 0.95h) | 0.25s | always | +30 | semi-auto |
-| Shotgun | -0.18 rad | (0.68w, 0.95h) | 0.55s | wave 2 | +6 shells | 7-pellet spread |
-| SMG | -0.28 rad | (0.78w, 0.95h) | 0.08s | wave 4 | +20 | full-auto (hold A) |
+| Pistol | -0.375 rad | (0.82w, 0.95h) | 0.25s | always | +30 | semi-auto |
+| Shotgun | -0.245 rad | (0.68w, 0.95h) | 0.55s | wave 2 | +6 shells | 7-pellet spread |
+| SMG | -0.325 rad | (0.78w, 0.95h) | 0.08s | wave 4 | +20 | full-auto (hold A) |
 
 - All weapon rotations computed so barrel aims toward crosshair (screen centre)
 - B button cycles through all *unlocked* weapons
@@ -60,8 +60,16 @@ In-game titles also updated in each screen's start overlay.
 - Bottom-left mini-map — situational awareness only
 - No wall-penetration shooting; radar is for navigation
 
+### Enemy AI
+- A* pathfinding on 32×32 grid — recomputes path every 1.2 s (or immediately if no LOS and path empty)
+- Direct movement when line-of-sight is clear; A* navigation through walls otherwise
+- Legacy wall-steering fallback still active if stuck
+
 ### Floor / environment
-- Dark stone floor + blood pools + screen-edge infernal vignette
+- Floor gradient: bright amber/colour near horizon, darkening to black at feet — clearly distinct from ceiling
+- Horizon separator line with soft glow separates floor from sky
+- Boundary walls rendered as bone-pile walls (pale yellowed bone + skull eye patches) — visible map limits
+- Blood pools + screen-edge infernal vignette
 
 ## CRT Overlay (`_CrtOverlayPainter` in arcade_center_screen.dart)
 - Horizontal scanlines every 2px at 14% opacity

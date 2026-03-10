@@ -2426,38 +2426,100 @@ class _CartridgePainter extends CustomPainter {
         p.isAntiAlias = false;
         break;
 
-      // ── INFRAMUNDO 2D (FPS) ───────────────────────────────────────────────
+      // ── Cripta Maldita (FPS raycaster) ───────────────────────────────────
       case 5:
-        // Stone bricks
-        p.color = const Color(0xFF550000).withOpacity(0.45);
-        for (int r = 0; r < 9; r++) {
-          final xOff = (r % 2) * 18.0;
-          for (int c = 0; c < 4; c++) {
-            canvas.drawRect(Rect.fromLTWH(c * 36.0 + xOff, r * 16.0, 34, 14), p);
-          }
+        // Hellfire sky — crimson gradient ceiling
+        p.color = const Color(0xFF8A1800).withOpacity(0.70);
+        canvas.drawRect(Rect.fromLTWH(0, 0, w, h * 0.50), p);
+        p.color = const Color(0xFF4A0A00).withOpacity(0.90);
+        canvas.drawRect(Rect.fromLTWH(0, 0, w, h * 0.30), p);
+        p.color = const Color(0xFF1A0200);
+        canvas.drawRect(Rect.fromLTWH(0, 0, w, h * 0.12), p);
+
+        // Warm amber floor — clearly distinct from the dark sky
+        p.color = const Color(0xFF6A300A).withOpacity(0.85);
+        canvas.drawRect(Rect.fromLTWH(0, h * 0.50, w, h * 0.08), p);
+        p.color = const Color(0xFF3A1600).withOpacity(0.90);
+        canvas.drawRect(Rect.fromLTWH(0, h * 0.58, w, h * 0.42), p);
+
+        // Horizon line — amber glow
+        p.color = const Color(0xFFBB6622).withOpacity(0.65);
+        canvas.drawRect(Rect.fromLTWH(0, h * 0.499, w, 2), p);
+
+        // Left stone wall (perspective trapezoid)
+        p.color = const Color(0xFF6A1A08).withOpacity(0.80);
+        final leftWall = Path()
+          ..moveTo(0, 0)
+          ..lineTo(w * 0.28, h * 0.18)
+          ..lineTo(w * 0.28, h * 0.82)
+          ..lineTo(0, h)
+          ..close();
+        canvas.drawPath(leftWall, p);
+        // Brick texture on left wall
+        p.color = const Color(0xFF3A0A00).withOpacity(0.50);
+        for (int r = 0; r < 6; r++) {
+          final wy1 = h * (0.18 + r * 0.10);
+          final xOff = (r % 2) * w * 0.08;
+          canvas.drawRect(Rect.fromLTWH(xOff, wy1, w * 0.20, h * 0.08), p);
         }
-        // Demon eye
+
+        // Right stone wall (mirrored)
+        p.color = const Color(0xFF4A1006).withOpacity(0.80);
+        final rightWall = Path()
+          ..moveTo(w, 0)
+          ..lineTo(w * 0.72, h * 0.18)
+          ..lineTo(w * 0.72, h * 0.82)
+          ..lineTo(w, h)
+          ..close();
+        canvas.drawPath(rightWall, p);
+
+        // Far corridor wall
+        p.color = const Color(0xFF2A0800).withOpacity(0.95);
+        canvas.drawRect(Rect.fromLTWH(w * 0.28, h * 0.18, w * 0.44, h * 0.64), p);
+        // Mortar lines on far wall
+        p.color = const Color(0xFF180400).withOpacity(0.60);
+        for (int r = 0; r < 4; r++) {
+          canvas.drawRect(Rect.fromLTWH(w*0.28, h*(0.28+r*0.12), w*0.44, 2), p);
+        }
+        for (int c = 0; c < 3; c++) {
+          canvas.drawRect(Rect.fromLTWH(w*(0.38+c*0.12), h*0.18, 2, h*0.64), p);
+        }
+
+        // Skeleton enemy at end of corridor
         p.isAntiAlias = true;
-        p.color = const Color(0xFFCC0000).withOpacity(0.20);
-        canvas.drawCircle(Offset(w*0.50, h*0.46), 52, p);
-        p.color = const Color(0xFF880000).withOpacity(0.75);
-        canvas.drawCircle(Offset(w*0.50, h*0.46), 36, p);
-        p.color = const Color(0xFFDD1100).withOpacity(0.92);
-        canvas.drawCircle(Offset(w*0.50, h*0.46), 26, p);
-        p.color = Colors.black;
-        canvas.drawOval(Rect.fromLTWH(w*0.47, h*0.40, 7, 24), p); // slit pupil
-        p.color = const Color(0xFFFF3311).withOpacity(0.90);
-        canvas.drawCircle(Offset(w*0.50, h*0.46), 12, p);
-        p.color = Colors.white.withOpacity(0.28);
-        canvas.drawCircle(Offset(w*0.46, h*0.42), 5, p);
-        // Flames
-        p.color = const Color(0xFFFF4400).withOpacity(0.60);
-        for (int i = 0; i < 5; i++) canvas.drawOval(Rect.fromLTWH(i*w/5, h*0.74, w/5, h*0.28), p);
-        p.color = const Color(0xFFFF8800).withOpacity(0.45);
-        for (int i = 0; i < 4; i++) canvas.drawOval(Rect.fromLTWH(w*0.10+i*w/4, h*0.80, w/5, h*0.22), p);
-        p.color = const Color(0xFFFFCC00).withOpacity(0.28);
-        for (int i = 0; i < 3; i++) canvas.drawOval(Rect.fromLTWH(w*0.15+i*w/3, h*0.86, w/4, h*0.14), p);
+        final skX = w * 0.50, skTop = h * 0.24, skH = h * 0.28;
+        // Skull
+        p.color = const Color(0xFFDDD8B8).withOpacity(0.90);
+        canvas.drawOval(Rect.fromLTWH(skX - 7, skTop, 14, 12), p);
+        // Eye sockets
+        p.color = Colors.black.withOpacity(0.85);
+        canvas.drawOval(Rect.fromLTWH(skX - 5, skTop + 3, 4, 4), p);
+        canvas.drawOval(Rect.fromLTWH(skX + 1, skTop + 3, 4, 4), p);
+        // Body skeleton
+        p.color = const Color(0xFFCCC8A8).withOpacity(0.85);
+        canvas.drawRect(Rect.fromLTWH(skX - 1, skTop + 11, 2, skH * 0.4), p); // spine
+        canvas.drawRect(Rect.fromLTWH(skX - 7, skTop + 14, 14, 2), p);        // ribs
+        canvas.drawRect(Rect.fromLTWH(skX - 6, skTop + 18, 12, 2), p);
+        // Arms
+        canvas.drawRect(Rect.fromLTWH(skX - 9, skTop + 12, 2, skH * 0.3), p);
+        canvas.drawRect(Rect.fromLTWH(skX + 7, skTop + 12, 2, skH * 0.3), p);
+        // Glowing eye sockets
+        p.color = const Color(0xFFFF3300).withOpacity(0.88);
+        canvas.drawOval(Rect.fromLTWH(skX - 4.5, skTop + 3.5, 3, 3), p);
+        canvas.drawOval(Rect.fromLTWH(skX + 1.5, skTop + 3.5, 3, 3), p);
         p.isAntiAlias = false;
+
+        // Pistol bottom-right corner
+        p.color = const Color(0xFF888888).withOpacity(0.85);
+        canvas.drawRect(Rect.fromLTWH(w*0.74, h*0.68, 5, 22), p);  // barrel
+        canvas.drawRect(Rect.fromLTWH(w*0.70, h*0.78, 16, 12), p); // body
+        p.color = const Color(0xFF4A3010).withOpacity(0.80);
+        canvas.drawRect(Rect.fromLTWH(w*0.70, h*0.88, 12, 10), p); // grip
+        // Muzzle flash
+        p.color = const Color(0xFFFF8800).withOpacity(0.75);
+        canvas.drawRect(Rect.fromLTWH(w*0.75, h*0.62, 3, 8), p);
+        p.color = const Color(0xFFFFDD44).withOpacity(0.60);
+        canvas.drawRect(Rect.fromLTWH(w*0.76, h*0.60, 2, 4), p);
         break;
 
       // ── Rana Saltarina (Frogger) ──────────────────────────────────────────
