@@ -544,17 +544,20 @@ class _FlappyPainter extends CustomPainter {
     }
 
     // ── Speed streaks — white/cyan horizontal lines at high speed ────────────
+    // Fixed seed so positions never jump; only horizontal scroll changes with time.
     if (speedT > 0.15) {
       final streakOpacity = ((speedT - 0.15) / 0.85).clamp(0.0, 1.0);
-      final streakRng = Random(pipesPassed ~/ 3);
+      final streakRng = Random(999); // fixed seed — positions never jump
       for (int i = 0; i < 18; i++) {
-        final sy = streakRng.nextDouble() * size.height * 0.88;
-        final len = (30 + streakRng.nextDouble() * 80) * speedT;
-        final sx = (time * (120 + i * 20) * speedT) % (size.width + len);
+        final sy = streakRng.nextDouble() * size.height * 0.82;
+        final baseLen = 30 + streakRng.nextDouble() * 80;
+        final len = baseLen * speedT;
+        final opacity = streakOpacity * (0.20 + streakRng.nextDouble() * 0.30);
+        final sx = (time * (80 + i * 14) * speedT) % (size.width + len);
         final col = i % 3 == 0
             ? const Color(0xFF00DDFF)
             : (i % 3 == 1 ? const Color(0xFFAA88FF) : Colors.white);
-        p.color = col.withOpacity(streakOpacity * (0.25 + streakRng.nextDouble() * 0.35));
+        p.color = col.withOpacity(opacity);
         canvas.drawRect(Rect.fromLTWH(size.width - sx, sy, len, 1.2), p);
       }
     }
@@ -609,18 +612,20 @@ class _FlappyPainter extends CustomPainter {
     p.color = const Color(0xFF334466);
     canvas.drawRect(Rect.fromLTWH(px + pw * 0.93, top, pw * 0.07, totalH), p);
 
-    // Neon ring bands — spacing varies with speed
+    // Neon ring bands — fixed to each pipe, no global time scroll
     final neonCol = Color.lerp(const Color(0xFF0088FF), const Color(0xFFAA00FF), speedT)!;
-    final ringSpacing = pw * 1.8;
-    final ringOffset = ((time * 40.0 * speedT) % ringSpacing);
+    final ringSpacing = pw * 2.2; // slightly wider spacing, less cluttered
+    // Phase offset is fixed per pipe via idSeed, so rings stay put on the pipe
+    final ringPhase = (idSeed * 1.618) % 1.0; // golden-ratio scatter
+    final ringOffset = ringPhase * ringSpacing;
     for (double ry = top + ringOffset; ry < bottom; ry += ringSpacing) {
       final dist = (ry - top).clamp(0, totalH);
-      final opacity = 0.7 - (dist / totalH).clamp(0.0, 0.5);
-      p.color = neonCol.withOpacity(opacity.clamp(0.1, 0.9));
-      canvas.drawRect(Rect.fromLTWH(px - pw * 0.1, ry, pw * 1.2, pw * 0.12), p);
+      final opacity = (0.55 - (dist / totalH).clamp(0.0, 0.4)).clamp(0.08, 0.65);
+      p.color = neonCol.withOpacity(opacity);
+      canvas.drawRect(Rect.fromLTWH(px - pw * 0.08, ry, pw * 1.16, pw * 0.10), p);
       // Inner bright ring centre
-      p.color = Colors.white.withOpacity(opacity * 0.5);
-      canvas.drawRect(Rect.fromLTWH(px, ry + pw * 0.04, pw, pw * 0.04), p);
+      p.color = Colors.white.withOpacity(opacity * 0.4);
+      canvas.drawRect(Rect.fromLTWH(px, ry + pw * 0.03, pw, pw * 0.03), p);
     }
 
     // Cap / muzzle — wider chrome collar

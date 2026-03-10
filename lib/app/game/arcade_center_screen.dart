@@ -158,7 +158,7 @@ final List<ArcadeGameDef> kArcadeGames = [
         required controller, required onSaldoChanged}) =>
       SnakeGameScreen(userId: userId, rewardsDocRef: rewardsDocRef,
         currentSaldo: currentSaldo, controller: controller, onSaldoChanged: onSaldoChanged)),
-  ArcadeGameDef(id: 'flappy',   emoji: '🕊️', title: 'Wing Rush',
+  ArcadeGameDef(id: 'flappy',   emoji: '🕊️', title: 'Vuelo Kamikaze',
     builder: ({required userId, required rewardsDocRef, required currentSaldo,
         required controller, required onSaldoChanged}) =>
       FlappyBirdScreen(userId: userId, rewardsDocRef: rewardsDocRef,
