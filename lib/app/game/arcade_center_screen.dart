@@ -21,17 +21,19 @@ import 'traffic_hopper_screen.dart';
 
 // ─── Settings enums ──────────────────────────────────────────────────────────
 
-enum ConsoleSkin  { gameBoy, psp, gba }
-enum ShellColor   { gray, midnight, indigo, crimson, navy, forest, rose }
-enum ColorTheme   { greenPhosphor, amberRetro, cyanCrypto, infernalRed }
-enum ButtonLayout { snes, xbox, ps4 }
+enum ConsoleSkin    { gameBoy, psp, gba }
+enum ShellColor     { gray, midnight, indigo, crimson, navy, forest, rose }
+enum ColorTheme     { greenPhosphor, amberRetro, cyanCrypto, infernalRed }
+enum ButtonLayout   { snes, xbox, ps4 }
+enum ButtonDisplay  { solid, blackout, clear }
 
 // Per-position button definition (label + color + underlying ArcadeButton)
 class _BtnDef {
   final String label;
   final Color  color;
   final ArcadeButton btn;
-  const _BtnDef(this.label, this.color, this.btn);
+  final double labelSize;
+  const _BtnDef(this.label, this.color, this.btn, {this.labelSize = 15});
 }
 
 // ─── Palette ──────────────────────────────────────────────────────────────────
@@ -195,19 +197,20 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
   late final ArcadeInputController _ctrl;
   late double _saldo;
   int _selectedIndex = 0;
+  int _hubCategory = 1;   // 0=reciente, 1=biblioteca, 2=perfil, 3=config
+  int? _lastPlayedIndex;
   ArcadeGameDef? _activeGame;
   final List<int> _highScores = List.filled(12, 0);
   int? _newRecordIndex;
   Timer? _recordTimer;
-  bool _showSettings = false;
 
   // ── Console customisation ──────────────────────────────────────────────────
   ConsoleSkin  _skin          = ConsoleSkin.gameBoy;
   ShellColor   _shellColor    = ShellColor.gray;
   ColorTheme   _colorTheme    = ColorTheme.greenPhosphor;
-  ButtonLayout _buttonLayout  = ButtonLayout.snes;
-  bool         _buttonBlackout = false;
-  int          _settingsCursor = 0;
+  ButtonLayout   _buttonLayout   = ButtonLayout.snes;
+  ButtonDisplay  _buttonDisplay  = ButtonDisplay.solid;
+  int            _settingsCursor = 0;
 
   // Theme accent colour (used everywhere terminal-green currently is)
   Color get _accent {
@@ -231,17 +234,17 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
         ];
       case ButtonLayout.xbox:
         return const [
-          _BtnDef('Y', Color(0xFFFFCC00), ArcadeButton.x),
-          _BtnDef('X', Color(0xFF107EC4), ArcadeButton.y),
-          _BtnDef('B', Color(0xFFD32F2F), ArcadeButton.a),
-          _BtnDef('A', Color(0xFF107C10), ArcadeButton.b),
+          _BtnDef('Y', Color(0xFFFFCC00), ArcadeButton.y),
+          _BtnDef('X', Color(0xFF107EC4), ArcadeButton.x),
+          _BtnDef('B', Color(0xFFD32F2F), ArcadeButton.b),
+          _BtnDef('A', Color(0xFF107C10), ArcadeButton.a),
         ];
       case ButtonLayout.ps4:
         return const [
-          _BtnDef('△', Color(0xFF00C896), ArcadeButton.x),
-          _BtnDef('☐', Color(0xFFCC66AA), ArcadeButton.y),
-          _BtnDef('○', Color(0xFFDD2222), ArcadeButton.a),
-          _BtnDef('✕', Color(0xFF4488CC), ArcadeButton.b),
+          _BtnDef('△', Color(0xFF00C896), ArcadeButton.x, labelSize: 20),
+          _BtnDef('☐', Color(0xFFCC66AA), ArcadeButton.y, labelSize: 19),
+          _BtnDef('○', Color(0xFFDD2222), ArcadeButton.a, labelSize: 21),
+          _BtnDef('✕', Color(0xFF4488CC), ArcadeButton.b, labelSize: 19),
         ];
     }
   }
@@ -358,7 +361,11 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
             (e) => e.name == d['colorTheme'], orElse: () => ColorTheme.greenPhosphor);
         _buttonLayout = ButtonLayout.values.firstWhere(
             (e) => e.name == d['buttonLayout'], orElse: () => ButtonLayout.snes);
-        _buttonBlackout = d['buttonBlackout'] as bool? ?? false;
+        // Support old bool field as migration path
+        final oldBlackout = d['buttonBlackout'] as bool? ?? false;
+        _buttonDisplay = ButtonDisplay.values.firstWhere(
+            (e) => e.name == d['buttonDisplay'],
+            orElse: () => oldBlackout ? ButtonDisplay.blackout : ButtonDisplay.solid);
       });
       _applyOrientation();
     } catch (_) { _applyOrientation(); }
@@ -374,7 +381,7 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
         'shellColor': _shellColor.name,
         'colorTheme': _colorTheme.name,
         'buttonLayout': _buttonLayout.name,
-        'buttonBlackout': _buttonBlackout,
+        'buttonDisplay': _buttonDisplay.name,
       });
     } catch (_) {}
   }
@@ -382,10 +389,10 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
   void _activateSetting(int idx) {
     setState(() {
       switch (idx) {
-        // SKIN (0-2)
+        // SKIN (0-2) — PSP/GBA locked as teaser
         case 0: _skin = ConsoleSkin.gameBoy; _applyOrientation();
-        case 1: _skin = ConsoleSkin.psp; _applyOrientation();
-        case 2: _skin = ConsoleSkin.gba; _applyOrientation();
+        case 1: break; // PSP — próximamente
+        case 2: break; // GBA — próximamente
         // SHELL COLOR (3-9)
         case 3: _shellColor = ShellColor.gray;
         case 4: _shellColor = ShellColor.midnight;
@@ -403,9 +410,10 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
         case 14: _buttonLayout = ButtonLayout.snes;
         case 15: _buttonLayout = ButtonLayout.xbox;
         case 16: _buttonLayout = ButtonLayout.ps4;
-        // BUTTON DISPLAY (17-18)
-        case 17: _buttonBlackout = false;
-        case 18: _buttonBlackout = true;
+        // BUTTON DISPLAY (17-19)
+        case 17: _buttonDisplay = ButtonDisplay.solid;
+        case 18: _buttonDisplay = ButtonDisplay.blackout;
+        case 19: _buttonDisplay = ButtonDisplay.clear;
       }
     });
     _savePreferences();
@@ -431,8 +439,9 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
       case 14: return _buttonLayout == ButtonLayout.snes;
       case 15: return _buttonLayout == ButtonLayout.xbox;
       case 16: return _buttonLayout == ButtonLayout.ps4;
-      case 17: return !_buttonBlackout;
-      case 18: return _buttonBlackout;
+      case 17: return _buttonDisplay == ButtonDisplay.solid;
+      case 18: return _buttonDisplay == ButtonDisplay.blackout;
+      case 19: return _buttonDisplay == ButtonDisplay.clear;
       default: return false;
     }
   }
@@ -452,43 +461,46 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
     }
 
     if (_activeGame == null) {
-      if (_showSettings) {
-        // Settings navigation
-        const totalOpts = 19; // 3 skins + 7 shell colors + 4 themes + 3 layouts + 2 display
+      if (_hubCategory == 3) {
+        // Config category — navigate settings
+        const totalOpts = 20; // 3 skins + 7 shell colors + 4 themes + 3 layouts + 3 display
         switch (btn) {
           case ArcadeButton.up:
             setState(() => _settingsCursor = (_settingsCursor - 1 + totalOpts) % totalOpts);
           case ArcadeButton.down:
             setState(() => _settingsCursor = (_settingsCursor + 1) % totalOpts);
+          case ArcadeButton.left:
+            setState(() => _hubCategory = 2);
           case ArcadeButton.a:
           case ArcadeButton.start:
             _activateSetting(_settingsCursor);
-          case ArcadeButton.b:
           case ArcadeButton.select:
-            setState(() => _showSettings = false);
+            Navigator.pop(context);
           default: break;
         }
         return;
       }
-      // Hub list navigation (games + settings row)
-      final n = kArcadeGames.length + 1; // +1 for settings row
+      // Hub navigation
       switch (btn) {
         case ArcadeButton.left:
-        case ArcadeButton.up:
-          setState(() => _selectedIndex = (_selectedIndex - 1 + n) % n);
+          if (_hubCategory > 0) setState(() => _hubCategory -= 1);
         case ArcadeButton.right:
+          if (_hubCategory < 3) setState(() => _hubCategory += 1);
+        case ArcadeButton.up:
+          if (_hubCategory == 1) {
+            setState(() => _selectedIndex = max(0, _selectedIndex - 1));
+          }
         case ArcadeButton.down:
-          setState(() => _selectedIndex = (_selectedIndex + 1) % n);
+          if (_hubCategory == 1) {
+            setState(() => _selectedIndex = min(kArcadeGames.length - 1, _selectedIndex + 1));
+          }
         case ArcadeButton.a:
         case ArcadeButton.start:
-          if (_selectedIndex == kArcadeGames.length) {
-            setState(() => _showSettings = true);
-          } else {
+          if (_hubCategory == 1) _launchSelected();
+          else if (_hubCategory == 0 && _lastPlayedIndex != null) {
+            setState(() { _hubCategory = 1; _selectedIndex = _lastPlayedIndex!; });
             _launchSelected();
           }
-        case ArcadeButton.y:
-          // Y toggles settings from anywhere in the hub
-          setState(() { _selectedIndex = kArcadeGames.length; _showSettings = !_showSettings; });
         case ArcadeButton.select:
           Navigator.pop(context);
         default: break;
@@ -527,7 +539,7 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
       await batch.commit();
     } catch (_) {}
     if (!mounted) return;
-    setState(() { _saldo = newSaldo; _activeGame = game; });
+    setState(() { _saldo = newSaldo; _activeGame = game; _lastPlayedIndex = _selectedIndex; });
   }
 
   // ─── Build ──────────────────────────────────────────────────────────────────
@@ -737,7 +749,7 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
       decoration: BoxDecoration(
         color: _kBezel,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFF1A0840), width: 2),
+        border: Border.all(color: Colors.black, width: 2),
         boxShadow: const [BoxShadow(color: Colors.black87, blurRadius: 10, offset: Offset(0, 3))],
       ),
       padding: const EdgeInsets.all(8),
@@ -756,20 +768,523 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
     );
   }
 
-  // ── Neon Arcade Cabinet Grid ───────────────────────────────────────────────
+  // ── New Hub UI (XMB-style homebrew) ──────────────────────────────────────
 
   Widget _buildNeonGrid() {
     if (!_splashDone) return _buildSplashScreen();
     return Container(
-      color: const Color(0xFF050A05),
-      child: Stack(children: [
-        Column(children: [
-          _buildTerminalHeader(),
-          Expanded(child: _buildTerminalGameList()),
-          _buildSettingsRow(),
-          _buildTerminalHint(),
+      color: Colors.black,
+      child: Column(children: [
+        _buildHubCategoryBar(),
+        Expanded(child: _buildHubContent()),
+        _buildHubHintBar(),
+      ]),
+    );
+  }
+
+  static const _kHubCats = ['RECIENTE', 'BIBLIOTECA', 'PERFIL', 'CONFIG'];
+  static const _kHubIcons = ['⏱', '🎮', '👤', '⚙'];
+
+  Widget _buildHubCategoryBar() {
+    final ac = _accent;
+    return Container(
+      height: 36,
+      decoration: BoxDecoration(
+        color: const Color(0xFF050505),
+        border: Border(bottom: BorderSide(color: ac.withOpacity(0.20), width: 1)),
+      ),
+      child: Row(
+        children: List.generate(_kHubCats.length, (i) {
+          final sel = _hubCategory == i;
+          return Expanded(
+            child: GestureDetector(
+              onTap: () => setState(() { _hubCategory = i; if (i == 1 && false) _selectedIndex = 0; }),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                decoration: BoxDecoration(
+                  border: Border(
+                    bottom: BorderSide(color: sel ? ac : Colors.transparent, width: 2),
+                  ),
+                ),
+                alignment: Alignment.center,
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(_kHubIcons[i], style: TextStyle(fontSize: sel ? 11 : 9)),
+                    const SizedBox(height: 1),
+                    Text(_kHubCats[i],
+                      style: TextStyle(
+                        color: sel ? ac : Colors.white24,
+                        fontSize: 5.5,
+                        fontFamily: 'monospace',
+                        fontWeight: sel ? FontWeight.bold : FontWeight.normal,
+                        letterSpacing: 0.4,
+                        shadows: sel ? [Shadow(color: ac, blurRadius: 6)] : null,
+                      )),
+                  ],
+                ),
+              ),
+            ),
+          );
+        }),
+      ),
+    );
+  }
+
+  Widget _buildHubContent() {
+    switch (_hubCategory) {
+      case 0: return _buildHubRecent();
+      case 1: return _buildHubLibrary();
+      case 2: return _buildHubProfile();
+      case 3: return _buildHubSettings();
+      default: return _buildHubLibrary();
+    }
+  }
+
+  Widget _buildHubHintBar() {
+    final ac = _accent;
+    final hints = _hubCategory == 1
+        ? [('◀▶', 'categoría'), ('▲▼', 'juego'), ('A', 'jugar'), ('SEL', 'salir')]
+        : _hubCategory == 3
+        ? [('▲▼', 'navegar'), ('A', 'activar'), ('◀', 'volver'), ('SEL', 'salir')]
+        : [('◀▶', 'categoría'), ('SEL', 'salir')];
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      decoration: BoxDecoration(
+        color: const Color(0xFF020202),
+        border: Border(top: BorderSide(color: ac.withOpacity(0.12), width: 1)),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: hints.expand((h) => [
+          _termHint(h.$1, h.$2),
+          const SizedBox(width: 10),
+        ]).toList()..removeLast(),
+      ),
+    );
+  }
+
+  // ── Hub: Reciente ─────────────────────────────────────────────────────────
+
+  Widget _buildHubRecent() {
+    final ac = _accent;
+    if (_lastPlayedIndex == null) {
+      return Center(
+        child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+          Text('◉', style: TextStyle(color: ac.withOpacity(0.18), fontSize: 30)),
+          const SizedBox(height: 8),
+          Text('Sin partidas recientes',
+            style: TextStyle(color: Colors.white24, fontSize: 8, fontFamily: 'monospace')),
+          const SizedBox(height: 3),
+          Text('Juega algo para verlo aquí',
+            style: TextStyle(color: Colors.white12, fontSize: 6.5, fontFamily: 'monospace')),
         ]),
-        if (_showSettings) _buildSettingsPanel(),
+      );
+    }
+    final idx = _lastPlayedIndex!;
+    final game = kArcadeGames[idx];
+    final neon = _kNeonColors[idx % _kNeonColors.length];
+    final grad = _kCardGradients[idx % _kCardGradients.length];
+    final score = _highScores[idx];
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(10),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text('ÚLTIMA PARTIDA',
+          style: TextStyle(color: ac.withOpacity(0.40), fontSize: 6.5,
+            fontFamily: 'monospace', letterSpacing: 1.5)),
+        const SizedBox(height: 8),
+        GestureDetector(
+          onTap: () { setState(() { _hubCategory = 1; _selectedIndex = idx; }); _launchSelected(); },
+          child: Container(
+            width: double.infinity,
+            height: 80,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(colors: grad, begin: Alignment.topLeft, end: Alignment.bottomRight),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: neon.withOpacity(0.55), width: 1.5),
+              boxShadow: [BoxShadow(color: neon.withOpacity(0.18), blurRadius: 14)],
+            ),
+            child: Row(children: [
+              const SizedBox(width: 14),
+              Text(game.emoji, style: const TextStyle(fontSize: 36)),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(game.title,
+                      style: TextStyle(color: Colors.white, fontSize: 12,
+                        fontWeight: FontWeight.bold, fontFamily: 'monospace',
+                        shadows: [Shadow(color: neon, blurRadius: 8)])),
+                    const SizedBox(height: 3),
+                    Text(score > 0 ? 'HI: $score pts' : 'Sin récord aún',
+                      style: TextStyle(color: Colors.amber.withOpacity(0.7),
+                        fontSize: 7.5, fontFamily: 'monospace')),
+                  ]),
+              ),
+              Container(
+                margin: const EdgeInsets.only(right: 12),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: neon.withOpacity(0.18),
+                  border: Border.all(color: neon.withOpacity(0.7), width: 1),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text('▶ JUGAR', style: TextStyle(
+                  color: neon, fontSize: 7.5, fontFamily: 'monospace',
+                  fontWeight: FontWeight.bold)),
+              ),
+            ]),
+          ),
+        ),
+        if (_newRecordIndex == idx) ...[
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            decoration: BoxDecoration(
+              color: Colors.amber.withOpacity(0.07),
+              border: Border.all(color: Colors.amber.withOpacity(0.35), width: 0.8),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: Row(children: [
+              const Text('⚡', style: TextStyle(fontSize: 10)),
+              const SizedBox(width: 6),
+              Text('¡NUEVO RÉCORD! $score pts',
+                style: const TextStyle(color: Colors.amber, fontSize: 7.5,
+                  fontFamily: 'monospace', fontWeight: FontWeight.bold)),
+            ]),
+          ),
+        ],
+      ]),
+    );
+  }
+
+  // ── Hub: Biblioteca ───────────────────────────────────────────────────────
+
+  Widget _buildHubLibrary() {
+    return ListView.builder(
+      padding: const EdgeInsets.fromLTRB(6, 4, 6, 4),
+      itemCount: kArcadeGames.length,
+      itemBuilder: (_, i) => _buildGameCard(i),
+    );
+  }
+
+  Widget _buildGameCard(int index) {
+    final game = kArcadeGames[index];
+    final selected = _hubCategory == 1 && _selectedIndex == index;
+    final neon = _kNeonColors[index % _kNeonColors.length];
+    final grad = _kCardGradients[index % _kCardGradients.length];
+    final score = _highScores[index];
+    final isRec = _newRecordIndex == index;
+    return GestureDetector(
+      onTap: () => setState(() => _selectedIndex = index),
+      onDoubleTap: (selected && !game.locked) ? _launchSelected : null,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 100),
+        margin: const EdgeInsets.only(bottom: 4),
+        height: selected ? 54 : 44,
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.centerLeft, end: Alignment.centerRight,
+            colors: selected
+                ? [grad[0], grad[1].withOpacity(0.85)]
+                : [const Color(0xFF090909), const Color(0xFF101010)],
+          ),
+          borderRadius: BorderRadius.circular(5),
+          border: Border.all(
+            color: selected ? neon.withOpacity(0.75) : Colors.white.withOpacity(0.05),
+            width: selected ? 1.5 : 0.5,
+          ),
+          boxShadow: selected
+              ? [BoxShadow(color: neon.withOpacity(0.22), blurRadius: 10, spreadRadius: 0)]
+              : [],
+        ),
+        child: Row(children: [
+          // Left neon stripe
+          Container(
+            width: 3,
+            decoration: BoxDecoration(
+              color: selected ? neon : neon.withOpacity(0.18),
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(5), bottomLeft: Radius.circular(5)),
+            ),
+          ),
+          const SizedBox(width: 8),
+          // Emoji
+          Text(game.emoji, style: TextStyle(fontSize: selected ? 22 : 17)),
+          const SizedBox(width: 8),
+          // Info
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(game.title,
+                  style: TextStyle(
+                    color: game.locked ? Colors.white24 : (selected ? Colors.white : Colors.white54),
+                    fontSize: selected ? 9 : 8,
+                    fontWeight: selected ? FontWeight.bold : FontWeight.normal,
+                    fontFamily: 'monospace',
+                    shadows: (selected && !game.locked)
+                        ? [Shadow(color: neon, blurRadius: 6)] : null,
+                  ),
+                  overflow: TextOverflow.ellipsis),
+                if (selected || score > 0)
+                  Text(
+                    game.locked
+                        ? '[ BLOQUEADO ]'
+                        : (score > 0 ? 'HI: $score pts' : 'Sin récord'),
+                    style: TextStyle(
+                      color: game.locked
+                          ? const Color(0xFF551111)
+                          : (score > 0 ? Colors.amber.withOpacity(0.75) : Colors.white24),
+                      fontSize: 6,
+                      fontFamily: 'monospace',
+                    )),
+              ],
+            ),
+          ),
+          // Right badge
+          if (game.locked)
+            Padding(padding: const EdgeInsets.only(right: 8),
+              child: const Text('🔒', style: TextStyle(fontSize: 9)))
+          else if (isRec)
+            Padding(padding: const EdgeInsets.only(right: 6),
+              child: Text('⚡REC', style: TextStyle(
+                color: Colors.amber, fontSize: 6.5, fontFamily: 'monospace',
+                fontWeight: FontWeight.bold,
+                shadows: [Shadow(color: Colors.amber, blurRadius: 6)])))
+          else if (selected)
+            Container(
+              margin: const EdgeInsets.only(right: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+              decoration: BoxDecoration(
+                color: neon.withOpacity(0.15),
+                border: Border.all(color: neon.withOpacity(0.6), width: 0.8),
+                borderRadius: BorderRadius.circular(3),
+              ),
+              child: Text('▶ RUN', style: TextStyle(
+                color: neon, fontSize: 6.5, fontFamily: 'monospace',
+                fontWeight: FontWeight.bold)))
+          else
+            const SizedBox(width: 12),
+        ]),
+      ),
+    );
+  }
+
+  // ── Hub: Perfil ───────────────────────────────────────────────────────────
+
+  Widget _buildHubProfile() {
+    final ac = _accent;
+    final totalScore = _highScores.fold(0, (a, b) => a + b);
+    final gamesPlayed = _highScores.where((s) => s > 0).length;
+    final unlocked = kArcadeGames.where((g) => !g.locked).length;
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(10),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        // User header
+        Row(children: [
+          Container(
+            width: 34, height: 34,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: LinearGradient(colors: [ac, ac.withOpacity(0.30)]),
+              border: Border.all(color: ac.withOpacity(0.55), width: 1.5),
+            ),
+            alignment: Alignment.center,
+            child: Text(
+              _userName.isNotEmpty ? _userName[0].toUpperCase() : '?',
+              style: const TextStyle(color: Colors.black, fontSize: 15,
+                fontWeight: FontWeight.bold)),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(_userName.isEmpty ? 'Jugador' : _userName,
+                style: const TextStyle(color: Colors.white, fontSize: 13,
+                  fontWeight: FontWeight.bold, fontFamily: 'monospace')),
+              Text('ARCADE CENTER',
+                style: TextStyle(color: ac.withOpacity(0.45), fontSize: 6,
+                  fontFamily: 'monospace', letterSpacing: 1.0)),
+            ]),
+          ),
+          Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+            Text('💰 ${_saldo.toStringAsFixed(0)}',
+              style: const TextStyle(color: Colors.amber, fontSize: 9.5,
+                fontFamily: 'monospace', fontWeight: FontWeight.bold)),
+            Text('SALDO', style: TextStyle(
+              color: Colors.white24, fontSize: 5.5, fontFamily: 'monospace')),
+          ]),
+        ]),
+        const SizedBox(height: 8),
+        Container(height: 1, color: ac.withOpacity(0.15)),
+        const SizedBox(height: 7),
+        // Stats row
+        Row(children: [
+          _profileStat('PUNTOS TOTALES', '$totalScore', ac),
+          const SizedBox(width: 6),
+          _profileStat('JUGADOS', '$gamesPlayed / $unlocked', ac),
+        ]),
+        const SizedBox(height: 8),
+        // Best scores
+        Text('MEJORES MARCAS',
+          style: TextStyle(color: ac.withOpacity(0.45), fontSize: 6.5,
+            fontFamily: 'monospace', letterSpacing: 1.5)),
+        const SizedBox(height: 4),
+        ...List.generate(kArcadeGames.length, (i) {
+          final g = kArcadeGames[i];
+          if (g.locked || _highScores[i] == 0) return const SizedBox.shrink();
+          final neon = _kNeonColors[i % _kNeonColors.length];
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 3),
+            child: Row(children: [
+              Container(width: 2.5, height: 13, color: neon,
+                margin: const EdgeInsets.only(right: 6)),
+              Text(g.emoji, style: const TextStyle(fontSize: 10)),
+              const SizedBox(width: 5),
+              Expanded(child: Text(g.title,
+                style: const TextStyle(color: Colors.white54, fontSize: 7,
+                  fontFamily: 'monospace'),
+                overflow: TextOverflow.ellipsis)),
+              Text('${_highScores[i]}',
+                style: TextStyle(color: Colors.amber.withOpacity(0.8),
+                  fontSize: 7, fontFamily: 'monospace', fontWeight: FontWeight.bold)),
+            ]),
+          );
+        }),
+        const SizedBox(height: 8),
+        Container(height: 1, color: ac.withOpacity(0.10)),
+        const SizedBox(height: 6),
+        // Achievements teaser
+        Text('LOGROS',
+          style: TextStyle(color: ac.withOpacity(0.45), fontSize: 6.5,
+            fontFamily: 'monospace', letterSpacing: 1.5)),
+        const SizedBox(height: 4),
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.02),
+            border: Border.all(color: Colors.white10, width: 0.5),
+            borderRadius: BorderRadius.circular(4),
+          ),
+          child: Row(children: [
+            Text('🏆', style: TextStyle(fontSize: 12, color: Colors.white24)),
+            const SizedBox(width: 7),
+            Text('PRÓXIMAMENTE...',
+              style: TextStyle(color: Colors.white24, fontSize: 7,
+                fontFamily: 'monospace', letterSpacing: 1.0)),
+          ]),
+        ),
+      ]),
+    );
+  }
+
+  Widget _profileStat(String label, String value, Color ac) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.all(7),
+        decoration: BoxDecoration(
+          color: ac.withOpacity(0.05),
+          border: Border.all(color: ac.withOpacity(0.18), width: 0.8),
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(value,
+            style: TextStyle(color: ac, fontSize: 13, fontWeight: FontWeight.bold,
+              fontFamily: 'monospace')),
+          const SizedBox(height: 2),
+          Text(label,
+            style: const TextStyle(color: Colors.white30, fontSize: 5.5,
+              fontFamily: 'monospace', letterSpacing: 0.4)),
+        ]),
+      ),
+    );
+  }
+
+  // ── Hub: Config (inline settings) ─────────────────────────────────────────
+
+  Widget _buildHubSettings() {
+    final ac = _accent;
+    int idx = 0;
+    Widget opt(String label, {bool locked = false}) {
+      final i = idx++;
+      if (locked) {
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 2),
+          child: Row(children: [
+            const Text('  ', style: TextStyle(fontSize: 8, fontFamily: 'monospace')),
+            Text(label, style: const TextStyle(
+              color: Colors.white12, fontSize: 7.5, fontFamily: 'monospace')),
+            const SizedBox(width: 6),
+            Text('[PRÓX]', style: TextStyle(
+              color: Colors.white12, fontSize: 5.5, fontFamily: 'monospace')),
+          ]),
+        );
+      }
+      return _optRow(label, _isSettingActive(i), _isCursorOn(i), () => _activateSetting(i));
+    }
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(12, 8, 10, 12),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text('> settings/', style: TextStyle(
+          color: ac, fontSize: 9, fontFamily: 'monospace', fontWeight: FontWeight.bold)),
+        const SizedBox(height: 4),
+        Container(height: 1, color: ac.withOpacity(0.18)),
+        const SizedBox(height: 8),
+
+        _settingSection('SKIN / FORMA', [
+          opt('GameBoy Classic'),
+          opt('PSP Landscape', locked: true),
+          opt('Game Boy Advance', locked: true),
+        ]),
+        const SizedBox(height: 8),
+
+        _settingSection('COLOR DE SHELL', [
+          opt('Gris Clasico'),
+          opt('Negro Medianoche'),
+          opt('Indigo'),
+          opt('Rojo Escarlata'),
+          opt('Azul Marina'),
+          opt('Verde Selva'),
+          opt('Rosa Oscuro'),
+        ]),
+        const SizedBox(height: 8),
+
+        _settingSection('ACENTO / FUENTES', [
+          opt('Verde Fosforo'),
+          opt('Ambar Retro'),
+          opt('Cian Cripto'),
+          opt('Rojo Infernal'),
+        ]),
+        const SizedBox(height: 8),
+
+        _settingSection('BOTONES / LAYOUT', [
+          opt('SNES Classic  X/Y/A/B'),
+          opt('Xbox Style  Y/X/B/A'),
+          opt('PS4 Style  △/☐/○/✕'),
+        ]),
+        const SizedBox(height: 8),
+
+        _settingSection('DISPLAY BOTONES', [
+          opt('Color solido'),
+          opt('Blackout (letras iluminadas)'),
+          opt('Clear (cristal transparente)'),
+        ]),
+        const SizedBox(height: 10),
+        Container(height: 1, color: ac.withOpacity(0.10)),
+        const SizedBox(height: 5),
+        Row(children: [
+          Text('▲▼', style: TextStyle(color: ac.withOpacity(0.45), fontSize: 7, fontFamily: 'monospace')),
+          const SizedBox(width: 4),
+          const Text('navegar  ', style: TextStyle(color: Colors.white24, fontSize: 7, fontFamily: 'monospace')),
+          Text('A', style: TextStyle(color: ac.withOpacity(0.45), fontSize: 7, fontFamily: 'monospace')),
+          const SizedBox(width: 4),
+          const Text('activar  ', style: TextStyle(color: Colors.white24, fontSize: 7, fontFamily: 'monospace')),
+          Text('◀', style: TextStyle(color: ac.withOpacity(0.45), fontSize: 7, fontFamily: 'monospace')),
+          const SizedBox(width: 4),
+          const Text('volver', style: TextStyle(color: Colors.white24, fontSize: 7, fontFamily: 'monospace')),
+        ]),
       ]),
     );
   }
@@ -837,197 +1352,6 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
             style: TextStyle(color: ac.withOpacity(0.30),
                 fontSize: 7, fontFamily: 'monospace')),
         ],
-      ),
-    );
-  }
-
-  // ── Terminal-style game list ───────────────────────────────────────────────
-
-  Widget _buildTerminalHeader() {
-    final ac = _accent;
-    final unlocked = kArcadeGames.where((g) => !g.locked).length;
-    return Container(
-      padding: const EdgeInsets.fromLTRB(10, 5, 10, 4),
-      decoration: BoxDecoration(
-        border: Border(
-          bottom: BorderSide(color: ac.withOpacity(0.18), width: 1)),
-      ),
-      child: Row(children: [
-        Text('> ls games/', style: TextStyle(
-          color: ac, fontSize: 8, fontFamily: 'monospace',
-          fontWeight: FontWeight.bold)),
-        const Spacer(),
-        Text('$unlocked/${kArcadeGames.length} ACTIVOS',
-          style: TextStyle(
-            color: ac.withOpacity(0.40),
-            fontSize: 7, fontFamily: 'monospace')),
-      ]),
-    );
-  }
-
-  Widget _buildTerminalGameList() {
-    return ListView.builder(
-      padding: const EdgeInsets.symmetric(vertical: 3),
-      itemCount: kArcadeGames.length,
-      itemBuilder: (_, i) => _buildTerminalRow(kArcadeGames[i], i, i == _selectedIndex),
-    );
-  }
-
-  Widget _buildTerminalRow(ArcadeGameDef game, int index, bool selected) {
-    final neon = _kNeonColors[index];
-    final isRecord = _newRecordIndex == index;
-    final score = _highScores[index];
-    final numStr = '[${(index + 1).toString().padLeft(2, '0')}]';
-
-    if (game.locked) {
-      return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-        color: selected ? const Color(0xFF0D0D0D) : Colors.transparent,
-        child: Row(children: [
-          Text(numStr, style: const TextStyle(
-            color: Colors.white12, fontSize: 8, fontFamily: 'monospace')),
-          const SizedBox(width: 6),
-          Text(game.emoji, style: const TextStyle(fontSize: 9)),
-          const SizedBox(width: 6),
-          Expanded(child: Text(game.title, style: const TextStyle(
-            color: Colors.white24, fontSize: 8, fontFamily: 'monospace'),
-            overflow: TextOverflow.ellipsis)),
-          const Text('[LOCKED]', style: TextStyle(
-            color: Color(0xFF552222), fontSize: 7, fontFamily: 'monospace')),
-        ]),
-      );
-    }
-
-    final scoreStr = score > 0 ? 'HI:$score' : 'HI:---';
-    return GestureDetector(
-      onTap: () => setState(() => _selectedIndex = index),
-      onDoubleTap: selected ? _launchSelected : null,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 80),
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-        decoration: BoxDecoration(
-          color: selected ? neon.withOpacity(0.08) : Colors.transparent,
-          border: Border(
-            left: BorderSide(
-              color: selected ? neon : Colors.transparent,
-              width: 2),
-          ),
-        ),
-        child: Row(children: [
-          Text(numStr, style: TextStyle(
-            color: selected ? neon : Colors.white30,
-            fontSize: 8, fontFamily: 'monospace',
-            fontWeight: selected ? FontWeight.bold : FontWeight.normal)),
-          const SizedBox(width: 5),
-          Text(game.emoji, style: TextStyle(fontSize: selected ? 12 : 10)),
-          const SizedBox(width: 6),
-          Expanded(
-            child: Text(game.title,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: selected ? Colors.white : Colors.white54,
-                fontSize: selected ? 8.5 : 8,
-                fontFamily: 'monospace',
-                fontWeight: selected ? FontWeight.bold : FontWeight.normal,
-                shadows: selected ? [Shadow(color: neon, blurRadius: 5)] : null,
-              )),
-          ),
-          const SizedBox(width: 4),
-          Text(scoreStr, style: TextStyle(
-            color: score > 0
-                ? Colors.amber.withOpacity(selected ? 0.90 : 0.45)
-                : Colors.white18,
-            fontSize: 7, fontFamily: 'monospace')),
-          const SizedBox(width: 5),
-          if (isRecord)
-            Text('⚡REC', style: TextStyle(
-              color: Colors.amber, fontSize: 7, fontFamily: 'monospace',
-              shadows: [Shadow(color: Colors.amber, blurRadius: 8)]))
-          else if (selected)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-              decoration: BoxDecoration(
-                color: neon.withOpacity(0.12),
-                border: Border.all(color: neon.withOpacity(0.65), width: 0.8),
-                borderRadius: BorderRadius.circular(2),
-              ),
-              child: Text('[RUN]', style: TextStyle(
-                color: neon, fontSize: 7, fontFamily: 'monospace',
-                fontWeight: FontWeight.bold)))
-          else
-            SizedBox(
-              width: 30,
-              child: Text('....', style: TextStyle(
-                color: Colors.white.withOpacity(0.08),
-                fontSize: 7, fontFamily: 'monospace'))),
-        ]),
-      ),
-    );
-  }
-
-  Widget _buildGameGrid() => _buildTerminalGameList();
-
-  Widget _buildTerminalHint() {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 3),
-      decoration: BoxDecoration(
-        color: const Color(0xFF020802),
-        border: Border(
-          top: BorderSide(color: _accent.withOpacity(0.15), width: 1)),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          _termHint('▲▼', 'navegar'),
-          const SizedBox(width: 10),
-          _termHint('A', 'jugar'),
-          const SizedBox(width: 10),
-          _termHint('[Y]', 'config'),
-          const SizedBox(width: 10),
-          _termHint('SELECT', 'salir'),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSettingsRow() {
-    final ac = _accent;
-    // Index for the settings row = kArcadeGames.length
-    final isSel = _selectedIndex == kArcadeGames.length && !_showSettings;
-    final isOpen = _showSettings;
-    return GestureDetector(
-      onTap: () => setState(() {
-        _selectedIndex = kArcadeGames.length;
-        _showSettings = !_showSettings;
-      }),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 80),
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-        decoration: BoxDecoration(
-          color: (isSel || isOpen) ? ac.withOpacity(0.08) : Colors.transparent,
-          border: Border(
-            top: BorderSide(color: ac.withOpacity(0.15), width: 1),
-            left: BorderSide(color: (isSel || isOpen) ? ac : Colors.transparent, width: 2),
-          ),
-        ),
-        child: Row(children: [
-          Text('[⚙]', style: TextStyle(
-            color: isOpen ? ac : ac.withOpacity(0.60),
-            fontSize: 8, fontFamily: 'monospace', fontWeight: FontWeight.bold)),
-          const SizedBox(width: 8),
-          Text('CONFIGURACION', style: TextStyle(
-            color: (isSel || isOpen) ? Colors.white : Colors.white38,
-            fontSize: 8, fontFamily: 'monospace',
-            fontWeight: (isSel || isOpen) ? FontWeight.bold : FontWeight.normal,
-            shadows: isOpen ? [Shadow(color: ac, blurRadius: 5)] : null)),
-          const Spacer(),
-          if (isOpen)
-            Text('▶ ABIERTO', style: TextStyle(
-              color: ac, fontSize: 7, fontFamily: 'monospace'))
-          else
-            Text('▶ ABRIR', style: TextStyle(
-              color: ac.withOpacity(0.30), fontSize: 7, fontFamily: 'monospace')),
-        ]),
       ),
     );
   }
@@ -1107,118 +1431,6 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
     );
   }
 
-  Widget _buildSettingsPanel() {
-    final ac = _accent;
-    int idx = 0;
-    Widget opt(String label) {
-      final i = idx++;
-      return _optRow(label, _isSettingActive(i), _isCursorOn(i),
-          () => _activateSetting(i));
-    }
-    return Positioned.fill(
-      child: GestureDetector(
-        onTap: () => setState(() => _showSettings = false),
-        child: Container(
-          color: Colors.black.withOpacity(0.80),
-          child: Align(
-            alignment: Alignment.centerRight,
-            child: GestureDetector(
-              onTap: () {},
-              child: Container(
-                width: double.infinity,
-                margin: const EdgeInsets.fromLTRB(18, 0, 0, 0),
-                padding: const EdgeInsets.fromLTRB(12, 10, 10, 12),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF020D02),
-                  border: Border(left: BorderSide(color: ac.withOpacity(0.50), width: 1)),
-                ),
-                child: SingleChildScrollView(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Header
-                      Row(children: [
-                        Text('> settings/', style: TextStyle(
-                          color: ac, fontSize: 9,
-                          fontFamily: 'monospace', fontWeight: FontWeight.bold)),
-                        const Spacer(),
-                        GestureDetector(
-                          onTap: () => setState(() => _showSettings = false),
-                          child: Text('[B] cerrar', style: TextStyle(
-                            color: ac.withOpacity(0.55), fontSize: 7, fontFamily: 'monospace')),
-                        ),
-                      ]),
-                      const SizedBox(height: 5),
-                      Container(height: 1, color: ac.withOpacity(0.18)),
-                      const SizedBox(height: 8),
-
-                      // SKIN
-                      _settingSection('SKIN / FORMA', [
-                        opt('GameBoy Classic'),
-                        opt('PSP Landscape'),
-                        opt('Game Boy Advance'),
-                      ]),
-                      const SizedBox(height: 8),
-
-                      // SHELL COLOR
-                      _settingSection('COLOR DE SHELL', [
-                        opt('Gris Clasico'),
-                        opt('Negro Medianoche'),
-                        opt('Indigo'),
-                        opt('Rojo Escarlata'),
-                        opt('Azul Marina'),
-                        opt('Verde Selva'),
-                        opt('Rosa Oscuro'),
-                      ]),
-                      const SizedBox(height: 8),
-
-                      // ACCENT COLOR
-                      _settingSection('ACENTO / FUENTES', [
-                        opt('Verde Fosforo'),
-                        opt('Ambar Retro'),
-                        opt('Cian Cripto'),
-                        opt('Rojo Infernal'),
-                      ]),
-                      const SizedBox(height: 8),
-
-                      // BUTTON LAYOUT
-                      _settingSection('BOTONES / LAYOUT', [
-                        opt('SNES Classic  X/Y/A/B'),
-                        opt('Xbox Style  Y/X/B/A'),
-                        opt('PS4 Style  △/☐/○/✕'),
-                      ]),
-                      const SizedBox(height: 8),
-
-                      // DISPLAY
-                      _settingSection('DISPLAY BOTONES', [
-                        opt('Color solido'),
-                        opt('Blackout (letras iluminadas)'),
-                      ]),
-                      const SizedBox(height: 12),
-                      Container(height: 1, color: ac.withOpacity(0.10)),
-                      const SizedBox(height: 5),
-                      Row(children: [
-                        Text('▲▼', style: TextStyle(color: ac.withOpacity(0.50), fontSize: 7, fontFamily: 'monospace')),
-                        const SizedBox(width: 4),
-                        Text('navegar  ', style: const TextStyle(color: Colors.white24, fontSize: 7, fontFamily: 'monospace')),
-                        Text('A', style: TextStyle(color: ac.withOpacity(0.50), fontSize: 7, fontFamily: 'monospace')),
-                        const SizedBox(width: 4),
-                        Text('activar  ', style: const TextStyle(color: Colors.white24, fontSize: 7, fontFamily: 'monospace')),
-                        Text('B', style: TextStyle(color: ac.withOpacity(0.50), fontSize: 7, fontFamily: 'monospace')),
-                        const SizedBox(width: 4),
-                        Text('cerrar', style: const TextStyle(color: Colors.white24, fontSize: 7, fontFamily: 'monospace')),
-                      ]),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
   Widget _buildActiveGame() {
     return _activeGame!.builder!(
       userId: widget.userId,
@@ -1267,16 +1479,20 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
       child: Stack(alignment: Alignment.center, children: [
         Positioned(top: 0, left: total / 2 - btnSize / 2,
             child: _ConsoleActionButton(label: btns[0].label, btn: btns[0].btn,
-                color: btns[0].color, controller: _ctrl, size: btnSize, blackout: _buttonBlackout)),
+                color: btns[0].color, controller: _ctrl, size: btnSize,
+                display: _buttonDisplay, labelSize: btns[0].labelSize)),
         Positioned(left: 0, top: total / 2 - btnSize / 2,
             child: _ConsoleActionButton(label: btns[1].label, btn: btns[1].btn,
-                color: btns[1].color, controller: _ctrl, size: btnSize, blackout: _buttonBlackout)),
+                color: btns[1].color, controller: _ctrl, size: btnSize,
+                display: _buttonDisplay, labelSize: btns[1].labelSize)),
         Positioned(right: 0, top: total / 2 - btnSize / 2,
             child: _ConsoleActionButton(label: btns[2].label, btn: btns[2].btn,
-                color: btns[2].color, controller: _ctrl, size: btnSize, blackout: _buttonBlackout)),
+                color: btns[2].color, controller: _ctrl, size: btnSize,
+                display: _buttonDisplay, labelSize: btns[2].labelSize)),
         Positioned(bottom: 0, left: total / 2 - btnSize / 2,
             child: _ConsoleActionButton(label: btns[3].label, btn: btns[3].btn,
-                color: btns[3].color, controller: _ctrl, size: btnSize, blackout: _buttonBlackout)),
+                color: btns[3].color, controller: _ctrl, size: btnSize,
+                display: _buttonDisplay, labelSize: btns[3].labelSize)),
       ]),
     );
   }
@@ -2232,10 +2448,11 @@ class _ConsoleActionButton extends StatefulWidget {
   final Color color;
   final ArcadeInputController controller;
   final double size;
-  final bool blackout;
+  final ButtonDisplay display;
+  final double labelSize;
   const _ConsoleActionButton({required this.label, required this.btn,
       required this.color, required this.controller, required this.size,
-      this.blackout = false});
+      this.display = ButtonDisplay.solid, this.labelSize = 15});
   @override State<_ConsoleActionButton> createState() => _ConsoleActionButtonState();
 }
 
@@ -2244,7 +2461,9 @@ class _ConsoleActionButtonState extends State<_ConsoleActionButton> {
   @override
   Widget build(BuildContext context) {
     final c = widget.color;
-    final isBlackout = widget.blackout;
+    final d = widget.display;
+    final isBlackout = d == ButtonDisplay.blackout;
+    final isClear    = d == ButtonDisplay.clear;
     return GestureDetector(
       onTapDown: (_) { setState(() => _pressed = true); HapticFeedback.selectionClick(); widget.controller.press(widget.btn); },
       onTapUp:   (_) { setState(() => _pressed = false); widget.controller.release(widget.btn); },
@@ -2254,16 +2473,22 @@ class _ConsoleActionButtonState extends State<_ConsoleActionButton> {
         width: widget.size, height: widget.size,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          color: isBlackout
-              ? (_pressed ? const Color(0xFF1A1A1A) : Colors.black)
-              : (_pressed ? c.withOpacity(0.55) : c),
-          border: isBlackout
-              ? Border.all(color: c.withOpacity(_pressed ? 0.55 : 0.30), width: 1.2)
+          color: isClear
+              ? c.withOpacity(_pressed ? 0.18 : 0.04)
+              : isBlackout
+                  ? (_pressed ? const Color(0xFF1A1A1A) : Colors.black)
+                  : (_pressed ? c.withOpacity(0.55) : c),
+          border: (isClear || isBlackout)
+              ? Border.all(
+                  color: c.withOpacity(isClear
+                      ? (_pressed ? 0.90 : 0.55)
+                      : (_pressed ? 0.55 : 0.30)),
+                  width: isClear ? 1.5 : 1.2)
               : null,
           boxShadow: _pressed ? [] : [
             BoxShadow(
-              color: c.withOpacity(isBlackout ? 0.75 : 0.50),
-              blurRadius: isBlackout ? 14 : 8,
+              color: c.withOpacity(isClear ? 0.35 : isBlackout ? 0.75 : 0.50),
+              blurRadius: isClear ? 10 : isBlackout ? 14 : 8,
               offset: const Offset(0, 3)),
             BoxShadow(color: Colors.black54, blurRadius: 4, offset: const Offset(0, 2)),
           ],
@@ -2271,11 +2496,11 @@ class _ConsoleActionButtonState extends State<_ConsoleActionButton> {
         alignment: Alignment.center,
         child: Text(widget.label,
           style: TextStyle(
-            color: isBlackout ? c : (_pressed ? Colors.white70 : Colors.white),
+            color: (isBlackout || isClear) ? c : (_pressed ? Colors.white70 : Colors.white),
             fontWeight: FontWeight.bold,
-            fontSize: 15,
-            shadows: isBlackout
-                ? [Shadow(color: c, blurRadius: _pressed ? 18 : 12)]
+            fontSize: widget.labelSize,
+            shadows: (isBlackout || isClear)
+                ? [Shadow(color: c, blurRadius: _pressed ? 20 : (isClear ? 16 : 12))]
                 : null)),
       ),
     );
