@@ -224,6 +224,16 @@ class _Enemy {
   double crosshairTimer = 0.0; // seconds the player's crosshair has been on this troll
   double teleportFlash = 0.0;  // 1 = just teleported (visual flicker)
 
+  // Flinch/knockback when shot
+  double flinchVx = 0.0;
+  double flinchVy = 0.0;
+  double flinchTimer = 0.0;
+
+  // Bullet-dodge state
+  double dodgeDir = 1.0;   // +1 or -1 perpendicular to current heading
+  double dodgeTimer = 0.0; // seconds remaining in active dodge
+  static const double kDodgeDuration = 0.45;
+
   // Wall-steering navigation (legacy fallback)
   double steerBias = 1.0;
   double stuckTimer = 0.0;
@@ -255,10 +265,10 @@ class _Enemy {
 
   double get speed {
     switch (type) {
-      case _EnemyType.skeleton:  return 0.65;
-      case _EnemyType.cacodemon: return 1.1;
-      case _EnemyType.troll:     return 1.6; // fast and sneaky
-      default:                   return 1.0;
+      case _EnemyType.skeleton:  return 0.90;  // was 0.65
+      case _EnemyType.cacodemon: return 1.50;  // was 1.1
+      case _EnemyType.troll:     return 1.90;  // was 1.6 — fast and sneaky
+      default:                   return 1.30;  // was 1.0 (demon)
     }
   }
 
@@ -326,7 +336,7 @@ class _Projectile {
   bool alive = true;
   double dist = 0; // distance traveled so far
 
-  static const double maxRange = 11.0;
+  static const double maxRange = 22.0; // was 11.0 — matches pistol range
 
   _Projectile({required this.x, required this.y,
       required this.dx, required this.dy,
@@ -648,7 +658,7 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
     _fireTimer = 0.25;
     _shootFlash = 1.0;
     HapticFeedback.lightImpact();
-    _checkCenterHit(_dirX, _dirY, 12.0, damage: 1);
+    _checkCenterHit(_dirX, _dirY, 22.0, damage: 1); // was 12.0
   }
 
   void _fireShotgun() {
@@ -667,7 +677,7 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
       final cosA = cos(angle), sinA = sin(angle);
       final rDx = _dirX * cosA - _dirY * sinA;
       final rDy = _dirX * sinA + _dirY * cosA;
-      _checkCenterHit(rDx, rDy, 7.0, damage: 1); // shorter range
+      _checkCenterHit(rDx, rDy, 12.0, damage: 1); // was 7.0
     }
   }
 
@@ -683,7 +693,7 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
     final cosA = cos(spread), sinA = sin(spread);
     final rDx = _dirX * cosA - _dirY * sinA;
     final rDy = _dirX * sinA + _dirY * cosA;
-    _checkCenterHit(rDx, rDy, 10.0, damage: 1);
+    _checkCenterHit(rDx, rDy, 18.0, damage: 1); // was 10.0
   }
 
   // ── A* pathfinding on the tile grid ─────────────────────────────────────────
@@ -754,7 +764,7 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
       final dot = dx * rayDirX + dy * rayDirY;
       if (dot <= 0 || dot > bestDist) continue;
       final perp = (dx * rayDirY - dy * rayDirX).abs();
-      if (perp < 0.60 && _hasLos(_posX, _posY, e.x, e.y)) {
+      if (perp < 0.75 && _hasLos(_posX, _posY, e.x, e.y)) { // was 0.60
         bestDist = dot;
         target = e;
       }
@@ -762,6 +772,14 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
     if (target != null) {
       target.hp -= _modInstantKill ? 9999 : damage;
       target.hitFlash = 1.0;
+      // Flinch — push enemy away from player on hit
+      final fdx = target.x - _posX, fdy = target.y - _posY;
+      final fd = sqrt(fdx * fdx + fdy * fdy);
+      if (fd > 0.01) {
+        target.flinchVx = fdx / fd * 2.2;
+        target.flinchVy = fdy / fd * 2.2;
+        target.flinchTimer = 0.18;
+      }
       if (target.hp <= 0) {
         target.alive = false;
         _kills++;
@@ -956,7 +974,7 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
   }
 
   void _updateEnemies(double dt) {
-    final eBaseSpeed = 0.7 + _wave * 0.15;
+    final eBaseSpeed = 1.4 + _wave * 0.18;  // was 0.7 + wave*0.15
     final map = _currentMap;
     for (final e in _enemies) {
       if (!e.alive) continue;
@@ -1094,8 +1112,55 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
         ndx = dx / dist; ndy = dy / dist;
       }
 
-      final nx = e.x + ndx * spd * dt;
-      final ny = e.y + ndy * spd * dt;
+      // ── Bullet-dodge — check if a player bullet is heading toward us ─────
+      if (e.dodgeTimer <= 0) {
+        for (final p in _projectiles) {
+          if (!p.alive) continue;
+          final pdx = e.x - p.x, pdy = e.y - p.y;
+          final dot = pdx * p.dx + pdy * p.dy; // positive = bullet heading our way
+          if (dot > 0 && dot < 2.8) {
+            final perp = (pdx * p.dy - pdy * p.dx).abs();
+            if (perp < 0.9) {
+              // Bullet is aimed at us — pick a random dodge direction and flee
+              e.dodgeDir = _rng.nextBool() ? 1.0 : -1.0;
+              e.dodgeTimer = _Enemy.kDodgeDuration;
+              break;
+            }
+          }
+        }
+      }
+      // Blend dodge strafe into movement direction when active
+      double moveX = ndx, moveY = ndy;
+      if (e.dodgeTimer > 0) {
+        e.dodgeTimer -= dt;
+        final t = (e.dodgeTimer / _Enemy.kDodgeDuration).clamp(0.0, 1.0);
+        final perpX = -ndy * e.dodgeDir;
+        final perpY =  ndx * e.dodgeDir;
+        // Stronger strafe at start of dodge, fading as it expires
+        final blend = 0.55 + t * 0.30;
+        moveX = ndx * (1.0 - blend) + perpX * blend;
+        moveY = ndy * (1.0 - blend) + perpY * blend;
+        final mlen = sqrt(moveX * moveX + moveY * moveY);
+        if (mlen > 0.01) { moveX /= mlen; moveY /= mlen; }
+      }
+
+      // ── Apply flinch knockback (from being shot) ──────────────────────────
+      if (e.flinchTimer > 0) {
+        e.flinchTimer -= dt;
+        final fnx = e.x + e.flinchVx * dt;
+        final fny = e.y + e.flinchVy * dt;
+        if (map[e.y.floor()][(fnx - kER).floor()] == 0 &&
+            map[e.y.floor()][(fnx + kER).floor()] == 0) e.x = fnx;
+        if (map[(fny - kER).floor()][e.x.floor()] == 0 &&
+            map[(fny + kER).floor()][e.x.floor()] == 0) e.y = fny;
+        // Decay flinch velocity quickly
+        e.flinchVx *= (1.0 - dt * 12.0).clamp(0.0, 1.0);
+        e.flinchVy *= (1.0 - dt * 12.0).clamp(0.0, 1.0);
+        continue; // skip normal movement this frame while flinching
+      }
+
+      final nx = e.x + moveX * spd * dt;
+      final ny = e.y + moveY * spd * dt;
       final nxOk = map[e.y.floor()][(nx - kER).floor()] == 0 &&
                    map[e.y.floor()][(nx + kER).floor()] == 0;
       final nyOk = map[(ny - kER).floor()][e.x.floor()] == 0 &&
@@ -1106,7 +1171,7 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
       if (!nxOk && !nyOk) {
         e.stuckTimer += dt;
         if (e.stuckTimer > 0.4) { e.steerBias = -e.steerBias; e.stuckTimer = 0; }
-        final px = -ndy * e.steerBias, py = ndx * e.steerBias;
+        final px = -moveY * e.steerBias, py = moveX * e.steerBias;
         final snx = e.x + px * spd * dt, sny = e.y + py * spd * dt;
         if (map[e.y.floor()][(snx-kER).floor()] == 0 &&
             map[e.y.floor()][(snx+kER).floor()] == 0) e.x = snx;
@@ -1797,12 +1862,10 @@ class _RaycasterPainter extends CustomPainter {
       final deY = (halfH + wallHPx * 0.5).clamp(0.0, size.height);
       final sliceH = (deY - dsY).clamp(0.5, size.height);
 
-      // ── Boundary bone-pile wall — bleached bone & skull texture ───────────
+      // ── Boundary bone-pile — low disorderly heap of bones on the floor ───
       final isBoundary = (mapX == 0 || mapX == _kMapW - 1 || mapY == 0 || mapY == _kMapH - 1);
       if (isBoundary) {
-        // Visible bone-pile boundary: pale yellowed-bone surface with dark gaps
-        final br = (1.0 / (1.0 + perpWallDist * 0.20)).clamp(0.05, 1.0);
-        // Sample a frac for the wall hit to create varied bone/gap texturing
+        final br = (1.0 / (1.0 + perpWallDist * 0.18)).clamp(0.04, 1.0);
         double bWallX;
         if (side == 0) {
           bWallX = posY + perpWallDist * rayDirY;
@@ -1810,24 +1873,56 @@ class _RaycasterPainter extends CustomPainter {
           bWallX = posX + perpWallDist * rayDirX;
         }
         bWallX -= bWallX.floor();
-        // Alternating bone segments and dark gaps (every ~12% of wall width)
-        final boneSeg = (bWallX * 8).floor();
-        final isDarkGap = boneSeg % 4 == 3; // every 4th segment is a dark gap
-        final boneShade = isDarkGap ? 0.25 : (boneSeg.isEven ? 1.0 : 0.80);
-        final boneR = (0xD4 * br * boneShade).round().clamp(0, 255);
-        final boneG = (0xC0 * br * boneShade).round().clamp(0, 255);
-        final boneB = (0x88 * br * boneShade).round().clamp(0, 255);
-        wallPaint.color = Color.fromRGBO(boneR, boneG, boneB, 1);
-        canvas.drawRect(Rect.fromLTWH(x * pxW, dsY, pxW + 0.5, sliceH), wallPaint);
-        // Skull eye-socket patches — dark ovals at regular intervals
-        if (perpWallDist < 8.0) {
-          final skullPhase = (bWallX * 3).floor();
-          if (skullPhase % 3 == 0) {
-            final eyeOp = (0.7 * br).clamp(0.0, 1.0);
-            wallPaint.color = Color.fromRGBO(0x18, 0x10, 0x08, eyeOp);
-            final eyeTop = dsY + sliceH * 0.22;
-            final eyeH = sliceH * 0.18;
-            canvas.drawRect(Rect.fromLTWH(x * pxW, eyeTop, pxW + 0.5, eyeH), wallPaint);
+
+        // Pile height = 1/3 of full wall slice, with organic jagged top edge
+        // Two sine harmonics create a lumpy, disorderly silhouette per column
+        final jag1 = sin(bWallX * pi * 9.7)  * 0.22;
+        final jag2 = sin(bWallX * pi * 17.3) * 0.11;
+        final pileH = (sliceH / 3.0) * (0.70 + (jag1 + jag2).abs() * 0.60)
+            .clamp(0.30, 1.50);
+        final pileTop = deY - pileH; // pile sits on the floor (deY = floor edge)
+
+        if (pileH < 0.5) continue; // too thin to draw
+
+        // ── Layer 0: dark ground shadow beneath pile ────────────────────────
+        wallPaint.color = Color.fromRGBO(0x10, 0x08, 0x04,
+            (0.85 * br).clamp(0.0, 1.0));
+        canvas.drawRect(Rect.fromLTWH(x * pxW, pileTop + pileH * 0.85,
+            pxW + 0.5, pileH * 0.15 + 0.5), wallPaint);
+
+        // ── Layers 1-4: irregular stacked bone fragments ────────────────────
+        const kBoneLayers = 4;
+        for (int bi = 0; bi < kBoneLayers; bi++) {
+          // Each layer sits slightly above the previous; top layer is thinnest
+          final layerFrac = bi / kBoneLayers;
+          final layerY = pileTop + pileH * layerFrac;
+          final layerH  = (pileH / kBoneLayers) *
+              (bi == kBoneLayers - 1 ? 0.55 : 0.85); // top layer thinner
+
+          // Per-column hash gives disorderly light/dark variation
+          final hash = ((bWallX * 13.7 + bi * 4.3 + mapX * 2.1 + mapY * 1.7)
+              .abs() % 7).floor();
+          final isGap = hash == 0; // ~14% dark gap between bone pieces
+          final isShadowed = hash <= 1;
+          final shade = isGap ? 0.12 : (isShadowed ? 0.52 : (hash.isEven ? 1.0 : 0.78));
+
+          final boneR = (0xD6 * br * shade).round().clamp(0, 255);
+          final boneG = (0xC2 * br * shade).round().clamp(0, 255);
+          final boneB = (0x82 * br * shade).round().clamp(0, 255);
+          wallPaint.color = Color.fromRGBO(boneR, boneG, boneB, 1);
+          canvas.drawRect(Rect.fromLTWH(
+              x * pxW, layerY, pxW + 0.5, layerH + 0.5), wallPaint);
+        }
+
+        // ── Skull cavity — dark eye-socket smear near the pile top ─────────
+        if (perpWallDist < 7.0) {
+          final skullSlot = (bWallX * 5.0).floor();
+          if (skullSlot % 5 == 0) {
+            final eyeOp = (0.75 * br).clamp(0.0, 1.0);
+            wallPaint.color = Color.fromRGBO(0x14, 0x0A, 0x04, eyeOp);
+            final eyeY = pileTop + pileH * 0.12;
+            final eyeH = pileH * 0.22;
+            canvas.drawRect(Rect.fromLTWH(x * pxW, eyeY, pxW + 0.5, eyeH), wallPaint);
           }
         }
         continue;
