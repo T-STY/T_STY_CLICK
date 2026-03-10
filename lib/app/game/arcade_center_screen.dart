@@ -2279,7 +2279,9 @@ class _CartridgePainter extends CustomPainter {
     // ── Game art (full bleed, clipped to card) ─────────────────────────────────
     canvas.save();
     canvas.clipRRect(rr);
-    _drawGameArt(canvas, w, h);
+    const refW = 120.0, refH = 150.0;
+    canvas.scale(w / refW, h / refH);
+    _drawGameArt(canvas, refW, refH);
 
     // Top vignette (darkens top so number badge is readable)
     canvas.drawRect(Rect.fromLTWH(0, 0, w, h * 0.22),
