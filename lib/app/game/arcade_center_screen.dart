@@ -2088,13 +2088,14 @@ class _HeroDemoGameState extends State<_HeroDemoGame> {
     if (widget.game.builder == null || widget.game.locked) {
       return Container(color: Colors.black12);
     }
-    return ClipRect(
-      child: FittedBox(
-        fit: BoxFit.cover,
-        child: SizedBox(
-          width: 375, height: 667,
-          child: AbsorbPointer(
-            child: widget.game.builder!(
+    return RepaintBoundary(
+      child: ClipRect(
+        child: FittedBox(
+          fit: BoxFit.cover,
+          child: SizedBox(
+            width: 375, height: 667,
+            child: AbsorbPointer(
+              child: widget.game.builder!(
               userId: '${widget.userId}_demo',
               // Sink doc: writes go to a harmless throwaway path, not the user's real doc
               rewardsDocRef: FirebaseFirestore.instance
@@ -2107,6 +2108,7 @@ class _HeroDemoGameState extends State<_HeroDemoGame> {
           ),
         ),
       ),
+    ),
     );
   }
 }

@@ -695,28 +695,21 @@ class _HopperPainter extends CustomPainter {
     final cs = _cs(size);
     final ox = _ox(size);
     final oy = _oy(size);
+    final p = Paint()..isAntiAlias = false;
 
-    // Background
-    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height),
-        Paint()..color = const Color(0xFF111111));
+    // Outer frame / letterbox
+    p.color = const Color(0xFF0A0A12);
+    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), p);
 
-    // Draw rows
+    // Terrain rows
     for (int row = 0; row < 14; row++) {
-      final rowColor = _rowColor(row);
-      final rect = Rect.fromLTWH(ox, oy + row * cs, cs * 13, cs);
-      canvas.drawRect(rect, Paint()..color = rowColor);
+      _drawTerrainRow(canvas, p, ox, oy, cs, row);
     }
 
-    // Road dashes (rows 7-11)
-    final dashPaint = Paint()..color = const Color(0xFFFFFFFF);
-    for (int row = 7; row <= 11; row++) {
-      final y = oy + row * cs + cs * 0.5 - 1;
-      for (int col = 0; col < 13; col += 3) {
-        canvas.drawRect(Rect.fromLTWH(ox + col * cs + cs * 0.1, y, cs * 1.8, 2), dashPaint);
-      }
-    }
+    // Road lane markings (on top of terrain)
+    _drawRoadMarkings(canvas, p, ox, oy, cs);
 
-    // Lily pads (row 0)
+    // Lily pads
     _drawLilyPads(canvas, ox, oy, cs);
 
     // Logs
@@ -725,7 +718,7 @@ class _HopperPainter extends CustomPainter {
     // Cars
     _drawCars(canvas, ox, oy, cs);
 
-    // Frog (only during playing/levelComplete or after respawn while dead-flash ends)
+    // Frog
     if (phase == _GamePhase.playing || phase == _GamePhase.levelComplete) {
       _drawFrog(canvas, ox, oy, cs);
     } else if (phase == _GamePhase.dead && deathFlash) {
@@ -733,34 +726,189 @@ class _HopperPainter extends CustomPainter {
     }
   }
 
-  Color _rowColor(int row) {
-    if (row == 0) return const Color(0xFF1A6B1A);
-    if (row >= 1 && row <= 5) return const Color(0xFF0055AA);
-    if (row == 6) return const Color(0xFF2D5016);
-    if (row >= 7 && row <= 11) return const Color(0xFF333333);
-    if (row == 12) return const Color(0xFF2D5016);
-    return const Color(0xFF2D5016); // row 13
+  // ── Terrain ──────────────────────────────────────────────────────────────
+
+  void _drawTerrainRow(Canvas canvas, Paint p, double ox, double oy, double cs, int row) {
+    final x = ox;
+    final y = oy + row * cs;
+    final w = cs * 13;
+
+    if (row == 0) {
+      // Goal / home row — rich forest green
+      p.color = const Color(0xFF155A15);
+      canvas.drawRect(Rect.fromLTWH(x, y, w, cs), p);
+      // Lighter grass crest
+      p.color = const Color(0xFF1E7A1E);
+      canvas.drawRect(Rect.fromLTWH(x, y, w, cs * 0.22), p);
+      // Dark divider at base
+      p.color = const Color(0xFF0A2E0A);
+      canvas.drawRect(Rect.fromLTWH(x, y + cs * 0.90, w, cs * 0.10), p);
+      // Grass blade spikes along top
+      p.color = const Color(0xFF3AAA3A);
+      for (double bx = x + 1; bx < x + w - 1; bx += 4) {
+        canvas.drawRect(Rect.fromLTWH(bx, y + 1, 1.5, cs * 0.14), p);
+      }
+      // Recessed water channels behind empty lily pad slots
+      for (final emptyCol in [0, 2, 4, 6, 8, 10, 11, 12]) {
+        p.color = const Color(0xFF0B3A0B);
+        canvas.drawRect(Rect.fromLTWH(ox + emptyCol * cs + cs * 0.05, y + cs * 0.14,
+            cs * 0.90, cs * 0.72), p);
+      }
+    } else if (row >= 1 && row <= 5) {
+      // River rows — deep water with shimmer
+      final baseBlue = row.isOdd ? const Color(0xFF003880) : const Color(0xFF00408A);
+      p.color = baseBlue;
+      canvas.drawRect(Rect.fromLTWH(x, y, w, cs), p);
+      // Foam / glare band at top
+      p.color = const Color(0xFF1A5DC4);
+      canvas.drawRect(Rect.fromLTWH(x, y, w, cs * 0.09), p);
+      // Depth shadow at bottom
+      p.color = const Color(0xFF001E55);
+      canvas.drawRect(Rect.fromLTWH(x, y + cs * 0.88, w, cs * 0.12), p);
+      // Two shimmer bands
+      p.color = const Color(0x304488DD);
+      canvas.drawRect(Rect.fromLTWH(x, y + cs * 0.28, w, cs * 0.07), p);
+      canvas.drawRect(Rect.fromLTWH(x, y + cs * 0.60, w, cs * 0.05), p);
+      // Ripple dashes — offset per row to avoid alignment
+      p.color = const Color(0x3866AAEE);
+      final rippleOffset = row * 13.0 % 9;
+      for (double rx = x + rippleOffset; rx < x + w - cs * 0.3; rx += cs * 1.1) {
+        canvas.drawRect(Rect.fromLTWH(rx, y + cs * 0.43, cs * 0.38, 1.5), p);
+      }
+    } else if (row == 6) {
+      // Safe island / median — bright grass strip
+      p.color = const Color(0xFF2A5512);
+      canvas.drawRect(Rect.fromLTWH(x, y, w, cs), p);
+      p.color = const Color(0xFF3A7A1A);
+      canvas.drawRect(Rect.fromLTWH(x, y + cs * 0.12, w, cs * 0.76), p);
+      // Yellow guardrail at top & bottom
+      p.color = const Color(0xFFDDAA00);
+      canvas.drawRect(Rect.fromLTWH(x, y, w, cs * 0.06), p);
+      canvas.drawRect(Rect.fromLTWH(x, y + cs * 0.94, w, cs * 0.06), p);
+      // Grass blades
+      p.color = const Color(0xFF55BB22);
+      for (double bx = x + 2; bx < x + w - 1; bx += 4) {
+        canvas.drawRect(Rect.fromLTWH(bx, y + cs * 0.16, 1.5, cs * 0.16), p);
+      }
+    } else if (row >= 7 && row <= 11) {
+      // Road rows — charcoal asphalt
+      p.color = const Color(0xFF232323);
+      canvas.drawRect(Rect.fromLTWH(x, y, w, cs), p);
+      // Subtle asphalt texture bands
+      p.color = const Color(0xFF2B2B2B);
+      for (double tx = x; tx < x + w; tx += cs * 0.85) {
+        canvas.drawRect(Rect.fromLTWH(tx, y + cs * 0.10, cs * 0.42, cs * 0.80), p);
+      }
+      // White edge lines (outer road border)
+      if (row == 7) {
+        p.color = const Color(0xFFDDDDDD);
+        canvas.drawRect(Rect.fromLTWH(x, y, w, cs * 0.045), p);
+      }
+      if (row == 11) {
+        p.color = const Color(0xFFDDDDDD);
+        canvas.drawRect(Rect.fromLTWH(x, y + cs * 0.955, w, cs * 0.045), p);
+      }
+    } else {
+      // Rows 12-13 — start safe zone, lush grass
+      p.color = const Color(0xFF1A5A1A);
+      canvas.drawRect(Rect.fromLTWH(x, y, w, cs), p);
+      p.color = const Color(0xFF237823);
+      canvas.drawRect(Rect.fromLTWH(x, y, w, cs * 0.22), p);
+      if (row == 12) {
+        // Sidewalk curb at bottom (top of start zone)
+        p.color = const Color(0xFFB0B0B0);
+        canvas.drawRect(Rect.fromLTWH(x, y + cs * 0.94, w, cs * 0.06), p);
+      }
+      if (row == 13) {
+        // Safe starting platform edge at very bottom
+        p.color = const Color(0xFF0A300A);
+        canvas.drawRect(Rect.fromLTWH(x, y + cs * 0.94, w, cs * 0.06), p);
+      }
+      // Grass blades
+      p.color = const Color(0xFF44BB33);
+      final bOff = row == 12 ? 1.0 : 3.0;
+      for (double bx = x + bOff; bx < x + w - 1; bx += 4) {
+        canvas.drawRect(Rect.fromLTWH(bx, y + 1, 1.5, cs * 0.13), p);
+      }
+    }
   }
 
+  void _drawRoadMarkings(Canvas canvas, Paint p, double ox, double oy, double cs) {
+    // White dashed lane dividers between road rows
+    for (int row = 7; row <= 10; row++) {
+      final y = oy + (row + 1) * cs - 1.5;
+      p.color = const Color(0xBBFFFFFF);
+      for (double dx = ox + cs * 0.15; dx < ox + cs * 13 - cs * 0.15; dx += cs * 1.5) {
+        canvas.drawRect(Rect.fromLTWH(dx, y, cs * 0.85, 2.5), p);
+      }
+    }
+    // Double yellow center divider between rows 9 and 10
+    final yC = oy + 10 * cs - 1.5;
+    p.color = const Color(0xFFDDAA00);
+    canvas.drawRect(Rect.fromLTWH(ox, yC - 2.5, cs * 13, 2.0), p);
+    canvas.drawRect(Rect.fromLTWH(ox, yC + 1.5, cs * 13, 2.0), p);
+  }
+
+  // ── Lily pads ─────────────────────────────────────────────────────────────
+
   void _drawLilyPads(Canvas canvas, double ox, double oy, double cs) {
+    final p = Paint()..isAntiAlias = false;
     for (final col in [1, 3, 5, 7, 9]) {
       final filled = filledPads.contains(col);
       final cx = ox + col * cs + cs / 2;
       final cy = oy + cs / 2;
-      final padColor = filled ? const Color(0xFF32CD32) : const Color(0xFF228B22);
-      canvas.drawRect(
-        Rect.fromCenter(center: Offset(cx, cy), width: cs * 0.8, height: cs * 0.6),
-        Paint()..color = padColor,
-      );
+      final r = cs * 0.42;
+
+      // Draw oval pad as stacked horizontal rects (9 bands)
+      const bands = 9;
+      for (int bi = 0; bi < bands; bi++) {
+        final t = (bi / (bands - 1)) * 2.0 - 1.0; // -1..1
+        final halfW = r * sqrt(max(0, 1.0 - t * t * 0.55));
+        final bandY = cy - r + bi * (r * 2.0 / (bands - 1));
+        final bandH = (r * 2.0 / (bands - 1)) + 1;
+
+        // Notch cut on upper-right (classic lily pad shape) for top 3 bands
+        final isNotchRow = bi < 3;
+        if (isNotchRow && halfW > r * 0.3) {
+          // Draw only left portion
+          p.color = bi < 2
+              ? (filled ? const Color(0xFF50D050) : const Color(0xFF2A9A2A))
+              : (filled ? const Color(0xFF38C038) : const Color(0xFF1E8A1E));
+          canvas.drawRect(Rect.fromLTWH(cx - halfW, bandY, halfW * 0.65, bandH), p);
+        } else {
+          // Full band
+          p.color = bi < 2
+              ? (filled ? const Color(0xFF50D050) : const Color(0xFF2A9A2A))
+              : bi > bands - 3
+                  ? (filled ? const Color(0xFF1A8A1A) : const Color(0xFF146414))
+                  : (filled ? const Color(0xFF38C038) : const Color(0xFF1E8A1E));
+          canvas.drawRect(Rect.fromLTWH(cx - halfW, bandY, halfW * 2.0, bandH), p);
+        }
+      }
+
+      // Pad vein lines (radial spokes)
+      p.color = filled ? const Color(0xFF66EE66) : const Color(0xFF2AA82A);
+      canvas.drawRect(Rect.fromLTWH(cx - 0.75, cy - r * 0.85, 1.5, r * 0.85), p);
+      canvas.drawRect(Rect.fromLTWH(cx - r * 0.85, cy - 0.75, r * 0.85, 1.5), p);
+      canvas.drawRect(Rect.fromLTWH(cx - 0.75, cy, 1.5, r * 0.80), p);
+      canvas.drawRect(Rect.fromLTWH(cx, cy - 0.75, r * 0.80, 1.5), p);
+
       if (filled) {
-        // Yellow dot
-        canvas.drawRect(
-          Rect.fromCenter(center: Offset(cx, cy), width: cs * 0.25, height: cs * 0.25),
-          Paint()..color = const Color(0xFFFFFF00),
-        );
+        // Glowing star / crown marking
+        p.color = const Color(0xFFFFEE00);
+        canvas.drawRect(Rect.fromCenter(center: Offset(cx, cy), width: r * 0.55, height: r * 0.55), p);
+        p.color = const Color(0xFFFF9900);
+        canvas.drawRect(Rect.fromCenter(center: Offset(cx, cy), width: r * 0.22, height: r * 1.0), p);
+        canvas.drawRect(Rect.fromCenter(center: Offset(cx, cy), width: r * 1.0, height: r * 0.22), p);
+      } else {
+        // Water-lily bud
+        p.color = const Color(0xFFEEEEAA);
+        canvas.drawRect(Rect.fromCenter(center: Offset(cx, cy), width: r * 0.22, height: r * 0.22), p);
       }
     }
   }
+
+  // ── Logs (kept with existing quality, minor tweak) ────────────────────────
 
   void _drawLogs(Canvas canvas, double ox, double oy, double cs) {
     final p = Paint()..isAntiAlias = false;
@@ -771,133 +919,233 @@ class _HopperPainter extends CustomPainter {
       final logTop = y + cs * 0.10;
       final logH = cs * 0.80;
 
+      // Water shadow below log
+      p.color = const Color(0x55000033);
+      canvas.drawRect(Rect.fromLTWH(x + 2, logTop + logH, w - 2, cs * 0.06), p);
+
       // Main bark body
       p.color = const Color(0xFF7A3A10);
       canvas.drawRect(Rect.fromLTWH(x, logTop, w, logH), p);
-
-      // Top highlight (lighter bark)
+      // Top highlight
       p.color = const Color(0xFFA05028);
       canvas.drawRect(Rect.fromLTWH(x, logTop, w, logH * 0.18), p);
-
       // Bottom shadow
       p.color = const Color(0xFF4A2008);
       canvas.drawRect(Rect.fromLTWH(x, logTop + logH * 0.82, w, logH * 0.18), p);
 
-      // Bark grain lines (horizontal wrinkles)
+      // Bark grain lines
       p.color = const Color(0xFF5A2808);
       final grainCount = (logH / 5).floor().clamp(2, 6);
       for (int i = 1; i < grainCount; i++) {
         final lineY = logTop + (logH * i / grainCount);
         canvas.drawRect(Rect.fromLTWH(x + 2, lineY, w - 4, 1.5), p);
       }
-
-      // Vertical bark cracks (spaced every ~cs apart)
+      // Vertical bark cracks
       p.color = const Color(0xFF4A2008);
       final crackSpacing = cs * 0.85;
       for (double cx2 = x + crackSpacing; cx2 < x + w - cs * 0.3; cx2 += crackSpacing) {
         canvas.drawRect(Rect.fromLTWH(cx2, logTop + logH * 0.2, 1.5, logH * 0.6), p);
       }
-
-      // End caps (darker circles at log ends)
+      // End caps
       p.color = const Color(0xFF3A1A06);
       canvas.drawRect(Rect.fromLTWH(x, logTop, cs * 0.18, logH), p);
       canvas.drawRect(Rect.fromLTWH(x + w - cs * 0.18, logTop, cs * 0.18, logH), p);
-      // Ring on cap
       p.color = const Color(0xFF6A3018);
       canvas.drawRect(Rect.fromLTWH(x + cs * 0.06, logTop + logH * 0.25, cs * 0.06, logH * 0.50), p);
       canvas.drawRect(Rect.fromLTWH(x + w - cs * 0.12, logTop + logH * 0.25, cs * 0.06, logH * 0.50), p);
     }
   }
 
+  // ── Cars ──────────────────────────────────────────────────────────────────
+
   void _drawCars(Canvas canvas, double ox, double oy, double cs) {
+    final p = Paint()..isAntiAlias = false;
     for (final car in cars) {
       final x = ox + car.x * cs;
       final y = oy + car.row * cs;
       final w = car.len * cs;
+      final goingRight = car.speed > 0;
 
-      final bodyPaint = Paint()..color = car.color;
-      canvas.drawRect(Rect.fromLTWH(x + 1, y + cs * 0.2, w - 2, cs * 0.65), bodyPaint);
+      // Ground shadow
+      p.color = const Color(0x55000000);
+      canvas.drawRect(Rect.fromLTWH(x + 2, y + cs * 0.83, w - 2, cs * 0.13), p);
 
-      // Windows (dark rectangles)
-      final windowPaint = Paint()..color = const Color(0xFF222222);
-      final winW = (w - 6) / 2;
-      if (winW > 2) {
-        canvas.drawRect(Rect.fromLTWH(x + 3, y + cs * 0.25, winW, cs * 0.25), windowPaint);
-        canvas.drawRect(Rect.fromLTWH(x + 3 + winW + 2, y + cs * 0.25, winW, cs * 0.25), windowPaint);
+      // Main car body
+      p.color = car.color;
+      canvas.drawRect(Rect.fromLTWH(x + 1, y + cs * 0.21, w - 2, cs * 0.58), p);
+
+      // Body top highlight
+      p.color = _lightenColor(car.color, 0.28);
+      canvas.drawRect(Rect.fromLTWH(x + 1, y + cs * 0.21, w - 2, cs * 0.09), p);
+
+      // Body bottom shadow
+      p.color = _darkenColor(car.color, 0.38);
+      canvas.drawRect(Rect.fromLTWH(x + 1, y + cs * 0.68, w - 2, cs * 0.11), p);
+
+      // Roof / cab section
+      if (w > cs * 1.1) {
+        final cabX = x + w * 0.22;
+        final cabW = w * 0.56;
+        p.color = _darkenColor(car.color, 0.18);
+        canvas.drawRect(Rect.fromLTWH(cabX, y + cs * 0.09, cabW, cs * 0.12), p);
+        // Windshield (front) and rear window (back)
+        p.color = const Color(0xFF7ABFE0);
+        canvas.drawRect(Rect.fromLTWH(cabX + 1, y + cs * 0.10, cabW * 0.43, cs * 0.10), p);
+        canvas.drawRect(Rect.fromLTWH(cabX + cabW - cabW * 0.40, y + cs * 0.10, cabW * 0.38, cs * 0.10), p);
+        // Window glare streak
+        p.color = const Color(0x99FFFFFF);
+        canvas.drawRect(Rect.fromLTWH(cabX + 2, y + cs * 0.11, cabW * 0.10, cs * 0.04), p);
       }
+
+      // Headlights (front) — bright yellow
+      final frontX = goingRight ? x + w - cs * 0.16 : x + cs * 0.04;
+      final rearX  = goingRight ? x + cs * 0.04     : x + w - cs * 0.16;
+      p.color = const Color(0xFFFFFF88);
+      canvas.drawRect(Rect.fromLTWH(frontX, y + cs * 0.29, cs * 0.11, cs * 0.14), p);
+      canvas.drawRect(Rect.fromLTWH(frontX, y + cs * 0.54, cs * 0.11, cs * 0.14), p);
+      // Taillights — red
+      p.color = const Color(0xFFFF2233);
+      canvas.drawRect(Rect.fromLTWH(rearX, y + cs * 0.29, cs * 0.11, cs * 0.14), p);
+      canvas.drawRect(Rect.fromLTWH(rearX, y + cs * 0.54, cs * 0.11, cs * 0.14), p);
+
+      // Wheels — dark with hub dot
+      p.color = const Color(0xFF111111);
+      canvas.drawRect(Rect.fromLTWH(x + cs * 0.10, y + cs * 0.72, cs * 0.20, cs * 0.17), p);
+      canvas.drawRect(Rect.fromLTWH(x + w - cs * 0.30, y + cs * 0.72, cs * 0.20, cs * 0.17), p);
+      p.color = const Color(0xFF555555);
+      canvas.drawRect(Rect.fromLTWH(x + cs * 0.155, y + cs * 0.745, cs * 0.09, cs * 0.07), p);
+      canvas.drawRect(Rect.fromLTWH(x + w - cs * 0.255, y + cs * 0.745, cs * 0.09, cs * 0.07), p);
     }
   }
 
+  Color _lightenColor(Color c, double t) {
+    return Color.fromARGB(
+      c.alpha,
+      (c.red   + (255 - c.red)   * t).round().clamp(0, 255),
+      (c.green + (255 - c.green) * t).round().clamp(0, 255),
+      (c.blue  + (255 - c.blue)  * t).round().clamp(0, 255),
+    );
+  }
+
+  Color _darkenColor(Color c, double t) {
+    return Color.fromARGB(
+      c.alpha,
+      (c.red   * (1 - t)).round().clamp(0, 255),
+      (c.green * (1 - t)).round().clamp(0, 255),
+      (c.blue  * (1 - t)).round().clamp(0, 255),
+    );
+  }
+
+  // ── Frog ──────────────────────────────────────────────────────────────────
+
   void _drawFrog(Canvas canvas, double ox, double oy, double cs) {
     final isDead = deathFlash;
-    final bodyGreen = isDead ? const Color(0xFFFF2200) : const Color(0xFF22BB22);
-    final darkGreen = isDead ? const Color(0xFFAA1100) : const Color(0xFF148814);
-    final bellyColor = isDead ? const Color(0xFFFF6644) : const Color(0xFF88EE66);
+    final bodyGreen  = isDead ? const Color(0xFFFF2200) : const Color(0xFF22CC22);
+    final darkGreen  = isDead ? const Color(0xFFAA1100) : const Color(0xFF119911);
+    final outlineCol = isDead ? const Color(0xFF660000) : const Color(0xFF0A4A0A);
+    final bellyColor = isDead ? const Color(0xFFFF6644) : const Color(0xFF99FF77);
+    final irisColor  = isDead ? const Color(0xFFFF8800) : const Color(0xFFCCBB00);
 
     final p = Paint()..isAntiAlias = false;
     final fx = ox + frogX * cs;
     final fy = oy + frogRow * cs;
-    final u = cs / 10.0; // 1 unit = cs/10
+    final u = cs / 10.0;
 
-    // Determine rotation based on facing
     canvas.save();
     canvas.translate(fx + cs / 2, fy + cs / 2);
-    canvas.scale(0.90); // 10% smaller
+    canvas.scale(0.90);
     switch (frogFacing) {
-      case _Facing.up:    break; // default
+      case _Facing.up:    break;
       case _Facing.down:  canvas.rotate(3.14159); break;
       case _Facing.left:  canvas.rotate(-1.5708); break;
       case _Facing.right: canvas.rotate(1.5708); break;
     }
 
-    // ── Back legs (wide spread at bottom) ──────────────────────────────────
-    p.color = darkGreen;
-    // Left back leg
-    canvas.drawRect(Rect.fromLTWH(-4.5*u, 1.5*u, 2.5*u, 3.5*u), p);
-    canvas.drawRect(Rect.fromLTWH(-5.5*u, 3.5*u, 2*u, 1.5*u), p); // foot
-    // Right back leg
-    canvas.drawRect(Rect.fromLTWH(2*u, 1.5*u, 2.5*u, 3.5*u), p);
-    canvas.drawRect(Rect.fromLTWH(3.5*u, 3.5*u, 2*u, 1.5*u), p); // foot
+    // ── Outline shadow (drawn 1px larger in each direction) ─────────────────
+    p.color = outlineCol;
+    canvas.drawRect(Rect.fromLTWH(-5*u,  1*u, 3*u, 4.5*u), p); // L back leg outline
+    canvas.drawRect(Rect.fromLTWH( 2*u,  1*u, 3*u, 4.5*u), p); // R back leg outline
+    canvas.drawRect(Rect.fromLTWH(-4.5*u, -2.5*u, 9*u, 6*u), p); // body outline
+    canvas.drawRect(Rect.fromLTWH(-4.5*u, -6*u, 9*u, 4.5*u), p); // head outline
+    canvas.drawRect(Rect.fromLTWH(-5.5*u, -3.5*u, 2.5*u, 3.5*u), p); // L front leg
+    canvas.drawRect(Rect.fromLTWH( 3*u,   -3.5*u, 2.5*u, 3.5*u), p); // R front leg
 
-    // ── Body ───────────────────────────────────────────────────────────────
+    // ── Back legs ───────────────────────────────────────────────────────────
+    p.color = darkGreen;
+    // Left thigh
+    canvas.drawRect(Rect.fromLTWH(-4.5*u, 1.5*u, 2.5*u, 3.5*u), p);
+    // Left foot webbing (3 toe stubs)
+    canvas.drawRect(Rect.fromLTWH(-5.8*u, 3.8*u, 1.2*u, 1.2*u), p);
+    canvas.drawRect(Rect.fromLTWH(-4.8*u, 4.2*u, 1.2*u, 1.0*u), p);
+    canvas.drawRect(Rect.fromLTWH(-3.8*u, 3.8*u, 1.2*u, 1.2*u), p);
+    // Right thigh
+    canvas.drawRect(Rect.fromLTWH( 2*u, 1.5*u, 2.5*u, 3.5*u), p);
+    // Right foot webbing
+    canvas.drawRect(Rect.fromLTWH( 2.6*u, 3.8*u, 1.2*u, 1.2*u), p);
+    canvas.drawRect(Rect.fromLTWH( 3.6*u, 4.2*u, 1.2*u, 1.0*u), p);
+    canvas.drawRect(Rect.fromLTWH( 4.6*u, 3.8*u, 1.2*u, 1.2*u), p);
+
+    // ── Body ────────────────────────────────────────────────────────────────
     p.color = bodyGreen;
     canvas.drawRect(Rect.fromLTWH(-3.5*u, -2*u, 7*u, 5*u), p);
+    // Dorsal stripe (slightly darker)
+    p.color = darkGreen;
+    canvas.drawRect(Rect.fromLTWH(-0.6*u, -2*u, 1.2*u, 4*u), p);
 
     // Belly
     p.color = bellyColor;
     canvas.drawRect(Rect.fromLTWH(-2*u, -0.5*u, 4*u, 3*u), p);
 
-    // Spots on back
+    // Back spots
     p.color = darkGreen;
-    canvas.drawRect(Rect.fromLTWH(-2.5*u, -1.5*u, 1.5*u, 1.5*u), p);
-    canvas.drawRect(Rect.fromLTWH(1*u, -1.5*u, 1.5*u, 1.5*u), p);
+    canvas.drawRect(Rect.fromLTWH(-2.8*u, -1.5*u, 1.6*u, 1.6*u), p);
+    canvas.drawRect(Rect.fromLTWH( 1.2*u, -1.5*u, 1.6*u, 1.6*u), p);
 
-    // ── Front legs (smaller, at sides of head) ────────────────────────────
+    // ── Front legs ──────────────────────────────────────────────────────────
     p.color = darkGreen;
     canvas.drawRect(Rect.fromLTWH(-5*u, -3*u, 2*u, 2.5*u), p);
-    canvas.drawRect(Rect.fromLTWH(3*u, -3*u, 2*u, 2.5*u), p);
+    // Front left toes
+    canvas.drawRect(Rect.fromLTWH(-5.8*u, -3.5*u, 0.9*u, 0.9*u), p);
+    canvas.drawRect(Rect.fromLTWH(-5.0*u, -3.8*u, 0.9*u, 0.9*u), p);
+    canvas.drawRect(Rect.fromLTWH(-4.2*u, -3.5*u, 0.9*u, 0.9*u), p);
+    canvas.drawRect(Rect.fromLTWH( 3*u, -3*u, 2*u, 2.5*u), p);
+    // Front right toes
+    canvas.drawRect(Rect.fromLTWH( 3.3*u, -3.5*u, 0.9*u, 0.9*u), p);
+    canvas.drawRect(Rect.fromLTWH( 4.1*u, -3.8*u, 0.9*u, 0.9*u), p);
+    canvas.drawRect(Rect.fromLTWH( 4.9*u, -3.5*u, 0.9*u, 0.9*u), p);
 
-    // ── Head (wider than body) ─────────────────────────────────────────────
+    // ── Head ────────────────────────────────────────────────────────────────
     p.color = bodyGreen;
     canvas.drawRect(Rect.fromLTWH(-4*u, -5.5*u, 8*u, 4*u), p);
-
-    // Mouth line
+    // Mouth crease
     p.color = darkGreen;
     canvas.drawRect(Rect.fromLTWH(-3*u, -2.5*u, 6*u, 1*u), p);
+    // Nostril dots
+    p.color = outlineCol;
+    canvas.drawRect(Rect.fromLTWH(-1.5*u, -4.2*u, 0.9*u, 0.9*u), p);
+    canvas.drawRect(Rect.fromLTWH( 0.6*u, -4.2*u, 0.9*u, 0.9*u), p);
 
-    // ── Bulging eyes (protruding bumps at top corners) ─────────────────────
+    // ── Bulging eyes ────────────────────────────────────────────────────────
+    // Eye socket bump (outline)
+    p.color = outlineCol;
+    canvas.drawRect(Rect.fromLTWH(-5*u, -7.5*u, 3.2*u, 3.2*u), p);
+    canvas.drawRect(Rect.fromLTWH( 1.8*u, -7.5*u, 3.2*u, 3.2*u), p);
     // Eye whites
     p.color = Colors.white;
     canvas.drawRect(Rect.fromLTWH(-4.5*u, -7*u, 2.5*u, 2.5*u), p);
-    canvas.drawRect(Rect.fromLTWH(2*u, -7*u, 2.5*u, 2.5*u), p);
-    // Pupils (black)
+    canvas.drawRect(Rect.fromLTWH( 2*u,   -7*u, 2.5*u, 2.5*u), p);
+    // Gold iris ring
+    p.color = irisColor;
+    canvas.drawRect(Rect.fromLTWH(-4.2*u, -6.8*u, 1.9*u, 1.9*u), p);
+    canvas.drawRect(Rect.fromLTWH( 2.3*u, -6.8*u, 1.9*u, 1.9*u), p);
+    // Pupils
     p.color = Colors.black;
     canvas.drawRect(Rect.fromLTWH(-3.8*u, -6.5*u, 1.2*u, 1.2*u), p);
-    canvas.drawRect(Rect.fromLTWH(2.6*u, -6.5*u, 1.2*u, 1.2*u), p);
+    canvas.drawRect(Rect.fromLTWH( 2.6*u, -6.5*u, 1.2*u, 1.2*u), p);
     // Pupil shine
     p.color = Colors.white;
-    canvas.drawRect(Rect.fromLTWH(-3.5*u, -6.8*u, 0.6*u, 0.6*u), p);
-    canvas.drawRect(Rect.fromLTWH(2.9*u, -6.8*u, 0.6*u, 0.6*u), p);
+    canvas.drawRect(Rect.fromLTWH(-3.6*u, -6.8*u, 0.55*u, 0.55*u), p);
+    canvas.drawRect(Rect.fromLTWH( 2.8*u, -6.8*u, 0.55*u, 0.55*u), p);
 
     canvas.restore();
   }

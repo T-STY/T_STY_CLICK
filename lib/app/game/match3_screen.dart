@@ -417,13 +417,16 @@ class _Match3ScreenState extends State<Match3Screen> with SingleTickerProviderSt
           const headerH = 56.0;
           const footerH = 72.0;
           const hPad = 8.0;
-          final boardH = totalH - headerH - footerH;
+          const headerGap = 6.0;
+          final boardH = totalH - headerH - footerH - headerGap;
           final cellW = (totalW - hPad * 2) / _kCols;
           final cellH = boardH / _kRows;
 
           return Column(children: [
             // Header bar
             _buildHeader(totalW, headerH),
+
+            const SizedBox(height: headerGap),
 
             // Board in dark wooden container
             Padding(

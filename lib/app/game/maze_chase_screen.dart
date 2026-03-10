@@ -112,10 +112,6 @@ class _MazeChasScreenState extends State<MazeChasScreen> {
     HighScoreService.load('maze').then((v) {
       if (mounted) setState(() => _hiScore = v);
     });
-    // Blink timer for pellet + scared ghost flash
-    _blinkTimer = Timer.periodic(const Duration(milliseconds: 300), (_) {
-      if (mounted) setState(() => _pelletBlink = !_pelletBlink);
-    });
   }
 
   @override
@@ -218,6 +214,7 @@ class _MazeChasScreenState extends State<MazeChasScreen> {
   void _startTimers() {
     _playerTimer?.cancel();
     _ghostTimer?.cancel();
+    _blinkTimer?.cancel();
     _playerTimer = Timer.periodic(
       const Duration(milliseconds: 200),
       _playerStep,
@@ -226,13 +223,18 @@ class _MazeChasScreenState extends State<MazeChasScreen> {
       Duration(milliseconds: _ghostIntervalMs),
       _ghostsStep,
     );
+    _blinkTimer = Timer.periodic(const Duration(milliseconds: 300), (_) {
+      if (mounted) setState(() => _pelletBlink = !_pelletBlink);
+    });
   }
 
   void _stopTimers() {
     _playerTimer?.cancel();
     _ghostTimer?.cancel();
+    _blinkTimer?.cancel();
     _playerTimer = null;
     _ghostTimer = null;
+    _blinkTimer = null;
   }
 
   void _restart() {
@@ -1988,5 +1990,19 @@ class _MazePainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_MazePainter old) => true;
+  bool shouldRepaint(_MazePainter old) =>
+      pelletBlink != old.pelletBlink ||
+      scaredBlink != old.scaredBlink ||
+      playerRow != old.playerRow ||
+      playerCol != old.playerCol ||
+      playerDir != old.playerDir ||
+      score != old.score ||
+      lives != old.lives ||
+      level != old.level ||
+      ghosts.length != old.ghosts.length ||
+      ghosts.any((g) {
+        final og = old.ghosts.firstWhere(
+          (o) => o.color == g.color, orElse: () => g);
+        return g.row != og.row || g.col != og.col || g.scared != og.scared;
+      });
 }
