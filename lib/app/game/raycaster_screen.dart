@@ -47,9 +47,10 @@ class _Enemy {
   double hitFlash;
   _EnemyType type;
   int wave; // used to scale damage each wave
+  bool isMega; // boss variant — distinct visuals, triple HP
 
-  _Enemy(this.x, this.y, {this.type = _EnemyType.demon, this.wave = 1})
-      : hp = _baseHp(type) * (1.0 + (wave - 1) * 0.25),
+  _Enemy(this.x, this.y, {this.type = _EnemyType.demon, this.wave = 1, this.isMega = false})
+      : hp = _baseHp(type) * (1.0 + (wave - 1) * 0.25) * (isMega ? 3.0 : 1.0),
         alive = true,
         hitFlash = 0;
 
@@ -62,6 +63,7 @@ class _Enemy {
   }
 
   double get spriteScale {
+    if (isMega) return 0.96; // near-full height, towering
     switch (type) {
       case _EnemyType.demon:     return 0.58;
       case _EnemyType.cacodemon: return 0.60;
@@ -183,7 +185,7 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
 
   final List<_Enemy> _enemies = [];
   final List<_Projectile> _projectiles = [];
-  final List<double> _zBuf = List<double>.filled(120, 0);
+  final List<double> _zBuf = List<double>.filled(240, 0);
   final Random _rng = Random();
 
   static const double _moveSpeed = 3.2;
@@ -359,9 +361,9 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
       return;
     }
 
-    // Boss wave (every 5th): spawn a mega-demon first
+    // Boss wave (every 5th): spawn a mega-demon — distinct visual, 3× HP
     if (wave % 5 == 0) {
-      _enemies.add(_Enemy(8.5, 3.5, type: _EnemyType.demon, wave: wave * 2));
+      _enemies.add(_Enemy(8.5, 3.5, type: _EnemyType.demon, wave: wave * 2, isMega: true));
     }
 
     final count = wave + 3;
@@ -1060,7 +1062,8 @@ class _RaycasterPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final pxW = size.width / 120.0;
+    const numCols = 240;
+    final pxW = size.width / numCols;
     final pxH = size.height / 80.0;
 
     _drawCeilingAndFloor(canvas, size, pxW, pxH);
@@ -1157,9 +1160,11 @@ class _RaycasterPainter extends CustomPainter {
 
   void _castWalls(Canvas canvas, Size size, double pxW, double pxH) {
     final wallPaint = Paint()..isAntiAlias = false;
+    const numCols = 240;
+    final halfH = size.height * 0.5;
 
-    for (int x = 0; x < 120; x++) {
-      final cameraX = 2 * x / 120.0 - 1.0;
+    for (int x = 0; x < numCols; x++) {
+      final cameraX = 2.0 * x / numCols - 1.0;
       final rayDirX = dirX + planeX * cameraX;
       final rayDirY = dirY + planeY * cameraX;
 
@@ -1197,29 +1202,48 @@ class _RaycasterPainter extends CustomPainter {
       final perpWallDist = side == 0 ? sideDistX - deltaDistX : sideDistY - deltaDistY;
       zBuf[x] = perpWallDist;
 
-      final lineH = (80 / perpWallDist).round().clamp(1, 80);
-      final ds = (40 - lineH ~/ 2).clamp(0, 79);
-      final de = (40 + lineH ~/ 2).clamp(0, 79);
+      // ── Sub-pixel smooth wall height — eliminates staircase jaggedness ──────
+      final wallHPx = (size.height / perpWallDist).clamp(0.5, size.height * 4.0);
+      final dsY = (halfH - wallHPx * 0.5).clamp(0.0, size.height);
+      final deY = (halfH + wallHPx * 0.5).clamp(0.0, size.height);
+      final sliceH = (deY - dsY).clamp(0.5, size.height);
 
-      // Dark red brick walls — side walls slightly darker
-      final int baseR = side == 0 ? 0x7A : 0x55;
-      final int baseG = side == 0 ? 0x18 : 0x10;
-      final int baseB = side == 0 ? 0x08 : 0x05;
+      // Stone block colour — N/S sides slightly darker
+      final int baseR = side == 0 ? 0x82 : 0x58;
+      final int baseG = side == 0 ? 0x1E : 0x12;
+      final int baseB = side == 0 ? 0x0A : 0x06;
 
-      final br = (1.0 / (1.0 + perpWallDist * 0.30)).clamp(0.1, 1.0);
+      // Distance fog
+      final br = (1.0 / (1.0 + perpWallDist * 0.28)).clamp(0.08, 1.0);
 
-      // Brick texture: vary brightness per horizontal brick row on the wall
-      final wallHitRow = (mapY + mapX * 7) % 4; // pseudo-random row offset
-      final brickPhase = (ds + wallHitRow * 5) % 6;
-      final brickTone = brickPhase < 2 ? 1.10 : (brickPhase < 4 ? 0.97 : 0.88);
+      // Horizontal brick texture — sample exact wall-hit fractional coordinate
+      double wallX;
+      if (side == 0) {
+        wallX = posY + perpWallDist * rayDirY;
+      } else {
+        wallX = posX + perpWallDist * rayDirX;
+      }
+      wallX -= wallX.floor();
+      final brickSeg = (wallX * 4).floor(); // 4 columns of bricks per wall face
+      final brickOff = (mapX * 3 + mapY * 7 + brickSeg) % 3;
+      final brickTone = brickOff == 0 ? 1.14 : (brickOff == 1 ? 0.95 : 0.82);
       final adjBr = (br * brickTone).clamp(0.05, 1.0);
 
       wallPaint.color = Color.fromRGBO(
         (baseR * adjBr).round().clamp(0, 255),
         (baseG * adjBr).round().clamp(0, 255),
         (baseB * adjBr).round().clamp(0, 255), 1);
-      canvas.drawRect(
-        Rect.fromLTWH(x * pxW, ds * pxH, pxW + 0.5, (de - ds) * pxH + 0.5), wallPaint);
+      canvas.drawRect(Rect.fromLTWH(x * pxW, dsY, pxW + 0.5, sliceH), wallPaint);
+
+      // Mortar seam at brick column edge — thin dark line when close
+      if (perpWallDist < 4.0) {
+        final edgeDist = (wallX * 4.0 - brickSeg.toDouble()).abs();
+        if (edgeDist < 0.055) {
+          wallPaint.color = Color.fromRGBO(
+            (0x18 * br).round(), (0x04 * br).round(), (0x02 * br).round(), 1);
+          canvas.drawRect(Rect.fromLTWH(x * pxW, dsY, pxW + 0.5, sliceH), wallPaint);
+        }
+      }
     }
   }
 
@@ -1234,6 +1258,8 @@ class _RaycasterPainter extends CustomPainter {
     });
 
     final sp = Paint()..isAntiAlias = false;
+    const numCols = 240;
+    final halfH = size.height * 0.5;
 
     for (final e in alive) {
       final dx = e.x - posX, dy = e.y - posY;
@@ -1242,37 +1268,35 @@ class _RaycasterPainter extends CustomPainter {
       final transformY = invDet * (-planeY * dx + planeX * dy);
       if (transformY <= 0.1) continue;
 
-      final screenX = (60 * (1 + transformX / transformY)).round();
-      final baseH = (80 / transformY).abs();
+      // Screen column centre (0-239)
+      final screenX = (numCols ~/ 2 * (1 + transformX / transformY)).round();
 
-      // Scale: 3/4 height max, type-specific scale
-      final spriteH = (baseH * e.spriteScale).round().clamp(2, 60);
-      final spriteW = spriteH;
+      // ── Sub-pixel continuous sprite height ───────────────────────────────
+      final spriteHPx = (size.height / transformY * e.spriteScale).clamp(2.0, size.height * 0.92);
+      final spriteWCols = (spriteHPx / pxW).round().clamp(2, numCols);
 
-      // Cacodemon floats/bobs vertically
-      final bobOffset = e.type == _EnemyType.cacodemon
-          ? (sin(time * 2.8 + e.x * 1.3) * 3).round()
-          : 0;
+      // Cacodemon floats/bobs vertically (in pixels, smooth)
+      final bobOffsetPx = e.type == _EnemyType.cacodemon
+          ? sin(time * 2.8 + e.x * 1.3) * 3.0 * pxH
+          : 0.0;
 
-      final drawStartX = screenX - spriteW ~/ 2;
-      final drawStartY = ((40 - spriteH ~/ 2) + bobOffset).clamp(0, 79);
-      final drawEndY = ((40 + spriteH ~/ 2) + bobOffset).clamp(0, 79);
-
-      final by = drawStartY * pxH;
-      final sh = (drawEndY - drawStartY) * pxH;
+      final drawStartX = screenX - spriteWCols ~/ 2;
+      final by = (halfH - spriteHPx * 0.5 + bobOffsetPx).clamp(0.0, size.height - 1.0);
+      final endY = (halfH + spriteHPx * 0.5 + bobOffsetPx).clamp(1.0, size.height);
+      final sh = endY - by;
       final v = sh / 20.0; // vertical unit within sprite
       final flash = e.hitFlash;
 
-      for (int sx = drawStartX; sx < drawStartX + spriteW; sx++) {
-        if (sx < 0 || sx >= 120) continue;
+      for (int sx = drawStartX; sx < drawStartX + spriteWCols; sx++) {
+        if (sx < 0 || sx >= numCols) continue;
         if (transformY >= zBuf[sx]) continue;
 
         final localX = sx - drawStartX;
-        final frac = localX / spriteW.toDouble();
+        final frac = localX / spriteWCols.toDouble();
 
         switch (e.type) {
           case _EnemyType.demon:
-            _drawDemonColumn(canvas, sp, sx, pxW, by, sh, v, frac, e.hp, flash);
+            _drawDemonColumn(canvas, sp, sx, pxW, by, sh, v, frac, e.hp, flash, e.isMega);
           case _EnemyType.cacodemon:
             _drawCacoDemonColumn(canvas, sp, sx, pxW, by, sh, v, frac, e.hp, flash);
           case _EnemyType.skeleton:
@@ -1283,7 +1307,7 @@ class _RaycasterPainter extends CustomPainter {
       // Hit-mark cross
       if (flash > 0.5) {
         final cx = screenX * pxW;
-        final cy = (drawStartY + (drawEndY - drawStartY) / 2.0) * pxH;
+        final cy = by + sh * 0.5;
         sp.color = Colors.white;
         canvas.drawRect(Rect.fromLTWH(cx - 5, cy - 1, 10, 2), sp);
         canvas.drawRect(Rect.fromLTWH(cx - 1, cy - 5, 2, 10), sp);
@@ -1296,6 +1320,7 @@ class _RaycasterPainter extends CustomPainter {
   void _drawProjectiles(Canvas canvas, Size size, double pxW, double pxH) {
     final sp = Paint()..isAntiAlias = false;
     final invDet = 1.0 / (planeX * dirY - dirX * planeY);
+    const numCols = 240;
 
     for (final p in projectiles) {
       if (!p.alive) continue;
@@ -1304,8 +1329,8 @@ class _RaycasterPainter extends CustomPainter {
       final transformY = invDet * (-planeY * dx + planeX * dy);
       if (transformY <= 0.05) continue;
 
-      final screenCol = (60 * (1 + transformX / transformY)).round();
-      if (screenCol < 0 || screenCol >= 120) continue;
+      final screenCol = (numCols ~/ 2 * (1 + transformX / transformY)).round();
+      if (screenCol < 0 || screenCol >= numCols) continue;
       if (transformY >= zBuf[screenCol]) continue; // behind wall
 
       final screenX = screenCol * pxW;
@@ -1338,7 +1363,12 @@ class _RaycasterPainter extends CustomPainter {
   // ─── Demon (bipedal humanoid) — 20% shorter, more menacing ─────────────────
 
   void _drawDemonColumn(Canvas canvas, Paint sp, int sx, double pxW,
-      double by, double sh, double v, double frac, double hp, double flash) {
+      double by, double sh, double v, double frac, double hp, double flash,
+      [bool isMega = false]) {
+    if (isMega) {
+      _drawMegaDemonColumn(canvas, sp, sx, pxW, by, sh, v, frac, hp, flash);
+      return;
+    }
     // 20 % shorter: demon occupies center 80 % of the column height (10 % gap top + bottom)
     const kPad = 0.10;
     if (v < 0.01) return; // degenerate sprite only
@@ -1466,6 +1496,138 @@ class _RaycasterPainter extends CustomPainter {
       // Knee cap highlight
       sp.color = Color.fromARGB(255, (body.red * 1.40).clamp(0,255).round(), 0, 0);
       canvas.drawRect(Rect.fromLTWH(x, vy(15.5), pxW, vh(1.0)), sp);
+    }
+  }
+
+  // ─── Mega-Demon (Abyssal Behemoth) — boss variant, full height, void-purple ─
+
+  void _drawMegaDemonColumn(Canvas canvas, Paint sp, int sx, double pxW,
+      double by, double sh, double v, double frac, double hp, double flash) {
+    if (v < 0.01) return;
+    final x = sx * pxW;
+
+    // Color palette: deep void-purple body, neon toxic green eyes, magenta accents
+    final bodyR = (0x28 + (0xDD - 0x28) * flash).round().clamp(0, 255);
+    final bodyB = (0x55 + (0xFF - 0x55) * flash).round().clamp(0, 255);
+    final body   = Color.fromARGB(255, bodyR, 0x00, bodyB);
+    final detail = const Color(0xFF0A0030);
+    final eyeGlow  = const Color(0xFF00FF88); // toxic neon green
+    final eyeCore  = const Color(0xFFCCFFAA); // bright core
+    final mouthCol = const Color(0xFFFF00FF); // magenta
+    final accentCol = const Color(0xFF8800FF); // purple glow band
+
+    // ── Abyssal crown — 5 jagged spikes across top ───────────────────────────
+    // Spikes at frac: 0.05, 0.2, 0.38, 0.56, 0.74, 0.9
+    final spikePositions = [0.05, 0.20, 0.38, 0.56, 0.74, 0.90];
+    for (final sp0 in spikePositions) {
+      final dist = (frac - sp0).abs();
+      if (dist < 0.075) {
+        final spikeH = v * (3.5 - dist * 30.0).clamp(0.5, 3.5);
+        sp.color = detail;
+        canvas.drawRect(Rect.fromLTWH(x, by, pxW, spikeH), sp);
+        sp.color = accentCol; // neon tip
+        canvas.drawRect(Rect.fromLTWH(x, by, pxW, spikeH * 0.3), sp);
+      }
+    }
+
+    // ── Shoulder-width head (frac 0.12 – 0.88, rows 1.5-6.5) ────────────────
+    if (frac >= 0.12 && frac <= 0.88) {
+      sp.color = body;
+      canvas.drawRect(Rect.fromLTWH(x, by + v * 1.5, pxW, v * 5.0), sp);
+    }
+
+    // ── Four glowing eyes (two pairs, rows 2.5-4.0) ──────────────────────────
+    final eyePairs = [
+      [0.18, 0.30], [0.36, 0.48], [0.52, 0.64], [0.70, 0.82],
+    ];
+    for (final pair in eyePairs) {
+      if (frac >= pair[0] && frac <= pair[1]) {
+        sp.color = eyeGlow;
+        canvas.drawRect(Rect.fromLTWH(x, by + v * 2.5, pxW, v * 1.5), sp);
+        sp.color = eyeCore;
+        canvas.drawRect(Rect.fromLTWH(x, by + v * 2.8, pxW, v * 0.7), sp);
+      }
+    }
+
+    // ── Glowing eye sockets (gap between pairs, deep shadow) ─────────────────
+    if ((frac >= 0.30 && frac <= 0.36) || (frac >= 0.48 && frac <= 0.52) ||
+        (frac >= 0.64 && frac <= 0.70)) {
+      sp.color = detail;
+      canvas.drawRect(Rect.fromLTWH(x, by + v * 2.2, pxW, v * 2.5), sp);
+    }
+
+    // ── Wide fanged maw — magenta glow (frac 0.18-0.82, rows 5.0-6.8) ───────
+    if (frac >= 0.18 && frac <= 0.82) {
+      sp.color = mouthCol;
+      canvas.drawRect(Rect.fromLTWH(x, by + v * 5.0, pxW, v * 1.8), sp);
+      // Fang tips — white at intervals
+      final toothIdx = ((frac - 0.18) / 0.64 * 10).floor();
+      if (toothIdx % 2 == 0) {
+        sp.color = Colors.white;
+        canvas.drawRect(Rect.fromLTWH(x, by + v * 6.2, pxW, v * 0.9), sp);
+      }
+    }
+    if (frac >= 0.18 && frac <= 0.82) {
+      sp.color = const Color(0xFF0A0000);
+      canvas.drawRect(Rect.fromLTWH(x, by + v * 5.3, pxW, v * 0.8), sp);
+    }
+
+    // ── Neck pillar (frac 0.38-0.62, rows 6.5-7.5) ───────────────────────────
+    if (frac >= 0.38 && frac <= 0.62) {
+      sp.color = Color.fromARGB(255, bodyR, 0, (bodyB * 0.7).round());
+      canvas.drawRect(Rect.fromLTWH(x, by + v * 6.5, pxW, v * 1.0), sp);
+    }
+
+    // ── Massive torso (frac 0.06-0.94, rows 7.5-16) ──────────────────────────
+    if (frac >= 0.06 && frac <= 0.94) {
+      sp.color = body;
+      canvas.drawRect(Rect.fromLTWH(x, by + v * 7.5, pxW, v * 8.5), sp);
+    }
+
+    // ── Glowing energy bands across torso (rows 8-15) ────────────────────────
+    for (int band = 0; band < 4; band++) {
+      if (frac >= 0.10 && frac <= 0.90) {
+        sp.color = band.isEven ? accentCol.withOpacity(0.7) : detail;
+        canvas.drawRect(Rect.fromLTWH(x, by + v * (8.5 + band * 1.8), pxW, v * 0.55), sp);
+      }
+    }
+
+    // ── Sternum mark (frac 0.46-0.54, rows 7.5-15) ───────────────────────────
+    if (frac >= 0.46 && frac <= 0.54) {
+      sp.color = accentCol;
+      canvas.drawRect(Rect.fromLTWH(x, by + v * 7.5, pxW, v * 7.5), sp);
+    }
+
+    // ── Pectoral highlights (frac 0.12-0.30, 0.70-0.88) ─────────────────────
+    if ((frac >= 0.12 && frac <= 0.30) || (frac >= 0.70 && frac <= 0.88)) {
+      sp.color = Color.fromARGB(255, (bodyR * 1.9).clamp(0, 255).round(), 0, (bodyB * 1.6).clamp(0, 255).round());
+      canvas.drawRect(Rect.fromLTWH(x, by + v * 7.8, pxW, v * 1.0), sp);
+    }
+
+    // ── Spine-blade arms (frac 0.01-0.06 & 0.94-0.99, rows 5-16) ───────────
+    if ((frac >= 0.01 && frac <= 0.06) || (frac >= 0.94 && frac <= 0.99)) {
+      sp.color = detail;
+      canvas.drawRect(Rect.fromLTWH(x, by + v * 5.0, pxW, v * 11.0), sp);
+      // Blade highlights
+      sp.color = Color.fromARGB(255, 0, 0, (bodyB * 1.8).clamp(0, 255).round());
+      canvas.drawRect(Rect.fromLTWH(x, by + v * 6.0, pxW, v * 5.0), sp);
+      // Claw spikes
+      sp.color = eyeCore;
+      canvas.drawRect(Rect.fromLTWH(x, by + v * 14.0, pxW, v * 2.0), sp);
+    }
+
+    // ── Legs — wide and armoured (frac 0.22-0.40, 0.60-0.78, rows 16-20) ────
+    if ((frac >= 0.22 && frac <= 0.40) || (frac >= 0.60 && frac <= 0.78)) {
+      sp.color = body;
+      canvas.drawRect(Rect.fromLTWH(x, by + v * 16.0, pxW, v * 4.0), sp);
+      sp.color = Color.fromARGB(255, (bodyR * 1.6).clamp(0, 255).round(), 0, bodyB);
+      canvas.drawRect(Rect.fromLTWH(x, by + v * 17.0, pxW, v * 1.2), sp);
+    }
+
+    // ── Ambient glow aura at outer edges ─────────────────────────────────────
+    if (frac < 0.06 || frac > 0.94) {
+      sp.color = accentCol.withOpacity(0.30 * flash.clamp(0.1, 1.0) + 0.15);
+      canvas.drawRect(Rect.fromLTWH(x, by + v * 3.0, pxW, v * 14.0), sp);
     }
   }
 
@@ -1680,8 +1842,9 @@ class _RaycasterPainter extends CustomPainter {
     final transformY = invDet * (-planeY * dx + planeX * dy);
     if (transformY <= 0.1) return;
 
-    final screenCol = (60 * (1 + transformX / transformY)).round();
-    if (screenCol < 0 || screenCol >= 120) return;
+    const numCols = 240;
+    final screenCol = (numCols ~/ 2 * (1 + transformX / transformY)).round();
+    if (screenCol < 0 || screenCol >= numCols) return;
     if (transformY >= zBuf[screenCol]) return;
 
     final sx = screenCol * pxW;
@@ -1879,7 +2042,30 @@ class _RaycasterPainter extends CustomPainter {
       final ry = cy + dy * scale;
       if ((rx - cx) * (rx - cx) + (ry - cy) * (ry - cy) > (radarR - 3) * (radarR - 3)) continue;
 
-      if (e.type == _EnemyType.skeleton) {
+      if (e.isMega) {
+        // MEGA-DEMON: large pulsing void-purple skull-diamond with crown
+        p.color = const Color(0xFF8800FF);
+        final megaPath = Path()
+          ..moveTo(rx, ry - 7)
+          ..lineTo(rx + 5, ry)
+          ..lineTo(rx, ry + 5)
+          ..lineTo(rx - 5, ry)
+          ..close();
+        canvas.drawPath(megaPath, p);
+        // Crown spikes
+        p.color = const Color(0xFF00FFAA);
+        canvas.drawRect(Rect.fromLTWH(rx - 4.5, ry - 10, 2, 3.5), p);
+        canvas.drawRect(Rect.fromLTWH(rx - 1,   ry - 11, 2, 4.0), p);
+        canvas.drawRect(Rect.fromLTWH(rx + 2.5, ry - 10, 2, 3.5), p);
+        // Glowing border
+        p.color = const Color(0xFFFF00FF);
+        p.style = PaintingStyle.stroke;
+        p.strokeWidth = 1.2;
+        canvas.drawPath(megaPath, p);
+        p.style = PaintingStyle.fill;
+        // MEGA label
+        _hudText(canvas, '☠', rx - 4, ry - 6.5, color: const Color(0xFFFF00FF), size: 7);
+      } else if (e.type == _EnemyType.skeleton) {
         // Skull: white circle + dark eye holes cross
         p.color = Colors.white70;
         canvas.drawCircle(Offset(rx, ry), 3.5, p);
