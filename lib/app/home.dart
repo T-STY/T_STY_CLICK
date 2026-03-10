@@ -75,12 +75,10 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
   late AnimationController _shakeCtrl;
   late Animation<double>   _shakeAnim;
 
-  // ── CRT TV-off animation (on 3rd logo tap) ─────────────────────────────────
+  // ── Pixelation animation (on 3rd logo tap) ──────────────────────────────────
   bool _crtActive = false;
   late final AnimationController _crtCtrl;
-  late final Animation<double> _crtSquish;
-  late final Animation<double> _crtLine;
-  late final Animation<double> _crtFade;
+  OverlayEntry? _pixelOverlay;
 
   @override
   void initState() {
@@ -95,18 +93,7 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
       TweenSequenceItem(tween: Tween(begin: -4.0, end: 0.0), weight: 1),
     ]).animate(CurvedAnimation(parent: _shakeCtrl, curve: Curves.linear));
 
-    _crtCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 520));
-    _crtSquish = Tween<double>(begin: 1.0, end: 0.0).animate(
-        CurvedAnimation(parent: _crtCtrl,
-            curve: const Interval(0.0, 0.58, curve: Curves.easeIn)));
-    _crtLine = TweenSequence<double>([
-      TweenSequenceItem(tween: Tween(begin: 0.0, end: 1.0), weight: 1),
-      TweenSequenceItem(tween: Tween(begin: 1.0, end: 0.0), weight: 1),
-    ]).animate(CurvedAnimation(parent: _crtCtrl,
-        curve: const Interval(0.44, 0.80)));
-    _crtFade = Tween<double>(begin: 0.0, end: 1.0).animate(
-        CurvedAnimation(parent: _crtCtrl,
-            curve: const Interval(0.65, 1.0, curve: Curves.easeIn)));
+    _crtCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 900));
     _crtCtrl.addStatusListener((s) {
       if (s == AnimationStatus.completed && _crtActive && mounted) {
         _navigateToArcade();
@@ -121,6 +108,8 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
     _pageController.dispose();
     _shakeCtrl.dispose();
     _crtCtrl.dispose();
+    _pixelOverlay?.remove();
+    _pixelOverlay = null;
     super.dispose();
   }
 
@@ -263,6 +252,16 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
     _pendingSaldo      = saldo;
     if (!_crtActive) {
       setState(() => _crtActive = true);
+      _pixelOverlay = OverlayEntry(
+        builder: (_) => AnimatedBuilder(
+          animation: _crtCtrl,
+          builder: (_, __) => CustomPaint(
+            painter: _PixelationPainter(_crtCtrl.value),
+            child: const SizedBox.expand(),
+          ),
+        ),
+      );
+      Overlay.of(context, rootOverlay: true).insert(_pixelOverlay!);
       _crtCtrl.forward();
     }
   }
@@ -281,6 +280,8 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
       ),
     ).then((_) {
       if (mounted) {
+        _pixelOverlay?.remove();
+        _pixelOverlay = null;
         setState(() { _tapCount = 0; _crtActive = false; });
         _crtCtrl.reset();
       }
@@ -403,27 +404,7 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
       ),
     );
 
-    // CRT TV-off animation: squishes the entire screen before navigating
-    return AnimatedBuilder(
-      animation: _crtCtrl,
-      builder: (ctx, child) {
-        if (!_crtActive) return child!;
-        return Stack(children: [
-          Transform(
-            alignment: Alignment.center,
-            transform: Matrix4.diagonal3Values(1.0, _crtSquish.value, 1.0),
-            child: child!,
-          ),
-          if (_crtLine.value > 0.01)
-            Positioned.fill(child: ColoredBox(
-                color: Colors.white.withOpacity(_crtLine.value * 0.92))),
-          if (_crtFade.value > 0.01)
-            Positioned.fill(child: ColoredBox(
-                color: Colors.black.withOpacity(_crtFade.value))),
-        ]);
-      },
-      child: body,
-    );
+    return body;
   }
 
   Widget _buildFilteredProductList() {
@@ -1751,4 +1732,49 @@ class _CrtScanlinePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_CrtScanlinePainter _) => false;
+}
+
+// ── Pixelation painter for logo-tap game transition ──────────────────────────
+
+class _PixelationPainter extends CustomPainter {
+  final double t; // 0.0 → 1.0
+  const _PixelationPainter(this.t);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (t <= 0.01) return;
+
+    if (t < 0.65) {
+      // Stage 1: growing phosphor-green pixel blocks (checkerboard)
+      final t1 = t / 0.65;
+      final blockSize = 4.0 + t1 * 28.0; // 4px → 32px
+      final opacity = t1 * 0.92;
+      final paintA = Paint()..color = const Color(0xFF003311).withOpacity(opacity);
+      final paintB = Paint()..color = const Color(0xFF005522).withOpacity(opacity * 0.55);
+      final cols = (size.width / blockSize).ceil();
+      final rows = (size.height / blockSize).ceil();
+      for (int r = 0; r < rows; r++) {
+        for (int c = 0; c < cols; c++) {
+          canvas.drawRect(
+            Rect.fromLTWH(c * blockSize, r * blockSize, blockSize - 1, blockSize - 1),
+            (r + c).isEven ? paintA : paintB,
+          );
+        }
+      }
+    } else {
+      // Stage 2: solid green → fade to black
+      canvas.drawRect(
+        Rect.fromLTWH(0, 0, size.width, size.height),
+        Paint()..color = const Color(0xFF002210),
+      );
+      final t2 = (t - 0.65) / 0.35;
+      canvas.drawRect(
+        Rect.fromLTWH(0, 0, size.width, size.height),
+        Paint()..color = Colors.black.withOpacity(t2),
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(_PixelationPainter old) => old.t != t;
 }

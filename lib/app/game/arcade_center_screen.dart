@@ -895,7 +895,7 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen>
                       color: Colors.black.withOpacity(_crtFade.value))),
               ]);
             },
-            child: _activeGame == null ? _buildNeonGrid() : _buildActiveGame(),
+            child: (_activeGame == null || _poweringOff) ? _buildNeonGrid() : _buildActiveGame(),
           ),
           // CRT scanline + vignette overlay
           Positioned.fill(
