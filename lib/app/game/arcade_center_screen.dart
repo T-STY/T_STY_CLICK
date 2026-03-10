@@ -26,6 +26,7 @@ enum ShellColor     { gray, midnight, indigo, crimson, navy, forest, rose }
 enum ColorTheme     { greenPhosphor, amberRetro, cyanCrypto, infernalRed }
 enum ButtonLayout   { snes, xbox, ps4 }
 enum ButtonDisplay  { solid, blackout, clear }
+enum AppLanguage   { spanish, english }
 
 // Per-position button definition (label + color + underlying ArcadeButton)
 class _BtnDef {
@@ -199,6 +200,7 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
   int _selectedIndex = 0;
   int _hubCategory = 1;   // 0=reciente, 1=biblioteca, 2=perfil, 3=config
   final ScrollController _carouselCtrl = ScrollController();
+  final List<GlobalKey> _settingKeys = List.generate(22, (_) => GlobalKey());
   int? _lastPlayedIndex;
   ArcadeGameDef? _activeGame;
   final List<int> _highScores = List.filled(12, 0);
@@ -212,6 +214,8 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
   ButtonLayout   _buttonLayout   = ButtonLayout.snes;
   ButtonDisplay  _buttonDisplay  = ButtonDisplay.solid;
   int            _settingsCursor = 0;
+  AppLanguage    _language       = AppLanguage.spanish;
+  bool _headerFocused = true;  // true = d-pad navigates category tabs; false = navigates content
 
   // Theme accent colour (used everywhere terminal-green currently is)
   Color get _accent {
@@ -220,6 +224,22 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
       case ColorTheme.amberRetro:    return const Color(0xFFFFB347);
       case ColorTheme.cyanCrypto:    return const Color(0xFF00DDFF);
       case ColorTheme.infernalRed:   return const Color(0xFFFF4455);
+    }
+  }
+
+  String _t(String es, String en) =>
+      _language == AppLanguage.spanish ? es : en;
+
+  // SELECT/START button colour — darker tint of the shell
+  Color get _metaColor {
+    switch (_shellColor) {
+      case ShellColor.gray:     return const Color(0xFF909090);
+      case ShellColor.midnight: return const Color(0xFF383838);
+      case ShellColor.indigo:   return const Color(0xFF3A2A5A);
+      case ShellColor.crimson:  return const Color(0xFF5A1212);
+      case ShellColor.navy:     return const Color(0xFF1A2438);
+      case ShellColor.forest:   return const Color(0xFF1A2E1A);
+      case ShellColor.rose:     return const Color(0xFF4A1E2E);
     }
   }
 
@@ -376,6 +396,8 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
         _buttonDisplay = ButtonDisplay.values.firstWhere(
             (e) => e.name == d['buttonDisplay'],
             orElse: () => oldBlackout ? ButtonDisplay.blackout : ButtonDisplay.solid);
+        _language = AppLanguage.values.firstWhere(
+            (e) => e.name == d['language'], orElse: () => AppLanguage.spanish);
       });
       _applyOrientation();
     } catch (_) { _applyOrientation(); }
@@ -392,6 +414,7 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
         'colorTheme': _colorTheme.name,
         'buttonLayout': _buttonLayout.name,
         'buttonDisplay': _buttonDisplay.name,
+        'language': _language.name,
       });
     } catch (_) {}
   }
