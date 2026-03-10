@@ -467,6 +467,8 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
   }
 
   bool _isCursorOn(int idx) => _settingsCursor == idx;
+  // Rows that are locked/coming-soon — skip in D-pad navigation
+  bool _isSettingLocked(int idx) => idx == 1 || idx == 2;
   bool _isSettingActive(int idx) {
     switch (idx) {
       case 0: return _skin == ConsoleSkin.gameBoy;
@@ -536,9 +538,9 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
             if (_settingsCursor == 0) {
               setState(() => _headerFocused = true);
             } else {
-              setState(() {
-                _settingsCursor = (_settingsCursor - 1 + totalOpts) % totalOpts;
-              });
+              int next = _settingsCursor - 1;
+              while (next > 0 && _isSettingLocked(next)) next--;
+              setState(() => _settingsCursor = next);
               _ensureSettingVisible(_settingsCursor);
             }
           } else {
@@ -547,7 +549,9 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
           }
         case ArcadeButton.down:
           if (_hubCategory == 3) {
-            setState(() => _settingsCursor = (_settingsCursor + 1) % totalOpts);
+            int next = (_settingsCursor + 1) % totalOpts;
+            while (_isSettingLocked(next)) next = (next + 1) % totalOpts;
+            setState(() => _settingsCursor = next);
             _ensureSettingVisible(_settingsCursor);
           }
         case ArcadeButton.left:
@@ -648,7 +652,7 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
           _buildTopStrip(),
           const SizedBox(height: 8),
           Expanded(child: _buildScreenBezel()),
-          const SizedBox(height: 6),
+          const SizedBox(height: 12),
           _buildSelectStartStrip(),
           const SizedBox(height: 10),
           _buildControlsRow(),
@@ -1168,10 +1172,6 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
         curve: Curves.easeOut,
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(22),
-          gradient: LinearGradient(
-            begin: Alignment.topLeft, end: Alignment.bottomRight,
-            colors: [grad[0], grad[1]],
-          ),
           border: Border.all(color: Colors.white.withOpacity(0.14), width: 1),
           boxShadow: [
             BoxShadow(color: neon.withOpacity(0.22),
@@ -1183,62 +1183,66 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
         child: ClipRRect(
           borderRadius: BorderRadius.circular(22),
           child: Stack(children: [
-            // Subtle shimmer/highlight top-left (glass reflection)
-            Positioned(top: 0, left: 0, right: 0,
-              child: Container(
-                height: 50,
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft, end: Alignment.bottomRight,
-                    colors: [
-                      Colors.white.withOpacity(0.10),
-                      Colors.transparent,
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            // Bottom glass fade
+            // Full-bleed live game demo
+            Positioned.fill(child: _AnimatedGameDemo(index: idx)),
+            // Dark scrim at bottom for text legibility
             Positioned(bottom: 0, left: 0, right: 0,
               child: Container(
-                height: 70,
+                height: 90,
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
                     begin: Alignment.topCenter, end: Alignment.bottomCenter,
-                    colors: [Colors.transparent, Colors.black.withOpacity(0.75)],
+                    colors: [Colors.transparent, Colors.black.withOpacity(0.88)],
                   ),
                 ),
               ),
             ),
-            // Content
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Top row: live AI game demo preview + status badges
-                  Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(10),
-                      child: SizedBox(
-                        width: 62, height: 52,
-                        child: _AnimatedGameDemo(index: idx),
-                      ),
-                    ),
-                    const Spacer(),
-                    if (game.locked)
-                      _heroBadge(_t('BLOQUEADO','LOCKED'), Colors.redAccent)
-                    else if (_newRecordIndex == idx)
-                      _heroBadge('⚡ RECORD', Colors.amber),
-                  ]),
-                  // Bottom: title + score + play button
-                  Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            // Top glass shimmer
+            Positioned(top: 0, left: 0, right: 0,
+              child: Container(
+                height: 40,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft, end: Alignment.bottomRight,
+                    colors: [Colors.white.withOpacity(0.08), Colors.transparent],
+                  ),
+                ),
+              ),
+            ),
+            // Number badge — top-left
+            Positioned(top: 10, left: 14,
+              child: Container(
+                width: 26, height: 26,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.black.withOpacity(0.55),
+                  border: Border.all(color: Colors.white.withOpacity(0.45), width: 1.5),
+                ),
+                alignment: Alignment.center,
+                child: Text('${idx + 1}',
+                    style: const TextStyle(color: Colors.white, fontSize: 12,
+                        fontWeight: FontWeight.bold, fontFamily: 'monospace')),
+              ),
+            ),
+            // Status badge — top-right
+            if (game.locked)
+              Positioned(top: 10, right: 14,
+                  child: _heroBadge(_t('BLOQUEADO','LOCKED'), Colors.redAccent))
+            else if (_newRecordIndex == idx)
+              Positioned(top: 10, right: 14,
+                  child: _heroBadge('⚡ RECORD', Colors.amber)),
+            // Bottom overlay: title + score + play
+            Positioned(bottom: 0, left: 0, right: 0,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
                     Text(game.title,
                       style: const TextStyle(
                         color: Colors.white, fontSize: 17,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 0.3,
+                        fontWeight: FontWeight.bold, letterSpacing: 0.3,
                         shadows: [Shadow(color: Colors.black87, blurRadius: 6)],
                       ),
                       overflow: TextOverflow.ellipsis),
@@ -1277,8 +1281,8 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
                           ),
                         ),
                     ]),
-                  ]),
-                ],
+                  ],
+                ),
               ),
             ),
           ]),
@@ -1339,35 +1343,10 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(11),
                 child: Stack(children: [
-                  // Gradient background (no game art)
                   Positioned.fill(
-                    child: Container(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: _kCardGradients[i % _kCardGradients.length],
-                          begin: Alignment.topLeft, end: Alignment.bottomRight,
-                        ),
-                      ),
-                    ),
-                  ),
-                  // Number badge centred
-                  Center(
-                    child: Container(
-                      width: 26, height: 26,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: _kCardGradients[i % _kCardGradients.length][1].withOpacity(0.92),
-                        border: Border.all(
-                            color: Colors.white.withOpacity(sel ? 0.70 : 0.35), width: 1.5),
-                        boxShadow: sel
-                            ? [BoxShadow(color: _kNeonColors[i % _kNeonColors.length].withOpacity(0.45),
-                                blurRadius: 8)]
-                            : [],
-                      ),
-                      alignment: Alignment.center,
-                      child: Text('${i + 1}',
-                          style: const TextStyle(color: Colors.white, fontSize: 12,
-                              fontWeight: FontWeight.bold, fontFamily: 'monospace')),
+                    child: CustomPaint(
+                      painter: _CartridgePainter(
+                          index: i, selected: sel, showNumber: false),
                     ),
                   ),
                   if (game.locked)
@@ -2277,10 +2256,12 @@ class _GameDemoPainter extends CustomPainter {
 class _CartridgePainter extends CustomPainter {
   final int index;
   final bool selected;
-  const _CartridgePainter({required this.index, required this.selected});
+  final bool showNumber;
+  const _CartridgePainter({required this.index, required this.selected, this.showNumber = true});
 
   @override
-  bool shouldRepaint(_CartridgePainter old) => old.selected != selected || old.index != index;
+  bool shouldRepaint(_CartridgePainter old) =>
+      old.selected != selected || old.index != index || old.showNumber != showNumber;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -2335,23 +2316,25 @@ class _CartridgePainter extends CustomPainter {
         ..isAntiAlias = true);
     canvas.restore();
 
-    // ── Number badge (top centre) ───────────────────────────────────────────────
-    final bx = w / 2, by = 22.0, br = 14.0;
-    canvas.drawCircle(Offset(bx, by + 1.5), br,
-        Paint()..color = Colors.black.withOpacity(0.45)..isAntiAlias = true);
-    canvas.drawCircle(Offset(bx, by), br,
-        Paint()..color = g[1].withOpacity(0.92)..isAntiAlias = true);
-    canvas.drawCircle(Offset(bx, by), br,
-        Paint()..style = PaintingStyle.stroke..strokeWidth = 1.5
-          ..color = Colors.white.withOpacity(0.55)..isAntiAlias = true);
-    final numTp = TextPainter(
-      text: TextSpan(text: '${index + 1}',
-        style: const TextStyle(color: Colors.white, fontSize: 13,
-            fontWeight: FontWeight.bold, fontFamily: 'monospace')),
-      textDirection: TextDirection.ltr,
-    )..layout();
-    numTp.paint(canvas, Offset(bx - numTp.width / 2, by - numTp.height / 2));
-    numTp.dispose();
+    // ── Number badge (top centre) — only when showNumber is true ───────────────
+    if (showNumber) {
+      final bx = w / 2, by = 22.0, br = 14.0;
+      canvas.drawCircle(Offset(bx, by + 1.5), br,
+          Paint()..color = Colors.black.withOpacity(0.45)..isAntiAlias = true);
+      canvas.drawCircle(Offset(bx, by), br,
+          Paint()..color = g[1].withOpacity(0.92)..isAntiAlias = true);
+      canvas.drawCircle(Offset(bx, by), br,
+          Paint()..style = PaintingStyle.stroke..strokeWidth = 1.5
+            ..color = Colors.white.withOpacity(0.55)..isAntiAlias = true);
+      final numTp = TextPainter(
+        text: TextSpan(text: '${index + 1}',
+          style: const TextStyle(color: Colors.white, fontSize: 13,
+              fontWeight: FontWeight.bold, fontFamily: 'monospace')),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      numTp.paint(canvas, Offset(bx - numTp.width / 2, by - numTp.height / 2));
+      numTp.dispose();
+    }
 
     // ── Selected shimmer ────────────────────────────────────────────────────────
     if (selected) {
@@ -2926,29 +2909,22 @@ class _CrossDPadPainter extends CustomPainter {
       }
     }
 
-    // Draw four arms
-    drawArm(Rect.fromLTWH(cx - half, 0, arm, cy - half + 2),
+    // Draw four arms — exact edges, no overlap
+    drawArm(Rect.fromLTWH(cx - half, 0, arm, cy - half),
         tl: r, tr: r, btn: ArcadeButton.up);
-    drawArm(Rect.fromLTWH(cx - half, cy + half - 2, arm, cy - half + 2),
+    drawArm(Rect.fromLTWH(cx - half, cy + half, arm, cy - half),
         bl: r, br: r, btn: ArcadeButton.down);
-    drawArm(Rect.fromLTWH(0, cy - half, cx - half + 2, arm),
+    drawArm(Rect.fromLTWH(0, cy - half, cx - half, arm),
         tl: r, bl: r, btn: ArcadeButton.left);
-    drawArm(Rect.fromLTWH(cx + half - 2, cy - half, cx - half + 2, arm),
+    drawArm(Rect.fromLTWH(cx + half, cy - half, cx - half, arm),
         tr: r, br: r, btn: ArcadeButton.right);
 
-    // Centre fill — match arm gradient light end so cross looks uniform
+    // Centre fill — same gradient as arms, no hub circle
     p.shader = const LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight,
         colors: [Color(0xFF2A2A2A), Color(0xFF181818)]
     ).createShader(Rect.fromLTWH(0, 0, 200, 200));
     canvas.drawRect(Rect.fromLTWH(cx - half, cy - half, arm, arm), p);
     p.shader = null;
-    p.color = const Color(0xFF2E2E2E);
-    canvas.drawCircle(Offset(cx, cy), half * 0.55, p);
-    p..color = Colors.white.withOpacity(0.05)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1;
-    canvas.drawCircle(Offset(cx, cy), half * 0.55, p);
-    p.style = PaintingStyle.fill;
 
     // ── Chevron arrows ─────────────────────────────────────────────────────────
     void drawChevron(List<Offset> pts, ArcadeButton btn) {
