@@ -747,7 +747,8 @@ class _SpaceShooterScreenState extends State<SpaceShooterScreen> {
 
   Widget _waveHud(int wave) => _neonPill('OLA $wave', _kMagenta, letterSpacing: 1);
 
-  Widget _buildStartOverlay() => Positioned.fill(
+  Widget _buildStartOverlay() {
+    return Positioned.fill(
       child: Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
@@ -837,8 +838,10 @@ class _SpaceShooterScreenState extends State<SpaceShooterScreen> {
         ),
       ),
     );
+  }
 
-  Widget _buildDeathOverlay() => Positioned.fill(
+  Widget _buildDeathOverlay() {
+    return Positioned.fill(
       child: Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
@@ -906,6 +909,7 @@ class _SpaceShooterScreenState extends State<SpaceShooterScreen> {
         ),
       ),
     );
+  }
 
   Widget _statCard(String label, String value, Color color) => Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -928,46 +932,48 @@ class _SpaceShooterScreenState extends State<SpaceShooterScreen> {
         ),
       );
 
-  Widget _buildPauseOverlay() => Positioned.fill(
-    child: Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [const Color(0xCC000820), const Color(0xDD000010), const Color(0xCC000820)],
+  Widget _buildPauseOverlay() {
+    return Positioned.fill(
+      child: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [const Color(0xCC000820), const Color(0xDD000010), const Color(0xCC000820)],
+          ),
         ),
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              border: Border.all(color: const Color(0xFF00E5FF).withOpacity(0.5), width: 2),
-              boxShadow: [BoxShadow(color: const Color(0xFF00E5FF).withOpacity(0.2), blurRadius: 16)],
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(color: const Color(0xFF00E5FF).withOpacity(0.5), width: 2),
+                boxShadow: [BoxShadow(color: const Color(0xFF00E5FF).withOpacity(0.2), blurRadius: 16)],
+              ),
+              child: const Text('II',
+                  style: TextStyle(
+                      color: Color(0xFF00E5FF),
+                      fontSize: 28,
+                      fontWeight: FontWeight.bold)),
             ),
-            child: const Text('II',
+            const SizedBox(height: 14),
+            const Text('PAUSA',
                 style: TextStyle(
                     color: Color(0xFF00E5FF),
-                    fontSize: 28,
-                    fontWeight: FontWeight.bold)),
-          ),
-          const SizedBox(height: 14),
-          const Text('PAUSA',
-              style: TextStyle(
-                  color: Color(0xFF00E5FF),
-                  fontSize: 26,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 8,
-                  shadows: [Shadow(color: Color(0xFF00E5FF), blurRadius: 16)])),
-          const SizedBox(height: 14),
-          const Text('START para continuar',
-              style: TextStyle(color: Color(0xFF4488AA), fontSize: 12, letterSpacing: 1)),
-        ],
+                    fontSize: 26,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 8,
+                    shadows: [Shadow(color: Color(0xFF00E5FF), blurRadius: 16)])),
+            const SizedBox(height: 14),
+            const Text('START para continuar',
+                style: TextStyle(color: Color(0xFF4488AA), fontSize: 12, letterSpacing: 1)),
+          ],
+        ),
       ),
-    ),
-  );
+    );
+  }
 }
 
 // ─── Star helper ─────────────────────────────────────────────────────────────
