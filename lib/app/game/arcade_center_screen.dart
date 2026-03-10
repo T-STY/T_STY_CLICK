@@ -111,68 +111,68 @@ class ArcadeGameDef {
       this.supportsDiagonal = false, this.builder});
 }
 
-// Games ordered alphabetically by new Spanish title (9 playable + 3 locked teasers):
-// Bloques Caídos · Campo Minado · Cascada Dulce ·
-// Caza Estelar   · Comecocos    · INFRAMUNDO 2D ·
-// Rana Saltarina · Víbora Veloz · Vuelo Kamikaze ·
-// [3 locked future games]
+// Games ordered alphabetically by English title (9 playable + 3 locked teasers):
+// Block Drop  · Candy Swap  · Crypt Doom ·
+// Dino Dash   · Frog Dash   · Ghost Maze ·
+// Minefield   · Neon Break  · Neon Snake ·
+// Star Blaster · Volt Pong  · Wing Rush
 final List<ArcadeGameDef> kArcadeGames = [
-  ArcadeGameDef(id: 'tetris',   emoji: '🟦', title: 'Bloques Caídos',
+  ArcadeGameDef(id: 'tetris',   emoji: '🟦', title: 'Block Drop',
     builder: ({required userId, required rewardsDocRef, required currentSaldo,
         required controller, required onSaldoChanged}) =>
       TetrisScreen(userId: userId, rewardsDocRef: rewardsDocRef,
         currentSaldo: currentSaldo, controller: controller, onSaldoChanged: onSaldoChanged)),
-  ArcadeGameDef(id: 'logic',    emoji: '💣', title: 'Campo Minado',
+  ArcadeGameDef(id: 'logic',    emoji: '💣', title: 'Minefield',
     builder: ({required userId, required rewardsDocRef, required currentSaldo,
         required controller, required onSaldoChanged}) =>
       LogicGridScreen(userId: userId, rewardsDocRef: rewardsDocRef,
         currentSaldo: currentSaldo, controller: controller, onSaldoChanged: onSaldoChanged)),
-  ArcadeGameDef(id: 'match3',   emoji: '🍬', title: 'Cascada Dulce',
+  ArcadeGameDef(id: 'match3',   emoji: '🍬', title: 'Candy Swap',
     builder: ({required userId, required rewardsDocRef, required currentSaldo,
         required controller, required onSaldoChanged}) =>
       Match3Screen(userId: userId, rewardsDocRef: rewardsDocRef,
         currentSaldo: currentSaldo, controller: controller, onSaldoChanged: onSaldoChanged)),
-  ArcadeGameDef(id: 'shooter',  emoji: '🚀', title: 'Caza Estelar', supportsDiagonal: true,
+  ArcadeGameDef(id: 'shooter',  emoji: '🚀', title: 'Star Blaster', supportsDiagonal: true,
     builder: ({required userId, required rewardsDocRef, required currentSaldo,
         required controller, required onSaldoChanged}) =>
       SpaceShooterScreen(userId: userId, rewardsDocRef: rewardsDocRef,
         currentSaldo: currentSaldo, controller: controller, onSaldoChanged: onSaldoChanged)),
-  ArcadeGameDef(id: 'maze',     emoji: '👻', title: 'Comecocos',
+  ArcadeGameDef(id: 'maze',     emoji: '👻', title: 'Ghost Maze',
     builder: ({required userId, required rewardsDocRef, required currentSaldo,
         required controller, required onSaldoChanged}) =>
       MazeChasScreen(userId: userId, rewardsDocRef: rewardsDocRef,
         currentSaldo: currentSaldo, controller: controller, onSaldoChanged: onSaldoChanged)),
-  ArcadeGameDef(id: 'raycaster',emoji: '🔥', title: 'INFRAMUNDO 2D', supportsDiagonal: true,
+  ArcadeGameDef(id: 'raycaster',emoji: '🔥', title: 'Crypt Doom', supportsDiagonal: true,
     builder: ({required userId, required rewardsDocRef, required currentSaldo,
         required controller, required onSaldoChanged}) =>
       RaycasterScreen(userId: userId, rewardsDocRef: rewardsDocRef,
         currentSaldo: currentSaldo, controller: controller, onSaldoChanged: onSaldoChanged)),
-  ArcadeGameDef(id: 'hopper',   emoji: '🐸', title: 'Rana Saltarina',
+  ArcadeGameDef(id: 'hopper',   emoji: '🐸', title: 'Frog Dash',
     builder: ({required userId, required rewardsDocRef, required currentSaldo,
         required controller, required onSaldoChanged}) =>
       TrafficHopperScreen(userId: userId, rewardsDocRef: rewardsDocRef,
         currentSaldo: currentSaldo, controller: controller, onSaldoChanged: onSaldoChanged)),
-  ArcadeGameDef(id: 'snake',    emoji: '🐍', title: 'Víbora Veloz',
+  ArcadeGameDef(id: 'snake',    emoji: '🐍', title: 'Neon Snake',
     builder: ({required userId, required rewardsDocRef, required currentSaldo,
         required controller, required onSaldoChanged}) =>
       SnakeGameScreen(userId: userId, rewardsDocRef: rewardsDocRef,
         currentSaldo: currentSaldo, controller: controller, onSaldoChanged: onSaldoChanged)),
-  ArcadeGameDef(id: 'flappy',   emoji: '🕊️', title: 'Vuelo Kamikaze',
+  ArcadeGameDef(id: 'flappy',   emoji: '🕊️', title: 'Wing Rush',
     builder: ({required userId, required rewardsDocRef, required currentSaldo,
         required controller, required onSaldoChanged}) =>
       FlappyBirdScreen(userId: userId, rewardsDocRef: rewardsDocRef,
         currentSaldo: currentSaldo, controller: controller, onSaldoChanged: onSaldoChanged)),
-  ArcadeGameDef(id: 'runner', emoji: '🦕', title: 'Dino Escape',
+  ArcadeGameDef(id: 'runner', emoji: '🦕', title: 'Dino Dash',
     builder: ({required userId, required rewardsDocRef, required currentSaldo,
         required controller, required onSaldoChanged}) =>
       EndlessRunnerScreen(userId: userId, rewardsDocRef: rewardsDocRef,
         currentSaldo: currentSaldo, controller: controller, onSaldoChanged: onSaldoChanged)),
-  ArcadeGameDef(id: 'breakout', emoji: '🧱', title: 'Muro de Neón',
+  ArcadeGameDef(id: 'breakout', emoji: '🧱', title: 'Neon Break',
     builder: ({required userId, required rewardsDocRef, required currentSaldo,
         required controller, required onSaldoChanged}) =>
       BreakoutScreen(userId: userId, rewardsDocRef: rewardsDocRef,
         currentSaldo: currentSaldo, controller: controller, onSaldoChanged: onSaldoChanged)),
-  ArcadeGameDef(id: 'pong', emoji: '🏓', title: 'Contragolpe',
+  ArcadeGameDef(id: 'pong', emoji: '🏓', title: 'Volt Pong',
     builder: ({required userId, required rewardsDocRef, required currentSaldo,
         required controller, required onSaldoChanged}) =>
       PongScreen(userId: userId, rewardsDocRef: rewardsDocRef,

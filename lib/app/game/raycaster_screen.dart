@@ -661,7 +661,7 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           const Text('🔥', style: TextStyle(fontSize: 48)),
           const SizedBox(height: 8),
-          const Text('INFRAMUNDO 2D',
+          const Text('CRYPT DOOM',
             style: TextStyle(
               color: Color(0xFFCC2200),
               fontSize: 26,
