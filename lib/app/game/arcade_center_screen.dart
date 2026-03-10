@@ -27,6 +27,7 @@ enum ColorTheme     { greenPhosphor, amberRetro, cyanCrypto, infernalRed }
 enum ButtonLayout   { snes, xbox, ps4 }
 enum ButtonDisplay  { solid, blackout, clear }
 enum AppLanguage   { spanish, english }
+enum DPadStyle     { classic, colorful }
 
 // Per-position button definition (label + color + underlying ArcadeButton)
 class _BtnDef {
@@ -200,7 +201,7 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
   int _selectedIndex = 0;
   int _hubCategory = 1;   // 0=reciente, 1=biblioteca, 2=perfil, 3=config
   final ScrollController _carouselCtrl = ScrollController();
-  final List<GlobalKey> _settingKeys = List.generate(22, (_) => GlobalKey());
+  final List<GlobalKey> _settingKeys = List.generate(24, (_) => GlobalKey());
   int? _lastPlayedIndex;
   ArcadeGameDef? _activeGame;
   final List<int> _highScores = List.filled(12, 0);
@@ -215,6 +216,7 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
   ButtonDisplay  _buttonDisplay  = ButtonDisplay.solid;
   int            _settingsCursor = 0;
   AppLanguage    _language       = AppLanguage.spanish;
+  DPadStyle      _dpadStyle      = DPadStyle.classic;
   bool _headerFocused = true;  // true = d-pad navigates category tabs; false = navigates content
 
   // Theme accent colour (used everywhere terminal-green currently is)
@@ -294,6 +296,11 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
     }
   }
 
+  // ── Power-off ──────────────────────────────────────────────────────────────
+  bool _poweringOff = false;
+  int _powerOffStep = 0;
+  Timer? _powerOffTimer;
+
   // ── Splash / power-on ──────────────────────────────────────────────────────
   bool _splashDone = false;
   int _splashLine = 0;          // 0-6: animate boot lines one by one
@@ -359,12 +366,26 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
   void dispose() {
     _splashTimer?.cancel();
     _recordTimer?.cancel();
+    _powerOffTimer?.cancel();
     _ctrl.removeListener(_handleShellEvent);
     _ctrl.dispose();
     _carouselCtrl.dispose();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.manual, overlays: [SystemUiOverlay.top]);
     SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
     super.dispose();
+  }
+
+  void _triggerPowerOff() {
+    if (_poweringOff) return;
+    setState(() { _poweringOff = true; _powerOffStep = 0; });
+    _powerOffTimer = Timer.periodic(const Duration(milliseconds: 500), (t) {
+      if (!mounted) { t.cancel(); return; }
+      setState(() => _powerOffStep++);
+      if (_powerOffStep >= 6) {
+        t.cancel();
+        Navigator.pop(context);
+      }
+    });
   }
 
   void _scrollCarouselToSelected() {
@@ -409,6 +430,8 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
             orElse: () => oldBlackout ? ButtonDisplay.blackout : ButtonDisplay.solid);
         _language = AppLanguage.values.firstWhere(
             (e) => e.name == d['language'], orElse: () => AppLanguage.spanish);
+        _dpadStyle = DPadStyle.values.firstWhere(
+            (e) => e.name == d['dpadStyle'], orElse: () => DPadStyle.classic);
       });
       _applyOrientation();
     } catch (_) { _applyOrientation(); }
@@ -426,6 +449,7 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
         'buttonLayout': _buttonLayout.name,
         'buttonDisplay': _buttonDisplay.name,
         'language': _language.name,
+        'dpadStyle': _dpadStyle.name,
       });
     } catch (_) {}
   }
@@ -461,6 +485,9 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
         // LANGUAGE (20-21)
         case 20: _language = AppLanguage.spanish;
         case 21: _language = AppLanguage.english;
+        // DPAD STYLE (22-23)
+        case 22: _dpadStyle = DPadStyle.classic;
+        case 23: _dpadStyle = DPadStyle.colorful;
       }
     });
     _savePreferences();
@@ -493,6 +520,8 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
       case 19: return _buttonDisplay == ButtonDisplay.clear;
       case 20: return _language == AppLanguage.spanish;
       case 21: return _language == AppLanguage.english;
+      case 22: return _dpadStyle == DPadStyle.classic;
+      case 23: return _dpadStyle == DPadStyle.colorful;
       default: return false;
     }
   }
@@ -512,7 +541,7 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
     }
 
     if (_activeGame == null) {
-      const totalOpts = 22; // 3+7+4+3+3+2 = 22 settings rows
+      const totalOpts = 24; // 3+7+4+3+3+2+2 = 24 settings rows
 
       if (_headerFocused) {
         // ── Header level: L/R switches tab, DOWN enters content ─────────────
@@ -523,8 +552,6 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
             if (_hubCategory < 3) setState(() { _hubCategory += 1; });
           case ArcadeButton.down:
             setState(() { _headerFocused = false; _settingsCursor = 0; });
-          case ArcadeButton.select:
-            Navigator.pop(context);
           default: break;
         }
         return;
@@ -577,8 +604,6 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
           } else if (_hubCategory == 3) {
             _activateSetting(_settingsCursor);
           }
-        case ArcadeButton.select:
-          Navigator.pop(context);
         default: break;
       }
     } else {
@@ -837,6 +862,7 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
 
   Widget _buildNeonGrid() {
     if (!_splashDone) return _buildSplashScreen();
+    if (_poweringOff) return _buildPowerOffScreen();
     return Stack(children: [
       Positioned.fill(child: _buildHubBackground()),
       Column(children: [
@@ -855,16 +881,18 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
         ? _kNeonColors[_selectedIndex.clamp(0, _kNeonColors.length - 1)]
         : _accent;
     return AnimatedContainer(
-      duration: const Duration(milliseconds: 450),
-      curve: Curves.easeInOut,
+      duration: const Duration(milliseconds: 280),
+      curve: Curves.easeOutCubic,
+      width: double.infinity,
+      height: double.infinity,
       decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [
-            grad[0].withOpacity(0.38),
+            Color.lerp(const Color(0xFF020205), grad[0], 0.55)!,
             const Color(0xFF020205),
-            grad[1].withOpacity(0.18),
+            Color.lerp(const Color(0xFF020205), grad[1], 0.30)!,
           ],
           stops: const [0.0, 0.5, 1.0],
         ),
@@ -1087,7 +1115,12 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
                     borderRadius: BorderRadius.circular(10),
                     child: SizedBox(
                       width: 52, height: 44,
-                      child: _AnimatedGameDemo(index: idx),
+                      child: _HeroDemoGame(
+                        key: ValueKey(idx),
+                        game: game,
+                        userId: widget.userId,
+                        rewardsDocRef: widget.rewardsDocRef,
+                      ),
                     ),
                   ),
                   const SizedBox(width: 14),
@@ -1184,7 +1217,12 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
           borderRadius: BorderRadius.circular(22),
           child: Stack(children: [
             // Full-bleed live game demo
-            Positioned.fill(child: _AnimatedGameDemo(index: idx)),
+            Positioned.fill(child: _HeroDemoGame(
+              key: ValueKey(idx),
+              game: game,
+              userId: widget.userId,
+              rewardsDocRef: widget.rewardsDocRef,
+            )),
             // Dark scrim at bottom for text legibility
             Positioned(bottom: 0, left: 0, right: 0,
               child: Container(
@@ -1582,6 +1620,10 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
           opt('Español'),
           opt('English'),
         ]),
+        _settingGroup(_t('ESTILO DPAD', 'DPAD STYLE'), [
+          opt(_t('Clásico', 'Classic')),
+          opt(_t('Colorido', 'Colorful')),
+        ]),
         const SizedBox(height: 6),
         Row(children: [
           Text('▲▼ ${_t('navegar', 'navigate')}  ', style: TextStyle(
@@ -1741,6 +1783,53 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
     );
   }
 
+  Widget _buildPowerOffScreen() {
+    final ac = _accent;
+    const messages = [
+      '> Guardando partida        [  OK  ]',
+      '> Cerrando procesos        [  OK  ]',
+      '> Liberando memoria        [  OK  ]',
+      '> Apagando pantalla        [  OK  ]',
+      '> ¡Hasta pronto!           [  OK  ]',
+    ];
+    return Container(
+      color: Colors.black,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text('ARCADE CENTER OS  — APAGANDO',
+          style: TextStyle(color: ac, fontSize: 9,
+              fontFamily: 'monospace', fontWeight: FontWeight.bold, letterSpacing: 1.2)),
+        const SizedBox(height: 2),
+        Container(height: 1, color: ac.withOpacity(0.35)),
+        const SizedBox(height: 8),
+        for (int i = 0; i < messages.length; i++)
+          if (i < _powerOffStep)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Text(messages[i],
+                style: TextStyle(color: ac.withOpacity(0.80), fontSize: 8,
+                    fontFamily: 'monospace')),
+            ),
+        const Spacer(),
+        if (_powerOffStep >= 5) ...[
+          Container(height: 1, color: ac.withOpacity(0.25)),
+          const SizedBox(height: 12),
+          Center(child: Text('😴  ¡NOS VEMOS PRONTO!',
+            style: TextStyle(color: Colors.white, fontSize: 14,
+                fontFamily: 'monospace', fontWeight: FontWeight.w900,
+                letterSpacing: 2,
+                shadows: [Shadow(color: ac, blurRadius: 14)]))),
+          const SizedBox(height: 8),
+        ],
+        const SizedBox(height: 6),
+        Container(height: 1, color: ac.withOpacity(0.15)),
+        const SizedBox(height: 4),
+        Text('ARCADE CENTER OS  ©2025',
+          style: TextStyle(color: ac.withOpacity(0.30), fontSize: 7, fontFamily: 'monospace')),
+      ]),
+    );
+  }
+
   Widget _buildActiveGame() {
     return _activeGame!.builder!(
       userId: widget.userId,
@@ -1756,11 +1845,21 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
   Widget _buildSelectStartStrip() {
     return Row(mainAxisAlignment: MainAxisAlignment.center, children: [
       _ConsoleMetaButton(label: 'SELECT', btn: ArcadeButton.select, controller: _ctrl, shellColor: _metaColor),
-      const SizedBox(width: 16),
-      Container(width: 8, height: 8,
-        decoration: BoxDecoration(shape: BoxShape.circle,
-            color: Colors.white12, border: Border.all(color: Colors.white24))),
-      const SizedBox(width: 16),
+      const SizedBox(width: 12),
+      GestureDetector(
+        onTap: _triggerPowerOff,
+        child: Container(
+          width: 18, height: 18,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: Colors.black.withOpacity(0.35),
+            border: Border.all(color: Colors.white.withOpacity(0.30), width: 1),
+          ),
+          alignment: Alignment.center,
+          child: Text('⏻', style: TextStyle(fontSize: 9, color: Colors.white.withOpacity(0.70))),
+        ),
+      ),
+      const SizedBox(width: 12),
       _ConsoleMetaButton(label: 'START', btn: ArcadeButton.start, controller: _ctrl, shellColor: _metaColor),
     ]);
   }
@@ -1778,7 +1877,8 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
   Widget _buildDPad() => _ConsoleDPad(
       controller: _ctrl,
       joystick: _activeGame?.supportsDiagonal ?? false,
-      accent: _accent);
+      accent: _accent,
+      dpadStyle: _dpadStyle);
 
   Widget _buildABXYCluster({double size = 48.0}) {
     final btnSize = size;
@@ -1826,430 +1926,119 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
   }
 }
 
-// ─── Animated Game Demo Widget (shown in hero card — no saldo/score effects) ──
+// ─── In-card game demo (actual game, bot-driven, no cost / no score impact) ──
 
-class _AnimatedGameDemo extends StatefulWidget {
-  final int index;
-  const _AnimatedGameDemo({required this.index});
-  @override State<_AnimatedGameDemo> createState() => _AnimatedGameDemoState();
+class _HeroDemoGame extends StatefulWidget {
+  final ArcadeGameDef game;
+  final String userId;
+  final DocumentReference rewardsDocRef;
+  const _HeroDemoGame({super.key, required this.game, required this.userId,
+      required this.rewardsDocRef});
+  @override State<_HeroDemoGame> createState() => _HeroDemoGameState();
 }
 
-class _AnimatedGameDemoState extends State<_AnimatedGameDemo> {
+class _HeroDemoGameState extends State<_HeroDemoGame> {
+  late final ArcadeInputController _bot;
+  Timer? _botTimer;
   int _tick = 0;
-  late Timer _timer;
 
   @override
   void initState() {
     super.initState();
-    _timer = Timer.periodic(const Duration(milliseconds: 110), (_) {
-      if (mounted) setState(() => _tick++);
+    _bot = ArcadeInputController();
+    _botTimer = Timer.periodic(const Duration(milliseconds: 120), (_) {
+      if (!mounted) return;
+      _tick++;
+      _botPlay();
     });
   }
 
+  void _botPlay() {
+    // Release everything first
+    for (final b in ArcadeButton.values) _bot.release(b);
+    switch (widget.game.id) {
+      case 'flappy':
+        if (_tick % 13 < 3) _bot.press(ArcadeButton.a);
+      case 'runner':
+        if (_tick % 18 < 3) _bot.press(ArcadeButton.a);
+      case 'tetris':
+        final phase = _tick % 10;
+        if (phase < 2)      _bot.press(ArcadeButton.left);
+        else if (phase < 4) _bot.press(ArcadeButton.right);
+        else if (phase == 5) _bot.press(ArcadeButton.a);
+        if (_tick % 22 < 2) _bot.press(ArcadeButton.down);
+      case 'snake':
+        const dirs = [ArcadeButton.right, ArcadeButton.right, ArcadeButton.down,
+            ArcadeButton.right, ArcadeButton.up,  ArcadeButton.right];
+        _bot.press(dirs[(_tick ~/ 9) % dirs.length]);
+      case 'shooter':
+        _bot.press(ArcadeButton.a);
+        final ph = _tick % 18;
+        if (ph < 5) _bot.press(ArcadeButton.left);
+        else if (ph < 10) _bot.press(ArcadeButton.right);
+      case 'maze':
+        const d = [ArcadeButton.right, ArcadeButton.down, ArcadeButton.left, ArcadeButton.up];
+        _bot.press(d[(_tick ~/ 14) % d.length]);
+      case 'hopper':
+        if (_tick % 14 < 3) _bot.press(ArcadeButton.up);
+        else if ((_tick ~/ 14) % 3 == 1) _bot.press(ArcadeButton.left);
+        else if ((_tick ~/ 14) % 3 == 2) _bot.press(ArcadeButton.right);
+      case 'breakout':
+      case 'pong':
+        if ((_tick ~/ 13) % 2 == 0) _bot.press(ArcadeButton.left);
+        else _bot.press(ArcadeButton.right);
+      case 'raycaster':
+        _bot.press(ArcadeButton.up);
+        if (_tick % 22 < 5) _bot.press(ArcadeButton.right);
+        if (_tick % 45 < 3) _bot.press(ArcadeButton.a);
+      case 'match3':
+        final p2 = _tick % 16;
+        if (p2 < 4) _bot.press(ArcadeButton.right);
+        else if (p2 < 8) _bot.press(ArcadeButton.down);
+        else if (p2 < 10) _bot.press(ArcadeButton.a);
+      case 'logic':
+        final p3 = _tick % 20;
+        if (p3 < 4)  _bot.press(ArcadeButton.right);
+        else if (p3 < 8) _bot.press(ArcadeButton.down);
+        else if (p3 < 10) _bot.press(ArcadeButton.a);
+      default:
+        const ds = [ArcadeButton.right, ArcadeButton.down, ArcadeButton.left, ArcadeButton.up];
+        _bot.press(ds[(_tick ~/ 10) % ds.length]);
+    }
+  }
+
   @override
-  void dispose() { _timer.cancel(); super.dispose(); }
+  void dispose() {
+    _botTimer?.cancel();
+    _bot.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    return CustomPaint(
-      painter: _GameDemoPainter(index: widget.index, tick: _tick),
+    if (widget.game.builder == null || widget.game.locked) {
+      return Container(color: Colors.black12);
+    }
+    return ClipRect(
+      child: FittedBox(
+        fit: BoxFit.cover,
+        child: SizedBox(
+          width: 375, height: 667,
+          child: AbsorbPointer(
+            child: widget.game.builder!(
+              userId: '${widget.userId}_demo',
+              rewardsDocRef: widget.rewardsDocRef,
+              currentSaldo: 99999,
+              controller: _bot,
+              onSaldoChanged: (_) {},
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
 
-class _GameDemoPainter extends CustomPainter {
-  final int index;
-  final int tick;
-  const _GameDemoPainter({required this.index, required this.tick});
-
-  @override
-  bool shouldRepaint(_GameDemoPainter o) => o.tick != tick || o.index != index;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final w = size.width, h = size.height;
-    // Background gradient
-    final g = _kCardGradients[index % _kCardGradients.length];
-    canvas.drawRect(Rect.fromLTWH(0, 0, w, h),
-        Paint()..shader = LinearGradient(colors: g, begin: Alignment.topLeft,
-            end: Alignment.bottomRight).createShader(Rect.fromLTWH(0, 0, w, h)));
-    _drawDemo(canvas, w, h, tick);
-  }
-
-  void _drawDemo(Canvas canvas, double w, double h, int t) {
-    final p = Paint()..isAntiAlias = true;
-    switch (index) {
-
-      // ── Block Drop (Tetris) ────────────────────────────────────────────────
-      case 0:
-        const cols = 6, rows = 8;
-        final cw = w / cols, ch = h / rows;
-        final colors = [Color(0xFF00CCCC), Color(0xFFFF8800), Color(0xFF2222DD),
-            Color(0xFFDDDD00), Color(0xFF22DD22), Color(0xFFDD22DD), Color(0xFFDD2222)];
-        // Static stack rows
-        final stack = [[1,3,5], [0,2,4,5], [1,2,3,4], [0,1,3,5]];
-        for (int r = 0; r < stack.length; r++) {
-          for (final c in stack[r]) {
-            p.color = colors[(r + c) % colors.length].withOpacity(0.80);
-            canvas.drawRect(Rect.fromLTWH(c*cw+1, h - (r+1)*ch+1, cw-2, ch-2), p);
-            p.color = Colors.white.withOpacity(0.25);
-            canvas.drawRect(Rect.fromLTWH(c*cw+1, h - (r+1)*ch+1, cw-2, 2), p);
-          }
-        }
-        // Falling T-piece
-        final fy = ((t % 28) * (h / 28.0)).clamp(0.0, h - 2*ch);
-        p.color = const Color(0xFFDD22DD).withOpacity(0.90);
-        for (int i = 0; i < 3; i++) canvas.drawRect(Rect.fromLTWH((i+1.5)*cw+1, fy, cw-2, ch-2), p);
-        canvas.drawRect(Rect.fromLTWH(2.5*cw+1, fy+ch, cw-2, ch-2), p);
-        p.color = Colors.white.withOpacity(0.30);
-        for (int i = 0; i < 3; i++) canvas.drawRect(Rect.fromLTWH((i+1.5)*cw+1, fy, cw-2, 2), p);
-        break;
-
-      // ── Minefield (Minesweeper) ────────────────────────────────────────────
-      case 1:
-        const mcols = 6, mrows = 8;
-        final mw2 = w / mcols, mh2 = h / mrows;
-        final revealPhase = t % (mcols * mrows);
-        for (int r = 0; r < mrows; r++) {
-          for (int c = 0; c < mcols; c++) {
-            final idx2 = r * mcols + c;
-            final revealed = idx2 < revealPhase;
-            final isMine = (r * 3 + c * 7) % 13 == 0;
-            if (revealed && isMine) {
-              p.color = const Color(0xFF550000).withOpacity(0.70);
-            } else if (revealed) {
-              p.color = const Color(0xFF1A5C1A).withOpacity(0.55);
-            } else {
-              p.color = const Color(0xFF0A1A0A).withOpacity(0.45);
-            }
-            canvas.drawRect(Rect.fromLTWH(c*mw2+1, r*mh2+1, mw2-2, mh2-2), p);
-            if (revealed && !isMine) {
-              p.color = const Color(0xFF22AA22).withOpacity(0.30);
-              canvas.drawRect(Rect.fromLTWH(c*mw2+1, r*mh2+1, mw2-2, 2), p);
-            }
-          }
-        }
-        // Cursor highlight
-        final cr = (t ~/ mcols) % mrows, cc2 = t % mcols;
-        p..color = Colors.yellowAccent.withOpacity(0.50)..style = PaintingStyle.stroke..strokeWidth = 1.5;
-        canvas.drawRect(Rect.fromLTWH(cc2*mw2+1, cr*mh2+1, mw2-2, mh2-2), p);
-        p.style = PaintingStyle.fill;
-        break;
-
-      // ── Candy Swap (Match3) ────────────────────────────────────────────────
-      case 2:
-        const gc = [Color(0xFFFF3388), Color(0xFFFF8800), Color(0xFFFFDD00),
-            Color(0xFF44CC44), Color(0xFF3388FF), Color(0xFFCC44FF)];
-        const gcols = 5, grows = 6;
-        final gsize = min(w / gcols, h / grows) * 0.80;
-        final goffx = (w - gsize * gcols) / 2, goffy = (h - gsize * grows) / 2;
-        // Pop animation: one column swaps every 6 ticks
-        final swapCol = (t ~/ 6) % gcols;
-        final swapRow1 = 2, swapRow2 = 3;
-        for (int r = 0; r < grows; r++) {
-          for (int c = 0; c < gcols; c++) {
-            final cidx = (r * 2 + c * 3 + (c == swapCol && r == swapRow1 ? t ~/ 3 : 0)) % gc.length;
-            final scale = (c == swapCol && (r == swapRow1 || r == swapRow2) && (t % 6) < 2) ? 0.6 : 1.0;
-            final cx2 = goffx + c * gsize + gsize / 2;
-            final cy2 = goffy + r * gsize + gsize / 2;
-            final rad = gsize * 0.38 * scale;
-            p.color = gc[cidx].withOpacity(0.82);
-            canvas.drawCircle(Offset(cx2, cy2), rad, p);
-            p.color = Colors.white.withOpacity(0.45);
-            canvas.drawOval(Rect.fromLTWH(cx2 - rad*0.7, cy2 - rad*0.85, rad*0.7, rad*0.45), p);
-          }
-        }
-        break;
-
-      // ── Star Blaster (Space Shooter) ──────────────────────────────────────
-      case 3:
-        // Stars scrolling down
-        final starSeeds = [Offset(0.10,0), Offset(0.32,0.1), Offset(0.66,0),
-            Offset(0.84,0.25), Offset(0.20,0.5), Offset(0.50,0.3),
-            Offset(0.74,0.1), Offset(0.40,0.45)];
-        for (final s in starSeeds) {
-          final sy = (s.dy * h + t * 1.2) % h;
-          p.color = Colors.white.withOpacity(0.50);
-          canvas.drawRect(Rect.fromLTWH(s.dx * w - 1, sy - 1, 2, 2), p);
-        }
-        // Enemy row marching
-        for (int i = 0; i < 3; i++) {
-          final ex = w * (0.15 + i * 0.30) + sin((t + i * 8) * 0.18) * 6;
-          const ey = 10.0;
-          p.color = const Color(0xFFCC1100).withOpacity(0.80);
-          canvas.drawRect(Rect.fromLTWH(ex, ey, 14, 6), p);
-          canvas.drawRect(Rect.fromLTWH(ex - 3, ey + 6, 20, 4), p);
-        }
-        // Bullet moving up
-        final by = h * 0.6 - (t % 30) * (h * 0.6 / 30);
-        p.color = Colors.cyanAccent.withOpacity(0.90);
-        canvas.drawRect(Rect.fromLTWH(w * 0.50 - 1, by, 2, 8), p);
-        // Player ship
-        final px2 = w * 0.50 + sin(t * 0.12) * w * 0.15;
-        p.color = const Color(0xFF44FFFF).withOpacity(0.88);
-        canvas.drawPath(Path()
-            ..moveTo(px2, h * 0.80)..lineTo(px2 - 10, h * 0.92)
-            ..lineTo(px2 - 4, h * 0.88)..lineTo(px2 + 4, h * 0.88)
-            ..lineTo(px2 + 10, h * 0.92)..close(), p);
-        p.color = const Color(0xFFFF8800).withOpacity(0.80);
-        canvas.drawOval(Rect.fromLTWH(px2 - 5, h * 0.90, 10, 6), p);
-        break;
-
-      // ── Ghost Maze (Pac-Man) ──────────────────────────────────────────────
-      case 4:
-        // Simple corridors
-        p.color = const Color(0xFF1A4AFF).withOpacity(0.55);
-        for (final r in [
-          Rect.fromLTWH(4, 4, w - 8, 8), Rect.fromLTWH(4, h - 12, w - 8, 8),
-          Rect.fromLTWH(4, 4, 8, h - 8), Rect.fromLTWH(w - 12, 4, 8, h - 8),
-          Rect.fromLTWH(4, h * 0.38, w * 0.40, 7), Rect.fromLTWH(w * 0.55, h * 0.38, w * 0.35, 7),
-          Rect.fromLTWH(4, h * 0.65, w * 0.55, 7),
-        ]) canvas.drawRect(r, p);
-        // Dots
-        p.color = Colors.yellow.withOpacity(0.60);
-        for (int i = 0; i < 5; i++) {
-          final dotX = w * (0.20 + i * 0.14);
-          const dotY = h * 0.52;
-          if ((t ~/ 10) % 10 != i) canvas.drawCircle(Offset(dotX, dotY), 2.5, p);
-        }
-        // Pac-man
-        final pacX = (w * 0.18 + (t % 60) * (w * 0.62 / 60)).clamp(w * 0.18, w * 0.80);
-        final mouthOpen = (t % 4) < 2;
-        p.color = Colors.yellow.withOpacity(0.92);
-        canvas.drawArc(Rect.fromLTWH(pacX - 8, h * 0.46, 16, 16),
-            mouthOpen ? 0.3 : 0.05, mouthOpen ? (2 * pi - 0.6) : (2 * pi - 0.1), true, p);
-        // Ghost
-        final gx = pacX + 22 + sin(t * 0.1) * 4;
-        p.color = const Color(0xFFFF4466).withOpacity(0.85);
-        canvas.drawArc(Rect.fromLTWH(gx - 8, h * 0.45, 16, 16), pi, pi, false, p);
-        canvas.drawRect(Rect.fromLTWH(gx - 8, h * 0.53, 16, 8), p);
-        break;
-
-      // ── Crypt Doom (Raycaster / FPS) ──────────────────────────────────────
-      case 5:
-        // Fake raycaster: vertical bars for walls
-        const rayCount = 20;
-        for (int i = 0; i < rayCount; i++) {
-          final dist = 0.4 + 0.55 * ((sin((i * 0.31 + t * 0.06)) + 1) / 2);
-          final barH = h * 0.7 * (1 - dist * 0.8);
-          final shade = (0x44 + (1 - dist) * 0xBB).round().clamp(0, 255);
-          p.color = Color(0xFF000000 | (shade * 0x8000) | (shade ~/ 2 * 0x100));
-          canvas.drawRect(Rect.fromLTWH(i * w / rayCount, (h - barH) / 2, w / rayCount + 1, barH), p);
-        }
-        // Floor/ceiling
-        p.color = Colors.black.withOpacity(0.50);
-        canvas.drawRect(Rect.fromLTWH(0, 0, w, h * 0.28), p);
-        canvas.drawRect(Rect.fromLTWH(0, h * 0.72, w, h * 0.28), p);
-        // Crosshair
-        p..color = Colors.redAccent.withOpacity(0.70)..strokeWidth = 1..style = PaintingStyle.stroke;
-        canvas.drawLine(Offset(w/2 - 5, h/2), Offset(w/2 + 5, h/2), p);
-        canvas.drawLine(Offset(w/2, h/2 - 5), Offset(w/2, h/2 + 5), p);
-        p.style = PaintingStyle.fill;
-        // Skull enemy
-        final eScale = 0.50 + 0.50 * ((sin(t * 0.08) + 1) / 2);
-        final eW = 16 * eScale, eH = 18 * eScale;
-        p.color = const Color(0xFFDDDDDD).withOpacity(0.80);
-        canvas.drawOval(Rect.fromLTWH(w/2 - eW/2, h/2 - eH * 0.7, eW, eH * 0.8), p);
-        p.color = Colors.black.withOpacity(0.90);
-        canvas.drawOval(Rect.fromLTWH(w/2 - eW*0.28, h/2 - eH * 0.48, eW*0.18, eH*0.22), p);
-        canvas.drawOval(Rect.fromLTWH(w/2 + eW*0.08, h/2 - eH * 0.48, eW*0.18, eH*0.22), p);
-        break;
-
-      // ── Frog Dash (Hopper/Frogger) ────────────────────────────────────────
-      case 6:
-        // Lane lines
-        p.color = Colors.white.withOpacity(0.08);
-        for (int i = 1; i < 5; i++) canvas.drawLine(Offset(0, h * i / 5), Offset(w, h * i / 5), p..style = PaintingStyle.stroke..strokeWidth = 0.8);
-        p.style = PaintingStyle.fill;
-        // Cars in lanes
-        for (int lane = 0; lane < 3; lane++) {
-          final carX = (w + 28) - ((t * (lane + 1) * 1.4) % (w + 50));
-          final laneY = h * (0.30 + lane * 0.15);
-          final carColor = [const Color(0xFFFF4422), const Color(0xFF2244FF), const Color(0xFFFFCC00)][lane];
-          p.color = carColor.withOpacity(0.80);
-          canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(carX, laneY, 28, 10), const Radius.circular(3)), p);
-        }
-        // Frog
-        final frogPhase = t ~/ 12;
-        final frogY = h * 0.85 - (frogPhase % 5) * (h * 0.15);
-        final jumping = (t % 12) < 4;
-        p.color = const Color(0xFF44CC22).withOpacity(0.92);
-        canvas.drawOval(Rect.fromLTWH(w/2 - 8, frogY + (jumping ? -4 : 0), 16, 12), p);
-        // Eyes
-        p.color = Colors.white.withOpacity(0.90);
-        canvas.drawCircle(Offset(w/2 - 4, frogY + (jumping ? -2 : 2)), 3, p);
-        canvas.drawCircle(Offset(w/2 + 4, frogY + (jumping ? -2 : 2)), 3, p);
-        p.color = Colors.black.withOpacity(0.80);
-        canvas.drawCircle(Offset(w/2 - 3.5, frogY + (jumping ? -1.5 : 2.5)), 1.5, p);
-        canvas.drawCircle(Offset(w/2 + 4.5, frogY + (jumping ? -1.5 : 2.5)), 1.5, p);
-        break;
-
-      // ── Neon Snake ────────────────────────────────────────────────────────
-      case 7:
-        const snakeCols = 12, snakeRows = 10;
-        final sw = w / snakeCols, sh2 = h / snakeRows;
-        // Pre-baked snake path (cycles through offsets each 8 ticks)
-        final base = t ~/ 3;
-        final body = <Offset>[
-          for (int i = 0; i < 10; i++) () {
-            final idx2 = (base - i + 200) % 40;
-            final loopPts = [
-              Offset(5, 5), Offset(6, 5), Offset(7, 5), Offset(8, 5), Offset(9, 5),
-              Offset(9, 6), Offset(9, 7), Offset(8, 7), Offset(7, 7), Offset(6, 7),
-              Offset(5, 7), Offset(5, 6), Offset(4, 6), Offset(3, 6), Offset(2, 6),
-              Offset(2, 5), Offset(2, 4), Offset(3, 4), Offset(4, 4), Offset(5, 4),
-              Offset(6, 4), Offset(7, 4), Offset(8, 4), Offset(9, 4), Offset(9, 3),
-              Offset(8, 3), Offset(7, 3), Offset(6, 3), Offset(5, 3), Offset(4, 3),
-              Offset(3, 3), Offset(2, 3), Offset(1, 3), Offset(1, 4), Offset(1, 5),
-              Offset(1, 6), Offset(1, 7), Offset(2, 7), Offset(3, 7), Offset(4, 7),
-            ];
-            return loopPts[idx2 % loopPts.length];
-          }()
-        ];
-        for (int i = 0; i < body.length; i++) {
-          final fade = 1.0 - i * 0.08;
-          p.color = const Color(0xFF00FF88).withOpacity(0.85 * fade);
-          canvas.drawRRect(RRect.fromRectAndRadius(
-              Rect.fromLTWH(body[i].dx * sw + 1, body[i].dy * sh2 + 1, sw - 2, sh2 - 2),
-              const Radius.circular(2)), p);
-        }
-        // Food dot (blinks)
-        if ((t % 8) < 6) {
-          p.color = Colors.redAccent.withOpacity(0.90);
-          canvas.drawCircle(Offset(w * 0.75, h * 0.25), 4, p);
-        }
-        break;
-
-      // ── Wing Rush (Flappy Bird) ────────────────────────────────────────────
-      case 8:
-        // Pipes scrolling left
-        const pipeW = 14.0;
-        for (int i = 0; i < 2; i++) {
-          final px = (w + pipeW - (t * 1.0 + i * (w / 2 + pipeW)) % (w + pipeW));
-          const gapCenter = 0.45;
-          const gapH = 0.30;
-          p.color = const Color(0xFF22AA22).withOpacity(0.80);
-          canvas.drawRect(Rect.fromLTWH(px, 0, pipeW, h * (gapCenter - gapH / 2)), p);
-          canvas.drawRect(Rect.fromLTWH(px, h * (gapCenter + gapH / 2), pipeW, h), p);
-          // Pipe caps
-          p.color = const Color(0xFF33BB33).withOpacity(0.90);
-          canvas.drawRect(Rect.fromLTWH(px - 2, h * (gapCenter - gapH / 2) - 5, pipeW + 4, 5), p);
-          canvas.drawRect(Rect.fromLTWH(px - 2, h * (gapCenter + gapH / 2), pipeW + 4, 5), p);
-        }
-        // Bird
-        final birdY = h * 0.42 + sin(t * 0.15) * h * 0.08;
-        final wingUp = (t % 6) < 3;
-        p.color = const Color(0xFFFFCC00).withOpacity(0.92);
-        canvas.drawOval(Rect.fromLTWH(w * 0.30 - 8, birdY - 6, 16, 12), p);
-        p.color = const Color(0xFFFF8800).withOpacity(0.80);
-        canvas.drawOval(Rect.fromLTWH(w * 0.30 + 4, birdY - 2, 8, 5), p); // beak
-        p.color = Colors.white.withOpacity(0.90);
-        canvas.drawCircle(Offset(w * 0.30 - 2, birdY - 2), 3, p); // eye
-        p.color = Colors.black.withOpacity(0.70);
-        canvas.drawCircle(Offset(w * 0.30 - 1, birdY - 2), 1.5, p);
-        p.color = const Color(0xFFFFCC00).withOpacity(0.75);
-        canvas.drawOval(Rect.fromLTWH(w * 0.30 - 14, birdY + (wingUp ? -5 : 2), 12, 6), p);
-        break;
-
-      // ── Dino Dash (Endless Runner) ────────────────────────────────────────
-      case 9:
-        // Ground
-        p.color = const Color(0xFF44AA44).withOpacity(0.70);
-        canvas.drawRect(Rect.fromLTWH(0, h * 0.75, w, 3), p);
-        // Scrolling cactus
-        final cactX = w - (t * 1.5) % (w + 20);
-        p.color = const Color(0xFF228822).withOpacity(0.85);
-        canvas.drawRect(Rect.fromLTWH(cactX, h * 0.58, 8, h * 0.17), p);
-        canvas.drawRect(Rect.fromLTWH(cactX - 6, h * 0.62, 6, 8), p);
-        canvas.drawRect(Rect.fromLTWH(cactX + 8, h * 0.65, 6, 8), p);
-        // Dino
-        final phase = t % 8;
-        final dinoY = h * 0.58;
-        final jumpOffset = phase < 4 ? -sin(phase * pi / 4) * 18 : 0.0;
-        p.color = const Color(0xFF88CC44).withOpacity(0.90);
-        // Body
-        canvas.drawRect(Rect.fromLTWH(w * 0.25 - 6, dinoY + jumpOffset, 18, 14), p);
-        // Head
-        canvas.drawRect(Rect.fromLTWH(w * 0.25 + 4, dinoY + jumpOffset - 9, 12, 10), p);
-        // Tail
-        canvas.drawRect(Rect.fromLTWH(w * 0.25 - 14, dinoY + jumpOffset + 2, 10, 6), p);
-        // Legs (alternate)
-        final leg = (t ~/ 3) % 2;
-        p.color = const Color(0xFF669933).withOpacity(0.90);
-        canvas.drawRect(Rect.fromLTWH(w * 0.25 - 3, dinoY + jumpOffset + 13, 5, leg == 0 ? 10 : 6), p);
-        canvas.drawRect(Rect.fromLTWH(w * 0.25 + 4, dinoY + jumpOffset + 13, 5, leg == 1 ? 10 : 6), p);
-        // Eye
-        p.color = Colors.black.withOpacity(0.85);
-        canvas.drawCircle(Offset(w * 0.25 + 12, dinoY + jumpOffset - 5), 2, p);
-        break;
-
-      // ── Neon Break (Breakout) ──────────────────────────────────────────────
-      case 10:
-        // Bricks top half
-        const bCols = 5, bRows = 4;
-        final bw2 = w / bCols, bh2 = h * 0.40 / bRows;
-        for (int r = 0; r < bRows; r++) {
-          for (int c = 0; c < bCols; c++) {
-            final alive = ((r * bCols + c + t ~/ 15) % 7) != 0;
-            if (!alive) continue;
-            final bc = _kNeonColors[(r * bCols + c) % _kNeonColors.length];
-            p.color = bc.withOpacity(0.65);
-            canvas.drawRRect(RRect.fromRectAndRadius(
-                Rect.fromLTWH(c*bw2+2, h*0.06 + r*bh2+2, bw2-4, bh2-4), const Radius.circular(3)), p);
-            p.color = Colors.white.withOpacity(0.20);
-            canvas.drawRect(Rect.fromLTWH(c*bw2+2, h*0.06+r*bh2+2, bw2-4, 2), p);
-          }
-        }
-        // Ball
-        final bAngle = t * 0.14;
-        final ballX = w/2 + sin(bAngle) * w * 0.35;
-        final ballY = h * 0.50 + cos(bAngle * 0.7) * h * 0.25;
-        p.color = Colors.cyanAccent.withOpacity(0.90);
-        canvas.drawCircle(Offset(ballX, ballY), 5, p);
-        p..color = Colors.cyanAccent.withOpacity(0.20)..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6);
-        canvas.drawCircle(Offset(ballX, ballY), 5, p);
-        p.maskFilter = null;
-        // Paddle
-        final pOff = sin(t * 0.10) * w * 0.25;
-        p.color = const Color(0xFF00DDFF).withOpacity(0.85);
-        canvas.drawRRect(RRect.fromRectAndRadius(
-            Rect.fromLTWH(w/2 - 20 + pOff, h * 0.88, 40, 6), const Radius.circular(3)), p);
-        break;
-
-      // ── Volt Pong ─────────────────────────────────────────────────────────
-      case 11:
-        // Ball physics (bouncing)
-        final bx = (sin(t * 0.13) * 0.5 + 0.5) * (w - 10) + 5;
-        final by = (sin(t * 0.09 + 1.2) * 0.5 + 0.5) * (h - 10) + 5;
-        // Left paddle tracking ball
-        final lp = by - 18;
-        // Right paddle slightly delayed
-        final rp = by + sin(t * 0.05) * 12 - 18;
-        const padH = 36.0, padW = 6.0;
-        p.color = const Color(0xFFFFAA00).withOpacity(0.85);
-        canvas.drawRRect(RRect.fromRectAndRadius(
-            Rect.fromLTWH(6, lp.clamp(2.0, h - padH - 2), padW, padH), const Radius.circular(3)), p);
-        canvas.drawRRect(RRect.fromRectAndRadius(
-            Rect.fromLTWH(w - padW - 6, rp.clamp(2.0, h - padH - 2), padW, padH), const Radius.circular(3)), p);
-        // Ball glow
-        p..color = Colors.amberAccent.withOpacity(0.25)..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
-        canvas.drawCircle(Offset(bx, by), 8, p);
-        p.maskFilter = null;
-        p.color = Colors.amberAccent.withOpacity(0.95);
-        canvas.drawCircle(Offset(bx, by), 4, p);
-        // Centre dashed line
-        p..color = Colors.white.withOpacity(0.15)..style = PaintingStyle.stroke..strokeWidth = 1;
-        for (int i = 0; i < 8; i++) {
-          canvas.drawLine(Offset(w/2, h * i / 8 + 2), Offset(w/2, h * (i + 0.5) / 8), p);
-        }
-        p.style = PaintingStyle.fill;
-        break;
-
-      default:
-        break;
-    }
-  }
-}
 
 // ─── TCG-style Card Painter ───────────────────────────────────────────────────
 
@@ -2773,8 +2562,10 @@ class _ConsoleDPad extends StatefulWidget {
   final bool joystick;
   final double size;
   final Color accent;
+  final DPadStyle dpadStyle;
   const _ConsoleDPad({required this.controller, this.joystick = false,
-      this.size = 144, this.accent = const Color(0xFF00FF88)});
+      this.size = 144, this.accent = const Color(0xFF00FF88),
+      this.dpadStyle = DPadStyle.classic});
   @override State<_ConsoleDPad> createState() => _ConsoleDPadState();
 }
 
@@ -2838,7 +2629,9 @@ class _ConsoleDPadState extends State<_ConsoleDPad> {
         size: Size(widget.size, widget.size),
         painter: widget.joystick
             ? _RoundDPadPainter(active: _active, accent: widget.accent)
-            : _CrossDPadPainter(active: _active, accent: widget.accent),
+            : widget.dpadStyle == DPadStyle.colorful
+                ? _ColorfulDPadPainter(active: _active, accent: widget.accent)
+                : _CrossDPadPainter(active: _active, accent: widget.accent),
       ),
     );
   }
@@ -2893,13 +2686,6 @@ class _CrossDPadPainter extends CustomPainter {
           topLeft: Radius.circular(tl), topRight: Radius.circular(tr),
           bottomLeft: Radius.circular(bl), bottomRight: Radius.circular(br)), p);
       p.shader = null;
-      // Top-edge highlight (bevel)
-      if (!isLit) {
-        p.color = Colors.white.withOpacity(0.09);
-        canvas.drawRRect(RRect.fromRectAndCorners(
-            Rect.fromLTWH(rect.left + 1, rect.top + 1, rect.width - 2, 1.5),
-            topLeft: Radius.circular(tl), topRight: Radius.circular(tr)), p);
-      }
       // Accent inner glow when lit
       if (isLit) {
         p..color = accent.withOpacity(0.30)
@@ -2962,6 +2748,98 @@ class _CrossDPadPainter extends CustomPainter {
         Offset(size.width - 30, cy + 3), Offset(size.width - 26, cy + 3),
         Offset(size.width - 26, cy + 8)],
         ArcadeButton.right);
+  }
+}
+
+// ─── Colorful 4-segment D-pad (Switch-style) ─────────────────────────────────
+
+class _ColorfulDPadPainter extends CustomPainter {
+  final Set<ArcadeButton> active;
+  final Color accent;
+  const _ColorfulDPadPainter({required this.active, this.accent = const Color(0xFF00FF88)});
+
+  @override
+  bool shouldRepaint(_ColorfulDPadPainter o) =>
+      o.active.length != active.length || !o.active.containsAll(active) || o.accent != accent;
+
+  bool _lit(ArcadeButton b) => active.contains(b);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final cx = size.width / 2, cy = size.height / 2;
+    final R = size.width / 2;
+    final p = Paint()..isAntiAlias = true;
+
+    // Dark circle background
+    p.color = const Color(0xFF1A1A1A);
+    canvas.drawCircle(Offset(cx, cy), R - 1, p);
+    p..color = Colors.black.withOpacity(0.60)..style = PaintingStyle.stroke..strokeWidth = 2;
+    canvas.drawCircle(Offset(cx, cy), R - 1, p);
+    p.style = PaintingStyle.fill;
+
+    // Segment colors: up=blue, left=green, right=red, down=yellow
+    final segColors = {
+      ArcadeButton.up:    const Color(0xFF2A7FD0),
+      ArcadeButton.left:  const Color(0xFF3DAA4A),
+      ArcadeButton.right: const Color(0xFFCC3333),
+      ArcadeButton.down:  const Color(0xFFDDAA00),
+    };
+    final segAngles = {
+      ArcadeButton.up:    -pi / 2,
+      ArcadeButton.right: 0.0,
+      ArcadeButton.down:  pi / 2,
+      ArcadeButton.left:  pi,
+    };
+
+    // Draw each segment as a "house" shape (rounded pentagon)
+    for (final btn in [ArcadeButton.up, ArcadeButton.right, ArcadeButton.down, ArcadeButton.left]) {
+      final isLit = _lit(btn);
+      final baseColor = segColors[btn]!;
+      final angle = segAngles[btn]!;
+      final color = isLit ? baseColor : baseColor.withOpacity(0.75);
+
+      canvas.save();
+      canvas.translate(cx, cy);
+      canvas.rotate(angle);
+
+      // Pentagon segment clipped to quarter-circle
+      final segPath = Path();
+      const halfAngle = pi * 0.47;
+      segPath.moveTo(0, 0);
+      segPath.arcTo(Rect.fromCircle(center: Offset.zero, radius: R - 2),
+          -pi / 2 - halfAngle / 2, halfAngle, false);
+      segPath.close();
+
+      p.color = color;
+      canvas.drawPath(segPath, p);
+
+      // Lighter top-center highlight
+      p.color = Colors.white.withOpacity(isLit ? 0.25 : 0.12);
+      canvas.drawPath(segPath, p);
+
+      // Arrow triangle pointing outward
+      const arrowDist = 0.62;
+      const s = 7.0;
+      p.color = Colors.white.withOpacity(isLit ? 0.95 : 0.70);
+      if (isLit) {
+        p.maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
+      }
+      canvas.drawPath(Path()
+          ..moveTo(0, -(R * arrowDist))
+          ..lineTo(-s, -(R * arrowDist) + s * 1.5)
+          ..lineTo(s, -(R * arrowDist) + s * 1.5)
+          ..close(), p);
+      p.maskFilter = null;
+
+      canvas.restore();
+    }
+
+    // Center cap
+    p.color = const Color(0xFF1A1A1A);
+    canvas.drawCircle(Offset(cx, cy), R * 0.20, p);
+    p..color = Colors.white.withOpacity(0.08)..style = PaintingStyle.stroke..strokeWidth = 1;
+    canvas.drawCircle(Offset(cx, cy), R * 0.20, p);
+    p.style = PaintingStyle.fill;
   }
 }
 
