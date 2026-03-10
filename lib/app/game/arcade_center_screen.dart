@@ -194,7 +194,8 @@ class ArcadeCenterScreen extends StatefulWidget {
   State<ArcadeCenterScreen> createState() => _ArcadeCenterScreenState();
 }
 
-class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
+class _ArcadeCenterScreenState extends State<ArcadeCenterScreen>
+    with TickerProviderStateMixin {
   late final ArcadeInputController _ctrl;
   late double _saldo;
   int _selectedIndex = 0;
@@ -215,7 +216,7 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
   ButtonDisplay  _buttonDisplay  = ButtonDisplay.solid;
   int            _settingsCursor = 0;
   AppLanguage    _language       = AppLanguage.spanish;
-  bool _headerFocused = true;  // true = d-pad navigates category tabs; false = navigates content
+  bool _headerFocused = false; // false = d-pad starts on content (game list)
 
   // Theme accent colour (used everywhere terminal-green currently is)
   Color get _accent {
@@ -299,6 +300,13 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
   int _powerOffStep = 0;
   Timer? _powerOffTimer;
 
+  // ── CRT TV-off animation (plays before Navigator.pop) ─────────────────────
+  bool _crtOffAnim = false;
+  late final AnimationController _crtOffCtrl;
+  late final Animation<double> _crtSquish; // scaleY 1→0
+  late final Animation<double> _crtLine;   // white-line brightness 0→1→0
+  late final Animation<double> _crtFade;   // black overlay 0→1
+
   // ── Splash / power-on ──────────────────────────────────────────────────────
   bool _splashDone = false;
   int _splashLine = 0;          // 0-6: animate boot lines one by one
@@ -316,6 +324,25 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
   @override
   void initState() {
     super.initState();
+    // CRT TV-off animation controller
+    _crtOffCtrl = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 520));
+    _crtSquish = Tween<double>(begin: 1.0, end: 0.0).animate(
+        CurvedAnimation(parent: _crtOffCtrl,
+            curve: const Interval(0.0, 0.58, curve: Curves.easeIn)));
+    _crtLine = TweenSequence<double>([
+      TweenSequenceItem(tween: Tween(begin: 0.0, end: 1.0), weight: 1),
+      TweenSequenceItem(tween: Tween(begin: 1.0, end: 0.0), weight: 1),
+    ]).animate(CurvedAnimation(parent: _crtOffCtrl,
+        curve: const Interval(0.44, 0.80)));
+    _crtFade = Tween<double>(begin: 0.0, end: 1.0).animate(
+        CurvedAnimation(parent: _crtOffCtrl,
+            curve: const Interval(0.65, 1.0, curve: Curves.easeIn)));
+    _crtOffCtrl.addStatusListener((s) {
+      if (s == AnimationStatus.completed && _crtOffAnim && mounted) {
+        Navigator.pop(context);
+      }
+    });
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     _ctrl = ArcadeInputController();
     _saldo = widget.currentSaldo;
@@ -365,6 +392,7 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
     _splashTimer?.cancel();
     _recordTimer?.cancel();
     _powerOffTimer?.cancel();
+    _crtOffCtrl.dispose();
     _ctrl.removeListener(_handleShellEvent);
     _ctrl.dispose();
     _carouselCtrl.dispose();
@@ -381,7 +409,13 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
       setState(() => _powerOffStep++);
       if (_powerOffStep >= 6) {
         t.cancel();
-        Navigator.pop(context);
+        // Short pause, then CRT TV-off animation; Navigator.pop fires on complete
+        Future.delayed(const Duration(milliseconds: 220), () {
+          if (mounted) {
+            setState(() => _crtOffAnim = true);
+            _crtOffCtrl.forward();
+          }
+        });
       }
     });
   }
@@ -806,7 +840,11 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
     final isDark = sg.top.computeLuminance() < 0.3;
     final labelColor = isDark ? ac.withOpacity(0.70) : const Color(0xFF444444);
     final ledColor = ac;
-    return Row(children: [
+    return Padding(
+      padding: const EdgeInsets.only(left: 12),
+      child: GestureDetector(
+        onTap: _triggerPowerOff,
+        child: Row(children: [
       Container(
         width: 7, height: 7,
         decoration: BoxDecoration(
@@ -819,7 +857,9 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
       Text('T_STY: Arcade -\$',
         style: TextStyle(color: labelColor, fontSize: 8,
             fontWeight: FontWeight.w700, fontFamily: 'monospace', letterSpacing: 0.5)),
-    ]);
+    ]),
+      ),
+    );
   }
 
   // ── Screen bezel ──────────────────────────────────────────────────────────
@@ -836,7 +876,27 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
       child: ClipRRect(
         borderRadius: BorderRadius.circular(10),
         child: Stack(children: [
-          _activeGame == null ? _buildNeonGrid() : _buildActiveGame(),
+          // CRT TV-off animation wraps game/hub content
+          AnimatedBuilder(
+            animation: _crtOffCtrl,
+            builder: (ctx, child) {
+              if (!_crtOffAnim) return child!;
+              return Stack(children: [
+                Transform(
+                  alignment: Alignment.center,
+                  transform: Matrix4.diagonal3Values(1.0, _crtSquish.value, 1.0),
+                  child: child!,
+                ),
+                if (_crtLine.value > 0.01)
+                  Positioned.fill(child: ColoredBox(
+                      color: Colors.white.withOpacity(_crtLine.value * 0.92))),
+                if (_crtFade.value > 0.01)
+                  Positioned.fill(child: ColoredBox(
+                      color: Colors.black.withOpacity(_crtFade.value))),
+              ]);
+            },
+            child: _activeGame == null ? _buildNeonGrid() : _buildActiveGame(),
+          ),
           // CRT scanline + vignette overlay
           Positioned.fill(
             child: IgnorePointer(
@@ -1707,7 +1767,7 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
   Widget _buildSplashScreen() {
     final ac = _accent;
     final showWelcome = _splashLine >= _kBootLines.length + 1;
-    return Container(
+    return SizedBox.expand(child: Container(
       color: Colors.black,
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       child: Column(
@@ -1766,7 +1826,7 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
                 fontSize: 7, fontFamily: 'monospace')),
         ],
       ),
-    );
+    ));
   }
 
   Widget _buildPowerOffScreen() {
@@ -1778,7 +1838,7 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
       '> Apagando pantalla        [  OK  ]',
       '> ¡Hasta pronto!           [  OK  ]',
     ];
-    return Container(
+    return SizedBox.expand(child: Container(
       color: Colors.black,
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -1813,7 +1873,7 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
         Text('ARCADE CENTER OS  ©2025',
           style: TextStyle(color: ac.withOpacity(0.30), fontSize: 7, fontFamily: 'monospace')),
       ]),
-    );
+    ));
   }
 
   Widget _buildActiveGame() {
@@ -1842,7 +1902,8 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
             border: Border.all(color: Colors.white.withOpacity(0.30), width: 1),
           ),
           alignment: Alignment.center,
-          child: Text('⏻', style: TextStyle(fontSize: 9, color: Colors.white.withOpacity(0.70))),
+          child: Icon(Icons.power_settings_new,
+              size: 11, color: Colors.white.withOpacity(0.70)),
         ),
       ),
       const SizedBox(width: 12),
