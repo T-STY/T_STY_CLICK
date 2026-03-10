@@ -326,7 +326,7 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen>
     super.initState();
     // CRT TV-off animation controller
     _crtOffCtrl = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 520));
+        vsync: this, duration: const Duration(milliseconds: 1020));
     _crtSquish = Tween<double>(begin: 1.0, end: 0.0).animate(
         CurvedAnimation(parent: _crtOffCtrl,
             curve: const Interval(0.0, 0.58, curve: Curves.easeIn)));

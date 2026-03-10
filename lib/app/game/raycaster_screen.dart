@@ -537,7 +537,7 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
         while (diff > pi)  diff -= 2 * pi;
         while (diff < -pi) diff += 2 * pi;
         // Only assist when enemy is within ~10 px of reticle centre
-        const kScreenThreshold = 0.037; // radians ≈ 10 px on a typical screen
+        const kScreenThreshold = 0.074; // radians ≈ 20 px on a typical screen
         if (diff.abs() < kScreenThreshold) {
           // Smooth, gentle nudge — does not snap
           final step = (_rotSpeed * 0.35 * dt).clamp(0.0, diff.abs());

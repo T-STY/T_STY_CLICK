@@ -414,7 +414,7 @@ class _Match3ScreenState extends State<Match3Screen> with SingleTickerProviderSt
         LayoutBuilder(builder: (ctx, constraints) {
           final totalW = constraints.maxWidth;
           final totalH = constraints.maxHeight;
-          final headerH = 76.0 + MediaQuery.of(ctx).padding.top;
+          final headerH = 64.0 + MediaQuery.of(ctx).padding.top;
           const footerH = 72.0;
           const hPad = 8.0;
           final boardH = totalH - headerH - footerH;
