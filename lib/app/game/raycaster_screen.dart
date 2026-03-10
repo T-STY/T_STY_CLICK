@@ -1791,6 +1791,12 @@ class _RaycasterPainter extends CustomPainter {
       final perpWallDist = side == 0 ? sideDistX - deltaDistX : sideDistY - deltaDistY;
       zBuf[x] = perpWallDist;
 
+      // ── Sub-pixel smooth wall height — eliminates staircase jaggedness ──────
+      final wallHPx = (size.height / perpWallDist).clamp(0.5, size.height * 4.0);
+      final dsY = (halfH - wallHPx * 0.5).clamp(0.0, size.height);
+      final deY = (halfH + wallHPx * 0.5).clamp(0.0, size.height);
+      final sliceH = (deY - dsY).clamp(0.5, size.height);
+
       // ── Boundary bone-pile wall — bleached bone & skull texture ───────────
       final isBoundary = (mapX == 0 || mapX == _kMapW - 1 || mapY == 0 || mapY == _kMapH - 1);
       if (isBoundary) {
@@ -1826,12 +1832,6 @@ class _RaycasterPainter extends CustomPainter {
         }
         continue;
       }
-
-      // ── Sub-pixel smooth wall height — eliminates staircase jaggedness ──────
-      final wallHPx = (size.height / perpWallDist).clamp(0.5, size.height * 4.0);
-      final dsY = (halfH - wallHPx * 0.5).clamp(0.0, size.height);
-      final deY = (halfH + wallHPx * 0.5).clamp(0.0, size.height);
-      final sliceH = (deY - dsY).clamp(0.5, size.height);
 
       // ── Lava-tower pillar: check if this wall cell is a lava column ──────────
       final lavaTowers = _kRealmLavaTowers[realmIdx.clamp(0, _kRealmLavaTowers.length - 1)];
