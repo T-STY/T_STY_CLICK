@@ -103,13 +103,15 @@ typedef ArcadeGameBuilder = Widget Function({
 class ArcadeGameDef {
   final String id;
   final String emoji;
-  final String title;
+  final String title;    // English title
+  final String titleEs;  // Spanish title
   final bool locked;
   final bool supportsDiagonal; // true → thumbstick; false → cross d-pad
   final ArcadeGameBuilder? builder;
   const ArcadeGameDef({required this.id, required this.emoji,
-      required this.title, this.locked = false,
-      this.supportsDiagonal = false, this.builder});
+      required this.title, String? titleEs, this.locked = false,
+      this.supportsDiagonal = false, this.builder})
+      : titleEs = titleEs ?? title;
 }
 
 // Games ordered alphabetically by English title (9 playable + 3 locked teasers):
@@ -118,62 +120,64 @@ class ArcadeGameDef {
 // Minefield   · Neon Break  · Neon Snake ·
 // Star Blaster · Volt Pong  · Wing Rush
 final List<ArcadeGameDef> kArcadeGames = [
-  ArcadeGameDef(id: 'tetris',   emoji: '🟦', title: 'Block Drop',
+  ArcadeGameDef(id: 'tetris',   emoji: '🟦', title: 'Block Drop',   titleEs: 'Bloques Caídos',
     builder: ({required userId, required rewardsDocRef, required currentSaldo,
         required controller, required onSaldoChanged}) =>
       TetrisScreen(userId: userId, rewardsDocRef: rewardsDocRef,
         currentSaldo: currentSaldo, controller: controller, onSaldoChanged: onSaldoChanged)),
-  ArcadeGameDef(id: 'logic',    emoji: '💣', title: 'Minefield',
+  ArcadeGameDef(id: 'logic',    emoji: '💣', title: 'Minefield',    titleEs: 'Campo Minado',
     builder: ({required userId, required rewardsDocRef, required currentSaldo,
         required controller, required onSaldoChanged}) =>
       LogicGridScreen(userId: userId, rewardsDocRef: rewardsDocRef,
         currentSaldo: currentSaldo, controller: controller, onSaldoChanged: onSaldoChanged)),
-  ArcadeGameDef(id: 'match3',   emoji: '🍬', title: 'Candy Swap',
+  ArcadeGameDef(id: 'match3',   emoji: '🍬', title: 'Candy Swap',   titleEs: 'Cascada Dulce',
     builder: ({required userId, required rewardsDocRef, required currentSaldo,
         required controller, required onSaldoChanged}) =>
       Match3Screen(userId: userId, rewardsDocRef: rewardsDocRef,
         currentSaldo: currentSaldo, controller: controller, onSaldoChanged: onSaldoChanged)),
-  ArcadeGameDef(id: 'shooter',  emoji: '🚀', title: 'Star Blaster', supportsDiagonal: true,
+  ArcadeGameDef(id: 'shooter',  emoji: '🚀', title: 'Star Blaster', titleEs: 'Caza Estelar',
+    supportsDiagonal: true,
     builder: ({required userId, required rewardsDocRef, required currentSaldo,
         required controller, required onSaldoChanged}) =>
       SpaceShooterScreen(userId: userId, rewardsDocRef: rewardsDocRef,
         currentSaldo: currentSaldo, controller: controller, onSaldoChanged: onSaldoChanged)),
-  ArcadeGameDef(id: 'maze',     emoji: '👻', title: 'Ghost Maze',
+  ArcadeGameDef(id: 'maze',     emoji: '👻', title: 'Ghost Maze',   titleEs: 'Comecocos',
     builder: ({required userId, required rewardsDocRef, required currentSaldo,
         required controller, required onSaldoChanged}) =>
       MazeChasScreen(userId: userId, rewardsDocRef: rewardsDocRef,
         currentSaldo: currentSaldo, controller: controller, onSaldoChanged: onSaldoChanged)),
-  ArcadeGameDef(id: 'raycaster',emoji: '🔥', title: 'Crypt Doom', supportsDiagonal: true,
+  ArcadeGameDef(id: 'raycaster',emoji: '🔥', title: 'Crypt Doom',   titleEs: 'Cripta Maldita',
+    supportsDiagonal: true,
     builder: ({required userId, required rewardsDocRef, required currentSaldo,
         required controller, required onSaldoChanged}) =>
       RaycasterScreen(userId: userId, rewardsDocRef: rewardsDocRef,
         currentSaldo: currentSaldo, controller: controller, onSaldoChanged: onSaldoChanged)),
-  ArcadeGameDef(id: 'hopper',   emoji: '🐸', title: 'Frog Dash',
+  ArcadeGameDef(id: 'hopper',   emoji: '🐸', title: 'Frog Dash',    titleEs: 'Rana Saltarina',
     builder: ({required userId, required rewardsDocRef, required currentSaldo,
         required controller, required onSaldoChanged}) =>
       TrafficHopperScreen(userId: userId, rewardsDocRef: rewardsDocRef,
         currentSaldo: currentSaldo, controller: controller, onSaldoChanged: onSaldoChanged)),
-  ArcadeGameDef(id: 'snake',    emoji: '🐍', title: 'Neon Snake',
+  ArcadeGameDef(id: 'snake',    emoji: '🐍', title: 'Neon Snake',   titleEs: 'Víbora Veloz',
     builder: ({required userId, required rewardsDocRef, required currentSaldo,
         required controller, required onSaldoChanged}) =>
       SnakeGameScreen(userId: userId, rewardsDocRef: rewardsDocRef,
         currentSaldo: currentSaldo, controller: controller, onSaldoChanged: onSaldoChanged)),
-  ArcadeGameDef(id: 'flappy',   emoji: '✈️', title: 'Kamikaze Flight',
+  ArcadeGameDef(id: 'flappy',   emoji: '✈️', title: 'Kamikaze Flight', titleEs: 'Vuelo Kamikaze',
     builder: ({required userId, required rewardsDocRef, required currentSaldo,
         required controller, required onSaldoChanged}) =>
       FlappyBirdScreen(userId: userId, rewardsDocRef: rewardsDocRef,
         currentSaldo: currentSaldo, controller: controller, onSaldoChanged: onSaldoChanged)),
-  ArcadeGameDef(id: 'runner', emoji: '🦕', title: 'Dino Dash',
+  ArcadeGameDef(id: 'runner', emoji: '🦕', title: 'Dino Dash',      titleEs: 'Dino Escape',
     builder: ({required userId, required rewardsDocRef, required currentSaldo,
         required controller, required onSaldoChanged}) =>
       EndlessRunnerScreen(userId: userId, rewardsDocRef: rewardsDocRef,
         currentSaldo: currentSaldo, controller: controller, onSaldoChanged: onSaldoChanged)),
-  ArcadeGameDef(id: 'breakout', emoji: '🧱', title: 'Neon Break',
+  ArcadeGameDef(id: 'breakout', emoji: '🧱', title: 'Neon Break',   titleEs: 'Muro de Neón',
     builder: ({required userId, required rewardsDocRef, required currentSaldo,
         required controller, required onSaldoChanged}) =>
       BreakoutScreen(userId: userId, rewardsDocRef: rewardsDocRef,
         currentSaldo: currentSaldo, controller: controller, onSaldoChanged: onSaldoChanged)),
-  ArcadeGameDef(id: 'pong', emoji: '🏓', title: 'Volt Pong',
+  ArcadeGameDef(id: 'pong', emoji: '🏓', title: 'Volt Pong',        titleEs: 'Contragolpe',
     builder: ({required userId, required rewardsDocRef, required currentSaldo,
         required controller, required onSaldoChanged}) =>
       PongScreen(userId: userId, rewardsDocRef: rewardsDocRef,
@@ -230,6 +234,10 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen>
 
   String _t(String es, String en) =>
       _language == AppLanguage.spanish ? es : en;
+
+  /// Returns the localised title for a game based on the current language setting.
+  String _gameTitle(ArcadeGameDef g) =>
+      _language == AppLanguage.spanish ? g.titleEs : g.title;
 
   // SELECT/START button colour — darker tint of the shell
   Color get _metaColor {
@@ -1180,7 +1188,7 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen>
                   Expanded(
                     child: Column(mainAxisAlignment: MainAxisAlignment.center,
                       crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Text(game.title, style: const TextStyle(color: Colors.white,
+                      Text(_gameTitle(game), style: const TextStyle(color: Colors.white,
                           fontSize: 14, fontWeight: FontWeight.bold,
                           shadows: [Shadow(color: Colors.black54, blurRadius: 4)])),
                       const SizedBox(height: 3),
@@ -1330,7 +1338,7 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen>
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(game.title,
+                    Text(_gameTitle(game),
                       style: const TextStyle(
                         color: Colors.white, fontSize: 17,
                         fontWeight: FontWeight.bold, letterSpacing: 0.3,
@@ -1563,7 +1571,7 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen>
                         fontFamily: 'monospace')),
                   ),
                   const SizedBox(width: 8),
-                  Expanded(child: Text(g.title,
+                  Expanded(child: Text(_gameTitle(g),
                       style: const TextStyle(color: Colors.white70, fontSize: 8),
                       overflow: TextOverflow.ellipsis)),
                   Text('${_highScores[i]}',
@@ -1880,7 +1888,19 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen>
   }
 
   Widget _buildActiveGame() {
-    return _activeGame!.builder!(
+    final game = _activeGame!;
+    // Raycaster receives the current language setting so it can localise its UI.
+    if (game.id == 'raycaster') {
+      return RaycasterScreen(
+        userId: widget.userId,
+        rewardsDocRef: widget.rewardsDocRef,
+        currentSaldo: _saldo,
+        controller: _ctrl,
+        onSaldoChanged: (newSaldo) => setState(() => _saldo = newSaldo),
+        language: _language,
+      );
+    }
+    return game.builder!(
       userId: widget.userId,
       rewardsDocRef: widget.rewardsDocRef,
       currentSaldo: _saldo,

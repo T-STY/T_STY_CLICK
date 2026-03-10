@@ -3,105 +3,163 @@ import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'arcade_center_screen.dart' show AppLanguage;
 import 'arcade_input_controller.dart';
 import 'high_score_service.dart';
 
 // ─── Map ──────────────────────────────────────────────────────────────────────
+// Maps are 16×16. Border cells (row 0/15, col 0/15) are "invisible boundary
+// walls" — they still block movement but render as void sky so the world
+// appears to extend to infinity. Interior 1-cells are lava-rock pillars.
 
 const _kMapW = 16, _kMapH = 16;
+
+// ─── Realm 0 — La Cripta (open hellscape, scattered lava-rock pillars) ────────
 const _kMap = <List<int>>[
   [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
   [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
-  [1,0,0,0,1,1,0,0,0,0,1,1,0,0,0,1],
-  [1,0,0,0,1,0,0,0,0,0,0,1,0,0,0,1],
-  [1,0,1,0,0,0,0,1,1,0,0,0,0,1,0,1],
-  [1,0,1,0,0,0,0,0,0,0,0,0,0,1,0,1],
-  [1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1],
-  [1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1],
   [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
-  [1,0,0,1,0,0,0,1,1,0,0,0,1,0,0,1],
   [1,0,0,1,0,0,0,0,0,0,0,0,1,0,0,1],
-  [1,0,0,0,0,1,1,0,0,1,1,0,0,0,0,1],
-  [1,0,1,0,0,0,0,0,0,0,0,0,0,1,0,1],
-  [1,0,1,0,0,0,0,1,1,0,0,0,0,1,0,1],
+  [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+  [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+  [1,0,0,0,0,0,1,0,0,1,0,0,0,0,0,1],
+  [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+  [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+  [1,0,0,0,0,0,1,0,0,1,0,0,0,0,0,1],
+  [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+  [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+  [1,0,0,1,0,0,0,0,0,0,0,0,1,0,0,1],
+  [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
   [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
   [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
 ];
 
-// Lava pool positions (map cells that glow orange on floor)
-const _kLavaCells = <List<int>>[
-  [7, 7], [7, 8], [8, 7], [8, 8],
-  [3, 12], [4, 12],
-  [11, 3], [11, 4],
-  [13, 10], [13, 11],
+// Lava pool floor positions per realm (cells that glow on floor, do NOT block)
+const _kLavaCells0 = <List<int>>[
+  [7,7],[7,8],[8,7],[8,8],
+  [3,3],[3,4],[4,3],
+  [11,11],[11,12],[12,11],
+  [3,12],[4,12],[4,13],
+  [12,3],[12,4],
 ];
 
-// ─── Realm 1 — Las Catacumbas (winding tunnels) ───────────────────────────────
+// Lava-rock pillars that render as glowing lava columns (interior 1-cells only)
+// Format: [mapX, mapY]
+const _kLavaTowers0 = <List<int>>[
+  [3,3],[12,3],[3,12],[12,12],
+  [6,6],[9,6],[6,9],[9,9],
+];
+
+// ─── Realm 1 — Las Catacumbas (wide halls, bone archways) ─────────────────────
 const _kMap1 = <List<int>>[
   [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
-  [1,0,0,0,0,0,0,1,0,0,0,0,0,0,0,1],
-  [1,0,1,1,0,1,0,1,0,1,1,0,1,0,1,1],
-  [1,0,1,0,0,0,0,0,0,0,0,0,0,1,0,1],
-  [1,0,1,0,1,1,1,0,1,1,0,1,0,1,0,1],
-  [1,0,0,0,1,0,0,0,0,0,0,1,0,0,0,1],
-  [1,1,0,1,1,0,1,1,0,1,0,0,1,0,1,1],
   [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
-  [1,0,1,0,0,1,1,0,0,1,1,0,0,1,0,1],
-  [1,0,1,0,1,0,0,0,0,0,0,1,0,1,0,1],
-  [1,0,0,0,1,0,1,1,1,1,0,1,0,0,0,1],
+  [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+  [1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1],
+  [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
   [1,0,1,0,0,0,0,0,0,0,0,0,0,1,0,1],
-  [1,1,1,0,1,0,1,0,0,1,0,1,0,1,1,1],
-  [1,0,0,0,1,0,0,0,0,0,0,1,0,0,0,1],
-  [1,0,0,0,0,0,0,1,1,0,0,0,0,0,0,1],
+  [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+  [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+  [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+  [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+  [1,0,1,0,0,0,0,0,0,0,0,0,0,1,0,1],
+  [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+  [1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1],
+  [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+  [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
   [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
 ];
 
-// ─── Realm 2 — El Abismo (open hellscape with pillars) ────────────────────────
+const _kLavaCells1 = <List<int>>[
+  [5,5],[10,5],[5,10],[10,10],
+  [7,2],[8,2],[7,13],[8,13],
+  [2,7],[2,8],[13,7],[13,8],
+];
+
+const _kLavaTowers1 = <List<int>>[
+  [5,3],[10,3],[5,12],[10,12],
+  [2,5],[13,5],[2,10],[13,10],
+];
+
+// ─── Realm 2 — El Abismo (vast open void with distant lava pillars) ────────────
 const _kMap2 = <List<int>>[
   [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
   [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
   [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
-  [1,0,0,1,0,0,0,0,0,0,0,0,1,0,0,1],
-  [1,0,0,0,0,0,1,0,0,1,0,0,0,0,0,1],
+  [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+  [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
   [1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1],
-  [1,0,0,1,0,0,0,0,0,0,0,0,1,0,0,1],
+  [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+  [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+  [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+  [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+  [1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1],
+  [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+  [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+  [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+  [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+  [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+];
+
+const _kLavaCells2 = <List<int>>[
+  [7,7],[7,8],[8,7],[8,8],
+  [2,2],[2,3],[3,2],
+  [12,2],[13,2],[13,3],
+  [2,12],[2,13],[3,13],
+  [12,12],[13,12],[13,13],
+];
+
+const _kLavaTowers2 = <List<int>>[
+  [5,5],[10,5],[5,10],[10,10],
+];
+
+// ─── Realm 3 — El Núcleo del Infierno (ring of lava towers) ──────────────────
+const _kMap3 = <List<int>>[
+  [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
   [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
   [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
   [1,0,0,1,0,0,0,0,0,0,0,0,1,0,0,1],
-  [1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1],
+  [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+  [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
   [1,0,0,0,0,0,1,0,0,1,0,0,0,0,0,1],
+  [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+  [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+  [1,0,0,0,0,0,1,0,0,1,0,0,0,0,0,1],
+  [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+  [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
   [1,0,0,1,0,0,0,0,0,0,0,0,1,0,0,1],
   [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
   [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
   [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
 ];
 
-// ─── Realm 3 — El Núcleo del Infierno (brutal ring labyrinth) ─────────────────
-const _kMap3 = <List<int>>[
-  [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
-  [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
-  [1,0,1,1,0,0,1,0,0,1,0,0,1,1,0,1],
-  [1,0,1,0,0,1,0,0,0,0,1,0,0,1,0,1],
-  [1,0,0,0,1,0,0,0,0,0,0,1,0,0,0,1],
-  [1,0,0,1,0,0,0,1,1,0,0,0,1,0,0,1],
-  [1,0,1,0,0,0,1,0,0,1,0,0,0,1,0,1],
-  [1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1],
-  [1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1],
-  [1,0,1,0,0,0,1,0,0,1,0,0,0,1,0,1],
-  [1,0,0,1,0,0,0,1,1,0,0,0,1,0,0,1],
-  [1,0,0,0,1,0,0,0,0,0,0,1,0,0,0,1],
-  [1,0,1,0,0,1,0,0,0,0,1,0,0,1,0,1],
-  [1,0,1,1,0,0,1,0,0,1,0,0,1,1,0,1],
-  [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
-  [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+const _kLavaCells3 = <List<int>>[
+  [7,7],[7,8],[8,7],[8,8],
+  [4,4],[4,5],[5,4],
+  [10,4],[11,4],[11,5],
+  [4,10],[4,11],[5,11],
+  [10,10],[10,11],[11,11],
+];
+
+const _kLavaTowers3 = <List<int>>[
+  [3,3],[12,3],[3,12],[12,12],
+  [6,6],[9,6],[6,9],[9,9],
 ];
 
 // All realm maps indexed by realm number
 const _kMaps = [_kMap, _kMap1, _kMap2, _kMap3];
 
+// Lava cell pools per realm (floor decorations, do NOT block movement)
+const _kRealmLavaCells = [_kLavaCells0, _kLavaCells1, _kLavaCells2, _kLavaCells3];
+
+// Lava tower pillar positions per realm (interior wall cells rendered as lava columns)
+const _kRealmLavaTowers = [_kLavaTowers0, _kLavaTowers1, _kLavaTowers2, _kLavaTowers3];
+
 // Realm flavor data
 const _kRealmNames  = ['La Cripta',             'Las Catacumbas',         'El Abismo',              'El Núcleo del Infierno'];
-const _kRealmTaglines = ['Las sombras te acechan…', '¡Los muertos caminan!', 'El vacío te llama…',     '¡No hay escapatoria!'];
+const _kRealmNamesEn = ['The Crypt',            'The Catacombs',          'The Abyss',              'The Hell Core'];
+const _kRealmTaglines   = ['Las sombras te acechan…', '¡Los muertos caminan!', 'El vacío te llama…',  '¡No hay escapatoria!'];
+const _kRealmTaglinesEn = ['Shadows stalk you…',     'The dead walk!',        'The void calls you…', 'There is no escape!'];
 // Player spawn per realm
 const _kRealmSpawn = [[2.5, 2.5], [1.5, 1.5], [2.5, 2.5], [2.5, 2.5]];
 
@@ -123,9 +181,9 @@ class _Enemy {
         alive = true,
         hitFlash = 0;
 
-  // Troll teleport state
-  double teleportTimer = 2.5;
-  double teleportFlash = 0.0; // 1 = just teleported (visual flicker)
+  // Troll crosshair-based teleport state
+  double crosshairTimer = 0.0; // seconds the player's crosshair has been on this troll
+  double teleportFlash = 0.0;  // 1 = just teleported (visual flicker)
 
   static double _baseHp(_EnemyType t) {
     switch (t) {
@@ -137,12 +195,13 @@ class _Enemy {
   }
 
   double get spriteScale {
-    if (isMega) return 0.96; // near-full height, towering
+    if (isMega) return 0.96; // near-full height, towering boss
+    // All enemies are 35% taller than the original values
     switch (type) {
-      case _EnemyType.demon:     return 0.58;
-      case _EnemyType.cacodemon: return 0.60;
-      case _EnemyType.skeleton:  return 0.60;
-      case _EnemyType.troll:     return 0.52; // squat and wide
+      case _EnemyType.demon:     return 0.783; // was 0.58 × 1.35
+      case _EnemyType.cacodemon: return 0.81;  // was 0.60 × 1.35
+      case _EnemyType.skeleton:  return 0.81;  // was 0.60 × 1.35
+      case _EnemyType.troll:     return 0.702; // was 0.52 × 1.35
     }
   }
 
@@ -167,29 +226,43 @@ class _Enemy {
   /// Damage increases 15% per wave (caps at 3×)
   double get damage => (_baseDamage * (1.0 + (wave - 1) * 0.15)).clamp(0, _baseDamage * 3);
 
-  // ── Ranged attack params (0 = melee only) ──────────────────────────────────
+  // ── Ranged attack params ─────────────────────────────────────────────────
+  // Troll has BOTH ranged acid spit AND close-range spear tail.
   double get attackRange {
     switch (type) {
       case _EnemyType.skeleton:  return 7.0;
       case _EnemyType.cacodemon: return 5.5;
-      default:                   return 0.0; // melee
+      case _EnemyType.troll:     return 5.5; // acid spit range
+      default:                   return 0.0; // demon = melee only
     }
   }
   double get attackInterval {
     switch (type) {
       case _EnemyType.skeleton:  return 1.8;
       case _EnemyType.cacodemon: return 2.4;
+      case _EnemyType.troll:     return 2.0; // acid spit cooldown
       default:                   return 0.0;
     }
   }
-  double get projectileDmg  => type == _EnemyType.skeleton
-      ? (10.0 * (1.0 + (wave - 1) * 0.15)).clamp(0, 30.0)
-      : (type == _EnemyType.cacodemon
-          ? (6.0 * (1.0 + (wave - 1) * 0.15)).clamp(0, 18.0) : 0.0);
-  double get projectileSpeed => type == _EnemyType.skeleton ? 5.0
-      : (type == _EnemyType.cacodemon ? 3.5 : 0.0);
-  /// Ranged enemies stop closing in once within this distance
-  double get minEngageRange  => attackRange > 0 ? 2.0 : 0.0;
+  double get projectileDmg {
+    switch (type) {
+      case _EnemyType.skeleton:  return (10.0 * (1.0 + (wave-1) * 0.15)).clamp(0, 30.0);
+      case _EnemyType.cacodemon: return (6.0  * (1.0 + (wave-1) * 0.15)).clamp(0, 18.0);
+      case _EnemyType.troll:     return (18.0 * (1.0 + (wave-1) * 0.15)).clamp(0, 54.0);
+      default:                   return 0.0;
+    }
+  }
+  double get projectileSpeed {
+    switch (type) {
+      case _EnemyType.skeleton:  return 5.0;
+      case _EnemyType.cacodemon: return 3.5;
+      case _EnemyType.troll:     return 4.5;
+      default:                   return 0.0;
+    }
+  }
+  /// Ranged enemies (non-troll) stop closing in once within this distance.
+  /// Troll continues to close for spear combat.
+  double get minEngageRange  => (attackRange > 0 && type != _EnemyType.troll) ? 2.0 : 0.0;
 
   double attackCooldown = 0;
 }
@@ -229,6 +302,7 @@ class RaycasterScreen extends StatefulWidget {
   final double currentSaldo;
   final ArcadeInputController controller;
   final void Function(double) onSaldoChanged;
+  final AppLanguage language;
 
   const RaycasterScreen({
     super.key,
@@ -237,6 +311,7 @@ class RaycasterScreen extends StatefulWidget {
     required this.currentSaldo,
     required this.controller,
     required this.onSaldoChanged,
+    this.language = AppLanguage.spanish,
   });
 
   @override
@@ -312,6 +387,10 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
   bool _modAimbot       = false;
   bool _modGodMode      = false;
   bool _modInstantKill  = false;
+
+  /// Returns the Spanish string when language is Spanish, English otherwise.
+  String _t(String es, String en) =>
+      widget.language == AppLanguage.spanish ? es : en;
 
   @override
   void initState() {
@@ -490,10 +569,6 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
       final dx = ex - _posX, dy = ey - _posY;
       if (dx * dx + dy * dy < 9) continue;
       final enemy = _Enemy(ex, ey, type: _randomType(wave), wave: wave);
-      // Randomize initial troll teleport timer
-      if (enemy.type == _EnemyType.troll) {
-        enemy.teleportTimer = 1.5 + _rng.nextDouble() * 2.5;
-      }
       _enemies.add(enemy);
       spawned++;
     }
@@ -596,6 +671,25 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
     }
   }
 
+  /// Teleports a troll to a random open location within [4, 64] units² of the player.
+  void _trollTeleport(_Enemy e, List<List<int>> map) {
+    int tries = 0;
+    while (tries++ < 200) {
+      final tx = 1.5 + _rng.nextDouble() * (_kMapW - 3);
+      final ty = 1.5 + _rng.nextDouble() * (_kMapH - 3);
+      final mx = tx.floor(), my = ty.floor();
+      if (mx < 0 || mx >= _kMapW || my < 0 || my >= _kMapH) continue;
+      if (map[my][mx] != 0) continue;
+      final ddx = tx - _posX, ddy = ty - _posY;
+      final dSq = ddx * ddx + ddy * ddy;
+      if (dSq < 4.0 || dSq > 72.0) continue;
+      e.x = tx; e.y = ty;
+      e.teleportFlash = 1.0;
+      HapticFeedback.selectionClick();
+      break;
+    }
+  }
+
   void _checkWaveComplete() {
     if (_enemies.any((e) => e.alive)) return;
     _wave++;
@@ -639,7 +733,7 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
 
     final isBoss = _wave % 5 == 0;
     _waveFlavorText = _realmTransitionTimer > 0
-        ? '⚡ ¡NUEVO REINO DESBLOQUEADO! ⚡'
+        ? _t('⚡ ¡NUEVO REINO DESBLOQUEADO! ⚡', '⚡ NEW REALM UNLOCKED! ⚡')
         : _getFlavorText(_wave, isBoss);
     _waveBannerTimer = (isBoss || _realmTransitionTimer > 0) ? 4.0 : 2.5;
 
@@ -651,17 +745,28 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
   }
 
   String _getFlavorText(int wave, bool isBoss) {
-    if (isBoss) return '☠  ¡¡JEFE INVOCADO!!  ☠';
-    const texts = [
-      'La oscuridad se intensifica…',
-      '¡Más demonios despiertan!',
-      '✨ Un relicario aparece ✨',
-      'La cripta tiembla de furia…',
-      '¡Resistid si podéis!',
-      'El reino infernal avanza…',
-      'Los muertos no descansan…',
-      'Sangre y fuego te esperan…',
-    ];
+    if (isBoss) return _t('☠  ¡¡JEFE INVOCADO!!  ☠', '☠  BOSS SUMMONED!!  ☠');
+    final texts = widget.language == AppLanguage.spanish
+        ? const [
+            'La oscuridad se intensifica…',
+            '¡Más demonios despiertan!',
+            '✨ Un relicario aparece ✨',
+            'La cripta tiembla de furia…',
+            '¡Resistid si podéis!',
+            'El reino infernal avanza…',
+            'Los muertos no descansan…',
+            'Sangre y fuego te esperan…',
+          ]
+        : const [
+            'The darkness intensifies…',
+            'More demons awaken!',
+            '✨ A relic appears ✨',
+            'The crypt shakes with fury…',
+            'Resist if you can!',
+            'The infernal realm advances…',
+            'The dead do not rest…',
+            'Blood and fire await you…',
+          ];
     return texts[(wave - 2) % texts.length];
   }
 
@@ -756,27 +861,28 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
     for (final e in _enemies) {
       if (!e.alive) continue;
 
-      // ── Troll: teleport logic ──────────────────────────────────────────────
+      // ── Troll: crosshair-based teleport ──────────────────────────────────
       if (e.type == _EnemyType.troll) {
-        e.teleportTimer -= dt;
-        if (e.teleportFlash > 0) e.teleportFlash = (e.teleportFlash - dt * 4.0).clamp(0, 1);
-        if (e.teleportTimer <= 0) {
-          // Teleport to a random valid location
-          int tries = 0;
-          while (tries++ < 200) {
-            final tx = 1.5 + _rng.nextDouble() * (_kMapW - 3);
-            final ty = 1.5 + _rng.nextDouble() * (_kMapH - 3);
-            final mx = tx.floor(), my = ty.floor();
-            if (mx < 0 || mx >= _kMapW || my < 0 || my >= _kMapH) continue;
-            if (map[my][mx] == 1) continue;
-            final ddx = tx - _posX, ddy = ty - _posY;
-            final dSq = ddx * ddx + ddy * ddy;
-            if (dSq < 4.0 || dSq > 64.0) continue; // not too close or too far
-            e.x = tx; e.y = ty;
-            e.teleportFlash = 1.0;
-            e.teleportTimer = 3.0 + _rng.nextDouble() * 3.0;
-            HapticFeedback.selectionClick();
-            break;
+        if (e.teleportFlash > 0) e.teleportFlash = (e.teleportFlash - dt * 3.0).clamp(0, 1);
+
+        // Detect if the player's crosshair is aimed at this troll
+        final toTrollX = e.x - _posX, toTrollY = e.y - _posY;
+        final trollDist = sqrt(toTrollX * toTrollX + toTrollY * toTrollY);
+        if (trollDist > 0.1) {
+          final dot  = toTrollX * _dirX + toTrollY * _dirY;
+          final perp = (toTrollX * _dirY - toTrollY * _dirX).abs();
+          // "In crosshairs" = in front, angular offset < ~14°, and has line of sight
+          final inCrosshairs = dot > 0 && (perp / trollDist) < 0.25
+              && _hasLos(_posX, _posY, e.x, e.y);
+          if (inCrosshairs) {
+            e.crosshairTimer += dt;
+            if (e.crosshairTimer >= 0.4) {
+              e.crosshairTimer = 0.0;
+              _trollTeleport(e, map);
+            }
+          } else {
+            // Decay timer slowly when not in crosshairs
+            e.crosshairTimer = (e.crosshairTimer - dt * 1.0).clamp(0.0, 0.4);
           }
         }
       }
@@ -784,8 +890,32 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
       final dx = _posX - e.x, dy = _posY - e.y;
       final dist = sqrt(dx * dx + dy * dy);
 
-      if (e.attackRange == 0) {
-        // ── Melee (demon / troll) ──────────────────────────────────────────
+      if (e.type == _EnemyType.troll) {
+        // ── Troll: spear tail at close range + acid spit at medium range ──
+        if (dist < 0.8) {
+          // Close spear-tail strike
+          if (!_modGodMode) _health -= e.damage * dt;
+          _hitFlash = (_hitFlash + dt * 3).clamp(0, 1);
+          if (_damageCooldown <= 0) {
+            HapticFeedback.lightImpact();
+            _damageCooldown = 0.35;
+          }
+          if (_health <= 0) { _health = 0; _gameOver(); return; }
+        } else if (e.attackCooldown <= 0 && dist < e.attackRange &&
+            _hasLos(e.x, e.y, _posX, _posY)) {
+          // Acid spit projectile
+          _projectiles.add(_Projectile(
+            x: e.x, y: e.y,
+            dx: dx / dist, dy: dy / dist,
+            speed: e.projectileSpeed,
+            damage: e.projectileDmg,
+            type: e.type,
+          ));
+          e.attackCooldown = e.attackInterval;
+        }
+        // Troll keeps advancing regardless (unlike ranged-only enemies)
+      } else if (e.attackRange == 0) {
+        // ── Melee (demon) ──────────────────────────────────────────────────
         if (dist < 0.5) {
           if (!_modGodMode) _health -= e.damage * dt;
           _hitFlash = (_hitFlash + dt * 3).clamp(0, 1);
@@ -946,12 +1076,13 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
               currentMap: _currentMap,
               realmIdx: _currentRealm,
               megaAlive: _megaAlive,
+              language: widget.language,
             ),
           ),
         ),
         if (_state == _GameState.playing && _waveBannerTimer > 0) _buildWaveBanner(),
-        if (_state == _GameState.start) _buildStartOverlay(),
-        if (_state == _GameState.dead) _buildDeathOverlay(),
+        if (_state == _GameState.start)  _buildStartOverlay(),
+        if (_state == _GameState.dead)   _buildDeathOverlay(),
         if (_paused && _state == _GameState.playing) _buildPauseOverlay(),
         if (_modMenuOpen) _buildModMenu(),
       ]),
@@ -983,22 +1114,24 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             if (isRealm) ...[
-              Text('🌀  NUEVO REINO  🌀',
+              Text('🌀  ${_t('NUEVO REINO', 'NEW REALM')}  🌀',
                 style: const TextStyle(
                   color: Color(0xFF00FFDD), fontSize: 24,
                   fontWeight: FontWeight.bold, fontFamily: 'monospace', letterSpacing: 3)),
               const SizedBox(height: 4),
-              Text(_kRealmNames[_currentRealm],
+              Text((widget.language == AppLanguage.spanish ? _kRealmNames : _kRealmNamesEn)[_currentRealm],
                 style: const TextStyle(
                   color: Color(0xFFAAFFFF), fontSize: 18,
                   fontWeight: FontWeight.bold, fontFamily: 'monospace', letterSpacing: 2)),
               const SizedBox(height: 4),
-              Text(_kRealmTaglines[_currentRealm],
+              Text((widget.language == AppLanguage.spanish ? _kRealmTaglines : _kRealmTaglinesEn)[_currentRealm],
                 style: const TextStyle(
                   color: Color(0xFF006688), fontSize: 11, fontFamily: 'monospace')),
             ] else ...[
               Text(
-                isBoss ? '⚡ OLEADA JEFE $_wave ⚡' : '¡OLEADA $_wave!',
+                isBoss
+                    ? '⚡ ${_t('OLEADA JEFE', 'BOSS WAVE')} $_wave ⚡'
+                    : '${_t('¡OLEADA', 'WAVE')} $_wave${_t('!', '!')}',
                 style: TextStyle(
                   color: titleColor,
                   fontSize: isBoss ? 30 : 36,
@@ -1034,8 +1167,8 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           const Text('🔥', style: TextStyle(fontSize: 48)),
           const SizedBox(height: 8),
-          const Text('CRYPT DOOM',
-            style: TextStyle(
+          Text(_t('CRIPTA MALDITA', 'CRYPT DOOM'),
+            style: const TextStyle(
               color: Color(0xFFCC2200),
               fontSize: 26,
               fontWeight: FontWeight.bold,
@@ -1043,8 +1176,9 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
               letterSpacing: 3,
             )),
           const SizedBox(height: 4),
-          const Text('Los demonios te esperan en las sombras…',
-            style: TextStyle(color: Color(0xFF882200), fontSize: 11, fontFamily: 'monospace')),
+          Text(_t('Los demonios te esperan en las sombras…',
+                  'Demons await you in the shadows…'),
+            style: const TextStyle(color: Color(0xFF882200), fontSize: 11, fontFamily: 'monospace')),
           const SizedBox(height: 22),
           Container(
             margin: const EdgeInsets.symmetric(horizontal: 24),
@@ -1053,19 +1187,24 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
               border: Border.all(color: const Color(0xFF660000), width: 1),
               color: const Color(0x33110000),
             ),
-            child: const Column(children: [
-              Text('↑↓ mover   ←→ girar   A disparar',
-                style: TextStyle(color: Color(0xFF44FF00), fontSize: 12, fontFamily: 'monospace')),
-              SizedBox(height: 6),
-              Text('X: escopeta (¡cuando la desbloquees!)',
-                style: TextStyle(color: Color(0xFF888888), fontSize: 10, fontFamily: 'monospace')),
-              SizedBox(height: 8),
-              Text('BAJAS × OLEADA = PUNTUACIÓN',
-                style: TextStyle(color: Color(0xFFCC8800), fontSize: 10, fontWeight: FontWeight.bold, fontFamily: 'monospace')),
-              Text('+1 PTO CADA OLEADA   JEFE CADA 5ª',
-                style: TextStyle(color: Color(0xFFFF4400), fontSize: 10, fontWeight: FontWeight.bold, fontFamily: 'monospace')),
-              Text('✨ Relicarios curan +25 HP cada 3 oleadas',
-                style: TextStyle(color: Color(0xFF44FF88), fontSize: 9, fontFamily: 'monospace')),
+            child: Column(children: [
+              Text(_t('↑↓ mover   ←→ girar   A disparar',
+                      '↑↓ move   ←→ turn   A shoot'),
+                style: const TextStyle(color: Color(0xFF44FF00), fontSize: 12, fontFamily: 'monospace')),
+              const SizedBox(height: 6),
+              Text(_t('B: cambiar arma   (desbloquea escopeta/SMG)',
+                      'B: cycle weapon   (unlock shotgun/SMG)'),
+                style: const TextStyle(color: Color(0xFF888888), fontSize: 10, fontFamily: 'monospace')),
+              const SizedBox(height: 8),
+              Text(_t('BAJAS × OLEADA = PUNTUACIÓN',
+                      'KILLS × WAVE = SCORE'),
+                style: const TextStyle(color: Color(0xFFCC8800), fontSize: 10, fontWeight: FontWeight.bold, fontFamily: 'monospace')),
+              Text(_t('+1 PTO CADA OLEADA   JEFE CADA 5ª',
+                      '+1 PT PER WAVE   BOSS EVERY 5th'),
+                style: const TextStyle(color: Color(0xFFFF4400), fontSize: 10, fontWeight: FontWeight.bold, fontFamily: 'monospace')),
+              Text(_t('✨ Relicarios curan +25 HP cada 3 oleadas',
+                      '✨ Relics heal +25 HP every 3 waves'),
+                style: const TextStyle(color: Color(0xFF44FF88), fontSize: 9, fontFamily: 'monospace')),
             ]),
           ),
           const SizedBox(height: 22),
@@ -1078,8 +1217,8 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
                   backgroundColor: const Color(0xFF7B0000),
                   foregroundColor: Colors.white,
                   shape: const StadiumBorder()),
-                child: const Text('⚔  Entrar a la Mazmorra',
-                  style: TextStyle(fontWeight: FontWeight.bold)),
+                child: Text('⚔  ${_t('Entrar a la Mazmorra', 'Enter the Dungeon')}',
+                  style: const TextStyle(fontWeight: FontWeight.bold)),
               )),
           ),
         ]),
@@ -1100,8 +1239,8 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           const Text('💀', style: TextStyle(fontSize: 52)),
           const SizedBox(height: 8),
-          const Text('HAS CAÍDO',
-            style: TextStyle(
+          Text(_t('HAS CAÍDO', 'YOU FELL'),
+            style: const TextStyle(
               color: Color(0xFFFF2200),
               fontSize: 30,
               fontWeight: FontWeight.bold,
@@ -1109,14 +1248,15 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
               letterSpacing: 3,
             )),
           const SizedBox(height: 4),
-          const Text('Los demonios han terminado contigo',
-            style: TextStyle(color: Color(0xFF882200), fontSize: 11, fontFamily: 'monospace')),
+          Text(_t('Los demonios han terminado contigo',
+                  'The demons have finished you'),
+            style: const TextStyle(color: Color(0xFF882200), fontSize: 11, fontFamily: 'monospace')),
           const SizedBox(height: 20),
-          Text('Bajas: $_kills',
+          Text('${_t('Bajas', 'Kills')}: $_kills',
             style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold, fontFamily: 'monospace')),
-          Text('Oleada alcanzada: $_wave',
+          Text('${_t('Oleada alcanzada', 'Wave reached')}: $_wave',
             style: const TextStyle(color: Color(0xFFFF8800), fontSize: 14, fontFamily: 'monospace')),
-          Text('Récord: $_hiScore bajas',
+          Text('${_t('Récord', 'Record')}: $_hiScore ${_t('bajas', 'kills')}',
             style: const TextStyle(color: Color(0xFFFFDD00), fontSize: 12, fontFamily: 'monospace')),
           const SizedBox(height: 26),
           Padding(
@@ -1128,8 +1268,8 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
                   backgroundColor: const Color(0xFF7B0000),
                   foregroundColor: Colors.white,
                   shape: const StadiumBorder()),
-                child: const Text('⚔  Nueva Batalla',
-                  style: TextStyle(fontWeight: FontWeight.bold)),
+                child: Text('⚔  ${_t('Nueva Batalla', 'New Battle')}',
+                  style: const TextStyle(fontWeight: FontWeight.bold)),
               )),
           ),
         ]),
@@ -1140,21 +1280,23 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
   Widget _buildPauseOverlay() => Positioned.fill(
     child: Container(
       color: const Color(0xCC000000),
-      child: const Column(
+      child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Text('⏸', style: TextStyle(fontSize: 48)),
-          SizedBox(height: 8),
-          Text('PAUSA', style: TextStyle(color: Color(0xFFFF4422), fontSize: 28, fontWeight: FontWeight.bold, letterSpacing: 6)),
-          SizedBox(height: 16),
-          Text('START para continuar', style: TextStyle(color: Color(0xFF882211), fontSize: 12)),
+          const Text('⏸', style: TextStyle(fontSize: 48)),
+          const SizedBox(height: 8),
+          Text(_t('PAUSA', 'PAUSE'), style: const TextStyle(color: Color(0xFFFF4422), fontSize: 28, fontWeight: FontWeight.bold, letterSpacing: 6)),
+          const SizedBox(height: 16),
+          Text(_t('START para continuar', 'Press START to continue'), style: const TextStyle(color: Color(0xFF882211), fontSize: 12)),
         ],
       ),
     ),
   );
 
   Widget _buildModMenu() {
-    const labels = ['MUNICIÓN INFINITA', 'AIMBOT', 'MODO DIOS', 'MUERTE INSTANTÁNEA'];
+    final labels = widget.language == AppLanguage.spanish
+        ? ['MUNICIÓN INFINITA', 'AIMBOT', 'MODO DIOS', 'MUERTE INSTANTÁNEA']
+        : ['INFINITE AMMO', 'AIMBOT', 'GOD MODE', 'INSTANT KILL'];
     final values = [_modUnlimitedAmmo, _modAimbot, _modGodMode, _modInstantKill];
     return Positioned.fill(
       child: Container(
@@ -1228,6 +1370,7 @@ class _RaycasterPainter extends CustomPainter {
   final List<List<int>> currentMap;
   final int realmIdx;
   final bool megaAlive;
+  final AppLanguage language;
 
   const _RaycasterPainter({
     required this.posX, required this.posY,
@@ -1249,10 +1392,15 @@ class _RaycasterPainter extends CustomPainter {
     required this.currentMap,
     required this.realmIdx,
     required this.megaAlive,
+    this.language = AppLanguage.spanish,
   });
 
   @override
   bool shouldRepaint(_RaycasterPainter old) => true;
+
+  /// Localisation helper for the painter.
+  String _pt(String es, String en) =>
+      language == AppLanguage.spanish ? es : en;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -1262,6 +1410,7 @@ class _RaycasterPainter extends CustomPainter {
 
     _drawCeilingAndFloor(canvas, size, pxW, pxH);
     _castWalls(canvas, size, pxW, pxH);
+    _drawLavaPools(canvas, size, pxW, pxH);
     _drawEnemySprites(canvas, size, pxW, pxH);
     _drawProjectiles(canvas, size, pxW, pxH);
     if (relicActive) _drawRelic(canvas, size, pxW, pxH);
@@ -1367,6 +1516,22 @@ class _RaycasterPainter extends CustomPainter {
     canvas.drawRect(Rect.fromLTWH(size.width * 0.55, size.height * 0.88, size.width * 0.18, size.height * 0.06), p);
     canvas.drawRect(Rect.fromLTWH(size.width * 0.78, size.height * 0.80, size.width * 0.10, size.height * 0.10), p);
 
+    // Animated lava vein streams on the floor — give an impression of flowing lava below
+    for (int streak = 0; streak < 4; streak++) {
+      final streakX = size.width * (0.12 + streak * 0.22 + sin(time * 0.25 + streak * 1.7) * 0.04);
+      final streakW = size.width * (0.07 + sin(time * 0.6 + streak * 2.3) * 0.02);
+      final lavaOp = (0.08 + sin(time * 1.8 + streak * 1.1) * 0.05).clamp(0.03, 0.18);
+      final lp = Paint()
+        ..shader = LinearGradient(
+          begin: Alignment.topCenter, end: Alignment.bottomCenter,
+          colors: [
+            const Color(0x00FF4400),
+            Color.fromARGB((lavaOp * 255).round(), 0xFF, streak.isEven ? 0x66 : 0x33, 0x00),
+          ],
+        ).createShader(Rect.fromLTWH(streakX, fY, streakW, size.height - fY));
+      canvas.drawRect(Rect.fromLTWH(streakX, fY, streakW, size.height - fY), lp);
+    }
+
     // Screen-edge infernal fire vignette — pulses with time
     final fireOpacity = (0.22 + sin(time * 1.4) * 0.07).clamp(0.12, 0.38);
     final fireColor = Color.fromARGB((fireOpacity * 255).round(), 0xCC, 0x11, 0x00);
@@ -1448,11 +1613,42 @@ class _RaycasterPainter extends CustomPainter {
       final perpWallDist = side == 0 ? sideDistX - deltaDistX : sideDistY - deltaDistY;
       zBuf[x] = perpWallDist;
 
+      // ── Invisible boundary: map-edge walls blend into the void ─────────────
+      final isBoundary = (mapX == 0 || mapX == _kMapW - 1 || mapY == 0 || mapY == _kMapH - 1);
+      if (isBoundary) {
+        // Don't draw — the ceiling/floor colour already shows through, creating
+        // the illusion that the hellscape extends to infinity.
+        continue;
+      }
+
       // ── Sub-pixel smooth wall height — eliminates staircase jaggedness ──────
       final wallHPx = (size.height / perpWallDist).clamp(0.5, size.height * 4.0);
       final dsY = (halfH - wallHPx * 0.5).clamp(0.0, size.height);
       final deY = (halfH + wallHPx * 0.5).clamp(0.0, size.height);
       final sliceH = (deY - dsY).clamp(0.5, size.height);
+
+      // ── Lava-tower pillar: check if this wall cell is a lava column ──────────
+      final lavaTowers = _kRealmLavaTowers[realmIdx.clamp(0, _kRealmLavaTowers.length - 1)];
+      final isLavaTower = lavaTowers.any((t) => t[0] == mapX && t[1] == mapY);
+
+      if (isLavaTower) {
+        // Render as a glowing volcanic lava column
+        final br = (1.0 / (1.0 + perpWallDist * 0.22)).clamp(0.08, 1.0);
+        final pulse = (0.7 + sin(time * 2.5 + mapX * 1.3 + mapY * 0.7) * 0.3).clamp(0.5, 1.0);
+        wallPaint.color = Color.fromRGBO(
+          (0xDD * br * pulse).round().clamp(0, 255),
+          (0x33 * br * pulse).round().clamp(0, 255),
+          0, 1);
+        canvas.drawRect(Rect.fromLTWH(x * pxW, dsY, pxW + 0.5, sliceH), wallPaint);
+        // Hot lava core glow at center of pillar
+        if (perpWallDist < 5.0) {
+          wallPaint.color = Color.fromRGBO(255,
+            (0x88 * pulse).round().clamp(0, 255),
+            0, (0.6 * br).clamp(0, 1));
+          canvas.drawRect(Rect.fromLTWH(x * pxW, dsY + sliceH * 0.25, pxW + 0.5, sliceH * 0.5), wallPaint);
+        }
+        continue;
+      }
 
       // Stone block colour — realm-themed, N/S sides slightly darker
       final int baseR, baseG, baseB;
@@ -1612,7 +1808,18 @@ class _RaycasterPainter extends CustomPainter {
       final screenY = size.height * 0.5;
       final s = (4.5 / transformY).clamp(1.0, 14.0);
 
-      if (p.type == _EnemyType.cacodemon) {
+      if (p.type == _EnemyType.troll) {
+        // Acid spit — pulsing green-yellow toxic glob
+        final acidPulse = 0.7 + sin(time * 8.0 + p.x + p.y) * 0.3;
+        sp.color = Color.fromARGB((0x33 * acidPulse).round(), 0x44, 0xFF, 0x00);
+        canvas.drawCircle(Offset(screenX, screenY), s * pxW * 2.0, sp);
+        sp.color = const Color(0xAA66FF22);
+        canvas.drawCircle(Offset(screenX, screenY), s * pxW * 1.1, sp);
+        sp.color = const Color(0xFFCCFF44);
+        canvas.drawCircle(Offset(screenX, screenY), s * pxW * 0.5, sp);
+        sp.color = Colors.white.withOpacity(0.6);
+        canvas.drawCircle(Offset(screenX, screenY), s * pxW * 0.2, sp);
+      } else if (p.type == _EnemyType.cacodemon) {
         // Fireball — three-layer glowing orb
         sp.color = const Color(0x55FF2200);
         canvas.drawCircle(Offset(screenX, screenY), s * pxW * 1.5, sp);
@@ -2031,6 +2238,57 @@ class _RaycasterPainter extends CustomPainter {
     }
   }
 
+  // ── Lava pool floor sprites ────────────────────────────────────────────────
+  // Projects lava cell positions onto the floor as glowing orange pools.
+
+  void _drawLavaPools(Canvas canvas, Size size, double pxW, double pxH) {
+    final lavaCells = _kRealmLavaCells[realmIdx.clamp(0, _kRealmLavaCells.length - 1)];
+    const numCols = 240;
+    final halfH = size.height * 0.5;
+    final invDet = 1.0 / (planeX * dirY - dirX * planeY);
+    final sp = Paint()..isAntiAlias = true;
+
+    for (final cell in lavaCells) {
+      final cx = cell[0] + 0.5 - posX;
+      final cy = cell[1] + 0.5 - posY;
+      final transformX = invDet * (dirY * cx - dirX * cy);
+      final transformY = invDet * (-planeY * cx + planeX * cy);
+      if (transformY <= 0.15) continue;
+
+      final screenCol = (numCols ~/ 2 * (1 + transformX / transformY)).round();
+      if (screenCol < 2 || screenCol >= numCols - 2) continue;
+
+      // Floor-level position: below horizon, scaled by distance
+      final projH = (size.height / transformY).clamp(1.0, size.height);
+      final floorY = halfH + projH * 0.50; // exactly at floor level
+
+      // Pool width in screen pixels — much wider than tall to look flat
+      final poolW = (projH / transformY * pxW * 5.0).clamp(3.0, size.width * 0.4);
+      final poolH = (projH * 0.08).clamp(2.0, 18.0);
+      final screenX = screenCol * pxW;
+
+      final pulse = 0.65 + sin(time * 2.2 + cell[0] * 1.7 + cell[1] * 0.9) * 0.35;
+      final dist = sqrt(cx * cx + cy * cy);
+      final alpha = ((0.35 * pulse) / (1.0 + dist * 0.25)).clamp(0.04, 0.55);
+
+      // Outer glow (wide orange haze)
+      sp.color = Color.fromARGB((alpha * 0.5 * 255).round(), 0xFF, 0x55, 0x00);
+      canvas.drawOval(
+          Rect.fromCenter(center: Offset(screenX, floorY),
+              width: poolW * 1.8, height: poolH * 2.5), sp);
+      // Mid pool
+      sp.color = Color.fromARGB((alpha * 255).round(), 0xFF, 0x88, 0x00);
+      canvas.drawOval(
+          Rect.fromCenter(center: Offset(screenX, floorY),
+              width: poolW, height: poolH), sp);
+      // Bright core
+      sp.color = Color.fromARGB(((alpha * 0.8 + 0.15) * 255).round().clamp(0, 255), 0xFF, 0xCC, 0x44);
+      canvas.drawOval(
+          Rect.fromCenter(center: Offset(screenX, floorY),
+              width: poolW * 0.35, height: poolH * 0.5), sp);
+    }
+  }
+
   // ─── Skeleton ──────────────────────────────────────────────────────────────
 
   void _drawSkeletonColumn(Canvas canvas, Paint sp, int sx, double pxW,
@@ -2116,9 +2374,11 @@ class _RaycasterPainter extends CustomPainter {
     }
   }
 
-  // ─── Troll (teleporting sneaky berserker) ─────────────────────────────────────
-  // Squat, wide, hunched green-grey figure with beady red eyes. Flickers when
-  // recently teleported (teleportFlash > 0).
+  // ─── Troll (Chameleon Hunter) ──────────────────────────────────────────────
+  // Nearly invisible due to active camouflage: translucent body with a lens-
+  // distortion shimmer (like Halo's active camo). It spits acid at range and
+  // strikes with its barbed spear tail at close quarters. Teleports the instant
+  // the player's crosshair lingers on it for 0.4 s.
 
   void _drawTrollColumn(Canvas canvas, Paint sp, int sx, double pxW,
       double by, double sh, double v, double frac, double hp,
@@ -2126,62 +2386,74 @@ class _RaycasterPainter extends CustomPainter {
     if (v < 0.01) return;
     final x = sx * pxW;
 
-    // Flicker effect after teleport — skip some columns randomly
-    if (teleportFlash > 0.1) {
-      // Use deterministic "random" based on frac+time to create shimmer
-      final shimmer = ((frac * 37.3 + time * 20.0) % 1.0);
-      if (shimmer < teleportFlash * 0.6) return;
-    }
+    // ── Camo alpha — very low normally, surges briefly on hit or just-teleported
+    // Base visibility: ~22% opaque. Hit flash pushes it to ~80% briefly.
+    // Just-teleported: spike to ~60%, then fades over ~0.3 s.
+    final camoBase = 0.22 + flash * 0.60 + teleportFlash * 0.45;
+    final camoAlpha = (camoBase.clamp(0.0, 1.0) * 255).round();
 
-    // Color palette: mossy green skin, dark brown shadows, beady red eyes
+    // ── Lens-distortion shimmer — alternating warm/cool bands ─────────────────
+    // Draw BEFORE the body so it forms the "refraction" layer underneath.
+    final shimPhase = (frac * 9.0 + time * 2.8) % 1.0;
+    final shimA = (12 + (sin(time * 4.5 + frac * 18.0) * 8.0).abs()).round().clamp(5, 28);
+    sp.color = shimPhase < 0.5
+        ? Color.fromARGB(shimA, 160, 220, 255)   // cool refraction
+        : Color.fromARGB(shimA, 255, 180, 100);  // warm refraction
+    canvas.drawRect(Rect.fromLTWH(x, by, pxW, sh), sp);
+
+    // Colour palette — underlying body visible only at ~22% opacity normally
     final skinR = (0x44 + (255 - 0x44) * flash).round().clamp(0, 255);
     final skinG = (0x6A * (1.0 - flash * 0.6)).round().clamp(0, 255);
-    final skin   = Color.fromARGB(255, skinR, skinG, 0x22);
-    final shadow = const Color(0xFF1A2A08);
+
+    Color s(int r, int g, int b) => Color.fromARGB(camoAlpha, r, g, b);
+    Color ss(Color c) => Color.fromARGB(camoAlpha, c.red, c.green, c.blue);
+
+    final skin   = s(skinR, skinG, 0x22);
+    final shadow = s(0x1A, 0x2A, 0x08);
     final eyeCol = hp > 6
-        ? Color.fromARGB(255, (0xFF * (1 - flash * 0.3)).round(), 0, 0)
-        : Colors.white; // turns white when near death
+        ? s((0xFF * (1 - flash * 0.3)).round(), 0, 0)
+        : s(255, 255, 255); // turns bright white when near death
 
     // Walk cycle
-    final walkCycle = sin(time * 7.0); // trolls scurry fast
+    final walkCycle = sin(time * 7.0);
 
     // ── Humped back / no-neck head (frac 20-80%, rows 0-5) ───────────────────
     if (frac >= 0.20 && frac <= 0.80) {
       sp.color = skin;
       canvas.drawRect(Rect.fromLTWH(x, by + v * 0.5, pxW, v * 4.5), sp);
-      // Dark hump shadow at top
       sp.color = shadow;
       canvas.drawRect(Rect.fromLTWH(x, by + v * 0.5, pxW, v * 0.8), sp);
     }
 
-    // ── Beady eyes (frac 32-42% and 58-68%, rows 1.2-2.5) ───────────────────
+    // ── Glowing eyes — most visible feature even through camo ─────────────────
+    // Eyes shine through the invisibility (higher alpha than body)
     if ((frac >= 0.32 && frac <= 0.42) || (frac >= 0.58 && frac <= 0.68)) {
-      sp.color = eyeCol;
+      final eyeAlpha = (camoAlpha * 2.5).round().clamp(0, 255); // eyes more visible
+      sp.color = Color.fromARGB(eyeAlpha, eyeCol.red, eyeCol.green, eyeCol.blue);
       canvas.drawRect(Rect.fromLTWH(x, by + v * 1.2, pxW, v * 1.3), sp);
-      sp.color = Colors.white.withOpacity(0.7);
+      sp.color = Color.fromARGB((eyeAlpha * 0.8).round(), 255, 255, 255);
       canvas.drawRect(Rect.fromLTWH(x, by + v * 1.3, pxW, v * 0.4), sp);
     }
 
-    // ── Wide flat nose (frac 44-56%, rows 2.5-3.5) ───────────────────────────
+    // ── Wide flat nose ────────────────────────────────────────────────────────
     if (frac >= 0.44 && frac <= 0.56) {
-      sp.color = Color.fromARGB(255, (skinR * 0.7).round(), (skinG * 0.5).round(), 0);
+      sp.color = s((skinR * 0.7).round(), (skinG * 0.5).round(), 0);
       canvas.drawRect(Rect.fromLTWH(x, by + v * 2.5, pxW, v * 1.0), sp);
     }
 
-    // ── Tusks (frac 30-40% and 60-70%, rows 3.8-5) ───────────────────────────
+    // ── Tusks ─────────────────────────────────────────────────────────────────
     if ((frac >= 0.30 && frac <= 0.38) || (frac >= 0.62 && frac <= 0.70)) {
-      sp.color = const Color(0xFFDDCC88);
+      sp.color = ss(const Color(0xFFDDCC88));
       canvas.drawRect(Rect.fromLTWH(x, by + v * 3.8, pxW, v * 1.2), sp);
     }
 
-    // ── Wide hunched body (frac 8-92%, rows 4-14) ────────────────────────────
+    // ── Wide hunched body ─────────────────────────────────────────────────────
     if (frac >= 0.08 && frac <= 0.92) {
       sp.color = skin;
       canvas.drawRect(Rect.fromLTWH(x, by + v * 4.0, pxW, v * 10.0), sp);
     }
-    // Hunched shoulder mounds
     if ((frac >= 0.10 && frac <= 0.24) || (frac >= 0.76 && frac <= 0.90)) {
-      sp.color = Color.fromARGB(255, (skinR * 1.3).clamp(0,255).round(), (skinG * 1.3).clamp(0,255).round(), 0);
+      sp.color = s((skinR * 1.3).clamp(0,255).round(), (skinG * 1.3).clamp(0,255).round(), 0);
       canvas.drawRect(Rect.fromLTWH(x, by + v * 3.5, pxW, v * 4.0), sp);
     }
     // Belly folds
@@ -2192,31 +2464,49 @@ class _RaycasterPainter extends CustomPainter {
       }
     }
 
-    // ── Short stubby arms (frac 0-8% and 92-100%, rows 4-13) ─────────────────
+    // ── Arms with claw tips ───────────────────────────────────────────────────
     if ((frac >= 0.00 && frac <= 0.08) || (frac >= 0.92 && frac <= 1.00)) {
       final isLeft = frac <= 0.50;
       final armOff = (isLeft ? -walkCycle : walkCycle) * v * 1.2;
       sp.color = shadow;
       canvas.drawRect(Rect.fromLTWH(x, by + v * 4.0 + armOff, pxW, v * 9.0), sp);
-      // Claw tips
-      sp.color = const Color(0xFFCCCC88);
+      sp.color = ss(const Color(0xFFCCCC88));
       canvas.drawRect(Rect.fromLTWH(x, by + v * 12.0 + armOff, pxW, v * 1.5), sp);
     }
 
-    // ── Stumpy legs (frac 25-42% and 58-75%, rows 14-20) ─────────────────────
+    // ── Stumpy legs ───────────────────────────────────────────────────────────
     if ((frac >= 0.25 && frac <= 0.42) || (frac >= 0.58 && frac <= 0.75)) {
       final isLeft = frac <= 0.50;
       final legOff = (isLeft ? walkCycle : -walkCycle) * v * 1.4;
       sp.color = skin;
       canvas.drawRect(Rect.fromLTWH(x, by + v * 14 + legOff, pxW, v * 6.0), sp);
-      // Thick knee
-      sp.color = Color.fromARGB(255, (skinR * 1.4).clamp(0,255).round(), (skinG * 1.1).clamp(0,255).round(), 0);
+      sp.color = s((skinR * 1.4).clamp(0,255).round(), (skinG * 1.1).clamp(0,255).round(), 0);
       canvas.drawRect(Rect.fromLTWH(x, by + v * 15.5 + legOff, pxW, v * 1.2), sp);
     }
 
-    // ── Aura shimmer when near teleport cooldown ──────────────────────────────
+    // ── Spear tail — barbed spike extending from lower back ───────────────────
+    // Tail shaft: narrow metallic spike at centre, rows 18-24
+    if (frac >= 0.44 && frac <= 0.56) {
+      // Main shaft
+      sp.color = s(0xAA, 0xBB, 0x44); // sickly yellow-green metal
+      canvas.drawRect(Rect.fromLTWH(x, by + v * 18.0, pxW, v * 5.5), sp);
+      // Barbed tip — bright acid-yellow
+      sp.color = s(0xFF, 0xEE, 0x00);
+      canvas.drawRect(Rect.fromLTWH(x, by + v * 22.5, pxW, v * 2.0), sp);
+      // Hot tip core
+      sp.color = Color.fromARGB((camoAlpha * 1.5).round().clamp(0, 255), 255, 255, 100);
+      canvas.drawRect(Rect.fromLTWH(x, by + v * 23.5, pxW, v * 1.0), sp);
+    }
+    // Side barbs on the tail (frac 38-44% and 56-62%, rows 19.5-21)
+    if ((frac >= 0.38 && frac <= 0.44) || (frac >= 0.56 && frac <= 0.62)) {
+      sp.color = s(0x88, 0x99, 0x22);
+      canvas.drawRect(Rect.fromLTWH(x, by + v * 19.5, pxW, v * 2.0), sp);
+    }
+
+    // ── Teleport shimmer / acid glow overlay ──────────────────────────────────
     if (teleportFlash > 0) {
-      sp.color = Color.fromARGB((teleportFlash * 80).round(), 0x88, 0xFF, 0x44);
+      // Electric blue-green burst as the troll vanishes or reappears
+      sp.color = Color.fromARGB((teleportFlash * 120).round(), 0x44, 0xFF, 0xCC);
       canvas.drawRect(Rect.fromLTWH(x, by, pxW, sh), sp);
     }
   }
@@ -2330,13 +2620,13 @@ class _RaycasterPainter extends CustomPainter {
 
     // ── Relic indicator ───────────────────────────────────────────────────────
     if (relicActive) {
-      _hudText(canvas, '✨ RELICARIO', barX + 4, barY + 16,
+      _hudText(canvas, '✨ ${_pt('RELICARIO', 'RELIC')}', barX + 4, barY + 16,
           color: const Color(0xFF44FF88), size: 7);
     }
 
     // ── Mega-demon active warning ─────────────────────────────────────────────
     if (megaAlive) {
-      _hudText(canvas, '☠ JEFE — RADAR INACTIVO', barX + 4, barY + 16,
+      _hudText(canvas, '☠ ${_pt('JEFE — RADAR INACTIVO', 'BOSS — RADAR OFFLINE')}', barX + 4, barY + 16,
           color: const Color(0xFFFF00AA), size: 7);
     }
 
@@ -2344,7 +2634,7 @@ class _RaycasterPainter extends CustomPainter {
     _hudText(canvas, '💀 $kills', 106, barY + 2, color: Colors.white, size: 10);
 
     // ── Wave indicator ────────────────────────────────────────────────────────
-    _hudText(canvas, 'OLA $wave', size.width / 2 - 22, barY + 2,
+    _hudText(canvas, '${_pt('OLA', 'WAVE')} $wave', size.width / 2 - 22, barY + 2,
         color: const Color(0xFFFF8800), size: 10);
 
     // ── Ammo display (right side) — stacked rows per unlocked weapon ─────────
@@ -2535,7 +2825,7 @@ class _RaycasterPainter extends CustomPainter {
     p.style = PaintingStyle.fill;
 
     // Label
-    _hudText(canvas, 'RADAR', cx - 14, cy + radarR + 3,
+    _hudText(canvas, _pt('RADAR', 'RADAR'), cx - 14, cy + radarR + 3,
         color: const Color(0xFFBB6622), size: 8);
   }
 
@@ -2670,8 +2960,8 @@ class _RaycasterPainter extends CustomPainter {
 
     if (shotgunAmmo == 0) {
       final tp = TextPainter(
-        text: const TextSpan(text: '— SIN CARTUCHOS —',
-            style: TextStyle(color: Colors.orange, fontSize: 10,
+        text: TextSpan(text: _pt('— SIN CARTUCHOS —', '— NO SHELLS —'),
+            style: const TextStyle(color: Colors.orange, fontSize: 10,
                 fontFamily: 'monospace', fontWeight: FontWeight.bold)),
         textDirection: TextDirection.ltr,
       );
@@ -2803,8 +3093,8 @@ class _RaycasterPainter extends CustomPainter {
 
     if (ammo == 0) {
       final tp = TextPainter(
-        text: const TextSpan(text: '— SIN BALAS —',
-          style: TextStyle(color: Colors.red, fontSize: 10,
+        text: TextSpan(text: _pt('— SIN BALAS —', '— NO AMMO —'),
+          style: const TextStyle(color: Colors.red, fontSize: 10,
             fontFamily: 'monospace', fontWeight: FontWeight.bold)),
         textDirection: TextDirection.ltr,
       );
@@ -2918,8 +3208,8 @@ class _RaycasterPainter extends CustomPainter {
 
     if (smgAmmo == 0) {
       final tp = TextPainter(
-        text: const TextSpan(text: '— SIN MUNICIÓN —',
-          style: TextStyle(color: Colors.orange, fontSize: 10,
+        text: TextSpan(text: _pt('— SIN MUNICIÓN —', '— NO ROUNDS —'),
+          style: const TextStyle(color: Colors.orange, fontSize: 10,
             fontFamily: 'monospace', fontWeight: FontWeight.bold)),
         textDirection: TextDirection.ltr,
       );
