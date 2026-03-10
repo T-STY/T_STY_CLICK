@@ -198,6 +198,7 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
   late double _saldo;
   int _selectedIndex = 0;
   int _hubCategory = 1;   // 0=reciente, 1=biblioteca, 2=perfil, 3=config
+  final ScrollController _carouselCtrl = ScrollController();
   int? _lastPlayedIndex;
   ArcadeGameDef? _activeGame;
   final List<int> _highScores = List.filled(12, 0);
@@ -340,9 +341,18 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
     _recordTimer?.cancel();
     _ctrl.removeListener(_handleShellEvent);
     _ctrl.dispose();
+    _carouselCtrl.dispose();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.manual, overlays: [SystemUiOverlay.top]);
     SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
     super.dispose();
+  }
+
+  void _scrollCarouselToSelected() {
+    if (!_carouselCtrl.hasClients) return;
+    const itemW = 56.0; // approx carousel item width + margin
+    final offset = (_selectedIndex * itemW - 40.0).clamp(0.0, double.infinity);
+    _carouselCtrl.animateTo(offset,
+        duration: const Duration(milliseconds: 300), curve: Curves.easeOut);
   }
 
   Future<void> _loadPreferences() async {
@@ -489,10 +499,12 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
         case ArcadeButton.up:
           if (_hubCategory == 1) {
             setState(() => _selectedIndex = max(0, _selectedIndex - 1));
+            _scrollCarouselToSelected();
           }
         case ArcadeButton.down:
           if (_hubCategory == 1) {
             setState(() => _selectedIndex = min(kArcadeGames.length - 1, _selectedIndex + 1));
+            _scrollCarouselToSelected();
           }
         case ArcadeButton.a:
         case ArcadeButton.start:
@@ -772,62 +784,134 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
 
   Widget _buildNeonGrid() {
     if (!_splashDone) return _buildSplashScreen();
-    return Container(
-      color: Colors.black,
-      child: Column(children: [
-        _buildHubCategoryBar(),
-        Expanded(child: _buildHubContent()),
-        _buildHubHintBar(),
+    return Stack(children: [
+      Positioned.fill(child: _buildHubBackground()),
+      SafeArea(
+        bottom: false,
+        child: Column(children: [
+          _buildHubCategoryBar(),
+          Expanded(child: _buildHubContent()),
+          _buildHubHintBar(),
+        ]),
+      ),
+    ]);
+  }
+
+  Widget _buildHubBackground() {
+    final grad = (_hubCategory == 1 && kArcadeGames.isNotEmpty)
+        ? _kCardGradients[_selectedIndex.clamp(0, _kCardGradients.length - 1)]
+        : [const Color(0xFF060614), const Color(0xFF020208)];
+    final neon = (_hubCategory == 1 && kArcadeGames.isNotEmpty)
+        ? _kNeonColors[_selectedIndex.clamp(0, _kNeonColors.length - 1)]
+        : _accent;
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 450),
+      curve: Curves.easeInOut,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            grad[0].withOpacity(0.38),
+            const Color(0xFF020205),
+            grad[1].withOpacity(0.18),
+          ],
+          stops: const [0.0, 0.5, 1.0],
+        ),
+      ),
+      child: Stack(children: [
+        Positioned(right: -24, top: -24,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 450),
+            width: 110, height: 110,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: RadialGradient(colors: [
+                neon.withOpacity(0.08), Colors.transparent]),
+            ),
+          ),
+        ),
+        Positioned(left: -30, bottom: -10,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 450),
+            width: 130, height: 130,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: RadialGradient(colors: [
+                grad[1].withOpacity(0.10), Colors.transparent]),
+            ),
+          ),
+        ),
       ]),
     );
   }
 
-  static const _kHubCats = ['RECIENTE', 'BIBLIOTECA', 'PERFIL', 'CONFIG'];
-  static const _kHubIcons = ['⏱', '🎮', '👤', '⚙'];
+  static const _kHubCats  = ['RECENT', 'GAMES', 'PROFILE', 'SETTINGS'];
+  static const _kHubIcons = ['🕐', '🎮', '👤', '⚙'];
 
   Widget _buildHubCategoryBar() {
     final ac = _accent;
-    return Container(
-      height: 36,
-      decoration: BoxDecoration(
-        color: const Color(0xFF050505),
-        border: Border(bottom: BorderSide(color: ac.withOpacity(0.20), width: 1)),
-      ),
-      child: Row(
-        children: List.generate(_kHubCats.length, (i) {
+    const icons  = ['🕐', '🎮', '👤', '⚙'];
+    const labels = ['RECENT', 'GAMES', 'PROFILE', 'SETTINGS'];
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(10, 8, 10, 6),
+      child: Row(children: [
+        // Pill tabs
+        ...List.generate(4, (i) {
           final sel = _hubCategory == i;
-          return Expanded(
-            child: GestureDetector(
-              onTap: () => setState(() { _hubCategory = i; if (i == 1 && false) _selectedIndex = 0; }),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 180),
-                decoration: BoxDecoration(
-                  border: Border(
-                    bottom: BorderSide(color: sel ? ac : Colors.transparent, width: 2),
-                  ),
+          return GestureDetector(
+            onTap: () => setState(() => _hubCategory = i),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              margin: const EdgeInsets.only(right: 6),
+              padding: EdgeInsets.symmetric(
+                  horizontal: sel ? 10 : 7, vertical: sel ? 5 : 4),
+              decoration: BoxDecoration(
+                color: sel
+                    ? ac.withOpacity(0.22)
+                    : Colors.white.withOpacity(0.06),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: sel
+                      ? ac.withOpacity(0.65)
+                      : Colors.white.withOpacity(0.10),
+                  width: sel ? 1.0 : 0.6,
                 ),
-                alignment: Alignment.center,
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(_kHubIcons[i], style: TextStyle(fontSize: sel ? 11 : 9)),
-                    const SizedBox(height: 1),
-                    Text(_kHubCats[i],
-                      style: TextStyle(
-                        color: sel ? ac : Colors.white24,
-                        fontSize: 5.5,
-                        fontFamily: 'monospace',
-                        fontWeight: sel ? FontWeight.bold : FontWeight.normal,
-                        letterSpacing: 0.4,
-                        shadows: sel ? [Shadow(color: ac, blurRadius: 6)] : null,
-                      )),
-                  ],
-                ),
+                boxShadow: sel
+                    ? [BoxShadow(color: ac.withOpacity(0.22),
+                        blurRadius: 10, spreadRadius: -2)]
+                    : [],
               ),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                Text(icons[i], style: TextStyle(fontSize: sel ? 10 : 8)),
+                if (sel) ...[
+                  const SizedBox(width: 4),
+                  Text(labels[i],
+                    style: TextStyle(
+                      color: ac, fontSize: 6.5,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 0.5,
+                      shadows: [Shadow(color: ac, blurRadius: 4)],
+                    )),
+                ],
+              ]),
             ),
           );
         }),
-      ),
+        const Spacer(),
+        // Saldo badge
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+          decoration: BoxDecoration(
+            color: Colors.amber.withOpacity(0.12),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: Colors.amber.withOpacity(0.30), width: 0.7),
+          ),
+          child: Text('💰 ${_saldo.toStringAsFixed(0)}',
+            style: const TextStyle(color: Colors.amber, fontSize: 7.5,
+                fontWeight: FontWeight.bold)),
+        ),
+      ]),
     );
   }
 
@@ -843,115 +927,167 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
 
   Widget _buildHubHintBar() {
     final ac = _accent;
-    final hints = _hubCategory == 1
-        ? [('◀▶', 'categoría'), ('▲▼', 'juego'), ('A', 'jugar'), ('SEL', 'salir')]
+    final items = _hubCategory == 1
+        ? [('◀▶', 'browse'), ('A', 'play'), ('SEL', 'exit')]
         : _hubCategory == 3
-        ? [('▲▼', 'navegar'), ('A', 'activar'), ('◀', 'volver'), ('SEL', 'salir')]
-        : [('◀▶', 'categoría'), ('SEL', 'salir')];
+        ? [('▲▼', 'nav'), ('A', 'select'), ('◀', 'back'), ('SEL', 'exit')]
+        : [('◀▶', 'switch'), ('SEL', 'exit')];
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 3),
+      padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 12),
       decoration: BoxDecoration(
-        color: const Color(0xFF020202),
-        border: Border(top: BorderSide(color: ac.withOpacity(0.12), width: 1)),
+        color: Colors.black.withOpacity(0.40),
+        border: Border(top: BorderSide(
+            color: Colors.white.withOpacity(0.06), width: 0.5)),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
-        children: hints.expand((h) => [
-          _termHint(h.$1, h.$2),
-          const SizedBox(width: 10),
+        children: items.expand((h) => [
+          Row(mainAxisSize: MainAxisSize.min, children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+              decoration: BoxDecoration(
+                color: ac.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(4),
+                border: Border.all(color: ac.withOpacity(0.35), width: 0.5),
+              ),
+              child: Text(h.$1, style: TextStyle(
+                  color: ac, fontSize: 6.5, fontWeight: FontWeight.w600)),
+            ),
+            const SizedBox(width: 3),
+            Text(h.$2, style: TextStyle(
+                color: Colors.white.withOpacity(0.30), fontSize: 6.5)),
+          ]),
+          const SizedBox(width: 12),
         ]).toList()..removeLast(),
       ),
     );
   }
 
-  // ── Hub: Reciente ─────────────────────────────────────────────────────────
+  // ── Hub: Recent ───────────────────────────────────────────────────────────
 
   Widget _buildHubRecent() {
-    final ac = _accent;
     if (_lastPlayedIndex == null) {
       return Center(
         child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-          Text('◉', style: TextStyle(color: ac.withOpacity(0.18), fontSize: 30)),
-          const SizedBox(height: 8),
-          Text('Sin partidas recientes',
-            style: TextStyle(color: Colors.white24, fontSize: 8, fontFamily: 'monospace')),
-          const SizedBox(height: 3),
-          Text('Juega algo para verlo aquí',
-            style: TextStyle(color: Colors.white12, fontSize: 6.5, fontFamily: 'monospace')),
+          Container(
+            width: 60, height: 60,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(color: Colors.white.withOpacity(0.08), width: 1),
+              color: Colors.white.withOpacity(0.04),
+            ),
+            alignment: Alignment.center,
+            child: Text('🕐', style: TextStyle(fontSize: 24,
+                color: Colors.white.withOpacity(0.4))),
+          ),
+          const SizedBox(height: 12),
+          Text('No recent games', style: TextStyle(
+              color: Colors.white.withOpacity(0.55), fontSize: 11,
+              fontWeight: FontWeight.w300, letterSpacing: 0.5)),
+          const SizedBox(height: 4),
+          Text('Play something to see it here',
+              style: TextStyle(color: Colors.white.withOpacity(0.25),
+                  fontSize: 8, letterSpacing: 0.3)),
         ]),
       );
     }
-    final idx = _lastPlayedIndex!;
-    final game = kArcadeGames[idx];
-    final neon = _kNeonColors[idx % _kNeonColors.length];
-    final grad = _kCardGradients[idx % _kCardGradients.length];
+    final idx   = _lastPlayedIndex!;
+    final game  = kArcadeGames[idx];
+    final neon  = _kNeonColors[idx % _kNeonColors.length];
+    final grad  = _kCardGradients[idx % _kCardGradients.length];
     final score = _highScores[idx];
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(10),
+      padding: const EdgeInsets.all(12),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text('ÚLTIMA PARTIDA',
-          style: TextStyle(color: ac.withOpacity(0.40), fontSize: 6.5,
-            fontFamily: 'monospace', letterSpacing: 1.5)),
-        const SizedBox(height: 8),
+        Text('LAST PLAYED',
+            style: TextStyle(color: Colors.white.withOpacity(0.35),
+                fontSize: 7, letterSpacing: 2.0, fontWeight: FontWeight.w500)),
+        const SizedBox(height: 10),
         GestureDetector(
           onTap: () { setState(() { _hubCategory = 1; _selectedIndex = idx; }); _launchSelected(); },
           child: Container(
-            width: double.infinity,
-            height: 80,
+            width: double.infinity, height: 88,
             decoration: BoxDecoration(
-              gradient: LinearGradient(colors: grad, begin: Alignment.topLeft, end: Alignment.bottomRight),
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: neon.withOpacity(0.55), width: 1.5),
-              boxShadow: [BoxShadow(color: neon.withOpacity(0.18), blurRadius: 14)],
+              borderRadius: BorderRadius.circular(20),
+              gradient: LinearGradient(colors: grad,
+                  begin: Alignment.topLeft, end: Alignment.bottomRight),
+              border: Border.all(color: Colors.white.withOpacity(0.14), width: 1),
+              boxShadow: [
+                BoxShadow(color: neon.withOpacity(0.20),
+                    blurRadius: 20, spreadRadius: -3, offset: const Offset(0, 4)),
+                BoxShadow(color: Colors.black.withOpacity(0.50), blurRadius: 10),
+              ],
             ),
-            child: Row(children: [
-              const SizedBox(width: 14),
-              Text(game.emoji, style: const TextStyle(fontSize: 36)),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(game.title,
-                      style: TextStyle(color: Colors.white, fontSize: 12,
-                        fontWeight: FontWeight.bold, fontFamily: 'monospace',
-                        shadows: [Shadow(color: neon, blurRadius: 8)])),
-                    const SizedBox(height: 3),
-                    Text(score > 0 ? 'HI: $score pts' : 'Sin récord aún',
-                      style: TextStyle(color: Colors.amber.withOpacity(0.7),
-                        fontSize: 7.5, fontFamily: 'monospace')),
-                  ]),
-              ),
-              Container(
-                margin: const EdgeInsets.only(right: 12),
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: neon.withOpacity(0.18),
-                  border: Border.all(color: neon.withOpacity(0.7), width: 1),
-                  borderRadius: BorderRadius.circular(4),
+            child: Stack(children: [
+              // Glass top highlight
+              Positioned(top: 0, left: 0, right: 0,
+                child: Container(
+                  height: 35,
+                  decoration: BoxDecoration(
+                    borderRadius: const BorderRadius.only(
+                        topLeft: Radius.circular(20),
+                        topRight: Radius.circular(20)),
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft, end: Alignment.bottomRight,
+                      colors: [Colors.white.withOpacity(0.12), Colors.transparent]),
+                  ),
                 ),
-                child: Text('▶ JUGAR', style: TextStyle(
-                  color: neon, fontSize: 7.5, fontFamily: 'monospace',
-                  fontWeight: FontWeight.bold)),
+              ),
+              Padding(
+                padding: const EdgeInsets.all(14),
+                child: Row(children: [
+                  Text(game.emoji,
+                      style: const TextStyle(fontSize: 38,
+                          shadows: [Shadow(color: Colors.black45, blurRadius: 6)])),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text(game.title, style: const TextStyle(color: Colors.white,
+                          fontSize: 14, fontWeight: FontWeight.bold,
+                          shadows: [Shadow(color: Colors.black54, blurRadius: 4)])),
+                      const SizedBox(height: 3),
+                      Text(score > 0 ? 'HI  $score pts' : 'No score yet',
+                          style: TextStyle(
+                              color: score > 0
+                                  ? Colors.amber.withOpacity(0.85)
+                                  : Colors.white38,
+                              fontSize: 8)),
+                    ]),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: neon.withOpacity(0.22),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: neon.withOpacity(0.70), width: 1),
+                      boxShadow: [BoxShadow(color: neon.withOpacity(0.30),
+                          blurRadius: 10)],
+                    ),
+                    child: Text('▶ PLAY', style: TextStyle(
+                        color: neon, fontSize: 9, fontWeight: FontWeight.bold,
+                        shadows: [Shadow(color: neon, blurRadius: 5)])),
+                  ),
+                ]),
               ),
             ]),
           ),
         ),
         if (_newRecordIndex == idx) ...[
-          const SizedBox(height: 8),
+          const SizedBox(height: 10),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
-              color: Colors.amber.withOpacity(0.07),
+              color: Colors.amber.withOpacity(0.08),
+              borderRadius: BorderRadius.circular(12),
               border: Border.all(color: Colors.amber.withOpacity(0.35), width: 0.8),
-              borderRadius: BorderRadius.circular(4),
             ),
             child: Row(children: [
-              const Text('⚡', style: TextStyle(fontSize: 10)),
-              const SizedBox(width: 6),
-              Text('¡NUEVO RÉCORD! $score pts',
-                style: const TextStyle(color: Colors.amber, fontSize: 7.5,
-                  fontFamily: 'monospace', fontWeight: FontWeight.bold)),
+              const Text('⚡', style: TextStyle(fontSize: 12)),
+              const SizedBox(width: 8),
+              Text('NEW RECORD — $score pts',
+                  style: const TextStyle(color: Colors.amber, fontSize: 8.5,
+                      fontWeight: FontWeight.bold, letterSpacing: 0.5)),
             ]),
           ),
         ],
@@ -959,250 +1095,376 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
     );
   }
 
-  // ── Hub: Biblioteca ───────────────────────────────────────────────────────
+  // ── Hub: Library ──────────────────────────────────────────────────────────
 
   Widget _buildHubLibrary() {
-    return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(6, 4, 6, 4),
-      itemCount: kArcadeGames.length,
-      itemBuilder: (_, i) => _buildGameCard(i),
-    );
+    return Column(children: [
+      Expanded(child: _buildHeroCard()),
+      const SizedBox(height: 7),
+      _buildGameCarousel(),
+      const SizedBox(height: 4),
+    ]);
   }
 
-  Widget _buildGameCard(int index) {
-    final game = kArcadeGames[index];
-    final selected = _hubCategory == 1 && _selectedIndex == index;
-    final neon = _kNeonColors[index % _kNeonColors.length];
-    final grad = _kCardGradients[index % _kCardGradients.length];
-    final score = _highScores[index];
-    final isRec = _newRecordIndex == index;
-    return GestureDetector(
-      onTap: () => setState(() => _selectedIndex = index),
-      onDoubleTap: (selected && !game.locked) ? _launchSelected : null,
+  Widget _buildHeroCard() {
+    if (kArcadeGames.isEmpty) return const SizedBox.shrink();
+    final idx  = _selectedIndex.clamp(0, kArcadeGames.length - 1);
+    final game = kArcadeGames[idx];
+    final neon = _kNeonColors[idx % _kNeonColors.length];
+    final grad = _kCardGradients[idx % _kCardGradients.length];
+    final score = _highScores[idx];
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(10, 0, 10, 0),
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 100),
-        margin: const EdgeInsets.only(bottom: 4),
-        height: selected ? 54 : 44,
+        duration: const Duration(milliseconds: 350),
+        curve: Curves.easeOut,
         decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(22),
           gradient: LinearGradient(
-            begin: Alignment.centerLeft, end: Alignment.centerRight,
-            colors: selected
-                ? [grad[0], grad[1].withOpacity(0.85)]
-                : [const Color(0xFF090909), const Color(0xFF101010)],
+            begin: Alignment.topLeft, end: Alignment.bottomRight,
+            colors: [grad[0], grad[1]],
           ),
-          borderRadius: BorderRadius.circular(5),
-          border: Border.all(
-            color: selected ? neon.withOpacity(0.75) : Colors.white.withOpacity(0.05),
-            width: selected ? 1.5 : 0.5,
-          ),
-          boxShadow: selected
-              ? [BoxShadow(color: neon.withOpacity(0.22), blurRadius: 10, spreadRadius: 0)]
-              : [],
+          border: Border.all(color: Colors.white.withOpacity(0.14), width: 1),
+          boxShadow: [
+            BoxShadow(color: neon.withOpacity(0.22),
+                blurRadius: 22, spreadRadius: -4, offset: const Offset(0, 5)),
+            BoxShadow(color: Colors.black.withOpacity(0.55),
+                blurRadius: 12, offset: const Offset(0, 3)),
+          ],
         ),
-        child: Row(children: [
-          // Left neon stripe
-          Container(
-            width: 3,
-            decoration: BoxDecoration(
-              color: selected ? neon : neon.withOpacity(0.18),
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(5), bottomLeft: Radius.circular(5)),
-            ),
-          ),
-          const SizedBox(width: 8),
-          // Emoji
-          Text(game.emoji, style: TextStyle(fontSize: selected ? 22 : 17)),
-          const SizedBox(width: 8),
-          // Info
-          Expanded(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(game.title,
-                  style: TextStyle(
-                    color: game.locked ? Colors.white24 : (selected ? Colors.white : Colors.white54),
-                    fontSize: selected ? 9 : 8,
-                    fontWeight: selected ? FontWeight.bold : FontWeight.normal,
-                    fontFamily: 'monospace',
-                    shadows: (selected && !game.locked)
-                        ? [Shadow(color: neon, blurRadius: 6)] : null,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(22),
+          child: Stack(children: [
+            // Subtle shimmer/highlight top-left (glass reflection)
+            Positioned(top: 0, left: 0, right: 0,
+              child: Container(
+                height: 50,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft, end: Alignment.bottomRight,
+                    colors: [
+                      Colors.white.withOpacity(0.10),
+                      Colors.transparent,
+                    ],
                   ),
-                  overflow: TextOverflow.ellipsis),
-                if (selected || score > 0)
-                  Text(
-                    game.locked
-                        ? '[ BLOQUEADO ]'
-                        : (score > 0 ? 'HI: $score pts' : 'Sin récord'),
-                    style: TextStyle(
-                      color: game.locked
-                          ? const Color(0xFF551111)
-                          : (score > 0 ? Colors.amber.withOpacity(0.75) : Colors.white24),
-                      fontSize: 6,
-                      fontFamily: 'monospace',
-                    )),
-              ],
-            ),
-          ),
-          // Right badge
-          if (game.locked)
-            Padding(padding: const EdgeInsets.only(right: 8),
-              child: const Text('🔒', style: TextStyle(fontSize: 9)))
-          else if (isRec)
-            Padding(padding: const EdgeInsets.only(right: 6),
-              child: Text('⚡REC', style: TextStyle(
-                color: Colors.amber, fontSize: 6.5, fontFamily: 'monospace',
-                fontWeight: FontWeight.bold,
-                shadows: [Shadow(color: Colors.amber, blurRadius: 6)])))
-          else if (selected)
-            Container(
-              margin: const EdgeInsets.only(right: 8),
-              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-              decoration: BoxDecoration(
-                color: neon.withOpacity(0.15),
-                border: Border.all(color: neon.withOpacity(0.6), width: 0.8),
-                borderRadius: BorderRadius.circular(3),
+                ),
               ),
-              child: Text('▶ RUN', style: TextStyle(
-                color: neon, fontSize: 6.5, fontFamily: 'monospace',
-                fontWeight: FontWeight.bold)))
-          else
-            const SizedBox(width: 12),
-        ]),
+            ),
+            // Bottom glass fade
+            Positioned(bottom: 0, left: 0, right: 0,
+              child: Container(
+                height: 70,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter, end: Alignment.bottomCenter,
+                    colors: [Colors.transparent, Colors.black.withOpacity(0.75)],
+                  ),
+                ),
+              ),
+            ),
+            // Content
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Top row: big emoji + status badges
+                  Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text(game.emoji,
+                        style: const TextStyle(fontSize: 42,
+                            shadows: [Shadow(color: Colors.black45, blurRadius: 8)])),
+                    const Spacer(),
+                    if (game.locked)
+                      _heroBadge('LOCKED', Colors.redAccent)
+                    else if (_newRecordIndex == idx)
+                      _heroBadge('⚡ RECORD', Colors.amber),
+                  ]),
+                  // Bottom: title + score + play button
+                  Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text(game.title,
+                      style: const TextStyle(
+                        color: Colors.white, fontSize: 17,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 0.3,
+                        shadows: [Shadow(color: Colors.black87, blurRadius: 6)],
+                      ),
+                      overflow: TextOverflow.ellipsis),
+                    const SizedBox(height: 5),
+                    Row(children: [
+                      Text(
+                        score > 0 ? 'HI  $score pts' : 'No high score yet',
+                        style: TextStyle(
+                          color: score > 0
+                              ? Colors.amber.withOpacity(0.90)
+                              : Colors.white38,
+                          fontSize: 8.5,
+                        )),
+                      const Spacer(),
+                      if (!game.locked)
+                        GestureDetector(
+                          onTap: _launchSelected,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 7),
+                            decoration: BoxDecoration(
+                              color: neon.withOpacity(0.22),
+                              borderRadius: BorderRadius.circular(18),
+                              border: Border.all(
+                                  color: neon.withOpacity(0.75), width: 1.2),
+                              boxShadow: [BoxShadow(
+                                  color: neon.withOpacity(0.35),
+                                  blurRadius: 12, spreadRadius: -2)],
+                            ),
+                            child: Text('▶  PLAY',
+                              style: TextStyle(
+                                color: neon, fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                                shadows: [Shadow(color: neon, blurRadius: 5)],
+                              )),
+                          ),
+                        ),
+                    ]),
+                  ]),
+                ],
+              ),
+            ),
+          ]),
+        ),
       ),
     );
   }
 
-  // ── Hub: Perfil ───────────────────────────────────────────────────────────
+  Widget _heroBadge(String label, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.20),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: color.withOpacity(0.60), width: 0.8),
+      ),
+      child: Text(label, style: TextStyle(
+          color: color, fontSize: 6.5, fontWeight: FontWeight.bold)),
+    );
+  }
+
+  Widget _buildGameCarousel() {
+    return SizedBox(
+      height: 58,
+      child: ListView.builder(
+        controller: _carouselCtrl,
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        itemCount: kArcadeGames.length,
+        itemBuilder: (_, i) {
+          final game = kArcadeGames[i];
+          final sel  = _selectedIndex == i;
+          final neon = _kNeonColors[i % _kNeonColors.length];
+          final grad = _kCardGradients[i % _kCardGradients.length];
+          return GestureDetector(
+            onTap: () {
+              setState(() => _selectedIndex = i);
+              _scrollCarouselToSelected();
+            },
+            onDoubleTap: (sel && !game.locked) ? _launchSelected : null,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              curve: Curves.easeOut,
+              width: sel ? 56 : 46,
+              margin: EdgeInsets.only(right: 6, top: sel ? 0 : 5, bottom: sel ? 0 : 5),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                gradient: sel
+                    ? LinearGradient(colors: grad,
+                        begin: Alignment.topLeft, end: Alignment.bottomRight)
+                    : null,
+                color: sel ? null : Colors.white.withOpacity(0.06),
+                border: Border.all(
+                  color: sel
+                      ? neon.withOpacity(0.85)
+                      : Colors.white.withOpacity(0.10),
+                  width: sel ? 1.5 : 0.8,
+                ),
+                boxShadow: sel
+                    ? [BoxShadow(color: neon.withOpacity(0.35),
+                        blurRadius: 10, spreadRadius: -1)]
+                    : [],
+              ),
+              alignment: Alignment.center,
+              child: Stack(alignment: Alignment.center, children: [
+                Text(game.emoji, style: TextStyle(fontSize: sel ? 22 : 17)),
+                if (game.locked)
+                  Positioned(right: 2, top: 2,
+                    child: Text('🔒',
+                        style: TextStyle(fontSize: 8,
+                            color: Colors.white.withOpacity(0.6)))),
+              ]),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  // ── Hub: Profile ──────────────────────────────────────────────────────────
 
   Widget _buildHubProfile() {
     final ac = _accent;
-    final totalScore = _highScores.fold(0, (a, b) => a + b);
+    final totalScore  = _highScores.fold(0, (a, b) => a + b);
     final gamesPlayed = _highScores.where((s) => s > 0).length;
-    final unlocked = kArcadeGames.where((g) => !g.locked).length;
+    final unlocked    = kArcadeGames.where((g) => !g.locked).length;
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(10),
+      padding: const EdgeInsets.all(12),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        // User header
-        Row(children: [
-          Container(
-            width: 34, height: 34,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: LinearGradient(colors: [ac, ac.withOpacity(0.30)]),
-              border: Border.all(color: ac.withOpacity(0.55), width: 1.5),
-            ),
-            alignment: Alignment.center,
-            child: Text(
-              _userName.isNotEmpty ? _userName[0].toUpperCase() : '?',
-              style: const TextStyle(color: Colors.black, fontSize: 15,
-                fontWeight: FontWeight.bold)),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(_userName.isEmpty ? 'Jugador' : _userName,
-                style: const TextStyle(color: Colors.white, fontSize: 13,
-                  fontWeight: FontWeight.bold, fontFamily: 'monospace')),
-              Text('ARCADE CENTER',
-                style: TextStyle(color: ac.withOpacity(0.45), fontSize: 6,
-                  fontFamily: 'monospace', letterSpacing: 1.0)),
-            ]),
-          ),
-          Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-            Text('💰 ${_saldo.toStringAsFixed(0)}',
-              style: const TextStyle(color: Colors.amber, fontSize: 9.5,
-                fontFamily: 'monospace', fontWeight: FontWeight.bold)),
-            Text('SALDO', style: TextStyle(
-              color: Colors.white24, fontSize: 5.5, fontFamily: 'monospace')),
-          ]),
-        ]),
-        const SizedBox(height: 8),
-        Container(height: 1, color: ac.withOpacity(0.15)),
-        const SizedBox(height: 7),
-        // Stats row
-        Row(children: [
-          _profileStat('PUNTOS TOTALES', '$totalScore', ac),
-          const SizedBox(width: 6),
-          _profileStat('JUGADOS', '$gamesPlayed / $unlocked', ac),
-        ]),
-        const SizedBox(height: 8),
-        // Best scores
-        Text('MEJORES MARCAS',
-          style: TextStyle(color: ac.withOpacity(0.45), fontSize: 6.5,
-            fontFamily: 'monospace', letterSpacing: 1.5)),
-        const SizedBox(height: 4),
-        ...List.generate(kArcadeGames.length, (i) {
-          final g = kArcadeGames[i];
-          if (g.locked || _highScores[i] == 0) return const SizedBox.shrink();
-          final neon = _kNeonColors[i % _kNeonColors.length];
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 3),
-            child: Row(children: [
-              Container(width: 2.5, height: 13, color: neon,
-                margin: const EdgeInsets.only(right: 6)),
-              Text(g.emoji, style: const TextStyle(fontSize: 10)),
-              const SizedBox(width: 5),
-              Expanded(child: Text(g.title,
-                style: const TextStyle(color: Colors.white54, fontSize: 7,
-                  fontFamily: 'monospace'),
-                overflow: TextOverflow.ellipsis)),
-              Text('${_highScores[i]}',
-                style: TextStyle(color: Colors.amber.withOpacity(0.8),
-                  fontSize: 7, fontFamily: 'monospace', fontWeight: FontWeight.bold)),
-            ]),
-          );
-        }),
-        const SizedBox(height: 8),
-        Container(height: 1, color: ac.withOpacity(0.10)),
-        const SizedBox(height: 6),
-        // Achievements teaser
-        Text('LOGROS',
-          style: TextStyle(color: ac.withOpacity(0.45), fontSize: 6.5,
-            fontFamily: 'monospace', letterSpacing: 1.5)),
-        const SizedBox(height: 4),
+        // User card
         Container(
-          padding: const EdgeInsets.all(8),
+          padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.02),
-            border: Border.all(color: Colors.white10, width: 0.5),
-            borderRadius: BorderRadius.circular(4),
+            borderRadius: BorderRadius.circular(18),
+            color: Colors.white.withOpacity(0.06),
+            border: Border.all(color: Colors.white.withOpacity(0.10), width: 0.8),
+            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.35),
+                blurRadius: 12, offset: const Offset(0, 3))],
           ),
           child: Row(children: [
-            Text('🏆', style: TextStyle(fontSize: 12, color: Colors.white24)),
-            const SizedBox(width: 7),
-            Text('PRÓXIMAMENTE...',
-              style: TextStyle(color: Colors.white24, fontSize: 7,
-                fontFamily: 'monospace', letterSpacing: 1.0)),
+            // Avatar circle
+            Container(
+              width: 40, height: 40,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: LinearGradient(
+                    begin: Alignment.topLeft, end: Alignment.bottomRight,
+                    colors: [ac, ac.withOpacity(0.35)]),
+                border: Border.all(color: Colors.white.withOpacity(0.25), width: 1),
+                boxShadow: [BoxShadow(color: ac.withOpacity(0.25),
+                    blurRadius: 10, spreadRadius: -2)],
+              ),
+              alignment: Alignment.center,
+              child: Text(
+                _userName.isNotEmpty ? _userName[0].toUpperCase() : '?',
+                style: const TextStyle(color: Colors.white, fontSize: 17,
+                    fontWeight: FontWeight.bold)),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(_userName.isEmpty ? 'Player' : _userName,
+                    style: const TextStyle(color: Colors.white, fontSize: 14,
+                        fontWeight: FontWeight.bold, letterSpacing: 0.3)),
+                Text('Arcade Center',
+                    style: TextStyle(color: ac.withOpacity(0.55), fontSize: 8,
+                        letterSpacing: 0.5)),
+              ]),
+            ),
+            Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+              Text('💰 ${_saldo.toStringAsFixed(0)}',
+                  style: const TextStyle(color: Colors.amber, fontSize: 10,
+                      fontWeight: FontWeight.bold)),
+              Text('BALANCE', style: TextStyle(
+                  color: Colors.white.withOpacity(0.30), fontSize: 6,
+                  letterSpacing: 0.8)),
+            ]),
+          ]),
+        ),
+        const SizedBox(height: 10),
+        // Stats row
+        Row(children: [
+          _profileStatCard('TOTAL SCORE', '$totalScore', ac),
+          const SizedBox(width: 8),
+          _profileStatCard('GAMES PLAYED', '$gamesPlayed / $unlocked', ac),
+        ]),
+        const SizedBox(height: 10),
+        // High scores list
+        Text('HIGH SCORES',
+            style: TextStyle(color: Colors.white.withOpacity(0.35),
+                fontSize: 7, letterSpacing: 2.0, fontWeight: FontWeight.w500)),
+        const SizedBox(height: 6),
+        Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            color: Colors.white.withOpacity(0.04),
+            border: Border.all(color: Colors.white.withOpacity(0.08), width: 0.6),
+          ),
+          child: Column(
+            children: List.generate(kArcadeGames.length, (i) {
+              final g = kArcadeGames[i];
+              if (g.locked || _highScores[i] == 0) return const SizedBox.shrink();
+              final neon = _kNeonColors[i % _kNeonColors.length];
+              return Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                decoration: BoxDecoration(
+                  border: Border(bottom: BorderSide(
+                      color: Colors.white.withOpacity(0.05), width: 0.5)),
+                ),
+                child: Row(children: [
+                  Container(width: 3, height: 16,
+                      margin: const EdgeInsets.only(right: 8),
+                      decoration: BoxDecoration(
+                          color: neon, borderRadius: BorderRadius.circular(2))),
+                  Text(g.emoji, style: const TextStyle(fontSize: 12)),
+                  const SizedBox(width: 8),
+                  Expanded(child: Text(g.title,
+                      style: const TextStyle(color: Colors.white70, fontSize: 8),
+                      overflow: TextOverflow.ellipsis)),
+                  Text('${_highScores[i]}',
+                      style: TextStyle(color: Colors.amber.withOpacity(0.85),
+                          fontSize: 8.5, fontWeight: FontWeight.bold)),
+                ]),
+              );
+            }).where((w) => w is! SizedBox || (w as SizedBox).height != null).toList(),
+          ),
+        ),
+        const SizedBox(height: 10),
+        // Achievements teaser
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            color: Colors.white.withOpacity(0.03),
+            border: Border.all(color: Colors.white.withOpacity(0.07), width: 0.6),
+          ),
+          child: Row(children: [
+            Text('🏆', style: TextStyle(fontSize: 18,
+                color: Colors.white.withOpacity(0.25))),
+            const SizedBox(width: 10),
+            Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('ACHIEVEMENTS',
+                  style: TextStyle(color: Colors.white.withOpacity(0.35),
+                      fontSize: 8, letterSpacing: 1.0, fontWeight: FontWeight.w500)),
+              Text('Coming soon...',
+                  style: TextStyle(color: Colors.white.withOpacity(0.20),
+                      fontSize: 7)),
+            ]),
           ]),
         ),
       ]),
     );
   }
 
-  Widget _profileStat(String label, String value, Color ac) {
+  Widget _profileStatCard(String label, String value, Color ac) {
     return Expanded(
       child: Container(
-        padding: const EdgeInsets.all(7),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
-          color: ac.withOpacity(0.05),
-          border: Border.all(color: ac.withOpacity(0.18), width: 0.8),
-          borderRadius: BorderRadius.circular(4),
+          borderRadius: BorderRadius.circular(14),
+          color: ac.withOpacity(0.07),
+          border: Border.all(color: ac.withOpacity(0.20), width: 0.8),
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.25),
+              blurRadius: 8, offset: const Offset(0, 2))],
         ),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(value,
-            style: TextStyle(color: ac, fontSize: 13, fontWeight: FontWeight.bold,
-              fontFamily: 'monospace')),
+          Text(value, style: TextStyle(color: ac, fontSize: 16,
+              fontWeight: FontWeight.bold, letterSpacing: 0.3)),
           const SizedBox(height: 2),
-          Text(label,
-            style: const TextStyle(color: Colors.white30, fontSize: 5.5,
-              fontFamily: 'monospace', letterSpacing: 0.4)),
+          Text(label, style: TextStyle(color: Colors.white.withOpacity(0.35),
+              fontSize: 6, letterSpacing: 0.5)),
         ]),
       ),
     );
   }
 
-  // ── Hub: Config (inline settings) ─────────────────────────────────────────
+  // ── Hub: Settings ─────────────────────────────────────────────────────────
 
   Widget _buildHubSettings() {
     final ac = _accent;
@@ -1210,82 +1472,132 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
     Widget opt(String label, {bool locked = false}) {
       final i = idx++;
       if (locked) {
-        return Padding(
-          padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 2),
-          child: Row(children: [
-            const Text('  ', style: TextStyle(fontSize: 8, fontFamily: 'monospace')),
-            Text(label, style: const TextStyle(
-              color: Colors.white12, fontSize: 7.5, fontFamily: 'monospace')),
-            const SizedBox(width: 6),
-            Text('[PRÓX]', style: TextStyle(
-              color: Colors.white12, fontSize: 5.5, fontFamily: 'monospace')),
-          ]),
-        );
+        return _settingsOptRow(label, false, false, null, locked: true);
       }
-      return _optRow(label, _isSettingActive(i), _isCursorOn(i), () => _activateSetting(i));
+      return _settingsOptRow(label, _isSettingActive(i), _isCursorOn(i),
+          () => _activateSetting(i));
     }
     return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(12, 8, 10, 12),
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text('> settings/', style: TextStyle(
-          color: ac, fontSize: 9, fontFamily: 'monospace', fontWeight: FontWeight.bold)),
-        const SizedBox(height: 4),
-        Container(height: 1, color: ac.withOpacity(0.18)),
-        const SizedBox(height: 8),
-
-        _settingSection('SKIN / FORMA', [
+        _settingGroup('CONSOLE SKIN', [
           opt('GameBoy Classic'),
           opt('PSP Landscape', locked: true),
           opt('Game Boy Advance', locked: true),
         ]),
-        const SizedBox(height: 8),
-
-        _settingSection('COLOR DE SHELL', [
-          opt('Gris Clasico'),
-          opt('Negro Medianoche'),
+        _settingGroup('SHELL COLOR', [
+          opt('Classic Gray'),
+          opt('Midnight Black'),
           opt('Indigo'),
-          opt('Rojo Escarlata'),
-          opt('Azul Marina'),
-          opt('Verde Selva'),
-          opt('Rosa Oscuro'),
+          opt('Crimson Red'),
+          opt('Navy Blue'),
+          opt('Forest Green'),
+          opt('Dark Rose'),
         ]),
-        const SizedBox(height: 8),
-
-        _settingSection('ACENTO / FUENTES', [
-          opt('Verde Fosforo'),
-          opt('Ambar Retro'),
-          opt('Cian Cripto'),
-          opt('Rojo Infernal'),
+        _settingGroup('ACCENT COLOR', [
+          opt('Phosphor Green'),
+          opt('Amber Retro'),
+          opt('Cyan Crypto'),
+          opt('Infernal Red'),
         ]),
-        const SizedBox(height: 8),
-
-        _settingSection('BOTONES / LAYOUT', [
+        _settingGroup('BUTTON LAYOUT', [
           opt('SNES Classic  X/Y/A/B'),
           opt('Xbox Style  Y/X/B/A'),
           opt('PS4 Style  △/☐/○/✕'),
         ]),
-        const SizedBox(height: 8),
-
-        _settingSection('DISPLAY BOTONES', [
-          opt('Color solido'),
-          opt('Blackout (letras iluminadas)'),
-          opt('Clear (cristal transparente)'),
+        _settingGroup('BUTTON DISPLAY', [
+          opt('Solid Color'),
+          opt('Blackout (neon glow)'),
+          opt('Crystal Clear (glass)'),
         ]),
-        const SizedBox(height: 10),
-        Container(height: 1, color: ac.withOpacity(0.10)),
-        const SizedBox(height: 5),
+        const SizedBox(height: 6),
         Row(children: [
-          Text('▲▼', style: TextStyle(color: ac.withOpacity(0.45), fontSize: 7, fontFamily: 'monospace')),
-          const SizedBox(width: 4),
-          const Text('navegar  ', style: TextStyle(color: Colors.white24, fontSize: 7, fontFamily: 'monospace')),
-          Text('A', style: TextStyle(color: ac.withOpacity(0.45), fontSize: 7, fontFamily: 'monospace')),
-          const SizedBox(width: 4),
-          const Text('activar  ', style: TextStyle(color: Colors.white24, fontSize: 7, fontFamily: 'monospace')),
-          Text('◀', style: TextStyle(color: ac.withOpacity(0.45), fontSize: 7, fontFamily: 'monospace')),
-          const SizedBox(width: 4),
-          const Text('volver', style: TextStyle(color: Colors.white24, fontSize: 7, fontFamily: 'monospace')),
+          Text('▲▼ navigate  ', style: TextStyle(
+              color: Colors.white.withOpacity(0.30), fontSize: 7)),
+          Text('A', style: TextStyle(color: ac.withOpacity(0.60), fontSize: 7,
+              fontWeight: FontWeight.bold)),
+          Text(' select  ◀ back', style: TextStyle(
+              color: Colors.white.withOpacity(0.30), fontSize: 7)),
         ]),
       ]),
+    );
+  }
+
+  Widget _settingGroup(String title, List<Widget> rows) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(title, style: TextStyle(
+            color: Colors.white.withOpacity(0.35), fontSize: 7,
+            letterSpacing: 1.5, fontWeight: FontWeight.w500)),
+        const SizedBox(height: 5),
+        Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            color: Colors.white.withOpacity(0.04),
+            border: Border.all(color: Colors.white.withOpacity(0.07), width: 0.5),
+          ),
+          child: Column(children: rows),
+        ),
+      ]),
+    );
+  }
+
+  Widget _settingsOptRow(String label, bool active, bool cursor,
+      VoidCallback? onTap, {bool locked = false}) {
+    final ac = _accent;
+    return GestureDetector(
+      onTap: locked ? null : onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 80),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: cursor
+              ? ac.withOpacity(0.12)
+              : active
+                  ? ac.withOpacity(0.06)
+                  : Colors.transparent,
+          border: Border(
+            bottom: BorderSide(color: Colors.white.withOpacity(0.05), width: 0.4)),
+        ),
+        child: Row(children: [
+          if (active && !locked)
+            Container(width: 3, height: 14,
+                margin: const EdgeInsets.only(right: 8),
+                decoration: BoxDecoration(
+                    color: ac, borderRadius: BorderRadius.circular(2)))
+          else
+            const SizedBox(width: 11),
+          Expanded(child: Text(label, style: TextStyle(
+              color: locked
+                  ? Colors.white.withOpacity(0.20)
+                  : (active || cursor ? Colors.white : Colors.white.withOpacity(0.55)),
+              fontSize: 8.5,
+              fontWeight: (active || cursor) && !locked
+                  ? FontWeight.w500 : FontWeight.normal))),
+          if (active && !locked)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: ac.withOpacity(0.18),
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: ac.withOpacity(0.50), width: 0.6),
+              ),
+              child: Text('ON', style: TextStyle(
+                  color: ac, fontSize: 7, fontWeight: FontWeight.bold)),
+            )
+          else if (locked)
+            Text('SOON', style: TextStyle(
+                color: Colors.white.withOpacity(0.18), fontSize: 6.5,
+                letterSpacing: 0.5)),
+          if (cursor && !locked)
+            Padding(
+              padding: const EdgeInsets.only(left: 6),
+              child: Text('›', style: TextStyle(color: ac, fontSize: 14,
+                  fontWeight: FontWeight.bold)),
+            ),
+        ]),
+      ),
     );
   }
 
@@ -1356,81 +1668,6 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
     );
   }
 
-  Widget _termHint(String key, String label) {
-    final ac = _accent;
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-          decoration: BoxDecoration(
-            color: ac.withOpacity(0.06),
-            borderRadius: BorderRadius.circular(2),
-            border: Border.all(color: ac.withOpacity(0.35), width: 0.5),
-          ),
-          child: Text(key, style: TextStyle(
-            color: ac.withOpacity(0.85), fontSize: 6,
-            fontFamily: 'monospace', fontWeight: FontWeight.bold)),
-        ),
-        const SizedBox(width: 3),
-        Text(label, style: const TextStyle(
-          color: Colors.white30, fontSize: 6, fontFamily: 'monospace')),
-      ],
-    );
-  }
-
-  // ── Settings panel (terminal slide-in, fully functional) ─────────────────
-
-  // Helper type for an option row
-  Widget _optRow(String label, bool sel, bool cursor, VoidCallback onTap) {
-    final ac = _accent;
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 60),
-        padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 2),
-        decoration: BoxDecoration(
-          color: cursor ? ac.withOpacity(0.15) : Colors.transparent,
-          borderRadius: BorderRadius.circular(2),
-        ),
-        child: Row(children: [
-          Text(sel ? '> ' : '  ',
-            style: TextStyle(
-              color: cursor ? Colors.white : ac,
-              fontSize: 8, fontFamily: 'monospace')),
-          Text(label, style: TextStyle(
-            color: sel || cursor ? Colors.white : Colors.white30,
-            fontSize: 7.5, fontFamily: 'monospace')),
-          if (sel) ...[
-            const SizedBox(width: 5),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 3),
-              decoration: BoxDecoration(
-                border: Border.all(color: ac.withOpacity(0.55), width: 0.5),
-                borderRadius: BorderRadius.circular(2),
-              ),
-              child: Text('ON', style: TextStyle(
-                color: ac, fontSize: 6, fontFamily: 'monospace')),
-            ),
-          ],
-        ]),
-      ),
-    );
-  }
-
-  Widget _settingSection(String title, List<Widget> rows) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(title, style: TextStyle(
-          color: _accent, fontSize: 7, fontFamily: 'monospace',
-          fontWeight: FontWeight.bold, letterSpacing: 0.5)),
-        const SizedBox(height: 3),
-        ...rows,
-      ],
-    );
-  }
-
   Widget _buildActiveGame() {
     return _activeGame!.builder!(
       userId: widget.userId,
@@ -1467,7 +1704,8 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen> {
 
   Widget _buildDPad() => _ConsoleDPad(
       controller: _ctrl,
-      joystick: _activeGame?.supportsDiagonal ?? false);
+      joystick: _activeGame?.supportsDiagonal ?? false,
+      accent: _accent);
 
   Widget _buildABXYCluster({double size = 48.0}) {
     final btnSize = size;
@@ -2030,7 +2268,9 @@ class _ConsoleDPad extends StatefulWidget {
   final ArcadeInputController controller;
   final bool joystick;
   final double size;
-  const _ConsoleDPad({required this.controller, this.joystick = false, this.size = 144});
+  final Color accent;
+  const _ConsoleDPad({required this.controller, this.joystick = false,
+      this.size = 144, this.accent = const Color(0xFF00FF88)});
   @override State<_ConsoleDPad> createState() => _ConsoleDPadState();
 }
 
@@ -2093,224 +2333,244 @@ class _ConsoleDPadState extends State<_ConsoleDPad> {
       child: CustomPaint(
         size: Size(widget.size, widget.size),
         painter: widget.joystick
-            ? _RoundDPadPainter(active: _active)
-            : _CrossDPadPainter(active: _active),
+            ? _RoundDPadPainter(active: _active, accent: widget.accent)
+            : _CrossDPadPainter(active: _active, accent: widget.accent),
       ),
     );
   }
 }
 
-// ─── Cross D-pad painter (cardinal-only games) ────────────────────────────────
+// ─── Modern Cross D-pad painter ───────────────────────────────────────────────
 
 class _CrossDPadPainter extends CustomPainter {
   final Set<ArcadeButton> active;
-  const _CrossDPadPainter({required this.active});
+  final Color accent;
+  const _CrossDPadPainter({required this.active, this.accent = const Color(0xFF00FF88)});
 
   @override
   bool shouldRepaint(_CrossDPadPainter o) =>
-      o.active.length != active.length || !o.active.containsAll(active);
+      o.active.length != active.length || !o.active.containsAll(active) || o.accent != accent;
+
+  bool _lit(ArcadeButton b) => active.contains(b);
 
   @override
   void paint(Canvas canvas, Size size) {
-    const cx = 72.0, cy = 72.0;
-    const arm = 48.0, half = arm / 2;
-    const r = 9.0; // outer-tip corner radius
-
-    bool lit(ArcadeButton b) => active.contains(b);
-    const base    = Color(0xFF1C1C1C);
-    const pressed = Color(0xFF3E3E3E);
+    final cx = size.width / 2, cy = size.height / 2;
+    const arm = 50.0, half = arm / 2;
+    const r = 10.0;
     final p = Paint()..isAntiAlias = true;
 
-    // ── Arms ──────────────────────────────────────────────────────────────────
-    // Up
-    p.color = lit(ArcadeButton.up) ? pressed : base;
-    canvas.drawRRect(RRect.fromRectAndCorners(
-        Rect.fromLTWH(cx - half, 0, arm, cy - half),
-        topLeft: Radius.circular(r), topRight: Radius.circular(r)), p);
-    // Down
-    p.color = lit(ArcadeButton.down) ? pressed : base;
-    canvas.drawRRect(RRect.fromRectAndCorners(
-        Rect.fromLTWH(cx - half, cy + half, arm, cy - half),
-        bottomLeft: Radius.circular(r), bottomRight: Radius.circular(r)), p);
-    // Left
-    p.color = lit(ArcadeButton.left) ? pressed : base;
-    canvas.drawRRect(RRect.fromRectAndCorners(
-        Rect.fromLTWH(0, cy - half, cx - half, arm),
-        topLeft: Radius.circular(r), bottomLeft: Radius.circular(r)), p);
-    // Right
-    p.color = lit(ArcadeButton.right) ? pressed : base;
-    canvas.drawRRect(RRect.fromRectAndCorners(
-        Rect.fromLTWH(cx + half, cy - half, cx - half, arm),
-        topRight: Radius.circular(r), bottomRight: Radius.circular(r)), p);
-    // Centre fill (no rounding, fills the gap between arms)
-    p.color = base;
-    canvas.drawRect(Rect.fromLTWH(cx - half, cy - half, arm, arm), p);
+    // ── Outer subtle glow ring when any button pressed ─────────────────────────
+    if (active.isNotEmpty) {
+      p.color = accent.withOpacity(0.10);
+      p.maskFilter = const MaskFilter.blur(BlurStyle.normal, 12);
+      canvas.drawCircle(Offset(cx, cy), size.width * 0.45, p);
+      p.maskFilter = null;
+    }
 
-    // ── Outline strokes on cross bars ─────────────────────────────────────────
-    p..color = Colors.white.withOpacity(0.07)
+    void drawArm(Rect rect, {double tl=0,double tr=0,double bl=0,double br=0, ArcadeButton? btn}) {
+      final isLit = btn != null && _lit(btn);
+      // Shadow/depth
+      p.color = Colors.black.withOpacity(0.50);
+      canvas.drawRRect(RRect.fromRectAndCorners(rect.shift(const Offset(0, 2)),
+          topLeft: Radius.circular(tl), topRight: Radius.circular(tr),
+          bottomLeft: Radius.circular(bl), bottomRight: Radius.circular(br)), p);
+      // Base
+      if (isLit) {
+        p.shader = LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight,
+            colors: [accent.withOpacity(0.85), accent.withOpacity(0.55)]
+        ).createShader(rect);
+      } else {
+        p.shader = const LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight,
+            colors: [Color(0xFF2A2A2A), Color(0xFF181818)]
+        ).createShader(Rect.fromLTWH(0, 0, 200, 200));
+      }
+      canvas.drawRRect(RRect.fromRectAndCorners(rect,
+          topLeft: Radius.circular(tl), topRight: Radius.circular(tr),
+          bottomLeft: Radius.circular(bl), bottomRight: Radius.circular(br)), p);
+      p.shader = null;
+      // Top-edge highlight (bevel)
+      if (!isLit) {
+        p.color = Colors.white.withOpacity(0.09);
+        canvas.drawRRect(RRect.fromRectAndCorners(
+            Rect.fromLTWH(rect.left + 1, rect.top + 1, rect.width - 2, 1.5),
+            topLeft: Radius.circular(tl), topRight: Radius.circular(tr)), p);
+      }
+      // Accent inner glow when lit
+      if (isLit) {
+        p..color = accent.withOpacity(0.30)
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6);
+        canvas.drawRRect(RRect.fromRectAndCorners(rect,
+            topLeft: Radius.circular(tl), topRight: Radius.circular(tr),
+            bottomLeft: Radius.circular(bl), bottomRight: Radius.circular(br)), p);
+        p.maskFilter = null;
+      }
+    }
+
+    // Draw four arms
+    drawArm(Rect.fromLTWH(cx - half, 0, arm, cy - half + 2),
+        tl: r, tr: r, btn: ArcadeButton.up);
+    drawArm(Rect.fromLTWH(cx - half, cy + half - 2, arm, cy - half + 2),
+        bl: r, br: r, btn: ArcadeButton.down);
+    drawArm(Rect.fromLTWH(0, cy - half, cx - half + 2, arm),
+        tl: r, bl: r, btn: ArcadeButton.left);
+    drawArm(Rect.fromLTWH(cx + half - 2, cy - half, cx - half + 2, arm),
+        tr: r, br: r, btn: ArcadeButton.right);
+
+    // Centre fill (dark disc)
+    p.color = const Color(0xFF151515);
+    canvas.drawRect(Rect.fromLTWH(cx - half, cy - half, arm, arm), p);
+    p.color = const Color(0xFF1E1E1E);
+    canvas.drawCircle(Offset(cx, cy), half * 0.55, p);
+    p..color = Colors.white.withOpacity(0.05)
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.0;
-    canvas.drawRRect(RRect.fromRectAndCorners(          // vertical bar
-        Rect.fromLTWH(cx - half, 0, arm, size.height),
-        topLeft: Radius.circular(r), topRight: Radius.circular(r),
-        bottomLeft: Radius.circular(r), bottomRight: Radius.circular(r)), p);
-    canvas.drawRRect(RRect.fromRectAndCorners(          // horizontal bar
-        Rect.fromLTWH(0, cy - half, size.width, arm),
-        topLeft: Radius.circular(r), topRight: Radius.circular(r),
-        bottomLeft: Radius.circular(r), bottomRight: Radius.circular(r)), p);
+      ..strokeWidth = 1;
+    canvas.drawCircle(Offset(cx, cy), half * 0.55, p);
     p.style = PaintingStyle.fill;
 
-    // ── Bevel highlights (top/left edge = lighter; bottom/right = shadow) ─────
-    // Up-arm top highlight
-    p.color = Colors.white.withOpacity(lit(ArcadeButton.up) ? 0.14 : 0.07);
-    canvas.drawRRect(RRect.fromRectAndCorners(
-        Rect.fromLTWH(cx - half + 1, 1, arm - 2, 2),
-        topLeft: Radius.circular(r), topRight: Radius.circular(r)), p);
-    // Down-arm bottom shadow
-    p.color = Colors.black.withOpacity(0.35);
-    canvas.drawRRect(RRect.fromRectAndCorners(
-        Rect.fromLTWH(cx - half + 1, size.height - 3, arm - 2, 2),
-        bottomLeft: Radius.circular(r), bottomRight: Radius.circular(r)), p);
-    // Left-arm left highlight
-    p.color = Colors.white.withOpacity(lit(ArcadeButton.left) ? 0.14 : 0.07);
-    canvas.drawRRect(RRect.fromRectAndCorners(
-        Rect.fromLTWH(1, cy - half + 1, 2, arm - 2),
-        topLeft: Radius.circular(r), bottomLeft: Radius.circular(r)), p);
-    // Right-arm right shadow
-    p.color = Colors.black.withOpacity(0.35);
-    canvas.drawRRect(RRect.fromRectAndCorners(
-        Rect.fromLTWH(size.width - 3, cy - half + 1, 2, arm - 2),
-        topRight: Radius.circular(r), bottomRight: Radius.circular(r)), p);
+    // ── Chevron arrows ─────────────────────────────────────────────────────────
+    void drawChevron(List<Offset> pts, ArcadeButton btn) {
+      final isLit = _lit(btn);
+      p.color = isLit ? accent : Colors.white.withOpacity(0.45);
+      if (isLit) {
+        p.maskFilter = MaskFilter.blur(BlurStyle.normal, 3);
+      }
+      final path = Path()..moveTo(pts[0].dx, pts[0].dy);
+      for (int i = 1; i < pts.length; i++) path.lineTo(pts[i].dx, pts[i].dy);
+      path.close();
+      canvas.drawPath(path, p);
+      p.maskFilter = null;
+    }
 
-    // ── Arrow triangles ───────────────────────────────────────────────────────
-    final ap = Paint()..isAntiAlias = true;
-    // Up
-    ap.color = Colors.white.withOpacity(lit(ArcadeButton.up)    ? 0.95 : 0.40);
-    canvas.drawPath(Path()..moveTo(cx, 14)..lineTo(cx - 9, 33)..lineTo(cx + 9, 33)..close(), ap);
-    // Down
-    ap.color = Colors.white.withOpacity(lit(ArcadeButton.down)  ? 0.95 : 0.40);
-    canvas.drawPath(Path()..moveTo(cx, 130)..lineTo(cx - 9, 111)..lineTo(cx + 9, 111)..close(), ap);
-    // Left
-    ap.color = Colors.white.withOpacity(lit(ArcadeButton.left)  ? 0.95 : 0.40);
-    canvas.drawPath(Path()..moveTo(14, cy)..lineTo(33, cy - 9)..lineTo(33, cy + 9)..close(), ap);
-    // Right
-    ap.color = Colors.white.withOpacity(lit(ArcadeButton.right) ? 0.95 : 0.40);
-    canvas.drawPath(Path()..moveTo(130, cy)..lineTo(111, cy - 9)..lineTo(111, cy + 9)..close(), ap);
+    // Up chevron
+    drawChevron([Offset(cx, 10), Offset(cx - 8, 26), Offset(cx - 3, 26),
+        Offset(cx - 3, 30), Offset(cx + 3, 30), Offset(cx + 3, 26), Offset(cx + 8, 26)],
+        ArcadeButton.up);
+    // Down chevron
+    drawChevron([Offset(cx, size.height - 10), Offset(cx - 8, size.height - 26),
+        Offset(cx - 3, size.height - 26), Offset(cx - 3, size.height - 30),
+        Offset(cx + 3, size.height - 30), Offset(cx + 3, size.height - 26),
+        Offset(cx + 8, size.height - 26)],
+        ArcadeButton.down);
+    // Left chevron
+    drawChevron([Offset(10, cy), Offset(26, cy - 8), Offset(26, cy - 3),
+        Offset(30, cy - 3), Offset(30, cy + 3), Offset(26, cy + 3), Offset(26, cy + 8)],
+        ArcadeButton.left);
+    // Right chevron
+    drawChevron([Offset(size.width - 10, cy), Offset(size.width - 26, cy - 8),
+        Offset(size.width - 26, cy - 3), Offset(size.width - 30, cy - 3),
+        Offset(size.width - 30, cy + 3), Offset(size.width - 26, cy + 3),
+        Offset(size.width - 26, cy + 8)],
+        ArcadeButton.right);
   }
 }
 
-// ─── Round D-pad painter (8-direction games: shooter / raycaster) ─────────────
-// Circular disc with cross/plus embossed — like a Game Boy / Switch D-pad cap.
+// ─── Modern Round D-pad painter (8-dir: shooter / raycaster) ─────────────────
 
 class _RoundDPadPainter extends CustomPainter {
   final Set<ArcadeButton> active;
-  const _RoundDPadPainter({required this.active});
+  final Color accent;
+  const _RoundDPadPainter({required this.active, this.accent = const Color(0xFF00FF88)});
 
   @override
   bool shouldRepaint(_RoundDPadPainter o) =>
-      o.active.length != active.length || !o.active.containsAll(active);
+      o.active.length != active.length || !o.active.containsAll(active) || o.accent != accent;
+
+  bool _lit(ArcadeButton b) => active.contains(b);
 
   @override
   void paint(Canvas canvas, Size size) {
-    const cx = 72.0, cy = 72.0;
-    const R = 65.0;            // disc radius
-    const arm = 47.0, half = arm / 2; // cross-arm width
-
-    bool lit(ArcadeButton b) => active.contains(b);
-    const base    = Color(0xFF1C1C1C);
-    const hi      = Color(0xFF3A3A3A); // pressed / highlight
+    final cx = size.width / 2, cy = size.height / 2;
+    final R = size.width / 2 - 4;
     final p = Paint()..isAntiAlias = true;
 
-    // Drop shadow
-    p.color = Colors.black.withOpacity(0.50);
-    canvas.drawCircle(const Offset(cx + 2, cy + 4), R, p);
-
-    // Base disc
-    p.color = base;
-    canvas.drawCircle(const Offset(cx, cy), R, p);
-
-    // ── Clip to disc for arm/quadrant fills ──────────────────────────────────
-    canvas.save();
-    canvas.clipPath(Path()
-        ..addOval(Rect.fromCircle(center: const Offset(cx, cy), radius: R)));
-
-    // Fill each arm (the cross bars — always visible as slightly raised areas)
-    // Vertical bar
-    p.color = const Color(0xFF222222);
-    canvas.drawRect(Rect.fromLTWH(cx - half, 0, arm, 144), p);
-    // Horizontal bar
-    canvas.drawRect(Rect.fromLTWH(0, cy - half, 144, arm), p);
-
-    // Active quadrant glow — lights up the pressed arm segment
-    if (lit(ArcadeButton.up)) {
-      p.color = hi;
-      canvas.drawRect(Rect.fromLTWH(cx - half, 0, arm, cy - half), p);
-    }
-    if (lit(ArcadeButton.down)) {
-      p.color = hi;
-      canvas.drawRect(Rect.fromLTWH(cx - half, cy + half, arm, cy - half), p);
-    }
-    if (lit(ArcadeButton.left)) {
-      p.color = hi;
-      canvas.drawRect(Rect.fromLTWH(0, cy - half, cx - half, arm), p);
-    }
-    if (lit(ArcadeButton.right)) {
-      p.color = hi;
-      canvas.drawRect(Rect.fromLTWH(cx + half, cy - half, cx - half, arm), p);
+    // Outer glow ring when any direction active
+    if (active.isNotEmpty) {
+      p..color = accent.withOpacity(0.12)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10);
+      canvas.drawCircle(Offset(cx, cy), R + 4, p);
+      p.maskFilter = null;
     }
 
-    // Centre knob (always base — where the cross bars intersect)
-    p.color = base;
-    canvas.drawRect(Rect.fromLTWH(cx - half, cy - half, arm, arm), p);
+    // Base disc shadow
+    p.color = Colors.black.withOpacity(0.45);
+    canvas.drawCircle(Offset(cx + 1, cy + 2), R, p);
 
-    // Cross groove lines — dark dividers between the arm sections
-    p..color = Colors.black.withOpacity(0.55)
+    // Base disc gradient
+    p.shader = const RadialGradient(
+      center: Alignment(-0.3, -0.4),
+      colors: [Color(0xFF2C2C2C), Color(0xFF141414)],
+    ).createShader(Rect.fromCircle(center: Offset(72, 72), radius: 68));
+    canvas.drawCircle(Offset(cx, cy), R, p);
+    p.shader = null;
+
+    // Outer rim highlight
+    p..color = Colors.white.withOpacity(0.10)
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.5;
-    canvas.drawLine(const Offset(cx - half, 0), const Offset(cx - half, 144), p);
-    canvas.drawLine(const Offset(cx + half, 0), const Offset(cx + half, 144), p);
-    canvas.drawLine(const Offset(0, cy - half), const Offset(144, cy - half), p);
-    canvas.drawLine(const Offset(0, cy + half), const Offset(144, cy + half), p);
+      ..strokeWidth = 1.2;
+    canvas.drawCircle(Offset(cx, cy), R, p);
     p.style = PaintingStyle.fill;
 
-    // Bevel highlights
-    p.color = Colors.white.withOpacity(lit(ArcadeButton.up) ? 0.16 : 0.07);
-    canvas.drawRect(Rect.fromLTWH(cx - half + 1, 1, arm - 2, 2), p);
-    p.color = Colors.white.withOpacity(lit(ArcadeButton.left) ? 0.16 : 0.07);
-    canvas.drawRect(Rect.fromLTWH(1, cy - half + 1, 2, arm - 2), p);
-    // Bottom/right shadows
-    p.color = Colors.black.withOpacity(0.30);
-    canvas.drawRect(Rect.fromLTWH(cx - half + 1, 141, arm - 2, 2), p);
-    canvas.drawRect(Rect.fromLTWH(141, cy - half + 1, 2, arm - 2), p);
-
-    canvas.restore();
-
-    // Outer ring
-    p..color = Colors.black.withOpacity(0.80)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.5;
-    canvas.drawCircle(const Offset(cx, cy), R, p);
+    // 8 sector dividers (very subtle)
+    p..color = Colors.black.withOpacity(0.35)
+      ..strokeWidth = 0.8
+      ..style = PaintingStyle.stroke;
+    for (int i = 0; i < 8; i++) {
+      final angle = i * pi / 4;
+      canvas.drawLine(Offset(cx, cy),
+          Offset(cx + cos(angle) * R, cy + sin(angle) * R), p);
+    }
     p.style = PaintingStyle.fill;
 
-    // Specular arc (upper-left rim)
-    p..color = Colors.white.withOpacity(0.18)
+    // Highlight active sectors
+    void drawSector(double startAngle, double sweepAngle, ArcadeButton btn) {
+      if (!_lit(btn)) return;
+      p.color = accent.withOpacity(0.30);
+      final path = Path()
+        ..moveTo(cx, cy)
+        ..arcTo(Rect.fromCircle(center: Offset(cx, cy), radius: R - 2),
+            startAngle, sweepAngle, false)
+        ..close();
+      canvas.drawPath(path, p);
+      p..color = accent.withOpacity(0.20)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6);
+      canvas.drawPath(path, p);
+      p.maskFilter = null;
+    }
+
+    drawSector(-pi / 2 - pi / 8, pi / 4, ArcadeButton.up);
+    drawSector(pi / 2 - pi / 8, pi / 4, ArcadeButton.down);
+    drawSector(pi - pi / 8, pi / 4, ArcadeButton.left);
+    drawSector(-pi / 8, pi / 4, ArcadeButton.right);
+
+    // Inner disc / hub
+    p.color = const Color(0xFF101010);
+    canvas.drawCircle(Offset(cx, cy), R * 0.26, p);
+    p..color = Colors.white.withOpacity(0.08)
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.0;
-    canvas.drawArc(
-        Rect.fromCircle(center: const Offset(cx, cy), radius: R - 2.5),
-        -pi * 1.25, pi * 0.65, false, p);
+      ..strokeWidth = 1;
+    canvas.drawCircle(Offset(cx, cy), R * 0.26, p);
     p.style = PaintingStyle.fill;
 
-    // Arrow triangles (same geometry as cross pad)
-    final ap = Paint()..isAntiAlias = true;
-    ap.color = Colors.white.withOpacity(lit(ArcadeButton.up)    ? 0.95 : 0.35);
-    canvas.drawPath(Path()..moveTo(cx, 14)..lineTo(cx - 9, 33)..lineTo(cx + 9, 33)..close(), ap);
-    ap.color = Colors.white.withOpacity(lit(ArcadeButton.down)  ? 0.95 : 0.35);
-    canvas.drawPath(Path()..moveTo(cx, 130)..lineTo(cx - 9, 111)..lineTo(cx + 9, 111)..close(), ap);
-    ap.color = Colors.white.withOpacity(lit(ArcadeButton.left)  ? 0.95 : 0.35);
-    canvas.drawPath(Path()..moveTo(14, cy)..lineTo(33, cy - 9)..lineTo(33, cy + 9)..close(), ap);
-    ap.color = Colors.white.withOpacity(lit(ArcadeButton.right) ? 0.95 : 0.35);
-    canvas.drawPath(Path()..moveTo(130, cy)..lineTo(111, cy - 9)..lineTo(111, cy + 9)..close(), ap);
+    // Cardinal direction arrows
+    final arrR = R * 0.72;
+    void drawArrow(double angle, ArcadeButton btn) {
+      final isLit = _lit(btn);
+      canvas.save();
+      canvas.translate(cx + cos(angle) * arrR, cy + sin(angle) * arrR);
+      canvas.rotate(angle + pi / 2);
+      p.color = isLit ? accent : Colors.white.withOpacity(0.40);
+      if (isLit) p.maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
+      const s = 6.0;
+      canvas.drawPath(Path()
+          ..moveTo(0, -s)..lineTo(-s, s * 0.4)..lineTo(0, 0)..lineTo(s, s * 0.4)..close(), p);
+      p.maskFilter = null;
+      canvas.restore();
+    }
+    drawArrow(-pi / 2, ArcadeButton.up);
+    drawArrow(pi / 2, ArcadeButton.down);
+    drawArrow(pi, ArcadeButton.left);
+    drawArrow(0, ArcadeButton.right);
   }
 }
 
@@ -2474,16 +2734,16 @@ class _ConsoleActionButtonState extends State<_ConsoleActionButton> {
         decoration: BoxDecoration(
           shape: BoxShape.circle,
           color: isClear
-              ? c.withOpacity(_pressed ? 0.18 : 0.04)
+              ? Colors.white.withOpacity(_pressed ? 0.22 : 0.09)
               : isBlackout
                   ? (_pressed ? const Color(0xFF1A1A1A) : Colors.black)
                   : (_pressed ? c.withOpacity(0.55) : c),
           border: (isClear || isBlackout)
               ? Border.all(
-                  color: c.withOpacity(isClear
-                      ? (_pressed ? 0.90 : 0.55)
-                      : (_pressed ? 0.55 : 0.30)),
-                  width: isClear ? 1.5 : 1.2)
+                  color: isClear
+                      ? c.withOpacity(_pressed ? 1.0 : 0.75)
+                      : c.withOpacity(_pressed ? 0.55 : 0.30),
+                  width: isClear ? 2.0 : 1.2)
               : null,
           boxShadow: _pressed ? [] : [
             BoxShadow(
