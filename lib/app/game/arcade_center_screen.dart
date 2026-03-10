@@ -1941,10 +1941,9 @@ class _HeroDemoGameState extends State<_HeroDemoGame> {
   void _botPlay() {
     for (final b in ArcadeButton.values) _bot.release(b);
 
-    // Phase 0 — alternate A / Start for the first 10 ticks to get past start screens
+    // Phase 0 — press A for the first 10 ticks to get past start screens
     if (_tick <= 10) {
-      if (_tick % 2 == 0) _bot.press(ArcadeButton.a);
-      else _bot.press(ArcadeButton.start);
+      _bot.press(ArcadeButton.a);
       return;
     }
 
@@ -1965,14 +1964,9 @@ class _HeroDemoGameState extends State<_HeroDemoGame> {
         // Keeps snake in a horizontal strip and avoids immediate wall death
         const _snakePattern = [
           ArcadeButton.right, ArcadeButton.right, ArcadeButton.right, ArcadeButton.right,
-          ArcadeButton.right, ArcadeButton.right, ArcadeButton.right, ArcadeButton.right,
-          ArcadeButton.right, ArcadeButton.right, ArcadeButton.right, ArcadeButton.right,
-          ArcadeButton.right, ArcadeButton.right,
           ArcadeButton.down, ArcadeButton.down, ArcadeButton.down, ArcadeButton.down,
           ArcadeButton.left, ArcadeButton.left, ArcadeButton.left, ArcadeButton.left,
           ArcadeButton.left, ArcadeButton.left, ArcadeButton.left, ArcadeButton.left,
-          ArcadeButton.left, ArcadeButton.left, ArcadeButton.left, ArcadeButton.left,
-          ArcadeButton.left, ArcadeButton.left,
           ArcadeButton.up, ArcadeButton.up, ArcadeButton.up, ArcadeButton.up,
         ];
         _bot.press(_snakePattern[t % _snakePattern.length]);
@@ -2630,13 +2624,11 @@ class _ConsoleDPadState extends State<_ConsoleDPad> {
       onPointerMove:   (e) => _applyButtons(_buttonsFor(e.localPosition), e.localPosition),
       onPointerUp:     (_) => _release(),
       onPointerCancel: (_) => _release(),
-      // Joystick games → round D-pad (circular disc with cross embossed)
-      // Cardinal games → classic plus-cross D-pad
+      // Always render the one-piece cross d-pad; joystick flag only affects
+      // input detection (8-dir vs 4-dir) in _buttonsFor, not appearance.
       child: CustomPaint(
         size: Size(widget.size, widget.size),
-        painter: widget.joystick
-            ? _RoundDPadPainter(active: _active, accent: widget.accent)
-            : _CrossDPadPainter(active: _active, accent: widget.accent),
+        painter: _CrossDPadPainter(active: _active, accent: widget.accent),
       ),
     );
   }
