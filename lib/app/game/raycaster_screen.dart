@@ -177,6 +177,10 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
   double _dimFlash = 0;       // atmospheric darkness pulse (0=normal, 1=fully dimmed)
   double _dimTimer = 0;       // countdown to next dim event
 
+  String _waveFlavorText = '';
+  bool _relicActive = false;
+  double _relicX = 7.5, _relicY = 7.5;
+
   final List<_Enemy> _enemies = [];
   final List<_Projectile> _projectiles = [];
   final List<double> _zBuf = List<double>.filled(120, 0);
@@ -323,6 +327,8 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
       _waveBannerTimer = 0;
       _dimFlash = 0;
       _dimTimer = 4.0 + _rng.nextDouble() * 6.0;
+      _waveFlavorText = '';
+      _relicActive = false;
       _state = _GameState.playing;
     });
     _spawnWave(1);
@@ -352,6 +358,12 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
       ]);
       return;
     }
+
+    // Boss wave (every 5th): spawn a mega-demon first
+    if (wave % 5 == 0) {
+      _enemies.add(_Enemy(8.5, 3.5, type: _EnemyType.demon, wave: wave * 2));
+    }
+
     final count = wave + 3;
     int spawned = 0, tries = 0;
     while (spawned < count && tries < 500) {
@@ -466,8 +478,8 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
   void _checkWaveComplete() {
     if (_enemies.any((e) => e.alive)) return;
     _wave++;
-    _ammo += 30;                    // pistol: 30 rounds per wave
-    _health = (_health + 20).clamp(0, 100.0);
+    _ammo += 30;
+    _health = (_health + 15).clamp(0, 100.0); // +15 HP regen on clear
 
     // Shotgun: unlock at wave 2, +6 shells every wave thereafter
     if (_wave == 2) {
@@ -484,12 +496,36 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
       _smgAmmo += 20;
     }
 
+    // Relic spawns every 3 waves at map centre
+    if (_wave % 3 == 0) {
+      _relicActive = true;
+      _relicX = 7.5; _relicY = 7.5;
+    }
+
+    final isBoss = _wave % 5 == 0;
+    _waveFlavorText = _getFlavorText(_wave, isBoss);
+    _waveBannerTimer = isBoss ? 4.0 : 2.5;
+
     _saldo += 1;
     widget.onSaldoChanged(_saldo);
     _updateFirestore(_saldo);
-    _waveBannerTimer = 2.5;
     HapticFeedback.heavyImpact();
     _spawnWave(_wave);
+  }
+
+  String _getFlavorText(int wave, bool isBoss) {
+    if (isBoss) return '☠  ¡¡JEFE INVOCADO!!  ☠';
+    const texts = [
+      'La oscuridad se intensifica…',
+      '¡Más demonios despiertan!',
+      '✨ Un relicario aparece ✨',
+      'La cripta tiembla de furia…',
+      '¡Resistid si podéis!',
+      'El reino infernal avanza…',
+      'Los muertos no descansan…',
+      'Sangre y fuego te esperan…',
+    ];
+    return texts[(wave - 2) % texts.length];
   }
 
   void _tick(Timer t) {
@@ -503,6 +539,7 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
     _updateEnemies(dts);
     _updateProjectiles(dts);
     _updateTimers(dts);
+    _checkRelic();
     setState(() {});
   }
 
@@ -676,6 +713,16 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
     }
   }
 
+  void _checkRelic() {
+    if (!_relicActive) return;
+    final dx = _relicX - _posX, dy = _relicY - _posY;
+    if (dx * dx + dy * dy < 0.6 * 0.6) {
+      _relicActive = false;
+      _health = (_health + 25).clamp(0, 100.0);
+      HapticFeedback.heavyImpact();
+    }
+  }
+
   void _gameOver() {
     _gameTimer?.cancel();
     _state = _GameState.dead;
@@ -725,6 +772,9 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
               isFiring: _fireTimer > 0,
               showHud: _state == _GameState.playing || _state == _GameState.dead,
               time: _time,
+              relicActive: _relicActive,
+              relicX: _relicX,
+              relicY: _relicY,
             ),
           ),
         ),
@@ -738,17 +788,45 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
   }
 
   Widget _buildWaveBanner() {
+    final isBoss = _wave % 5 == 0;
     return Center(
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
         decoration: BoxDecoration(
-          color: Colors.black.withOpacity(0.80),
-          border: Border.all(color: const Color(0xFFCC2200), width: 2),
+          color: Colors.black.withOpacity(0.85),
+          border: Border.all(
+            color: isBoss ? const Color(0xFFFF6600) : const Color(0xFFCC2200),
+            width: isBoss ? 3 : 2,
+          ),
           borderRadius: BorderRadius.circular(8),
         ),
-        child: Text('¡OLEADA $_wave!',
-          style: const TextStyle(color: Colors.white, fontSize: 36,
-            fontWeight: FontWeight.bold, fontFamily: 'monospace', letterSpacing: 4)),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              isBoss ? '⚡ OLEADA JEFE $_wave ⚡' : '¡OLEADA $_wave!',
+              style: TextStyle(
+                color: isBoss ? const Color(0xFFFF8800) : Colors.white,
+                fontSize: isBoss ? 30 : 36,
+                fontWeight: FontWeight.bold,
+                fontFamily: 'monospace',
+                letterSpacing: 4,
+              ),
+            ),
+            if (_waveFlavorText.isNotEmpty) ...[
+              const SizedBox(height: 6),
+              Text(
+                _waveFlavorText,
+                style: TextStyle(
+                  color: isBoss ? const Color(0xFFFF4400) : const Color(0xFFAA4422),
+                  fontSize: 12,
+                  fontFamily: 'monospace',
+                  letterSpacing: 1,
+                ),
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }
@@ -794,8 +872,10 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
               SizedBox(height: 8),
               Text('BAJAS × OLEADA = PUNTUACIÓN',
                 style: TextStyle(color: Color(0xFFCC8800), fontSize: 10, fontWeight: FontWeight.bold, fontFamily: 'monospace')),
-              Text('+1 PTO CADA 5 OLEADAS',
-                style: TextStyle(color: Color(0xFFFF4400), fontSize: 11, fontWeight: FontWeight.bold, fontFamily: 'monospace')),
+              Text('+1 PTO CADA OLEADA   JEFE CADA 5ª',
+                style: TextStyle(color: Color(0xFFFF4400), fontSize: 10, fontWeight: FontWeight.bold, fontFamily: 'monospace')),
+              Text('✨ Relicarios curan +25 HP cada 3 oleadas',
+                style: TextStyle(color: Color(0xFF44FF88), fontSize: 9, fontFamily: 'monospace')),
             ]),
           ),
           const SizedBox(height: 22),
@@ -953,6 +1033,8 @@ class _RaycasterPainter extends CustomPainter {
   final _WeaponType weapon;
   final double hitFlash, shootFlash, dimFlash, time;
   final bool isFiring, showHud;
+  final bool relicActive;
+  final double relicX, relicY;
 
   const _RaycasterPainter({
     required this.posX, required this.posY,
@@ -969,6 +1051,8 @@ class _RaycasterPainter extends CustomPainter {
     required this.dimFlash,
     required this.isFiring, required this.showHud,
     required this.time,
+    required this.relicActive,
+    required this.relicX, required this.relicY,
   });
 
   @override
@@ -983,6 +1067,7 @@ class _RaycasterPainter extends CustomPainter {
     _castWalls(canvas, size, pxW, pxH);
     _drawEnemySprites(canvas, size, pxW, pxH);
     _drawProjectiles(canvas, size, pxW, pxH);
+    if (relicActive) _drawRelic(canvas, size, pxW, pxH);
     _drawScreenFx(canvas, size);
     if (showHud) {
       _drawHud(canvas, size);
@@ -996,41 +1081,76 @@ class _RaycasterPainter extends CustomPainter {
 
   void _drawCeilingAndFloor(Canvas canvas, Size size, double pxW, double pxH) {
     final p = Paint()..isAntiAlias = false;
+    final cH = size.height / 2;
+    final fY = size.height / 2;
 
-    // Ceiling — dark reddish stone
-    p.color = const Color(0xFF110808);
-    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height / 2), p);
-
-    // Floor — dark lava ground
-    p.color = const Color(0xFF180A00);
-    canvas.drawRect(Rect.fromLTWH(0, size.height / 2, size.width, size.height / 2), p);
-
-    // Atmospheric stone floor lines (distance shading)
-    p.color = const Color(0xFF200C00);
-    for (int i = 0; i < 10; i++) {
-      final lineY = size.height * 0.5 + size.height * 0.5 * (i + 0.5) / 10;
-      canvas.drawRect(Rect.fromLTWH(0, lineY, size.width, 1.0), p);
+    // Ceiling — horizontal banding from pitch-black at top to dark stone near horizon
+    const ceilingBands = [
+      (0.00, 0.12, Color(0xFF030101)),
+      (0.12, 0.30, Color(0xFF080303)),
+      (0.30, 0.55, Color(0xFF0E0505)),
+      (0.55, 0.78, Color(0xFF140707)),
+      (0.78, 0.92, Color(0xFF1A0909)),
+      (0.92, 1.00, Color(0xFF1F0B0B)),
+    ];
+    for (final band in ceilingBands) {
+      p.color = band.$3;
+      canvas.drawRect(Rect.fromLTWH(0, cH * band.$1, size.width, cH * (band.$2 - band.$1) + 1), p);
     }
+
+    // Floor — stepped distance shading (distant=lighter, near camera=darker)
+    const floorBands = [
+      (0.00, 0.06, Color(0xFF190900)),
+      (0.06, 0.16, Color(0xFF150700)),
+      (0.16, 0.32, Color(0xFF110500)),
+      (0.32, 0.55, Color(0xFF0D0400)),
+      (0.55, 0.78, Color(0xFF0A0300)),
+      (0.78, 1.00, Color(0xFF070200)),
+    ];
+    for (final band in floorBands) {
+      p.color = band.$3;
+      canvas.drawRect(Rect.fromLTWH(0, fY + cH * band.$1, size.width, cH * (band.$2 - band.$1) + 1), p);
+    }
+
     // Blood pools (static dark splotches near ground)
     p.color = const Color(0xFF2A0400);
     canvas.drawRect(Rect.fromLTWH(0, size.height * 0.82, size.width * 0.12, size.height * 0.08), p);
     canvas.drawRect(Rect.fromLTWH(size.width * 0.55, size.height * 0.88, size.width * 0.18, size.height * 0.06), p);
     canvas.drawRect(Rect.fromLTWH(size.width * 0.78, size.height * 0.80, size.width * 0.10, size.height * 0.10), p);
 
-    // Screen-edge infernal glow (vignette)
+    // Screen-edge infernal fire vignette — pulses with time
+    final fireOpacity = (0.22 + sin(time * 1.4) * 0.07).clamp(0.12, 0.38);
+    final fireColor = Color.fromARGB((fireOpacity * 255).round(), 0xCC, 0x11, 0x00);
     final vPaint = Paint()
       ..shader = LinearGradient(
-        colors: [const Color(0x44CC1100), Colors.transparent],
-      ).createShader(Rect.fromLTWH(0, 0, size.width * 0.18, size.height));
-    canvas.drawRect(Rect.fromLTWH(0, 0, size.width * 0.18, size.height), vPaint);
+        colors: [fireColor, const Color(0x00000000)],
+      ).createShader(Rect.fromLTWH(0, 0, size.width * 0.22, size.height));
+    canvas.drawRect(Rect.fromLTWH(0, 0, size.width * 0.22, size.height), vPaint);
 
     final vPaint2 = Paint()
       ..shader = LinearGradient(
         begin: Alignment.centerRight,
         end: Alignment.centerLeft,
-        colors: [const Color(0x44CC1100), Colors.transparent],
-      ).createShader(Rect.fromLTWH(size.width * 0.82, 0, size.width * 0.18, size.height));
-    canvas.drawRect(Rect.fromLTWH(size.width * 0.82, 0, size.width * 0.18, size.height), vPaint2);
+        colors: [fireColor, const Color(0x00000000)],
+      ).createShader(Rect.fromLTWH(size.width * 0.78, 0, size.width * 0.22, size.height));
+    canvas.drawRect(Rect.fromLTWH(size.width * 0.78, 0, size.width * 0.22, size.height), vPaint2);
+
+    // Top and bottom edge vignette for immersion
+    final topFire = Paint()
+      ..shader = LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [Color.fromARGB((fireOpacity * 180).round(), 0x88, 0x08, 0x00), const Color(0x00000000)],
+      ).createShader(Rect.fromLTWH(0, 0, size.width, size.height * 0.15));
+    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height * 0.15), topFire);
+
+    final botFire = Paint()
+      ..shader = LinearGradient(
+        begin: Alignment.bottomCenter,
+        end: Alignment.topCenter,
+        colors: [Color.fromARGB((fireOpacity * 200).round(), 0xAA, 0x10, 0x00), const Color(0x00000000)],
+      ).createShader(Rect.fromLTWH(0, size.height * 0.85, size.width, size.height * 0.15));
+    canvas.drawRect(Rect.fromLTWH(0, size.height * 0.85, size.width, size.height * 0.15), botFire);
   }
 
   // ── Wall raycasting ─────────────────────────────────────────────────────────
@@ -1087,8 +1207,17 @@ class _RaycasterPainter extends CustomPainter {
       final int baseB = side == 0 ? 0x08 : 0x05;
 
       final br = (1.0 / (1.0 + perpWallDist * 0.30)).clamp(0.1, 1.0);
+
+      // Brick texture: vary brightness per horizontal brick row on the wall
+      final wallHitRow = (mapY + mapX * 7) % 4; // pseudo-random row offset
+      final brickPhase = (ds + wallHitRow * 5) % 6;
+      final brickTone = brickPhase < 2 ? 1.10 : (brickPhase < 4 ? 0.97 : 0.88);
+      final adjBr = (br * brickTone).clamp(0.05, 1.0);
+
       wallPaint.color = Color.fromRGBO(
-        (baseR * br).round(), (baseG * br).round(), (baseB * br).round(), 1);
+        (baseR * adjBr).round().clamp(0, 255),
+        (baseG * adjBr).round().clamp(0, 255),
+        (baseB * adjBr).round().clamp(0, 255), 1);
       canvas.drawRect(
         Rect.fromLTWH(x * pxW, ds * pxH, pxW + 0.5, (de - ds) * pxH + 0.5), wallPaint);
     }
@@ -1542,6 +1671,45 @@ class _RaycasterPainter extends CustomPainter {
     }
   }
 
+  // ── Relic pickup (glowing green orb on floor) ────────────────────────────────
+
+  void _drawRelic(Canvas canvas, Size size, double pxW, double pxH) {
+    final dx = relicX - posX, dy = relicY - posY;
+    final invDet = 1.0 / (planeX * dirY - dirX * planeY);
+    final transformX = invDet * (dirY * dx - dirX * dy);
+    final transformY = invDet * (-planeY * dx + planeX * dy);
+    if (transformY <= 0.1) return;
+
+    final screenCol = (60 * (1 + transformX / transformY)).round();
+    if (screenCol < 0 || screenCol >= 120) return;
+    if (transformY >= zBuf[screenCol]) return;
+
+    final sx = screenCol * pxW;
+    // Place slightly below horizon (sitting on floor)
+    final baseH = (80 / transformY).abs();
+    final sprH = (baseH * 0.22).clamp(4.0, 28.0);
+    final sy = size.height * 0.5 + baseH * pxH * 0.14;
+
+    final pulse = 0.7 + sin(time * 3.5) * 0.3;
+    final sp = Paint()..isAntiAlias = true;
+
+    // Outer glow ring
+    sp.color = Color.fromARGB((70 * pulse).round(), 0x00, 0xFF, 0x88);
+    canvas.drawCircle(Offset(sx, sy), sprH * pxW * 1.6, sp);
+
+    // Mid ring
+    sp.color = Color.fromARGB((140 * pulse).round(), 0x00, 0xFF, 0x66);
+    canvas.drawCircle(Offset(sx, sy), sprH * pxW * 0.95, sp);
+
+    // Core bright
+    sp.color = const Color(0xFF88FFCC);
+    canvas.drawCircle(Offset(sx, sy), sprH * pxW * 0.50, sp);
+
+    // White hot centre
+    sp.color = Colors.white;
+    canvas.drawCircle(Offset(sx, sy), sprH * pxW * 0.18, sp);
+  }
+
   // ── Screen effects ──────────────────────────────────────────────────────────
 
   void _drawScreenFx(Canvas canvas, Size size) {
@@ -1557,6 +1725,15 @@ class _RaycasterPainter extends CustomPainter {
     if (hitFlash > 0) {
       canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height),
         Paint()..color = Colors.red.withOpacity(hitFlash * 0.50)..isAntiAlias = false);
+      // Blood spatter splotches at high damage
+      if (hitFlash > 0.65) {
+        final sp = Paint()
+          ..color = const Color(0xFF770000).withOpacity((hitFlash - 0.65) * 1.5)
+          ..isAntiAlias = false;
+        canvas.drawRect(Rect.fromLTWH(0, size.height * 0.22, size.width * 0.14, size.height * 0.12), sp);
+        canvas.drawRect(Rect.fromLTWH(size.width * 0.82, size.height * 0.30, size.width * 0.14, size.height * 0.10), sp);
+        canvas.drawRect(Rect.fromLTWH(size.width * 0.38, 0, size.width * 0.24, size.height * 0.07), sp);
+      }
     }
   }
 
@@ -1587,6 +1764,12 @@ class _RaycasterPainter extends CustomPainter {
     p.style = PaintingStyle.fill;
 
     _hudText(canvas, '❤  $health%', barX + 4, barY + 2, color: Colors.white, size: 10);
+
+    // ── Relic indicator ───────────────────────────────────────────────────────
+    if (relicActive) {
+      _hudText(canvas, '✨ RELICARIO', barX + 4, barY + 16,
+          color: const Color(0xFF44FF88), size: 7);
+    }
 
     // ── Kill counter ──────────────────────────────────────────────────────────
     _hudText(canvas, '💀 $kills', 106, barY + 2, color: Colors.white, size: 10);

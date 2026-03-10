@@ -1195,18 +1195,6 @@ class _MazePainter extends CustomPainter {
       ).createShader(Rect.fromLTWH(0, 0, size.width, size.height));
     canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), bgPaint);
 
-    // Subtle ambient glow from the maze area — a faint cyan bloom behind maze
-    final mazeCentrePaint = Paint()
-      ..color = const Color(0xFF00AACC).withOpacity(0.06)
-      ..maskFilter = MaskFilter.blur(BlurStyle.normal, cs * 6.0);
-    canvas.drawOval(
-      Rect.fromCenter(
-        center: Offset(offsetX + cs * _kMazeCols / 2, offsetY + cs * _kMazeRows / 2),
-        width: cs * _kMazeCols * 1.1,
-        height: cs * _kMazeRows * 1.1,
-      ),
-      mazeCentrePaint,
-    );
 
     // Corner vignette for cinematic depth
     final vignettePaint = Paint()
@@ -1225,25 +1213,13 @@ class _MazePainter extends CustomPainter {
       offsetX - 4, offsetY - 4,
       cs * _kMazeCols + 8, cs * _kMazeRows + 8,
     );
-    // Wide purple bloom
-    final bezelBloomPaint = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 8
-      ..color = const Color(0xFFAA00FF).withOpacity(0.4)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 14);
+    // Purple accent ring
     canvas.drawRRect(
       RRect.fromRectAndRadius(bezelRect, const Radius.circular(8)),
-      bezelBloomPaint,
-    );
-    // Mid purple glow
-    final bezelGlowPaint = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 3
-      ..color = const Color(0xFF8800FF).withOpacity(0.65)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5);
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(bezelRect, const Radius.circular(8)),
-      bezelGlowPaint,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2.5
+        ..color = const Color(0xFF8800FF).withOpacity(0.50),
     );
     // Crisp bright cyan inner line
     final bezelPaint = Paint()
@@ -1270,31 +1246,15 @@ class _MazePainter extends CustomPainter {
           case 2: // Power pellet — pulsing glow
             _drawPowerPellet(canvas, x, y, cs);
           case 3: // Ghost spawn area — deep magenta-tinted den
-            // Rich deep purple spawn floor with gradient
-            final spawnPaint = Paint()
-              ..shader = LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: const [Color(0xFF1A003A), Color(0xFF0E0022)],
-              ).createShader(Rect.fromLTWH(x, y, cs, cs));
-            canvas.drawRect(Rect.fromLTWH(x, y, cs, cs), spawnPaint);
+            canvas.drawRect(Rect.fromLTWH(x, y, cs, cs), Paint()..color = const Color(0xFF120028));
             _drawFloorTile(canvas, x, y, cs, const Color(0xFF3A0066));
-            // Magenta/pink glowing border
-            final spawnBorder = Paint()
+            canvas.drawRect(Rect.fromLTWH(x, y, cs, cs), Paint()
               ..style = PaintingStyle.stroke
               ..strokeWidth = 1.0
-              ..color = const Color(0xFFEE00FF).withOpacity(0.45)
-              ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2.5);
-            canvas.drawRect(Rect.fromLTWH(x, y, cs, cs), spawnBorder);
+              ..color = const Color(0xFFEE00FF).withOpacity(0.35));
           default:
-            // Consumed cell (-1) — rich deep-indigo floor with tile texture
-            final floorPaint = Paint()
-              ..shader = LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: const [Color(0xFF0F001C), Color(0xFF080012)],
-              ).createShader(Rect.fromLTWH(x, y, cs, cs));
-            canvas.drawRect(Rect.fromLTWH(x, y, cs, cs), floorPaint);
+            // Consumed cell (-1) — deep-indigo floor with tile texture
+            canvas.drawRect(Rect.fromLTWH(x, y, cs, cs), Paint()..color = const Color(0xFF0C0018));
             _drawFloorTile(canvas, x, y, cs, const Color(0xFF1E0035));
         }
       }
@@ -1329,17 +1289,8 @@ class _MazePainter extends CustomPainter {
   void _drawWall(Canvas canvas, double x, double y, double cs, int r, int c) {
     final rect = Rect.fromLTWH(x, y, cs, cs);
 
-    // Rich deep-indigo wall fill with a subtle top-left sheen
-    final fillPaint = Paint()
-      ..shader = LinearGradient(
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-        colors: [
-          const Color(0xFF160032),
-          const Color(0xFF080014),
-        ],
-      ).createShader(rect);
-    canvas.drawRect(rect, fillPaint);
+    // Rich deep-indigo wall fill
+    canvas.drawRect(rect, Paint()..color = const Color(0xFF100020));
 
     // Determine which sides border a non-wall (open space)
     final hasTop    = r > 0 && _kMap[r - 1][c] != 1;
@@ -1347,16 +1298,8 @@ class _MazePainter extends CustomPainter {
     final hasLeft   = c > 0 && _kMap[r][c - 1] != 1;
     final hasRight  = c < _kMazeCols - 1 && _kMap[r][c + 1] != 1;
 
-    // All exposed edges glow vivid cyan — consistent neon labyrinth look
-    const neonGlowColor = Color(0xFF00EEFF);
+    // All exposed edges — vivid cyan neon line
     const neonCoreColor = Color(0xFFAAFFFF);
-
-    // Wide soft glow bloom
-    final glowPaint = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = max(2.0, cs * 0.18)
-      ..color = neonGlowColor.withOpacity(0.5)
-      ..maskFilter = MaskFilter.blur(BlurStyle.normal, cs * 0.22);
 
     // Crisp bright core line
     final borderPaint = Paint()
@@ -1365,7 +1308,6 @@ class _MazePainter extends CustomPainter {
       ..color = neonCoreColor.withOpacity(0.95);
 
     void drawEdge(Offset a, Offset b) {
-      canvas.drawLine(a, b, glowPaint);
       canvas.drawLine(a, b, borderPaint);
     }
 
@@ -1382,25 +1324,8 @@ class _MazePainter extends CustomPainter {
     final cy = y + cs / 2;
     final r = max(1.8, cs * 0.13);
 
-    // Wide soft outer halo — warm ivory glow
-    final haloPaint = Paint()
-      ..color = const Color(0xFFFFEE88).withOpacity(0.22)
-      ..maskFilter = MaskFilter.blur(BlurStyle.normal, r * 3.0);
-    canvas.drawCircle(Offset(cx, cy), r * 2.8, haloPaint);
-
-    // Inner glow ring
-    final midPaint = Paint()
-      ..color = const Color(0xFFFFFFCC).withOpacity(0.55)
-      ..maskFilter = MaskFilter.blur(BlurStyle.normal, r * 1.2);
-    canvas.drawCircle(Offset(cx, cy), r * 1.6, midPaint);
-
-    // Bright core — white centre to warm yellow
-    final dotPaint = Paint()
-      ..shader = RadialGradient(
-        colors: [Colors.white, const Color(0xFFFFFF99), const Color(0xFFFFDD44)],
-        stops: const [0.0, 0.5, 1.0],
-      ).createShader(Rect.fromCircle(center: Offset(cx, cy), radius: r));
-    canvas.drawCircle(Offset(cx, cy), r, dotPaint);
+    // Bright warm-yellow dot
+    canvas.drawCircle(Offset(cx, cy), r, Paint()..color = const Color(0xFFFFEE55));
   }
 
   // ─── Power pellet drawing ─────────────────────────────────────────────────
@@ -1413,23 +1338,9 @@ class _MazePainter extends CustomPainter {
     final baseR = cs * 0.25;
     final r = pelletBlink ? baseR * 1.22 : baseR * 0.85;
 
-    // Wide outer corona — orange-gold shimmering aura
-    final coronaPaint = Paint()
-      ..color = const Color(0xFFFF8800).withOpacity(pelletBlink ? 0.35 : 0.18)
-      ..maskFilter = MaskFilter.blur(BlurStyle.normal, r * 4.0);
-    canvas.drawCircle(Offset(cx, cy), r * 3.5, coronaPaint);
-
-    // Mid yellow glow ring
-    final midGlowPaint = Paint()
-      ..color = const Color(0xFFFFFF00).withOpacity(pelletBlink ? 0.65 : 0.35)
-      ..maskFilter = MaskFilter.blur(BlurStyle.normal, r * 1.8);
-    canvas.drawCircle(Offset(cx, cy), r * 2.0, midGlowPaint);
-
-    // Inner intense ring — almost white
-    final innerRingPaint = Paint()
-      ..color = Colors.white.withOpacity(0.45)
-      ..maskFilter = MaskFilter.blur(BlurStyle.normal, r * 0.8);
-    canvas.drawCircle(Offset(cx, cy), r * 1.3, innerRingPaint);
+    // Outer semi-transparent ring
+    canvas.drawCircle(Offset(cx, cy), r * 1.8,
+      Paint()..color = const Color(0xFFFFAA00).withOpacity(pelletBlink ? 0.40 : 0.20));
 
     // Core: white → gold → orange radial
     final corePaint = Paint()
@@ -1496,15 +1407,6 @@ class _MazePainter extends CustomPainter {
       ghostDark = Color.fromARGB(255, dR, dG, dB);
     }
 
-    // Strong outer body glow
-    final glowPaint = Paint()
-      ..color = ghostColor.withOpacity(0.55)
-      ..maskFilter = MaskFilter.blur(BlurStyle.normal, cs * 0.32);
-    canvas.drawOval(
-      Rect.fromLTWH(bx - cs * 0.05, by - cs * 0.04, bodyW + cs * 0.1, bodyH + cs * 0.08),
-      glowPaint,
-    );
-
     // Build ghost body path: dome top + rounded wavy skirt
     final path = Path();
     final domeRadius = bodyW / 2;
@@ -1565,8 +1467,7 @@ class _MazePainter extends CustomPainter {
       Paint()
         ..style = PaintingStyle.stroke
         ..strokeWidth = max(0.8, cs * 0.07)
-        ..color = Colors.white.withOpacity(0.38)
-        ..maskFilter = MaskFilter.blur(BlurStyle.normal, cs * 0.04),
+        ..color = Colors.white.withOpacity(0.38),
     );
 
     // ── Googly eyes ──────────────────────────────────────────────────────────
@@ -1618,13 +1519,6 @@ class _MazePainter extends CustomPainter {
       mouthPath.lineTo(mx1, mouthY);
       canvas.drawPath(mouthPath, mouthPaint);
     } else {
-      // Normal: large white sclera with drop shadow for depth
-      final eyeShadowPaint = Paint()
-        ..color = Colors.black.withOpacity(0.35)
-        ..maskFilter = MaskFilter.blur(BlurStyle.normal, cs * 0.04);
-      canvas.drawCircle(Offset(leftEyeX + 0.5, eyeY + 0.8), eyeScleraR, eyeShadowPaint);
-      canvas.drawCircle(Offset(rightEyeX + 0.5, eyeY + 0.8), eyeScleraR, eyeShadowPaint);
-
       // White sclera
       canvas.drawCircle(Offset(leftEyeX, eyeY), eyeScleraR,
           Paint()..color = Colors.white);
@@ -1633,16 +1527,9 @@ class _MazePainter extends CustomPainter {
 
       // Blue iris
       final irisR = eyeScleraR * 0.68;
-      final irisPaint = Paint()
-        ..shader = RadialGradient(
-          colors: [const Color(0xFF2255FF), const Color(0xFF0011AA)],
-        ).createShader(Rect.fromCircle(center: Offset(leftEyeX, eyeY), radius: irisR));
+      final irisPaint = Paint()..color = const Color(0xFF2255FF);
       canvas.drawCircle(Offset(leftEyeX, eyeY), irisR, irisPaint);
-      final irisPaint2 = Paint()
-        ..shader = RadialGradient(
-          colors: [const Color(0xFF2255FF), const Color(0xFF0011AA)],
-        ).createShader(Rect.fromCircle(center: Offset(rightEyeX, eyeY), radius: irisR));
-      canvas.drawCircle(Offset(rightEyeX, eyeY), irisR, irisPaint2);
+      canvas.drawCircle(Offset(rightEyeX, eyeY), irisR, irisPaint);
 
       // Black pupil
       final pupilR = eyeScleraR * 0.38;
@@ -1697,18 +1584,6 @@ class _MazePainter extends CustomPainter {
     final radius = cs * 0.40;
     final cx = x + cs / 2;
     final cy = y + cs / 2;
-
-    // Outer golden glow halo
-    final haloGlowPaint = Paint()
-      ..color = const Color(0xFFFFCC00).withOpacity(0.28)
-      ..maskFilter = MaskFilter.blur(BlurStyle.normal, radius * 1.8);
-    canvas.drawCircle(Offset(cx, cy), radius * 2.2, haloGlowPaint);
-
-    // Inner tight glow
-    final innerGlowPaint = Paint()
-      ..color = const Color(0xFFFFFF00).withOpacity(0.5)
-      ..maskFilter = MaskFilter.blur(BlurStyle.normal, radius * 0.6);
-    canvas.drawCircle(Offset(cx, cy), radius * 1.2, innerGlowPaint);
 
     // Animated mouth: toggles open/closed with pelletBlink
     // Open = wide wedge, closed = very thin slice
@@ -1773,8 +1648,7 @@ class _MazePainter extends CustomPainter {
       Paint()
         ..style = PaintingStyle.stroke
         ..strokeWidth = max(1.2, radius * 0.28)
-        ..color = Colors.white.withOpacity(0.45)
-        ..maskFilter = MaskFilter.blur(BlurStyle.normal, radius * 0.12),
+        ..color = Colors.white.withOpacity(0.45),
     );
 
     // Eye: dark circle with white pupil glint
@@ -1800,25 +1674,7 @@ class _MazePainter extends CustomPainter {
     final hudRRect = RRect.fromRectAndRadius(hudRect, const Radius.circular(6));
 
     // HUD background — deep dark navy with slight purple tint
-    final hudBgPaint = Paint()
-      ..shader = LinearGradient(
-        begin: Alignment.topCenter,
-        end: Alignment.bottomCenter,
-        colors: [
-          const Color(0xFF0A0820),
-          const Color(0xFF050412),
-        ],
-      ).createShader(hudRect)
-      ..color = const Color(0xFF050412); // fallback
-    canvas.drawRRect(hudRRect, hudBgPaint);
-
-    // Cyan glow behind border
-    final hudGlowPaint = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 3.5
-      ..color = const Color(0xFF00EEFF).withOpacity(0.3)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5);
-    canvas.drawRRect(hudRRect, hudGlowPaint);
+    canvas.drawRRect(hudRRect, Paint()..color = const Color(0xFF070616));
 
     // Crisp cyan border
     final hudBorderPaint = Paint()
@@ -1957,14 +1813,6 @@ class _MazePainter extends CustomPainter {
   }
 
   void _drawMiniPacman(Canvas canvas, double cx, double cy, double r) {
-    // Tiny outer glow
-    canvas.drawCircle(
-      Offset(cx, cy), r * 1.6,
-      Paint()
-        ..color = const Color(0xFFFFEE00).withOpacity(0.35)
-        ..maskFilter = MaskFilter.blur(BlurStyle.normal, r * 1.2),
-    );
-
     final paint = Paint()
       ..shader = RadialGradient(
         center: const Alignment(-0.3, -0.3),
