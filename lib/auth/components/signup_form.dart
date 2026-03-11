@@ -16,26 +16,72 @@ class SignUpForm extends StatefulWidget {
 
 class _SignUpFormState extends State<SignUpForm> {
   final FirebaseAuth _auth = FirebaseAuth.instance;
+  final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   bool _acceptTerms = false;
 
+  static final _emailRegex = RegExp(
+    r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$',
+  );
+
+  String? _validateName(String? value) {
+    if (value == null || value.trim().isEmpty) {
+      return 'Por favor, ingresa tu nombre';
+    }
+    if (value.trim().length > 50) {
+      return 'El nombre no puede exceder 50 caracteres';
+    }
+    return null;
+  }
+
+  String? _validateEmail(String? value) {
+    if (value == null || value.trim().isEmpty) {
+      return 'Por favor, ingresa tu correo';
+    }
+    if (!_emailRegex.hasMatch(value.trim())) {
+      return 'Ingresa un correo electrónico válido';
+    }
+    return null;
+  }
+
+  String? _validatePassword(String? value) {
+    if (value == null || value.isEmpty) {
+      return 'Por favor, ingresa una contraseña';
+    }
+    if (value.length < 8) {
+      return 'La contraseña debe tener al menos 8 caracteres';
+    }
+    if (!RegExp(r'[a-zA-Z]').hasMatch(value)) {
+      return 'La contraseña debe contener al menos una letra';
+    }
+    if (!RegExp(r'[0-9]').hasMatch(value)) {
+      return 'La contraseña debe contener al menos un número';
+    }
+    return null;
+  }
+
   Future<void> _signUpUser() async {
+    if (!(_formKey.currentState?.validate() ?? false)) return;
+
+    final name = _nameController.text.trim();
+    final email = _emailController.text.trim();
+
     try {
       UserCredential userCredential = await _auth.createUserWithEmailAndPassword(
-        email: _emailController.text,
+        email: email,
         password: _passwordController.text,
       );
 
-      await userCredential.user!.updateDisplayName(_nameController.text);
+      await userCredential.user!.updateDisplayName(name);
 
       final userDocRef = FirebaseFirestore.instance.collection('users').doc(userCredential.user!.uid);
 
       await userDocRef.set({
         'userInfo': {
-          'name': _nameController.text,
-          'email': _emailController.text,
+          'name': name,
+          'email': email,
         }
       });
 
@@ -55,10 +101,29 @@ class _SignUpFormState extends State<SignUpForm> {
         const SnackBar(content: Text('¡Éxito! Usuario registrado.')),
       );
 
+    } on FirebaseAuthException catch (e) {
+      if (!mounted) return;
+      String message;
+      switch (e.code) {
+        case 'email-already-in-use':
+          message = 'Este correo ya está registrado.';
+          break;
+        case 'invalid-email':
+          message = 'El correo electrónico no es válido.';
+          break;
+        case 'weak-password':
+          message = 'La contraseña es muy débil.';
+          break;
+        default:
+          message = 'Error al crear la cuenta. Intenta de nuevo.';
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message)),
+      );
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $error')),
+        const SnackBar(content: Text('Error al crear la cuenta. Intenta de nuevo.')),
       );
     }
   }
@@ -68,10 +133,13 @@ class _SignUpFormState extends State<SignUpForm> {
     return Padding(
       padding: const EdgeInsets.all(AppDefaults.padding),
       child: Form(
+        key: _formKey,
         child: Column(
           children: [
-            TextField(
+            TextFormField(
               controller: _nameController,
+              validator: _validateName,
+              maxLength: 50,
               decoration: InputDecoration(
                 fillColor: Theme.of(context).brightness == Brightness.dark
                     ? Colors.grey[800]
@@ -116,8 +184,9 @@ class _SignUpFormState extends State<SignUpForm> {
               ),
             ),
             const SizedBox(height: AppDefaults.margin),
-            TextField(
+            TextFormField(
               controller: _emailController,
+              validator: _validateEmail,
               decoration: InputDecoration(
                 fillColor: Theme.of(context).brightness == Brightness.dark
                     ? Colors.grey[800]
@@ -162,8 +231,9 @@ class _SignUpFormState extends State<SignUpForm> {
               ),
             ),
             const SizedBox(height: AppDefaults.margin),
-            TextField(
+            TextFormField(
               controller: _passwordController,
+              validator: _validatePassword,
               obscureText: true,
               decoration: InputDecoration(
                 fillColor: Theme.of(context).brightness == Brightness.dark

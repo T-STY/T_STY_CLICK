@@ -1,9 +1,11 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_credit_card/flutter_credit_card.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../components/shimmer_placeholder.dart';
 import '../../constants/app_images.dart';
+import '../../utils/crypto_utils.dart';
 import 'create_new_card.dart';
 
 class RewardsCardPage extends StatefulWidget {
@@ -87,7 +89,7 @@ class _RewardsCardPageState extends State<RewardsCardPage> {
         }
       }
     } catch (e) {
-      debugPrint('Error fetching card data: $e');
+      if (kDebugMode) debugPrint('Error fetching card data: $e');
     }
   }
 
@@ -121,12 +123,13 @@ class _RewardsCardPageState extends State<RewardsCardPage> {
     }
 
     String prefixedCardNumber = 'T_STY-$cardNumber';
+    final hashedCvv = hashPin(cvv);
 
     try {
       final querySnapshot = await FirebaseFirestore.instance
           .collection('rewards')
           .where('cardNumber', isEqualTo: prefixedCardNumber)
-          .where('cvvCode', isEqualTo: cvv)
+          .where('cvvCode', isEqualTo: hashedCvv)
           .get();
 
       if (querySnapshot.docs.isNotEmpty) {
@@ -155,7 +158,8 @@ class _RewardsCardPageState extends State<RewardsCardPage> {
             'No se encontró un monedero con esos datos. Verifica tu número y NIP.');
       }
     } catch (e) {
-      _showAlertDialog('Error', 'Error al agregar el monedero: $e');
+      if (kDebugMode) debugPrint('Error adding card: $e');
+      _showAlertDialog('Error', 'Error al agregar el monedero. Intenta de nuevo.');
     }
   }
 
@@ -173,6 +177,8 @@ class _RewardsCardPageState extends State<RewardsCardPage> {
       return;
     }
 
+    final hashedCvv = hashPin(cvv);
+
     try {
       final userDocRef = FirebaseFirestore.instance
           .collection('users')
@@ -181,7 +187,7 @@ class _RewardsCardPageState extends State<RewardsCardPage> {
           .doc('cardInfo');
 
       await userDocRef.update({
-        'cvvCode': cvv,
+        'cvvCode': hashedCvv,
       });
 
       final querySnapshot = await FirebaseFirestore.instance
@@ -193,7 +199,7 @@ class _RewardsCardPageState extends State<RewardsCardPage> {
         final rewardsDocRef = querySnapshot.docs.first.reference;
 
         await rewardsDocRef.update({
-          'cvvCode': cvv,
+          'cvvCode': hashedCvv,
         });
 
         if (!mounted) return;
@@ -202,7 +208,8 @@ class _RewardsCardPageState extends State<RewardsCardPage> {
         _showAlertDialog('Error', 'No se encontró ningún monedero');
       }
     } catch (e) {
-      _showAlertDialog('Error', 'No se pudo actualizar el NIP: $e');
+      if (kDebugMode) debugPrint('Error updating CVV: $e');
+      _showAlertDialog('Error', 'No se pudo actualizar el NIP. Intenta de nuevo.');
     }
   }
 
@@ -257,8 +264,9 @@ class _RewardsCardPageState extends State<RewardsCardPage> {
         _showAlertDialog('Error', 'No se encontró ningún monedero');
       }
     } catch (e) {
+      if (kDebugMode) debugPrint('Error updating phone: $e');
       _showAlertDialog(
-          'Error', 'No se pudo actualizar el número de teléfono: $e');
+          'Error', 'No se pudo actualizar el número de teléfono. Intenta de nuevo.');
     }
   }
 
@@ -369,7 +377,7 @@ class _RewardsCardPageState extends State<RewardsCardPage> {
                         expiryDate: userData?['customerSince'] ?? 'MM/YY',
                         cardHolderName:
                         userData?['cardHolderName'] ?? 'Card Holder',
-                        cvvCode: userData?['cvvCode'] ?? '',
+                        cvvCode: '****',
                         obscureCardCvv: false,
                         showBackView: false,
                         isHolderNameVisible: true,

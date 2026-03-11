@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:lottie/lottie.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -70,7 +71,7 @@ class _SettingsPageState extends State<SettingsPage> {
           });
         }
       } catch (e) {
-        debugPrint('Error al obtener el nombre del usuario: $e');
+        if (kDebugMode) debugPrint('Error al obtener el nombre del usuario: $e');
       }
     }
   }
@@ -116,7 +117,7 @@ class _SettingsPageState extends State<SettingsPage> {
         });
       }
     } catch (e) {
-      debugPrint('Error al obtener los datos del usuario: $e');
+      if (kDebugMode) debugPrint('Error al obtener los datos del usuario: $e');
       setState(() {
         _isLoading = false;
       });
@@ -138,7 +139,7 @@ class _SettingsPageState extends State<SettingsPage> {
         if (!mounted) return;
         _showAlertDialog('Éxito', 'Información actualizada con éxito');
       } catch (e) {
-        debugPrint('Error al actualizar la información: $e');
+        if (kDebugMode) debugPrint('Error al actualizar la información: $e');
         if (!mounted) return;
         _showAlertDialog('Error', 'Error al actualizar la información');
       }
@@ -156,7 +157,7 @@ class _SettingsPageState extends State<SettingsPage> {
         _showAlertDialog('Éxito', 'Contraseña actualizada con éxito');
       }
     } catch (e) {
-      debugPrint('Error al cambiar la contraseña: $e');
+      if (kDebugMode) debugPrint('Error al cambiar la contraseña: $e');
       if (!mounted) return;
 
       String errorMsg = 'Error al cambiar la contraseña';
@@ -165,6 +166,27 @@ class _SettingsPageState extends State<SettingsPage> {
       }
       _showAlertDialog('Error', errorMsg);
     }
+  }
+
+  Future<void> _deleteUserFirestoreData(String userId) async {
+    final firestore = FirebaseFirestore.instance;
+    final userDocRef = firestore.collection('users').doc(userId);
+
+    // Delete known subcollection documents
+    final subcollections = ['rewardsCard', 'userInfo', 'addresses', 'orderHistory', 'coupons'];
+    for (final sub in subcollections) {
+      final snapshot = await userDocRef.collection(sub).get();
+      final batch = firestore.batch();
+      for (final doc in snapshot.docs) {
+        batch.delete(doc.reference);
+      }
+      if (snapshot.docs.isNotEmpty) {
+        await batch.commit();
+      }
+    }
+
+    // Delete the root user document
+    await userDocRef.delete();
   }
 
   Future<void> _deleteAccount() async {
@@ -193,6 +215,7 @@ class _SettingsPageState extends State<SettingsPage> {
 
     if (confirm == true) {
       try {
+        await _deleteUserFirestoreData(user.uid);
         await user.delete();
         if (!mounted) return;
         Navigator.of(context).pushAndRemoveUntil(
@@ -200,7 +223,7 @@ class _SettingsPageState extends State<SettingsPage> {
               (route) => false,
         );
       } catch (e) {
-        debugPrint('Error al eliminar la cuenta: $e');
+        if (kDebugMode) debugPrint('Error al eliminar la cuenta: $e');
         if (!mounted) return;
         _showAlertDialog('Error',
             'No se pudo eliminar la cuenta. Es posible que debas volver a iniciar sesión para confirmar esta acción.');

@@ -1,4 +1,5 @@
 import 'dart:ui';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -93,7 +94,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
         }
       }
     } catch (e) {
-      debugPrint("Error loading shipping settings: $e");
+      if (kDebugMode) debugPrint("Error loading shipping settings: $e");
     }
   }
 
@@ -202,9 +203,9 @@ class _CheckoutPageState extends State<CheckoutPage> {
         _assignedCoupons = validCoupons;
       });
     } catch (e) {
-      debugPrint('Error fetching coupons: $e');
+      if (kDebugMode) debugPrint('Error fetching coupons: $e');
       if (!mounted) return;
-      _showAlertDialog('Error', 'No se pudieron cargar los cupones: $e');
+      _showAlertDialog('Error', 'No se pudieron cargar los cupones. Intenta de nuevo.');
     }
   }
 
@@ -338,7 +339,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
                     } catch (e) {
                       if (!context.mounted) return;
                       Navigator.pop(context);
-                      _showAlertDialog('Error', 'No se pudo actualizar: $e');
+                      if (kDebugMode) debugPrint('Error updating phone: $e');
+                      _showAlertDialog('Error', 'No se pudo actualizar. Intenta de nuevo.');
                     }
                   }
                 } else {
@@ -561,64 +563,81 @@ class _CheckoutPageState extends State<CheckoutPage> {
     };
 
     try {
-      DocumentReference orderRef =
-      FirebaseFirestore.instance.collection('orders').doc();
-      WriteBatch batch = FirebaseFirestore.instance.batch();
+      final firestore = FirebaseFirestore.instance;
 
-      batch.set(orderRef, orderData);
+      await firestore.runTransaction((transaction) async {
+        // If using rewards, read current saldo inside transaction for atomicity
+        double verifiedSaldo = 0.0;
+        DocumentReference? rewardsDocRef;
+        DocumentReference? userRewardsSaldoRef;
 
-      DocumentReference userOrderHistoryRef = FirebaseFirestore.instance
-          .collection('users')
-          .doc(userId)
-          .collection('orderHistory')
-          .doc(orderRef.id);
-      batch.set(userOrderHistoryRef, orderData);
+        if (_useRewardsBalance && _appliedRewards > 0) {
+          userRewardsSaldoRef = firestore
+              .collection('users')
+              .doc(userId)
+              .collection('rewardsCard')
+              .doc('cardInfo');
 
-      if (_useRewardsBalance && _appliedRewards > 0) {
-        double newUserSaldo = _rewardsBalance - _appliedRewards;
-        if (newUserSaldo < 0) newUserSaldo = 0.0;
+          final userRewardsSnap = await transaction.get(userRewardsSaldoRef);
+          if (!userRewardsSnap.exists) {
+            throw Exception('No se encontró información de monedero.');
+          }
 
-        DocumentReference userRewardsSaldoRef = FirebaseFirestore.instance
-            .collection('users')
-            .doc(userId)
-            .collection('rewardsCard')
-            .doc('cardInfo');
+          final rewardsQuery = await firestore
+              .collection('rewards')
+              .where('cardNumber', isEqualTo: _rewardsCardData?['cardNumber'])
+              .limit(1)
+              .get();
 
-        QuerySnapshot rewardsSnapshot = await FirebaseFirestore.instance
-            .collection('rewards')
-            .where('cardNumber', isEqualTo: _rewardsCardData?['cardNumber'])
-            .limit(1)
-            .get();
+          if (rewardsQuery.docs.isNotEmpty) {
+            rewardsDocRef = rewardsQuery.docs.first.reference;
+            final rewardsSnap = await transaction.get(rewardsDocRef);
+            verifiedSaldo = _toDouble(rewardsSnap.data()?['saldo'] ?? 0);
+          }
 
-        if (rewardsSnapshot.docs.isNotEmpty) {
-          DocumentReference rewardsDocRef =
-              rewardsSnapshot.docs.first.reference;
-          double currentRewardsSaldo =
-          _toDouble(rewardsSnapshot.docs.first['saldo']);
-          double newRewardsSaldo = currentRewardsSaldo - _appliedRewards;
-          if (newRewardsSaldo < 0) newRewardsSaldo = 0.0;
-
-          batch.update(userRewardsSaldoRef, {'saldo': newUserSaldo});
-          batch.update(rewardsDocRef, {'saldo': newRewardsSaldo});
+          if (verifiedSaldo < _appliedRewards) {
+            throw Exception('Saldo insuficiente en el monedero.');
+          }
         }
-      }
 
-      if (_selectedCouponCode != null) {
-        DocumentReference userCouponRef = FirebaseFirestore.instance
+        // Create order
+        DocumentReference orderRef = firestore.collection('orders').doc();
+        transaction.set(orderRef, orderData);
+
+        // User order history
+        DocumentReference userOrderHistoryRef = firestore
             .collection('users')
             .doc(userId)
-            .collection('coupons')
-            .doc(_selectedCouponCode);
-        batch.update(userCouponRef, {'used': true});
-      }
+            .collection('orderHistory')
+            .doc(orderRef.id);
+        transaction.set(userOrderHistoryRef, orderData);
 
-      await batch.commit();
+        // Deduct rewards atomically
+        if (_useRewardsBalance && _appliedRewards > 0 && rewardsDocRef != null && userRewardsSaldoRef != null) {
+          double newRewardsSaldo = (verifiedSaldo - _appliedRewards).clamp(0.0, double.infinity);
+          double newUserSaldo = (_rewardsBalance - _appliedRewards).clamp(0.0, double.infinity);
+
+          transaction.update(userRewardsSaldoRef, {'saldo': newUserSaldo});
+          transaction.update(rewardsDocRef, {'saldo': newRewardsSaldo});
+        }
+
+        // Mark coupon as used
+        if (_selectedCouponCode != null) {
+          DocumentReference userCouponRef = firestore
+              .collection('users')
+              .doc(userId)
+              .collection('coupons')
+              .doc(_selectedCouponCode);
+          transaction.update(userCouponRef, {'used': true});
+        }
+      });
 
       cartProvider.clearCart();
       widget.onOrderPlaced();
     } catch (e) {
       if (!mounted) return;
-      _showAlertDialog('Error', 'No se pudo completar el pedido: $e');
+      if (kDebugMode) debugPrint('Error placing order: $e');
+      _showAlertDialog('Error', 'No se pudo completar el pedido. Intenta de nuevo.');
     }
   }
 

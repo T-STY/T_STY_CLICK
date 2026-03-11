@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 import 'package:lottie/lottie.dart';
 import '../../constants/app_images.dart';
+import '../../utils/crypto_utils.dart';
 
 class CreateNewCard extends StatefulWidget {
   final VoidCallback onBack;
@@ -109,6 +110,8 @@ class _CreateNewCardState extends State<CreateNewCard> {
       try {
         String upperCaseName = cardHolderName.toUpperCase();
 
+        final hashedCvv = hashPin(cvvCode);
+
         await FirebaseFirestore.instance
             .collection('users')
             .doc(userId)
@@ -118,14 +121,14 @@ class _CreateNewCardState extends State<CreateNewCard> {
           'cardNumber': 'T_STY$cardNumber',
           'customerSince': customerSince,
           'cardHolderName': upperCaseName,
-          'cvvCode': cvvCode,
+          'cvvCode': hashedCvv,
         });
 
         await FirebaseFirestore.instance.collection('rewards').doc(userId).set({
           'cardNumber': 'T_STY$cardNumber',
           'customerSince': customerSince,
           'cardHolderName': upperCaseName,
-          'cvvCode': cvvCode,
+          'cvvCode': hashedCvv,
           'saldo': 0,
         });
 
@@ -136,7 +139,8 @@ class _CreateNewCardState extends State<CreateNewCard> {
         });
       } catch (e) {
         if (!mounted) return;
-        _showAlertDialog('Error', 'No se pudo crear el monedero: $e');
+        debugPrint('Error creating card: $e');
+        _showAlertDialog('Error', 'No se pudo crear el monedero. Intenta de nuevo.');
       } finally {
         if (mounted) {
           setState(() {
