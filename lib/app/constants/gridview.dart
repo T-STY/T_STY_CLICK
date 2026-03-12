@@ -24,7 +24,8 @@ class RecipeGrid extends StatefulWidget {
   State<RecipeGrid> createState() => RecipeGridState();
 }
 
-class RecipeGridState extends State<RecipeGrid> {
+class RecipeGridState extends State<RecipeGrid>
+    with TickerProviderStateMixin {
   final PageController _pageController = PageController();
   final PageController _promoPageController = PageController();
   int _currentPage = 0;
@@ -32,10 +33,32 @@ class RecipeGridState extends State<RecipeGrid> {
   Timer? _timer;
   Timer? _promoTimer;
   bool _showingPromos = false;
+  late final AnimationController _slideController;
+  late final Animation<Offset> _slideInFromRight;
+  late final Animation<Offset> _slideInFromLeft;
 
   @override
   void initState() {
     super.initState();
+    _slideController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 350),
+    );
+    _slideInFromRight = Tween<Offset>(
+      begin: const Offset(1.0, 0.0),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(
+      parent: _slideController,
+      curve: Curves.easeOutCubic,
+    ));
+    _slideInFromLeft = Tween<Offset>(
+      begin: const Offset(-1.0, 0.0),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(
+      parent: _slideController,
+      curve: Curves.easeOutCubic,
+    ));
+    _slideController.value = 1.0;
     _startAutoSlide();
   }
 
@@ -80,9 +103,24 @@ class RecipeGridState extends State<RecipeGrid> {
   void dispose() {
     _timer?.cancel();
     _promoTimer?.cancel();
+    _slideController.dispose();
     _pageController.dispose();
     _promoPageController.dispose();
     super.dispose();
+  }
+
+  void _switchTo({required bool promos}) {
+    if (promos == _showingPromos) return;
+    _slideController.reset();
+    setState(() {
+      _showingPromos = promos;
+      if (promos) {
+        _startPromoAutoSlide();
+      } else {
+        _promoTimer?.cancel();
+      }
+    });
+    _slideController.forward();
   }
 
   @override
@@ -90,7 +128,45 @@ class RecipeGridState extends State<RecipeGrid> {
     return Column(
       children: [
         _buildSectionWithToggle(context),
-        _showingPromos ? _buildPromoPageView(context) : _buildPageView(context),
+        AnimatedSwitcher(
+          duration: const Duration(milliseconds: 350),
+          switchInCurve: Curves.easeOutCubic,
+          switchOutCurve: Curves.easeInCubic,
+          transitionBuilder: (child, animation) {
+            final isPromo =
+                (child.key == const ValueKey<bool>(true));
+            final beginOffset = isPromo
+                ? const Offset(1.0, 0.0)
+                : const Offset(-1.0, 0.0);
+            return ClipRect(
+              child: SlideTransition(
+                position: Tween<Offset>(
+                  begin: beginOffset,
+                  end: Offset.zero,
+                ).animate(animation),
+                child: child,
+              ),
+            );
+          },
+          layoutBuilder: (currentChild, previousChildren) {
+            return Stack(
+              alignment: Alignment.topCenter,
+              children: [
+                ...previousChildren,
+                if (currentChild != null) currentChild,
+              ],
+            );
+          },
+          child: _showingPromos
+              ? KeyedSubtree(
+                  key: const ValueKey<bool>(true),
+                  child: _buildPromoPageView(context),
+                )
+              : KeyedSubtree(
+                  key: const ValueKey<bool>(false),
+                  child: _buildPageView(context),
+                ),
+        ),
       ],
     );
   }
@@ -100,45 +176,47 @@ class RecipeGridState extends State<RecipeGrid> {
     final activeColor = isDarkMode ? Colors.white : Colors.black;
     final inactiveColor = isDarkMode ? Colors.white38 : Colors.black38;
 
+    // Active section label (left)
+    final String activeLabel =
+        _showingPromos ? 'Promociones 🏷️' : widget.title;
+    // Inactive section label (right)
+    final String inactiveLabel =
+        _showingPromos ? widget.title : 'Promociones 🏷️';
+
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 10.0, horizontal: 8.0),
       child: Row(
         children: [
-          GestureDetector(
-            onTap: _showingPromos
-                ? () {
-                    setState(() {
-                      _showingPromos = false;
-                      _promoTimer?.cancel();
-                    });
-                  }
-                : null,
-            child: Text(
-              widget.title,
-              style: TextStyle(
-                fontSize: _showingPromos ? 16 : 20,
-                fontWeight: FontWeight.bold,
-                color: _showingPromos ? inactiveColor : activeColor,
+          // Active label — left side, animated in
+          Flexible(
+            child: SlideTransition(
+              position: _showingPromos ? _slideInFromRight : _slideInFromLeft,
+              child: Text(
+                activeLabel,
+                key: ValueKey<String>('active_$activeLabel'),
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: activeColor,
+                ),
               ),
             ),
           ),
           if (widget.onPromotionSelected != null) ...[
-            const SizedBox(width: 12),
-            GestureDetector(
-              onTap: !_showingPromos
-                  ? () {
-                      setState(() {
-                        _showingPromos = true;
-                        _startPromoAutoSlide();
-                      });
-                    }
-                  : null,
-              child: Text(
-                'Promociones 🏷️',
-                style: TextStyle(
-                  fontSize: _showingPromos ? 20 : 16,
-                  fontWeight: FontWeight.bold,
-                  color: _showingPromos ? activeColor : inactiveColor,
+            const Spacer(),
+            // Inactive label — right side, tappable, animated in
+            SlideTransition(
+              position: _showingPromos ? _slideInFromLeft : _slideInFromRight,
+              child: GestureDetector(
+                onTap: () => _switchTo(promos: !_showingPromos),
+                child: Text(
+                  inactiveLabel,
+                  key: ValueKey<String>('inactive_$inactiveLabel'),
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: inactiveColor,
+                  ),
                 ),
               ),
             ),
