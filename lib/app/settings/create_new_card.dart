@@ -5,7 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 import 'package:lottie/lottie.dart';
 import '../../constants/app_images.dart';
-import '../../utils/crypto_utils.dart';
+
 
 class CreateNewCard extends StatefulWidget {
   final VoidCallback onBack;
@@ -110,8 +110,6 @@ class _CreateNewCardState extends State<CreateNewCard> {
       try {
         String upperCaseName = cardHolderName.toUpperCase();
 
-        final hashedCvv = hashPin(cvvCode);
-
         await FirebaseFirestore.instance
             .collection('users')
             .doc(userId)
@@ -121,14 +119,14 @@ class _CreateNewCardState extends State<CreateNewCard> {
           'cardNumber': 'T_STY$cardNumber',
           'customerSince': customerSince,
           'cardHolderName': upperCaseName,
-          'cvvCode': hashedCvv,
+          'cvvCode': cvvCode,
         });
 
         await FirebaseFirestore.instance.collection('rewards').doc(userId).set({
           'cardNumber': 'T_STY$cardNumber',
           'customerSince': customerSince,
           'cardHolderName': upperCaseName,
-          'cvvCode': hashedCvv,
+          'cvvCode': cvvCode,
           'saldo': 0,
         });
 

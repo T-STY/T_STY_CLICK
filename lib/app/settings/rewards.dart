@@ -5,7 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../components/shimmer_placeholder.dart';
 import '../../constants/app_images.dart';
-import '../../utils/crypto_utils.dart';
+
 import 'create_new_card.dart';
 
 class RewardsCardPage extends StatefulWidget {
@@ -123,13 +123,12 @@ class _RewardsCardPageState extends State<RewardsCardPage> {
     }
 
     String prefixedCardNumber = 'T_STY-$cardNumber';
-    final hashedCvv = hashPin(cvv);
 
     try {
       final querySnapshot = await FirebaseFirestore.instance
           .collection('rewards')
           .where('cardNumber', isEqualTo: prefixedCardNumber)
-          .where('cvvCode', isEqualTo: hashedCvv)
+          .where('cvvCode', isEqualTo: cvv)
           .get();
 
       if (querySnapshot.docs.isNotEmpty) {
@@ -177,8 +176,6 @@ class _RewardsCardPageState extends State<RewardsCardPage> {
       return;
     }
 
-    final hashedCvv = hashPin(cvv);
-
     try {
       final userDocRef = FirebaseFirestore.instance
           .collection('users')
@@ -187,7 +184,7 @@ class _RewardsCardPageState extends State<RewardsCardPage> {
           .doc('cardInfo');
 
       await userDocRef.update({
-        'cvvCode': hashedCvv,
+        'cvvCode': cvv,
       });
 
       final querySnapshot = await FirebaseFirestore.instance
@@ -199,7 +196,7 @@ class _RewardsCardPageState extends State<RewardsCardPage> {
         final rewardsDocRef = querySnapshot.docs.first.reference;
 
         await rewardsDocRef.update({
-          'cvvCode': hashedCvv,
+          'cvvCode': cvv,
         });
 
         if (!mounted) return;
