@@ -374,7 +374,7 @@ class _RewardsCardPageState extends State<RewardsCardPage> {
                         expiryDate: userData?['customerSince'] ?? 'MM/YY',
                         cardHolderName:
                         userData?['cardHolderName'] ?? 'Card Holder',
-                        cvvCode: '****',
+                        cvvCode: userData?['cvvCode'] ?? '****',
                         obscureCardCvv: false,
                         showBackView: false,
                         isHolderNameVisible: true,
