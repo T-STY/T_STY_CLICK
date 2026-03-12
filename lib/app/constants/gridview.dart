@@ -477,7 +477,7 @@ class RecipeGridState extends State<RecipeGrid>
               child: (data['imageURL'] != null && (data['imageURL'] as String).isNotEmpty)
                   ? CachedNetworkImage(
                       imageUrl: data['imageURL'],
-                      fit: BoxFit.cover,
+                      fit: BoxFit.fill,
                       width: double.infinity,
                       height: 150,
                       placeholder: (context, url) =>
