@@ -5,6 +5,7 @@ import 'dart:ui';
 import 'package:algolia/algolia.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:click/app/recipes.dart';
+import 'package:click/app/promotions.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
@@ -59,8 +60,10 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
   List<AlgoliaObjectSnapshot> _searchResults = [];
   bool _isSearching = false;
   bool _showRecipeDetail = false;
+  bool _showPromoDetail = false;
   Map<String, dynamic> _selectedFilters = {};
   String? selectedRecipeId;
+  String? selectedPromoId;
   List<DocumentSnapshot> _filteredProducts = [];
 
   final PageController _pageController = PageController();
@@ -207,6 +210,14 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
   void _navigateBackToGrid() {
     setState(() {
       _showRecipeDetail = false;
+      _showPromoDetail = false;
+    });
+  }
+
+  void _navigateToPromoDetail(String promoId) {
+    setState(() {
+      selectedPromoId = promoId;
+      _showPromoDetail = true;
     });
   }
 
@@ -313,10 +324,10 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
     final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
     final body = PopScope(
-      canPop: !_showRecipeDetail,
+      canPop: !_showRecipeDetail && !_showPromoDetail,
       onPopInvokedWithResult: (didPop, result) {
         if (didPop) return;
-        if (_showRecipeDetail) {
+        if (_showRecipeDetail || _showPromoDetail) {
           _navigateBackToGrid();
         }
       },
@@ -351,6 +362,11 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
         body: _showRecipeDetail
             ? RecipeDetailPage(
           recipeId: selectedRecipeId!,
+          onBackPressed: _navigateBackToGrid,
+        )
+            : _showPromoDetail
+            ? PromotionDetailPage(
+          promotionId: selectedPromoId!,
           onBackPressed: _navigateBackToGrid,
         )
             : Column(
@@ -470,6 +486,7 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
               title: "Rincon de Recetas 🌞",
               query: FirebaseFirestore.instance.collection('recipes'),
               onRecipeSelected: _navigateToRecipeDetail,
+              onPromotionSelected: _navigateToPromoDetail,
             ),
             FirestoreProductGrid(
               title: "¡Lo más top! 🔥",
