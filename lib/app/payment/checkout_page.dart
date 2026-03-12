@@ -592,7 +592,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
           if (rewardsQuery.docs.isNotEmpty) {
             rewardsDocRef = rewardsQuery.docs.first.reference;
             final rewardsSnap = await transaction.get(rewardsDocRef);
-            verifiedSaldo = _toDouble(rewardsSnap.data()?['saldo'] ?? 0);
+            verifiedSaldo = _toDouble((rewardsSnap.data() as Map<String, dynamic>?)?['saldo'] ?? 0);
           }
 
           if (verifiedSaldo < _appliedRewards) {
