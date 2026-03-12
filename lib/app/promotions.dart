@@ -181,6 +181,7 @@ class _PromotionDetailPageState extends State<PromotionDetailPage> {
           stock: (product['stock'] as num?)?.toDouble() ?? 0,
           typeSpecific: product['type_specific'] as String?,
           variante: product['variante'] as String?,
+          brand: product['brand'] as String? ?? '',
         );
       }
     } else if (type == 'combo_choice' || type == 'combo_brand') {
@@ -195,6 +196,7 @@ class _PromotionDetailPageState extends State<PromotionDetailPage> {
           stock: (triggerProductData!['stock'] as num?)?.toDouble() ?? 0,
           typeSpecific: triggerProductData!['type_specific'] as String?,
           variante: triggerProductData!['variante'] as String?,
+          brand: triggerProductData!['brand'] as String? ?? '',
         );
       }
       if (selectedOptionProductId != null) {
@@ -211,6 +213,7 @@ class _PromotionDetailPageState extends State<PromotionDetailPage> {
           stock: (selected['stock'] as num?)?.toDouble() ?? 0,
           typeSpecific: selected['type_specific'] as String?,
           variante: selected['variante'] as String?,
+          brand: selected['brand'] as String? ?? '',
         );
       }
     } else if (type == 'bxgy') {
@@ -226,6 +229,7 @@ class _PromotionDetailPageState extends State<PromotionDetailPage> {
           stock: (triggerProductData!['stock'] as num?)?.toDouble() ?? 0,
           typeSpecific: triggerProductData!['type_specific'] as String?,
           variante: triggerProductData!['variante'] as String?,
+          brand: triggerProductData!['brand'] as String? ?? '',
         );
       }
     }

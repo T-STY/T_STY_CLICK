@@ -183,11 +183,65 @@ class _CartPageState extends State<CartPage> {
                 child: Consumer<CartProvider>(
                   builder: (context, cartProvider, child) {
                     final double subtotal = cartProvider.totalPrice;
-                    final double total = subtotal;
+                    final double discount = cartProvider.discountAmount;
+                    final double total = cartProvider.totalPriceAfterDiscount;
 
                     return Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
+                        // Applied promotions
+                        if (cartProvider.appliedPromosList.isNotEmpty) ...[
+                          ...cartProvider.appliedPromosList.map((promoName) => Padding(
+                            padding: const EdgeInsets.only(bottom: 4.0),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.local_offer, size: 14, color: Colors.orange),
+                                const SizedBox(width: 4),
+                                Expanded(
+                                  child: Text(
+                                    promoName,
+                                    style: TextStyle(fontSize: 12, color: Colors.orange[700], fontWeight: FontWeight.bold),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          )),
+                          const SizedBox(height: 6),
+                        ],
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'Subtotal:',
+                              style: Theme.of(context).textTheme.titleMedium,
+                            ),
+                            Text(
+                              '\$${subtotal.toStringAsFixed(2)} MXN',
+                              style: Theme.of(context).textTheme.titleMedium,
+                            ),
+                          ],
+                        ),
+                        if (discount > 0) ...[
+                          const SizedBox(height: 6),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                'Descuento:',
+                                style: Theme.of(context).textTheme.titleMedium,
+                              ),
+                              Text(
+                                '-\$${discount.toStringAsFixed(2)}',
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .titleMedium
+                                    ?.copyWith(color: Colors.red),
+                              ),
+                            ],
+                          ),
+                        ],
+                        const SizedBox(height: 6),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [

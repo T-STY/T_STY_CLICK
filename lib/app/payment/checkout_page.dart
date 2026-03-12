@@ -495,7 +495,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
 
   void _calculateTotal() {
     final cartProvider = Provider.of<CartProvider>(context, listen: false);
-    double subtotal = cartProvider.totalPrice;
+    double subtotal = cartProvider.totalPriceAfterDiscount;
 
     _calculateDiscount();
 
