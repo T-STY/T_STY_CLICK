@@ -188,7 +188,7 @@ class RecipeGridState extends State<RecipeGrid>
       child: Row(
         children: [
           // Active label — left side, animated in
-          Flexible(
+          Expanded(
             child: SlideTransition(
               position: _showingPromos ? _slideInFromRight : _slideInFromLeft,
               child: Text(
@@ -203,7 +203,6 @@ class RecipeGridState extends State<RecipeGrid>
             ),
           ),
           if (widget.onPromotionSelected != null) ...[
-            const Spacer(),
             // Inactive label — right side, tappable, animated in
             SlideTransition(
               position: _showingPromos ? _slideInFromLeft : _slideInFromRight,
