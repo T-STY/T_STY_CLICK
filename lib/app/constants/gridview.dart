@@ -374,29 +374,29 @@ class RecipeGridState extends State<RecipeGrid>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: <Widget>[
-            ClipRRect(
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(43),
-                topRight: Radius.circular(24),
-                bottomLeft: Radius.circular(14),
-                bottomRight: Radius.circular(14),
-              ),
-              child: CachedNetworkImage(
-                imageUrl: data['imageURL'] ?? '',
-                fit: BoxFit.cover,
-                width: double.infinity,
-                height: 150,
-                placeholder: (context, url) =>
-                const ShimmerPlaceholder(height: 150),
-                errorWidget: (context, url, error) => Container(
-                  height: 150,
-                  color: Colors.grey[300],
-                  child: const Icon(Icons.broken_image),
+            Expanded(
+              child: ClipRRect(
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(43),
+                  topRight: Radius.circular(24),
+                  bottomLeft: Radius.circular(14),
+                  bottomRight: Radius.circular(14),
+                ),
+                child: CachedNetworkImage(
+                  imageUrl: data['imageURL'] ?? '',
+                  fit: BoxFit.cover,
+                  width: double.infinity,
+                  placeholder: (context, url) =>
+                  const ShimmerPlaceholder(height: 150),
+                  errorWidget: (context, url, error) => Container(
+                    color: Colors.grey[300],
+                    child: const Icon(Icons.broken_image),
+                  ),
                 ),
               ),
             ),
             Padding(
-              padding: const EdgeInsets.all(8.0),
+              padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
@@ -467,56 +467,55 @@ class RecipeGridState extends State<RecipeGrid>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: <Widget>[
-            ClipRRect(
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(43),
-                topRight: Radius.circular(24),
-                bottomLeft: Radius.circular(14),
-                bottomRight: Radius.circular(14),
-              ),
-              child: (data['imageURL'] != null && (data['imageURL'] as String).isNotEmpty)
-                  ? CachedNetworkImage(
-                      imageUrl: data['imageURL'],
-                      fit: BoxFit.fill,
-                      width: double.infinity,
-                      height: 150,
-                      placeholder: (context, url) =>
-                      const ShimmerPlaceholder(height: 150),
-                      errorWidget: (context, url, error) => Container(
-                        height: 150,
-                        color: Colors.grey[300],
-                        child: const Icon(Icons.broken_image),
-                      ),
-                    )
-                  : Container(
-                      width: double.infinity,
-                      height: 150,
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [Colors.deepOrange.shade400, Colors.orange.shade300],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
+            Expanded(
+              child: ClipRRect(
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(43),
+                  topRight: Radius.circular(24),
+                  bottomLeft: Radius.circular(14),
+                  bottomRight: Radius.circular(14),
+                ),
+                child: (data['imageURL'] != null && (data['imageURL'] as String).isNotEmpty)
+                    ? CachedNetworkImage(
+                        imageUrl: data['imageURL'],
+                        fit: BoxFit.fill,
+                        width: double.infinity,
+                        placeholder: (context, url) =>
+                        const ShimmerPlaceholder(height: 150),
+                        errorWidget: (context, url, error) => Container(
+                          color: Colors.grey[300],
+                          child: const Icon(Icons.broken_image),
+                        ),
+                      )
+                    : Container(
+                        width: double.infinity,
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [Colors.deepOrange.shade400, Colors.orange.shade300],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                        ),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(Icons.local_offer, size: 40, color: Colors.white),
+                            const SizedBox(height: 8),
+                            Text(
+                              _promoTypeLabel(type),
+                              style: const TextStyle(
+                                color: Colors.white70,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Icon(Icons.local_offer, size: 40, color: Colors.white),
-                          const SizedBox(height: 8),
-                          Text(
-                            _promoTypeLabel(type),
-                            style: const TextStyle(
-                              color: Colors.white70,
-                              fontSize: 13,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
+              ),
             ),
             Padding(
-              padding: const EdgeInsets.all(8.0),
+              padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
