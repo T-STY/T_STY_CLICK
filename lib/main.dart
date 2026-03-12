@@ -326,16 +326,16 @@ class CheckUserScreenState extends State<CheckUserScreen> {
 
     try {
       await user.reload();
-      if (mounted) {
-        Navigator.of(context).pushReplacement(
-            customPageRouteBuilder(const MainMenuScreen()));
-      }
     } catch (e) {
-      await FirebaseAuth.instance.signOut();
-      if (mounted) {
-        Navigator.of(context).pushReplacement(
-            customPageRouteBuilder(const MainMenuScreen()));
-      }
+      // Network or token refresh failure — do NOT sign out.
+      // Firebase Auth will handle token refresh automatically
+      // when connectivity is restored.
+      debugPrint('User reload failed (offline?): $e');
+    }
+
+    if (mounted) {
+      Navigator.of(context).pushReplacement(
+          customPageRouteBuilder(const MainMenuScreen()));
     }
   }
 
