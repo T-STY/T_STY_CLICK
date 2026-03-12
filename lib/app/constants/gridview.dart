@@ -128,12 +128,10 @@ class RecipeGridState extends State<RecipeGrid> {
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
-                  color: _showingPromos
-                      ? Colors.deepOrange.withValues(alpha: 0.15)
-                      : Colors.blue.withValues(alpha: 0.1),
+                  color: Colors.black.withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(
-                    color: _showingPromos ? Colors.deepOrange : Colors.blue,
+                    color: Colors.black,
                     width: 1,
                   ),
                 ),
@@ -143,15 +141,15 @@ class RecipeGridState extends State<RecipeGrid> {
                     Icon(
                       _showingPromos ? Icons.restaurant_menu : Icons.local_offer,
                       size: 16,
-                      color: _showingPromos ? Colors.deepOrange : Colors.blue,
+                      color: Colors.black,
                     ),
                     const SizedBox(width: 4),
                     Text(
                       _showingPromos ? 'Recetas' : 'Promos',
-                      style: TextStyle(
+                      style: const TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
-                        color: _showingPromos ? Colors.deepOrange : Colors.blue,
+                        color: Colors.black,
                       ),
                     ),
                   ],

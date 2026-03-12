@@ -314,12 +314,12 @@ class _PromotionDetailPageState extends State<PromotionDetailPage> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
-                color: Colors.blue.withValues(alpha: 0.1),
+                color: Colors.black.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: const Text(
                 'Principal',
-                style: TextStyle(fontSize: 12, color: Colors.blue, fontWeight: FontWeight.bold),
+                style: TextStyle(fontSize: 12, color: Colors.black, fontWeight: FontWeight.bold),
               ),
             ),
         ],
@@ -575,17 +575,18 @@ class _PromotionDetailPageState extends State<PromotionDetailPage> {
                             padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
                             decoration: BoxDecoration(
                               color: isSelected
-                                  ? Colors.blue.withValues(alpha: 0.08)
+                                  ? Colors.black.withValues(alpha: 0.06)
                                   : null,
                               borderRadius: BorderRadius.circular(10),
                               border: isSelected
-                                  ? Border.all(color: Colors.blue, width: 1.5)
+                                  ? Border.all(color: Colors.black, width: 1.5)
                                   : null,
                             ),
                             child: Row(
                               children: [
                                 Checkbox(
                                   value: isSelected,
+                                  activeColor: Colors.black,
                                   onChanged: (_) {
                                     setState(() {
                                       selectedOptionProductId = productId;
