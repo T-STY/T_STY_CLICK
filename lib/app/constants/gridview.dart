@@ -97,65 +97,52 @@ class RecipeGridState extends State<RecipeGrid> {
 
   Widget _buildSectionWithToggle(BuildContext context) {
     final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    final textColor = isDarkMode ? Colors.white : Colors.black;
+    final activeColor = isDarkMode ? Colors.white : Colors.black;
+    final inactiveColor = isDarkMode ? Colors.white38 : Colors.black38;
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 10.0, horizontal: 8.0),
       child: Row(
         children: [
-          Expanded(
+          GestureDetector(
+            onTap: _showingPromos
+                ? () {
+                    setState(() {
+                      _showingPromos = false;
+                      _promoTimer?.cancel();
+                    });
+                  }
+                : null,
             child: Text(
-              _showingPromos ? 'Promociones 🏷️' : widget.title,
+              widget.title,
               style: TextStyle(
-                fontSize: 20,
+                fontSize: _showingPromos ? 16 : 20,
                 fontWeight: FontWeight.bold,
-                color: textColor,
+                color: _showingPromos ? inactiveColor : activeColor,
               ),
             ),
           ),
-          if (widget.onPromotionSelected != null)
+          if (widget.onPromotionSelected != null) ...[
+            const SizedBox(width: 12),
             GestureDetector(
-              onTap: () {
-                setState(() {
-                  _showingPromos = !_showingPromos;
-                  if (_showingPromos) {
-                    _startPromoAutoSlide();
-                  } else {
-                    _promoTimer?.cancel();
-                  }
-                });
-              },
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(
-                    color: Colors.black,
-                    width: 1,
-                  ),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      _showingPromos ? Icons.restaurant_menu : Icons.local_offer,
-                      size: 16,
-                      color: Colors.black,
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      _showingPromos ? 'Recetas' : 'Promos',
-                      style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.black,
-                      ),
-                    ),
-                  ],
+              onTap: !_showingPromos
+                  ? () {
+                      setState(() {
+                        _showingPromos = true;
+                        _startPromoAutoSlide();
+                      });
+                    }
+                  : null,
+              child: Text(
+                'Promociones 🏷️',
+                style: TextStyle(
+                  fontSize: _showingPromos ? 20 : 16,
+                  fontWeight: FontWeight.bold,
+                  color: _showingPromos ? activeColor : inactiveColor,
                 ),
               ),
             ),
+          ],
         ],
       ),
     );
