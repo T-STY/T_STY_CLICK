@@ -379,7 +379,7 @@ class RecipeGridState extends State<RecipeGrid> {
       subtitle = 'Lleva $buy, Paga $pay';
     } else {
       final price = (data['comboPrice'] as num?)?.toDouble() ?? 0;
-      subtitle = '\$${price.toStringAsFixed(2)}';
+      subtitle = 'Precio: \$${price.toStringAsFixed(2)}';
     }
 
     return SizedBox(
@@ -412,32 +412,46 @@ class RecipeGridState extends State<RecipeGrid> {
                 bottomLeft: Radius.circular(14),
                 bottomRight: Radius.circular(14),
               ),
-              child: Container(
-                width: double.infinity,
-                height: 150,
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [Colors.deepOrange.shade400, Colors.orange.shade300],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                ),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(Icons.local_offer, size: 40, color: Colors.white),
-                    const SizedBox(height: 8),
-                    Text(
-                      _promoTypeLabel(type),
-                      style: const TextStyle(
-                        color: Colors.white70,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w500,
+              child: (data['imageURL'] != null && (data['imageURL'] as String).isNotEmpty)
+                  ? CachedNetworkImage(
+                      imageUrl: data['imageURL'],
+                      fit: BoxFit.cover,
+                      width: double.infinity,
+                      height: 150,
+                      placeholder: (context, url) =>
+                      const ShimmerPlaceholder(height: 150),
+                      errorWidget: (context, url, error) => Container(
+                        height: 150,
+                        color: Colors.grey[300],
+                        child: const Icon(Icons.broken_image),
+                      ),
+                    )
+                  : Container(
+                      width: double.infinity,
+                      height: 150,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [Colors.deepOrange.shade400, Colors.orange.shade300],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                      ),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(Icons.local_offer, size: 40, color: Colors.white),
+                          const SizedBox(height: 8),
+                          Text(
+                            _promoTypeLabel(type),
+                            style: const TextStyle(
+                              color: Colors.white70,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                  ],
-                ),
-              ),
             ),
             Padding(
               padding: const EdgeInsets.all(8.0),

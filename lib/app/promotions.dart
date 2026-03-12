@@ -127,20 +127,17 @@ class _PromotionDetailPageState extends State<PromotionDetailPage> {
     switch (type) {
       case 'combo_exact':
         return [
-          'Revisa los productos incluidos en este combo.',
           'Presiona "Agregar combo al carrito" para añadir todos los productos.',
           'El precio especial del combo se aplicará en tu carrito.',
         ];
       case 'combo_choice':
         return [
-          'El producto principal ya está incluido en el combo.',
           'Selecciona una de las opciones disponibles de la lista.',
           'Presiona "Agregar combo al carrito" para añadir ambos productos.',
           'El precio especial se aplicará en tu carrito.',
         ];
       case 'combo_brand':
         return [
-          'El producto principal ya está incluido en el combo.',
           'Elige un producto de la marca participante de la lista.',
           'Presiona "Agregar combo al carrito" para añadir ambos productos.',
           'El precio especial se aplicará en tu carrito.',
@@ -149,7 +146,6 @@ class _PromotionDetailPageState extends State<PromotionDetailPage> {
         final buyQty = promoData?['buyQuantity'] ?? 3;
         final payQty = promoData?['payQuantity'] ?? 2;
         return [
-          'Lleva $buyQty unidades del producto mostrado.',
           'Solo pagas $payQty unidades.',
           'Presiona "Agregar combo al carrito" para añadir las $buyQty unidades.',
           'El descuento se reflejará en tu carrito.',
@@ -368,52 +364,68 @@ class _PromotionDetailPageState extends State<PromotionDetailPage> {
               // Header image — promo banner
               ClipRRect(
                 borderRadius: BorderRadius.circular(20),
-                child: Container(
-                  width: double.infinity,
-                  height: 250,
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [Colors.deepOrange.shade400, Colors.orange.shade300],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                  ),
-                  child: Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(Icons.local_offer, size: 60, color: Colors.white),
-                        const SizedBox(height: 12),
-                        Text(
-                          _promoTypeLabel(type),
-                          style: const TextStyle(
-                            fontSize: 16,
-                            color: Colors.white70,
-                            fontWeight: FontWeight.w500,
+                child: (promoData!['imageURL'] != null && (promoData!['imageURL'] as String).isNotEmpty)
+                    ? CachedNetworkImage(
+                        imageUrl: promoData!['imageURL'],
+                        width: double.infinity,
+                        height: 250,
+                        fit: BoxFit.fill,
+                        placeholder: (context, url) =>
+                        const ShimmerPlaceholder.rectangular(height: 250),
+                        errorWidget: (context, url, error) => Container(
+                          height: 250,
+                          color: Colors.grey[300],
+                          child: const Icon(Icons.broken_image),
+                        ),
+                      )
+                    : Container(
+                        width: double.infinity,
+                        height: 250,
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [Colors.deepOrange.shade400, Colors.orange.shade300],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
                           ),
                         ),
-                        const SizedBox(height: 4),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 24),
-                          child: Text(
-                            promoData!['name'] ?? 'Promoción',
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(
-                              fontSize: 26,
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                            ),
+                        child: Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Icon(Icons.local_offer, size: 60, color: Colors.white),
+                              const SizedBox(height: 12),
+                              Text(
+                                _promoTypeLabel(type),
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  color: Colors.white70,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 24),
+                                child: Text(
+                                  promoData!['name'] ?? 'Promoción',
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(
+                                    fontSize: 26,
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                      ],
-                    ),
-                  ),
-                ),
+                      ),
               ),
               const SizedBox(height: 20),
 
               // Title + price card (mirrors recipe title/precio)
-              Container(
+              SizedBox(
+                width: double.infinity,
+                child: Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
                   color: elevatedColor,
@@ -450,6 +462,7 @@ class _PromotionDetailPageState extends State<PromotionDetailPage> {
                     ),
                   ],
                 ),
+              ),
               ),
               const SizedBox(height: 20),
 
