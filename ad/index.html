@@ -171,13 +171,13 @@ html,body{width:1920px;height:1080px;overflow:hidden;background:#000;font-family
 .pts-desc{font-size:18px;color:rgba(26,26,26,0.6);text-align:center;line-height:2}
 
 /* ═══ PROMOS (pop-art style) ═══ */
-#scene-promos{gap:30px;background:#FFFFFF;position:relative}
+#scene-promos{gap:30px;background:#FFFFFF;position:relative;overflow:hidden}
 .promo-title{
   font-size:42px;color:#1A1A1A;text-align:center;line-height:1.6;
   animation:fade-up 0.6s ease forwards;opacity:0;transform:translateY(20px);
   position:relative;z-index:2;
 }
-.promo-cards{display:flex;flex-direction:column;gap:24px;width:85%;max-width:800px;position:relative;z-index:2}
+.promo-cards{display:flex;flex-direction:column;gap:24px;width:80%;max-width:750px;position:relative;z-index:2}
 .promo-card{
   display:flex;align-items:center;gap:28px;
   padding:24px 30px;background:rgba(0,0,0,0.03);
@@ -197,55 +197,39 @@ html,body{width:1920px;height:1080px;overflow:hidden;background:#000;font-family
 .promo-explosion{position:absolute;pointer-events:none;z-index:1;animation:spin-slow 8s linear infinite}
 .promo-explosion canvas{image-rendering:pixelated}
 
-/* ═══ COCA COLA (parachute ad recreation) ═══ */
+/* ═══ COCA COLA (war-landing scene) ═══ */
 #scene-coke{
-  gap:0;padding:0;background:#1a0000;position:relative;overflow:hidden;
+  gap:0;padding:0 !important;background:#0a0a1a;position:relative;overflow:hidden;
+  justify-content:flex-end !important;
 }
-.coke-bg-canvas{position:absolute;inset:0;z-index:0}
-.coke-content{
+.coke-war-canvas{position:absolute;inset:0;z-index:0;image-rendering:pixelated}
+.coke-bottom{
   position:relative;z-index:2;display:flex;flex-direction:column;align-items:center;
-  justify-content:center;gap:20px;width:100%;height:100%;padding:40px;
+  gap:14px;width:100%;padding:40px 40px 60px;
+  background:linear-gradient(transparent 0%,rgba(0,0,0,0.85) 30%,rgba(0,0,0,0.95) 100%);
 }
 .coke-regalo{
-  font-size:64px;color:#E53935;text-align:center;
+  font-size:56px;color:#E53935;text-align:center;
   text-shadow:0 0 30px rgba(229,57,53,0.5),4px 4px 0 #8B0000;
   animation:pixel-pop 0.6s cubic-bezier(.2,1,.3,1) forwards;opacity:0;transform:scale(0);
 }
-.coke-subtitle{font-size:14px;color:#fff;text-align:center;line-height:2.4;max-width:700px;animation:fade-up 0.6s 0.3s ease forwards;opacity:0;transform:translateY(20px)}
+.coke-subtitle{font-size:13px;color:#fff;text-align:center;line-height:2.4;max-width:700px;animation:fade-up 0.6s 0.3s ease forwards;opacity:0;transform:translateY(20px)}
 .coke-badge{
   padding:12px 30px;border:3px solid #E53935;color:#fff;font-size:12px;letter-spacing:3px;
   background:rgba(229,57,53,0.15);border-radius:4px;
   animation:fade-up 0.6s 0.5s ease forwards;opacity:0;transform:translateY(20px);
 }
-.coke-steps{display:flex;gap:30px;margin-top:10px;animation:fade-up 0.6s 0.7s ease forwards;opacity:0;transform:translateY(20px)}
+.coke-steps{display:flex;gap:24px;margin-top:6px;animation:fade-up 0.6s 0.7s ease forwards;opacity:0;transform:translateY(20px)}
 .coke-step{
-  display:flex;flex-direction:column;align-items:center;gap:10px;
-  padding:16px 20px;background:rgba(255,255,255,0.05);border:2px solid rgba(229,57,53,0.2);border-radius:8px;
-  width:200px;
+  display:flex;flex-direction:column;align-items:center;gap:8px;
+  padding:12px 16px;background:rgba(255,255,255,0.05);border:2px solid rgba(229,57,53,0.2);border-radius:8px;
+  width:180px;
 }
-.coke-step-num{font-size:36px;color:#E53935;font-weight:bold}
-.coke-step-label{font-size:9px;color:#fff;text-align:center;line-height:2;letter-spacing:1px}
-.coke-step canvas{width:40px;height:40px;image-rendering:pixelated}
-.coke-footer{font-size:11px;color:rgba(255,255,255,0.5);text-align:center;line-height:2;animation:fade-up 0.6s 1s ease forwards;opacity:0;transform:translateY(20px)}
+.coke-step-num{font-size:32px;color:#E53935;font-weight:bold}
+.coke-step-label{font-size:8px;color:#fff;text-align:center;line-height:2;letter-spacing:1px}
+.coke-step canvas{width:36px;height:36px;image-rendering:pixelated}
+.coke-footer{font-size:10px;color:rgba(255,255,255,0.5);text-align:center;line-height:2;animation:fade-up 0.6s 1s ease forwards;opacity:0;transform:translateY(20px)}
 .coke-footer b{color:#fff}
-/* Parachute bottles (animated canvases) */
-.coke-parachutes{position:absolute;top:0;left:0;width:100%;height:50%;z-index:1;pointer-events:none}
-.coke-para{position:absolute;animation:para-drop 2s ease-out forwards;opacity:0}
-.coke-para canvas{image-rendering:pixelated}
-@keyframes para-drop{0%{opacity:0;transform:translateY(-100px)}30%{opacity:1}100%{opacity:1;transform:translateY(0)}}
-.coke-para:nth-child(1){left:15%;top:5%;animation-delay:0.2s}
-.coke-para:nth-child(2){left:40%;top:0%;animation-delay:0s}
-.coke-para:nth-child(3){left:65%;top:8%;animation-delay:0.4s}
-
-/* Radial red glow for coke scene */
-.coke-glow{
-  position:absolute;top:30%;left:50%;width:600px;height:600px;
-  transform:translate(-50%,-50%);
-  background:radial-gradient(circle,rgba(229,57,53,0.2) 0%,transparent 70%);
-  z-index:0;pointer-events:none;
-  animation:coke-pulse 2s ease-in-out infinite alternate;
-}
-@keyframes coke-pulse{0%{opacity:0.5;transform:translate(-50%,-50%) scale(1)}100%{opacity:1;transform:translate(-50%,-50%) scale(1.2)}}
 
 /* ═══ CTA ═══ */
 #scene-cta{gap:30px;background:#FFFFFF}
@@ -304,48 +288,48 @@ html,body{width:1920px;height:1080px;overflow:hidden;background:#000;font-family
 <div id="scene-spot-0" class="scene"><div class="spotlight">
   <div class="spot-canvas-wrap" style="color:#BB44FF"><canvas class="spot-canvas" id="canvas-tetris" width="200" height="200"></canvas></div>
   <div class="spot-info"><div class="spot-number">GAME 01 / 12</div><div class="spot-title" style="color:#BB44FF">BLOCK DROP</div>
-    <div class="spot-tags"><span class="spot-tag" style="color:#BB44FF;border-color:#BB44FF">PUZZLE</span><span class="spot-tag" style="color:#BB44FF;border-color:#BB44FF">CLASSIC</span></div>
-    <div class="spot-blurb">Stack the pieces and clear lines.<br>The classic that never gets old.<span class="spot-cursor">█</span></div></div>
+    <div class="spot-tags"><span class="spot-tag" style="color:#BB44FF;border-color:#BB44FF">PUZZLE</span><span class="spot-tag" style="color:#BB44FF;border-color:#BB44FF">CLÁSICO</span></div>
+    <div class="spot-blurb">Apila las piezas y elimina líneas.<br>El clásico que nunca pasa de moda.<span class="spot-cursor">█</span></div></div>
 </div></div>
 
 <!-- SCENE 4: Star Blaster (Shooter) -->
 <div id="scene-spot-1" class="scene"><div class="spotlight">
   <div class="spot-canvas-wrap" style="color:#FF4422"><canvas class="spot-canvas" id="canvas-shooter" width="200" height="200"></canvas></div>
   <div class="spot-info"><div class="spot-number">GAME 04 / 12</div><div class="spot-title" style="color:#FF4422">STAR BLASTER</div>
-    <div class="spot-tags"><span class="spot-tag" style="color:#FF4422;border-color:#FF4422">SHOOTER</span><span class="spot-tag" style="color:#FF4422;border-color:#FF4422">ACTION</span></div>
-    <div class="spot-blurb">Defend the galaxy against waves<br>of enemy ships.<span class="spot-cursor">█</span></div></div>
+    <div class="spot-tags"><span class="spot-tag" style="color:#FF4422;border-color:#FF4422">DISPAROS</span><span class="spot-tag" style="color:#FF4422;border-color:#FF4422">ACCIÓN</span></div>
+    <div class="spot-blurb">Defiende la galaxia contra oleadas<br>de naves enemigas.<span class="spot-cursor">█</span></div></div>
 </div></div>
 
 <!-- SCENE 5: Ghost Maze (Pac-Man) -->
 <div id="scene-spot-2" class="scene"><div class="spotlight">
   <div class="spot-canvas-wrap" style="color:#4488FF"><canvas class="spot-canvas" id="canvas-maze" width="200" height="200"></canvas></div>
   <div class="spot-info"><div class="spot-number">GAME 05 / 12</div><div class="spot-title" style="color:#4488FF">GHOST MAZE</div>
-    <div class="spot-tags"><span class="spot-tag" style="color:#4488FF;border-color:#4488FF">MAZE</span><span class="spot-tag" style="color:#4488FF;border-color:#4488FF">ARCADE</span></div>
-    <div class="spot-blurb">Eat all the dots and dodge the<br>ghosts in the maze.<span class="spot-cursor">█</span></div></div>
+    <div class="spot-tags"><span class="spot-tag" style="color:#4488FF;border-color:#4488FF">LABERINTO</span><span class="spot-tag" style="color:#4488FF;border-color:#4488FF">ARCADE</span></div>
+    <div class="spot-blurb">Come todos los puntos y esquiva<br>a los fantasmas en el laberinto.<span class="spot-cursor">█</span></div></div>
 </div></div>
 
 <!-- SCENE 6: Crypt Doom (FPS) -->
 <div id="scene-spot-3" class="scene"><div class="spotlight">
   <div class="spot-canvas-wrap" style="color:#FF8800"><canvas class="spot-canvas" id="canvas-raycaster" width="200" height="200"></canvas></div>
   <div class="spot-info"><div class="spot-number">GAME 06 / 12</div><div class="spot-title" style="color:#FF8800">CRYPT DOOM</div>
-    <div class="spot-tags"><span class="spot-tag" style="color:#FF8800;border-color:#FF8800">FPS</span><span class="spot-tag" style="color:#FF8800;border-color:#FF8800">HORROR</span></div>
-    <div class="spot-blurb">Explore the cursed crypt Doom-style.<br>Shoot demons and survive.<span class="spot-cursor">█</span></div></div>
+    <div class="spot-tags"><span class="spot-tag" style="color:#FF8800;border-color:#FF8800">FPS</span><span class="spot-tag" style="color:#FF8800;border-color:#FF8800">TERROR</span></div>
+    <div class="spot-blurb">Explora la cripta maldita estilo Doom.<br>Dispara a los demonios y sobrevive.<span class="spot-cursor">█</span></div></div>
 </div></div>
 
 <!-- SCENE 7: Neon Snake -->
 <div id="scene-spot-4" class="scene"><div class="spotlight">
   <div class="spot-canvas-wrap" style="color:#00FF88"><canvas class="spot-canvas" id="canvas-snake" width="200" height="200"></canvas></div>
   <div class="spot-info"><div class="spot-number">GAME 08 / 12</div><div class="spot-title" style="color:#00FF88">NEON SNAKE</div>
-    <div class="spot-tags"><span class="spot-tag" style="color:#00FF88;border-color:#00FF88">SNAKE</span><span class="spot-tag" style="color:#00FF88;border-color:#00FF88">RETRO</span></div>
-    <div class="spot-blurb">Eat, grow, and don't bite your tail.<br>Simple but addictive.<span class="spot-cursor">█</span></div></div>
+    <div class="spot-tags"><span class="spot-tag" style="color:#00FF88;border-color:#00FF88">SERPIENTE</span><span class="spot-tag" style="color:#00FF88;border-color:#00FF88">RETRO</span></div>
+    <div class="spot-blurb">Come, crece y no muerdas tu cola.<br>Simple pero adictivo.<span class="spot-cursor">█</span></div></div>
 </div></div>
 
 <!-- SCENE 8: Frog Dash (Frogger) -->
 <div id="scene-spot-5" class="scene"><div class="spotlight">
   <div class="spot-canvas-wrap" style="color:#88FF44"><canvas class="spot-canvas" id="canvas-hopper" width="200" height="200"></canvas></div>
   <div class="spot-info"><div class="spot-number">GAME 07 / 12</div><div class="spot-title" style="color:#88FF44">FROG DASH</div>
-    <div class="spot-tags"><span class="spot-tag" style="color:#88FF44;border-color:#88FF44">FROGGER</span><span class="spot-tag" style="color:#88FF44;border-color:#88FF44">DODGE</span></div>
-    <div class="spot-blurb">Cross the road and river without<br>getting caught by traffic.<span class="spot-cursor">█</span></div></div>
+    <div class="spot-tags"><span class="spot-tag" style="color:#88FF44;border-color:#88FF44">FROGGER</span><span class="spot-tag" style="color:#88FF44;border-color:#88FF44">ESQUIVAR</span></div>
+    <div class="spot-blurb">Cruza la carretera y el río sin<br>que te atrape el tráfico.<span class="spot-cursor">█</span></div></div>
 </div></div>
 
 <!-- SCENE 9: DELIVERY -->
@@ -391,8 +375,8 @@ html,body{width:1920px;height:1080px;overflow:hidden;background:#000;font-family
 
 <!-- SCENE 11: PROMOS (pop-art) -->
 <div id="scene-promos" class="scene">
-  <canvas class="promo-explosion" id="promo-explode-1" width="200" height="200" style="top:5%;left:5%;width:200px;height:200px"></canvas>
-  <canvas class="promo-explosion" id="promo-explode-2" width="200" height="200" style="top:60%;right:5%;width:200px;height:200px;left:auto"></canvas>
+  <canvas class="promo-explosion" id="promo-explode-1" width="200" height="200" style="top:8%;left:2%;width:160px;height:160px"></canvas>
+  <canvas class="promo-explosion" id="promo-explode-2" width="200" height="200" style="top:55%;right:2%;width:160px;height:160px;left:auto"></canvas>
   <div class="promo-title">PROMOCIONES<br>EN LA APP</div>
   <div class="promo-cards">
     <div class="promo-card"><canvas class="promo-icon" data-icon="tag" width="24" height="24"></canvas><span class="p-text">Ofertas exclusivas solo<br>para usuarios de la app</span></div>
@@ -401,17 +385,10 @@ html,body{width:1920px;height:1080px;overflow:hidden;background:#000;font-family
   </div>
 </div>
 
-<!-- SCENE 12: COCA COLA (parachute ad) -->
+<!-- SCENE 12: COCA COLA (war-landing) -->
 <div id="scene-coke" class="scene">
-  <div class="coke-glow"></div>
-  <canvas class="coke-bg-canvas" id="coke-bg" width="1080" height="1920"></canvas>
-  <div class="coke-parachutes" id="coke-paras">
-    <div class="coke-para"><canvas id="para1" width="120" height="200"></canvas></div>
-    <div class="coke-para"><canvas id="para2" width="150" height="250"></canvas></div>
-    <div class="coke-para"><canvas id="para3" width="120" height="200"></canvas></div>
-  </div>
-  <div class="coke-content">
-    <div style="height:280px"></div>
+  <canvas class="coke-war-canvas" id="coke-war" width="1080" height="1920"></canvas>
+  <div class="coke-bottom">
     <div class="coke-regalo">¡REGALO!</div>
     <div class="coke-subtitle">¡Estamos mas que generosos esta semana!<br>Gana una botella de Coca-Cola de 500ml gratis.</div>
     <div class="coke-badge">¿LISTO PARA TU COCA-COLA?</div>
@@ -822,69 +799,371 @@ function initIcons(){
     else if(s==='bottle'){ctx.fillRect(8,1,4,4);ctx.fillRect(7,5,6,14);ctx.fillStyle='#fff';ctx.fillRect(8,7,4,4)}
   });
 
-  drawParachutes();
-  drawCokeBg();
+  initCokeWar();
 }
 
-function drawParachutes(){
-  ['para1','para2','para3'].forEach((id,i)=>{
-    const cv=document.getElementById(id);if(!cv)return;
-    const ctx=cv.getContext('2d');const W=cv.width,H=cv.height;
-    ctx.imageSmoothingEnabled=false;
-    const bx=W/2,by=H*0.65;
-    // Parachute canopy (red/white stripes)
-    const cx=W/2,cy=H*0.2,rr=W*0.35;
-    for(let a=-Math.PI;a<0;a+=0.05){
-      const stripe=Math.floor((a+Math.PI)/0.4)%2;
-      ctx.fillStyle=stripe?'#E53935':'#fff';
-      const x1=cx+Math.cos(a)*rr,y1=cy+Math.sin(a)*rr*0.6;
-      ctx.fillRect(x1|0,y1|0,3,3);
+/* ═══ COCA COLA WAR-LANDING ANIMATION ═══ */
+function initCokeWar(){
+  const cv=document.getElementById('coke-war');if(!cv)return;
+  const ctx=cv.getContext('2d');
+  ctx.imageSmoothingEnabled=false;
+  const W=1080,H=1920;
+
+  // Parachute bottles
+  const bottles=[];
+  for(let i=0;i<8;i++){
+    bottles.push({
+      x:100+Math.random()*(W-200),
+      y:-100-Math.random()*800,
+      vy:0.6+Math.random()*0.4,
+      sway:Math.random()*Math.PI*2,
+      swayAmp:15+Math.random()*25,
+      swaySpd:0.01+Math.random()*0.015,
+      size:40+Math.random()*30,
+      delay:i*0.3
+    });
+  }
+
+  // Jets
+  const jets=[];
+  function spawnJet(){
+    const fromLeft=Math.random()>0.5;
+    jets.push({
+      x:fromLeft?-120:W+120,
+      y:80+Math.random()*500,
+      vx:fromLeft?(4+Math.random()*4):-(4+Math.random()*4),
+      trail:[],size:1,
+      flip:!fromLeft,
+      life:0
+    });
+  }
+  spawnJet();spawnJet();
+
+  // Missiles
+  const missiles=[];
+  function spawnMissile(){
+    const fromLeft=Math.random()>0.5;
+    missiles.push({
+      x:fromLeft?-30:W+30,
+      y:150+Math.random()*600,
+      vx:fromLeft?(6+Math.random()*5):-(6+Math.random()*5),
+      vy:-1+Math.random()*2,
+      trail:[],life:0,
+      maxLife:120+Math.random()*80
+    });
+  }
+  spawnMissile();spawnMissile();spawnMissile();
+
+  // Explosions
+  const explosions=[];
+  function spawnExplosion(x,y,big){
+    const parts=[];const n=big?30:15;
+    for(let i=0;i<n;i++){
+      const a=Math.random()*Math.PI*2;
+      const spd=big?(2+Math.random()*5):(1+Math.random()*3);
+      parts.push({x:0,y:0,vx:Math.cos(a)*spd,vy:Math.sin(a)*spd,life:1,decay:0.015+Math.random()*0.02,
+        color:['#FF4400','#FF8800','#FFCC00','#FF2200','#FFF'][Math.floor(Math.random()*5)],
+        size:big?(3+Math.random()*5):(2+Math.random()*3)
+      });
     }
-    // Canopy fill
+    explosions.push({x,y,parts,flash:big?12:6,ring:0,ringMax:big?60:35});
+  }
+
+  // Tracers (gunfire)
+  const tracers=[];
+  function spawnTracer(){
+    const fromLeft=Math.random()>0.5;
+    tracers.push({
+      x:fromLeft?0:W,
+      y:50+Math.random()*700,
+      vx:fromLeft?(10+Math.random()*8):-(10+Math.random()*8),
+      vy:-2+Math.random()*4,
+      life:30+Math.random()*20,
+      color:Math.random()>0.5?'#FFFF44':'#FF8844'
+    });
+  }
+
+  // Stars
+  const stars=[];
+  for(let i=0;i<80;i++) stars.push({x:Math.random()*W,y:Math.random()*H*0.6,a:Math.random(),twinkle:Math.random()*0.05});
+
+  // Smoke clouds
+  const clouds=[];
+  for(let i=0;i<6;i++) clouds.push({x:Math.random()*W,y:300+Math.random()*400,r:60+Math.random()*100,a:0.03+Math.random()*0.04,dx:0.2+Math.random()*0.3});
+
+  // Flak bursts (anti-air puffs)
+  const flakBursts=[];
+  function spawnFlak(){
+    flakBursts.push({x:100+Math.random()*(W-200),y:100+Math.random()*500,life:1,r:0});
+  }
+
+  let frame=0;
+  let jetTimer=0,missileTimer=0,tracerTimer=0,flakTimer=0;
+
+  function drawBottle(x,y,sz){
+    const p=sz;
+    // Parachute canopy
+    const cx=x,cy=y-sz*1.2;
     ctx.fillStyle='#E53935';
-    ctx.beginPath();ctx.ellipse(cx,cy,rr,rr*0.5,0,Math.PI,0);ctx.fill();
-    // Stripes on canopy
-    for(let s=0;s<6;s++){
-      const sx=cx-rr+s*(rr*2/6);
-      if(s%2===0){ctx.fillStyle='#fff';ctx.fillRect(sx|0,(cy-rr*0.4)|0,(rr/3)|0,(rr*0.4)|0)}
+    ctx.beginPath();ctx.ellipse(cx,cy,sz*0.9,sz*0.45,0,Math.PI,0);ctx.fill();
+    // White stripes
+    for(let s=0;s<4;s++){
+      const sx=cx-sz*0.8+s*(sz*0.45);
+      if(s%2===0){ctx.fillStyle='#fff';ctx.fillRect(sx|0,(cy-sz*0.35)|0,(sz*0.22)|0,(sz*0.35)|0)}
     }
     // Strings
-    ctx.strokeStyle='#aaa';ctx.lineWidth=1;
-    ctx.beginPath();ctx.moveTo(cx-rr*0.7,cy);ctx.lineTo(bx,by);ctx.stroke();
-    ctx.beginPath();ctx.moveTo(cx+rr*0.7,cy);ctx.lineTo(bx,by);ctx.stroke();
-    ctx.beginPath();ctx.moveTo(cx,cy+2);ctx.lineTo(bx,by);ctx.stroke();
-    // Bottle
-    const bw=W*0.2,bh=H*0.3;
-    // Glass outline
-    ctx.fillStyle='#E8E8E8';ctx.fillRect(bx-bw*0.2,by,bw*0.4,bh*0.15);
-    ctx.fillStyle='#2A1508';ctx.fillRect(bx-bw*0.3,by+bh*0.15,bw*0.6,bh*0.55);
+    ctx.strokeStyle='rgba(255,255,255,0.4)';ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(cx-sz*0.7,cy);ctx.lineTo(x,y-sz*0.2);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(cx+sz*0.7,cy);ctx.lineTo(x,y-sz*0.2);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(cx,cy+2);ctx.lineTo(x,y-sz*0.2);ctx.stroke();
+    // Bottle body
+    const bw=sz*0.3,bh=sz*0.8;
+    const bx=x,by=y;
+    // Cap
+    ctx.fillStyle='#C0C0C0';ctx.fillRect(bx-bw*0.25,by-bh*0.5,bw*0.5,bh*0.1);
+    // Neck
+    ctx.fillStyle='#E8E8E8';ctx.fillRect(bx-bw*0.2,by-bh*0.4,bw*0.4,bh*0.15);
+    // Body
+    ctx.fillStyle='#2A1508';ctx.fillRect(bx-bw*0.45,by-bh*0.25,bw*0.9,bh*0.6);
     // Red label
-    ctx.fillStyle='#CC0000';ctx.fillRect(bx-bw*0.3,by+bh*0.35,bw*0.6,bh*0.2);
-    ctx.fillStyle='#fff';ctx.fillRect(bx-bw*0.15,by+bh*0.4,bw*0.3,bh*0.08);
+    ctx.fillStyle='#CC0000';ctx.fillRect(bx-bw*0.45,by-bh*0.1,bw*0.9,bh*0.2);
+    // Label text (white bar)
+    ctx.fillStyle='#fff';ctx.fillRect(bx-bw*0.25,by-bh*0.03,bw*0.5,bh*0.08);
     // Bottom
-    ctx.fillStyle='#E8E8E8';ctx.fillRect(bx-bw*0.35,by+bh*0.7,bw*0.7,bh*0.05);
-    ctx.fillStyle='#2A1508';ctx.fillRect(bx-bw*0.35,by+bh*0.75,bw*0.7,bh*0.2);
-    ctx.fillStyle='#D0D0D0';ctx.fillRect(bx-bw*0.35,by+bh*0.95,bw*0.7,bh*0.05);
-  });
-}
+    ctx.fillStyle='#E8E8E8';ctx.fillRect(bx-bw*0.5,by+bh*0.35,bw*1.0,bh*0.05);
+    ctx.fillStyle='#2A1508';ctx.fillRect(bx-bw*0.45,by+bh*0.4,bw*0.9,bh*0.1);
+  }
 
-function drawCokeBg(){
-  const cv=document.getElementById('coke-bg');if(!cv)return;
-  const ctx=cv.getContext('2d');
-  // Dark bg with subtle bottle silhouettes
-  ctx.fillStyle='#1a0000';ctx.fillRect(0,0,1080,1920);
-  // Radial red center glow
-  const g=ctx.createRadialGradient(540,700,100,540,700,600);
-  g.addColorStop(0,'rgba(229,57,53,0.15)');g.addColorStop(1,'transparent');
-  ctx.fillStyle=g;ctx.fillRect(0,0,1080,1920);
-  // Faint bottle outlines on sides
-  ctx.strokeStyle='rgba(229,57,53,0.08)';ctx.lineWidth=3;
-  [50,980].forEach(x=>{
-    ctx.beginPath();ctx.moveTo(x,400);ctx.lineTo(x,350);ctx.lineTo(x-15,300);ctx.lineTo(x-15,200);ctx.lineTo(x-10,180);ctx.lineTo(x+10,180);ctx.lineTo(x+15,200);ctx.lineTo(x+15,300);ctx.lineTo(x,350);ctx.stroke();
-  });
-  // Light rays from center
-  ctx.strokeStyle='rgba(229,57,53,0.05)';ctx.lineWidth=2;
-  for(let i=0;i<12;i++){const a=i*Math.PI/6;ctx.beginPath();ctx.moveTo(540,700);ctx.lineTo(540+Math.cos(a)*500,700+Math.sin(a)*500);ctx.stroke()}
+  function drawJet(j){
+    const s=j.flip?-1:1;
+    ctx.save();ctx.translate(j.x,j.y);ctx.scale(s,1);
+    // Fuselage
+    ctx.fillStyle='#556B7A';
+    ctx.fillRect(-40,-6,80,12);
+    // Nose
+    ctx.fillStyle='#778899';
+    ctx.beginPath();ctx.moveTo(40,-5);ctx.lineTo(55,0);ctx.lineTo(40,5);ctx.fill();
+    // Wings
+    ctx.fillStyle='#445566';
+    ctx.beginPath();ctx.moveTo(-5,-6);ctx.lineTo(15,-30);ctx.lineTo(20,-6);ctx.fill();
+    ctx.beginPath();ctx.moveTo(-5,6);ctx.lineTo(15,30);ctx.lineTo(20,6);ctx.fill();
+    // Tail
+    ctx.fillStyle='#445566';
+    ctx.beginPath();ctx.moveTo(-40,-6);ctx.lineTo(-50,-20);ctx.lineTo(-30,-6);ctx.fill();
+    ctx.beginPath();ctx.moveTo(-40,6);ctx.lineTo(-50,20);ctx.lineTo(-30,6);ctx.fill();
+    // Cockpit
+    ctx.fillStyle='#88CCFF';ctx.fillRect(20,-3,10,6);
+    // Engine glow
+    ctx.fillStyle='#FF8800';ctx.fillRect(-48,-3,10,6);
+    ctx.fillStyle='#FFCC00';ctx.fillRect(-45,-2,6,4);
+    ctx.restore();
+    // Afterburner trail
+    for(let t=0;t<j.trail.length;t++){
+      const tr=j.trail[t];
+      ctx.fillStyle='rgba(255,136,0,'+(tr.a*0.5)+')';
+      ctx.fillRect(tr.x-tr.s/2,tr.y-tr.s/2,tr.s,tr.s);
+    }
+  }
+
+  function drawMissile(m){
+    const dir=m.vx>0?1:-1;
+    ctx.save();ctx.translate(m.x,m.y);
+    // Body
+    ctx.fillStyle='#888';ctx.fillRect(-12*dir<0?-12:0,-2,24,4);
+    // Nose (red)
+    ctx.fillStyle='#E53935';
+    ctx.beginPath();ctx.moveTo(12*dir,-3);ctx.lineTo(18*dir,0);ctx.lineTo(12*dir,3);ctx.fill();
+    // Fins
+    ctx.fillStyle='#666';
+    ctx.beginPath();ctx.moveTo(-10*dir,-2);ctx.lineTo(-14*dir,-7);ctx.lineTo(-8*dir,-2);ctx.fill();
+    ctx.beginPath();ctx.moveTo(-10*dir,2);ctx.lineTo(-14*dir,7);ctx.lineTo(-8*dir,2);ctx.fill();
+    // Exhaust
+    ctx.fillStyle='#FFAA00';ctx.fillRect(-14*dir-2,-2,6,4);
+    ctx.fillStyle='#FF4400';ctx.fillRect(-17*dir-2,-1,4,2);
+    ctx.restore();
+    // Smoke trail
+    for(let t=0;t<m.trail.length;t++){
+      const tr=m.trail[t];
+      ctx.fillStyle='rgba(200,200,200,'+(tr.a*0.3)+')';
+      ctx.fillRect(tr.x-tr.s/2,tr.y-tr.s/2,tr.s,tr.s);
+    }
+  }
+
+  function tick(){
+    frame++;
+    ctx.fillStyle='#0a0a1a';ctx.fillRect(0,0,W,H);
+
+    // Sky gradient (dark navy to dark red near horizon)
+    const skyG=ctx.createLinearGradient(0,0,0,H*0.65);
+    skyG.addColorStop(0,'#050510');
+    skyG.addColorStop(0.3,'#0a0a2a');
+    skyG.addColorStop(0.7,'#1a0510');
+    skyG.addColorStop(1,'#2a0a0a');
+    ctx.fillStyle=skyG;ctx.fillRect(0,0,W,H*0.7);
+
+    // Stars
+    stars.forEach(s=>{
+      const a=s.a*(0.5+0.5*Math.sin(frame*s.twinkle));
+      ctx.fillStyle='rgba(255,255,255,'+a+')';
+      ctx.fillRect(s.x|0,s.y|0,2,2);
+    });
+
+    // Smoke clouds
+    clouds.forEach(c=>{
+      c.x+=c.dx;if(c.x>W+c.r)c.x=-c.r;
+      const g=ctx.createRadialGradient(c.x,c.y,0,c.x,c.y,c.r);
+      g.addColorStop(0,'rgba(80,40,20,'+c.a+')');g.addColorStop(1,'transparent');
+      ctx.fillStyle=g;ctx.fillRect(c.x-c.r,c.y-c.r,c.r*2,c.r*2);
+    });
+
+    // Ground (dark terrain)
+    const grdG=ctx.createLinearGradient(0,H*0.65,0,H);
+    grdG.addColorStop(0,'#1a0a05');grdG.addColorStop(0.3,'#0d0805');grdG.addColorStop(1,'#050303');
+    ctx.fillStyle=grdG;ctx.fillRect(0,H*0.65,W,H*0.35);
+    // Horizon fire glow
+    const hg=ctx.createLinearGradient(0,H*0.62,0,H*0.72);
+    hg.addColorStop(0,'transparent');
+    hg.addColorStop(0.3,'rgba(255,80,20,'+(0.08+0.04*Math.sin(frame*0.05))+')');
+    hg.addColorStop(0.7,'rgba(255,40,10,'+(0.05+0.03*Math.sin(frame*0.07))+')');
+    hg.addColorStop(1,'transparent');
+    ctx.fillStyle=hg;ctx.fillRect(0,H*0.62,W,H*0.1);
+
+    // Spawn timers
+    jetTimer++;missileTimer++;tracerTimer++;flakTimer++;
+    if(jetTimer>180){spawnJet();jetTimer=0}
+    if(missileTimer>60+Math.random()*40){spawnMissile();missileTimer=0}
+    if(tracerTimer>4){spawnTracer();tracerTimer=0}
+    if(flakTimer>50+Math.random()*40){spawnFlak();flakTimer=0}
+
+    // Update & draw flak bursts
+    for(let i=flakBursts.length-1;i>=0;i--){
+      const f=flakBursts[i];
+      f.life-=0.018;f.r+=1.5;
+      if(f.life<=0){flakBursts.splice(i,1);continue}
+      ctx.strokeStyle='rgba(255,200,100,'+f.life*0.6+')';ctx.lineWidth=2;
+      ctx.beginPath();ctx.arc(f.x,f.y,f.r,0,Math.PI*2);ctx.stroke();
+      // Inner puff
+      const g2=ctx.createRadialGradient(f.x,f.y,0,f.x,f.y,f.r*0.7);
+      g2.addColorStop(0,'rgba(255,220,150,'+f.life*0.3+')');g2.addColorStop(1,'transparent');
+      ctx.fillStyle=g2;ctx.fillRect(f.x-f.r,f.y-f.r,f.r*2,f.r*2);
+      // Debris pixels
+      for(let d=0;d<5;d++){
+        const da=d*Math.PI*2/5+frame*0.02;
+        const dr=f.r*(0.5+Math.random()*0.5);
+        ctx.fillStyle='rgba(255,180,80,'+f.life*0.5+')';
+        ctx.fillRect((f.x+Math.cos(da)*dr)|0,(f.y+Math.sin(da)*dr)|0,3,3);
+      }
+    }
+
+    // Update & draw tracers (gunfire)
+    for(let i=tracers.length-1;i>=0;i--){
+      const t=tracers[i];
+      t.x+=t.vx;t.y+=t.vy;t.life--;
+      if(t.life<=0||t.x<-20||t.x>W+20){tracers.splice(i,1);continue}
+      ctx.fillStyle=t.color;
+      ctx.fillRect(t.x|0,t.y|0,4,2);
+      // Trail
+      ctx.fillStyle=t.color.replace(')',',0.3)').replace('rgb','rgba');
+      ctx.fillRect((t.x-t.vx*0.5)|0,(t.y-t.vy*0.5)|0,3,2);
+    }
+
+    // Update & draw missiles
+    for(let i=missiles.length-1;i>=0;i--){
+      const m=missiles[i];
+      m.x+=m.vx;m.y+=m.vy;m.life++;
+      m.trail.push({x:m.x-m.vx*2,y:m.y,s:3+Math.random()*2,a:1});
+      for(let t=m.trail.length-1;t>=0;t--){m.trail[t].a-=0.04;m.trail[t].s+=0.3;if(m.trail[t].a<=0)m.trail.splice(t,1)}
+      if(m.life>m.maxLife){
+        spawnExplosion(m.x,m.y,true);
+        missiles.splice(i,1);continue;
+      }
+      if(m.x<-60||m.x>W+60){missiles.splice(i,1);continue}
+      drawMissile(m);
+    }
+
+    // Update & draw jets
+    for(let i=jets.length-1;i>=0;i--){
+      const j=jets[i];
+      j.x+=j.vx;j.life++;
+      j.trail.push({x:j.x-(j.flip?-50:50),y:j.y,s:4,a:1});
+      for(let t=j.trail.length-1;t>=0;t--){j.trail[t].a-=0.025;j.trail[t].s+=0.5;if(j.trail[t].a<=0)j.trail.splice(t,1)}
+      if(j.x<-200||j.x>W+200){jets.splice(i,1);continue}
+      drawJet(j);
+    }
+
+    // Update & draw explosions
+    for(let i=explosions.length-1;i>=0;i--){
+      const e=explosions[i];
+      // Flash
+      if(e.flash>0){
+        const fa=e.flash/12;
+        const g3=ctx.createRadialGradient(e.x,e.y,0,e.x,e.y,80);
+        g3.addColorStop(0,'rgba(255,255,200,'+fa+')');g3.addColorStop(1,'transparent');
+        ctx.fillStyle=g3;ctx.fillRect(e.x-80,e.y-80,160,160);
+        e.flash--;
+      }
+      // Ring
+      if(e.ring<e.ringMax){
+        e.ring+=2;
+        ctx.strokeStyle='rgba(255,150,50,'+(1-e.ring/e.ringMax)*0.5+')';
+        ctx.lineWidth=3;
+        ctx.beginPath();ctx.arc(e.x,e.y,e.ring,0,Math.PI*2);ctx.stroke();
+      }
+      // Particles
+      let alive=false;
+      e.parts.forEach(p=>{
+        if(p.life<=0)return;alive=true;
+        p.x+=p.vx;p.y+=p.vy;p.vy+=0.05;p.life-=p.decay;
+        ctx.fillStyle=p.color;
+        ctx.globalAlpha=Math.max(0,p.life);
+        ctx.fillRect((e.x+p.x)|0,(e.y+p.y)|0,p.size|0,p.size|0);
+      });
+      ctx.globalAlpha=1;
+      if(!alive&&e.ring>=e.ringMax)explosions.splice(i,1);
+    }
+
+    // Parachute bottles (float down with sway)
+    bottles.forEach(b=>{
+      const t=frame*b.swaySpd+b.sway;
+      const bx=b.x+Math.sin(t)*b.swayAmp;
+      const by=b.y+frame*b.vy*0.5;
+      const wy=((by%((H*0.6)+b.size*3))-b.size*2);
+      if(wy>-b.size*2&&wy<H*0.6){
+        drawBottle(bx,wy,b.size);
+      }
+    });
+
+    // Searchlight beams from bottom
+    for(let i=0;i<2;i++){
+      const bx=200+i*680;
+      const angle=Math.sin(frame*0.008+i*2)*0.3;
+      ctx.save();ctx.translate(bx,H*0.68);ctx.rotate(angle);
+      const sg=ctx.createLinearGradient(0,0,0,-H*0.5);
+      sg.addColorStop(0,'rgba(255,255,200,0.04)');sg.addColorStop(1,'transparent');
+      ctx.fillStyle=sg;
+      ctx.beginPath();ctx.moveTo(-20,0);ctx.lineTo(-80,-H*0.5);ctx.lineTo(80,-H*0.5);ctx.lineTo(20,0);ctx.fill();
+      ctx.restore();
+    }
+
+    // Distant ground fires (flickering orange spots)
+    for(let i=0;i<5;i++){
+      const fx=120+i*220;const fy=H*0.67+Math.sin(i*7)*20;
+      const fi=0.2+0.15*Math.sin(frame*0.1+i*3);
+      const fg=ctx.createRadialGradient(fx,fy,0,fx,fy,25+Math.sin(frame*0.08+i)*8);
+      fg.addColorStop(0,'rgba(255,100,20,'+fi+')');fg.addColorStop(1,'transparent');
+      ctx.fillStyle=fg;ctx.fillRect(fx-40,fy-40,80,80);
+    }
+
+    // Screen shake on explosion
+    if(explosions.length>0&&explosions.some(e=>e.flash>6)){
+      cv.style.transform='translate('+(Math.random()*4-2)+'px,'+(Math.random()*4-2)+'px)';
+    }else{
+      cv.style.transform='';
+    }
+
+    requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
 }
 
 window.addEventListener('DOMContentLoaded',()=>{initIcons();loop()});
