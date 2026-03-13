@@ -314,23 +314,20 @@ class CheckUserScreenState extends State<CheckUserScreen> {
   }
 
   Future<void> _checkUser() async {
-    final user = FirebaseAuth.instance.currentUser;
+    // Wait for Firebase Auth to finish restoring any persisted session
+    // from secure storage. currentUser can be null immediately after
+    // initializeApp even when a session exists on disk.
+    final user = await FirebaseAuth.instance.authStateChanges().first;
 
-    if (user == null) {
-      if (mounted) {
-        Navigator.of(context).pushReplacement(
-            customPageRouteBuilder(const MainMenuScreen()));
+    if (user != null) {
+      try {
+        await user.reload();
+      } catch (e) {
+        // Network or token refresh failure — do NOT sign out.
+        // Firebase Auth will handle token refresh automatically
+        // when connectivity is restored.
+        debugPrint('User reload failed (offline?): $e');
       }
-      return;
-    }
-
-    try {
-      await user.reload();
-    } catch (e) {
-      // Network or token refresh failure — do NOT sign out.
-      // Firebase Auth will handle token refresh automatically
-      // when connectivity is restored.
-      debugPrint('User reload failed (offline?): $e');
     }
 
     if (mounted) {
