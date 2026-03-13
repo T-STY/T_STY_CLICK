@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1920, height=1080">
+<title>T_STY: Beyond — Anuncio</title>
+<style>
+  /* ── Reset & base ─────────────────────────────────────── */
+  *{margin:0;padding:0;box-sizing:border-box}
+  @font-face{font-family:'Inter';src:local('Inter'),local('Arial');font-weight:100 900}
+  html,body{width:1920px;height:1080px;overflow:hidden;background:#000;font-family:'Inter','Segoe UI',system-ui,sans-serif}
+
+  /* ── Rotation wrapper — rotates content 90° CW so a CW-rotated TV shows it upright ── */
+  #rotation-wrapper{
+    position:absolute;
+    width:1080px;height:1920px;
+    top:50%;left:50%;
+    transform:translate(-50%,-50%) rotate(90deg);
+    transform-origin:center center;
+    overflow:hidden;
+    background:#0a0a0f;
+  }
+
+  /* ── Scene system ─────────────────────────────────────── */
+  .scene{
+    position:absolute;inset:0;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    opacity:0;pointer-events:none;
+    transition:opacity 0.8s ease;
+  }
+  .scene.active{opacity:1;pointer-events:auto}
+
+  /* ── CRT overlay ──────────────────────────────────────── */
+  #crt-overlay{
+    position:absolute;inset:0;z-index:9999;pointer-events:none;
+    background:
+      repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 2px,
+        rgba(0,255,136,0.03) 2px,
+        rgba(0,255,136,0.03) 4px
+      );
+  }
+  #crt-overlay::after{
+    content:'';position:absolute;inset:0;
+    background:radial-gradient(ellipse at center,transparent 55%,rgba(0,0,0,0.45) 100%);
+  }
+
+  /* ── Shared typography ────────────────────────────────── */
+  .logo-text{
+    font-size:110px;font-weight:900;letter-spacing:12px;
+    color:#fff;text-shadow:0 0 40px rgba(0,255,136,0.5),0 0 80px rgba(0,255,136,0.2);
+  }
+  .subtitle{
+    font-size:38px;font-weight:300;letter-spacing:8px;color:rgba(255,255,255,0.7);
+    margin-top:8px;
+  }
+  .headline{
+    font-size:72px;font-weight:800;text-align:center;line-height:1.15;
+    color:#fff;padding:0 60px;
+  }
+  .body-text{
+    font-size:36px;font-weight:400;text-align:center;line-height:1.5;
+    color:rgba(255,255,255,0.85);padding:0 80px;margin-top:30px;
+  }
+  .accent{color:#00ff88}
+  .accent-amber{color:#FFB347}
+  .accent-cyan{color:#00DDFF}
+  .accent-red{color:#E53935}
+  .accent-pink{color:#FF6EC7}
+
+  /* ── Neon badge ───────────────────────────────────────── */
+  .neon-badge{
+    display:inline-block;padding:16px 48px;border-radius:60px;
+    border:3px solid #00ff88;
+    font-size:34px;font-weight:700;color:#00ff88;letter-spacing:4px;
+    text-shadow:0 0 20px rgba(0,255,136,0.6);
+    box-shadow:0 0 30px rgba(0,255,136,0.25),inset 0 0 30px rgba(0,255,136,0.05);
+    margin-top:40px;
+    animation:badge-pulse 2s ease-in-out infinite;
+  }
+  @keyframes badge-pulse{
+    0%,100%{box-shadow:0 0 30px rgba(0,255,136,0.25),inset 0 0 30px rgba(0,255,136,0.05)}
+    50%{box-shadow:0 0 60px rgba(0,255,136,0.5),inset 0 0 50px rgba(0,255,136,0.1)}
+  }
+
+  /* ═══════════════════════════════════════════════════════
+     SCENE 1 — LAUNCH / SPLASH
+     ═══════════════════════════════════════════════════════ */
+  #scene-launch{background:radial-gradient(ellipse at 50% 40%,#0d1a0f 0%,#0a0a0f 100%)}
+  #scene-launch .logo-text{
+    animation:logo-enter 1.2s cubic-bezier(.16,1,.3,1) forwards;
+    opacity:0;transform:scale(0.5);
+  }
+  @keyframes logo-enter{to{opacity:1;transform:scale(1)}}
+  #scene-launch .subtitle{
+    animation:fade-up 1s 0.6s ease forwards;opacity:0;transform:translateY(30px);
+  }
+  #scene-launch .launch-tag{
+    animation:fade-up 1s 1.1s ease forwards;opacity:0;transform:translateY(30px);
+  }
+  #scene-launch .neon-line{
+    width:0;height:3px;background:linear-gradient(90deg,transparent,#00ff88,transparent);
+    margin:40px auto;animation:line-expand 1.5s 0.8s ease forwards;
+  }
+  @keyframes line-expand{to{width:500px}}
+  @keyframes fade-up{to{opacity:1;transform:translateY(0)}}
+
+  /* Floating particles */
+  .particle{
+    position:absolute;width:4px;height:4px;border-radius:50%;
+    background:#00ff88;opacity:0;
+    animation:float-particle 4s ease-in-out infinite;
+  }
+
+  @keyframes float-particle{
+    0%{opacity:0;transform:translateY(0)}
+    20%{opacity:0.6}
+    80%{opacity:0.6}
+    100%{opacity:0;transform:translateY(-200px)}
+  }
+
+  /* ═══════════════════════════════════════════════════════
+     SCENE 2 — DELIVERY
+     ═══════════════════════════════════════════════════════ */
+  #scene-delivery{background:radial-gradient(ellipse at 50% 60%,#0f1520 0%,#0a0a0f 100%)}
+
+  .delivery-icon{
+    font-size:160px;
+    animation:bounce-in 0.8s cubic-bezier(.16,1,.3,1) forwards;
+    opacity:0;transform:scale(0);
+  }
+  @keyframes bounce-in{to{opacity:1;transform:scale(1)}}
+
+  .delivery-items{
+    display:flex;gap:40px;margin-top:50px;
+    animation:fade-up 1s 0.5s ease forwards;opacity:0;transform:translateY(30px);
+  }
+  .delivery-item{
+    display:flex;flex-direction:column;align-items:center;gap:12px;
+  }
+  .delivery-item .emoji{font-size:70px}
+  .delivery-item .label{font-size:24px;color:rgba(255,255,255,0.7);font-weight:500}
+
+  /* ═══════════════════════════════════════════════════════
+     SCENE 3 — POINTS (1%)
+     ═══════════════════════════════════════════════════════ */
+  #scene-points{background:radial-gradient(ellipse at 50% 30%,#1a1008 0%,#0a0a0f 100%)}
+
+  .big-percent{
+    font-size:260px;font-weight:900;
+    background:linear-gradient(135deg,#FFB347,#FF6EC7);
+    -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+    background-clip:text;
+    text-shadow:none;filter:drop-shadow(0 0 40px rgba(255,179,71,0.4));
+    animation:scale-pop 0.8s cubic-bezier(.16,1,.3,1) forwards;
+    opacity:0;transform:scale(0.3);
+  }
+  @keyframes scale-pop{to{opacity:1;transform:scale(1)}}
+
+  .points-desc{
+    font-size:42px;font-weight:600;color:#fff;text-align:center;
+    margin-top:10px;padding:0 80px;line-height:1.4;
+    animation:fade-up 1s 0.4s ease forwards;opacity:0;transform:translateY(30px);
+  }
+  .points-sub{
+    font-size:30px;color:rgba(255,255,255,0.6);text-align:center;
+    margin-top:20px;padding:0 100px;
+    animation:fade-up 1s 0.7s ease forwards;opacity:0;transform:translateY(30px);
+  }
+
+  /* ═══════════════════════════════════════════════════════
+     SCENE 4 — ARCADE GAMES
+     ═══════════════════════════════════════════════════════ */
+  #scene-games{background:radial-gradient(ellipse at 50% 50%,#120a1a 0%,#0a0a0f 100%)}
+
+  .arcade-title{
+    font-size:56px;font-weight:800;color:#fff;letter-spacing:6px;
+    text-shadow:0 0 30px rgba(187,68,255,0.5);
+    animation:fade-up 0.8s ease forwards;opacity:0;transform:translateY(30px);
+  }
+  .arcade-subtitle{
+    font-size:30px;color:rgba(255,255,255,0.6);margin-top:10px;margin-bottom:40px;
+    animation:fade-up 0.8s 0.3s ease forwards;opacity:0;transform:translateY(30px);
+  }
+
+  .games-grid{
+    display:grid;grid-template-columns:repeat(3,1fr);gap:20px;
+    padding:0 60px;width:100%;max-width:900px;
+  }
+  .game-card{
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    padding:22px 10px;border-radius:16px;
+    background:rgba(255,255,255,0.04);
+    border:2px solid rgba(255,255,255,0.08);
+    opacity:0;transform:scale(0.7);
+    animation:card-pop 0.5s cubic-bezier(.16,1,.3,1) forwards;
+  }
+  .game-card .emoji{font-size:52px;margin-bottom:8px}
+  .game-card .name{font-size:18px;color:rgba(255,255,255,0.8);text-align:center;font-weight:600}
+
+  /* Individual neon borders for each game */
+  .game-card:nth-child(1){border-color:#BB44FF;box-shadow:0 0 15px rgba(187,68,255,0.3)}
+  .game-card:nth-child(2){border-color:#FFDD00;box-shadow:0 0 15px rgba(255,221,0,0.3)}
+  .game-card:nth-child(3){border-color:#FF69B4;box-shadow:0 0 15px rgba(255,105,180,0.3)}
+  .game-card:nth-child(4){border-color:#FF6633;box-shadow:0 0 15px rgba(255,102,51,0.3)}
+  .game-card:nth-child(5){border-color:#4488FF;box-shadow:0 0 15px rgba(68,136,255,0.3)}
+  .game-card:nth-child(6){border-color:#FF4422;box-shadow:0 0 15px rgba(255,68,34,0.3)}
+  .game-card:nth-child(7){border-color:#88FF44;box-shadow:0 0 15px rgba(136,255,68,0.3)}
+  .game-card:nth-child(8){border-color:#44FF88;box-shadow:0 0 15px rgba(68,255,136,0.3)}
+  .game-card:nth-child(9){border-color:#44CCFF;box-shadow:0 0 15px rgba(68,204,255,0.3)}
+  .game-card:nth-child(10){border-color:#FF8844;box-shadow:0 0 15px rgba(255,136,68,0.3)}
+  .game-card:nth-child(11){border-color:#FFAA00;box-shadow:0 0 15px rgba(255,170,0,0.3)}
+  .game-card:nth-child(12){border-color:#00FFAA;box-shadow:0 0 15px rgba(0,255,170,0.3)}
+
+  /* Staggered animation delays */
+  .game-card:nth-child(1){animation-delay:0.1s}
+  .game-card:nth-child(2){animation-delay:0.15s}
+  .game-card:nth-child(3){animation-delay:0.2s}
+  .game-card:nth-child(4){animation-delay:0.25s}
+  .game-card:nth-child(5){animation-delay:0.3s}
+  .game-card:nth-child(6){animation-delay:0.35s}
+  .game-card:nth-child(7){animation-delay:0.4s}
+  .game-card:nth-child(8){animation-delay:0.45s}
+  .game-card:nth-child(9){animation-delay:0.5s}
+  .game-card:nth-child(10){animation-delay:0.55s}
+  .game-card:nth-child(11){animation-delay:0.6s}
+  .game-card:nth-child(12){animation-delay:0.65s}
+
+  @keyframes card-pop{to{opacity:1;transform:scale(1)}}
+
+  /* ═══════════════════════════════════════════════════════
+     SCENE 5 — PROMOTIONS
+     ═══════════════════════════════════════════════════════ */
+  #scene-promos{background:radial-gradient(ellipse at 50% 40%,#1a0a0a 0%,#0a0a0f 100%)}
+
+  .promo-icon{
+    font-size:140px;
+    animation:bounce-in 0.8s cubic-bezier(.16,1,.3,1) forwards;opacity:0;transform:scale(0);
+  }
+  .promo-cards{
+    display:flex;flex-direction:column;gap:24px;margin-top:40px;width:100%;padding:0 80px;
+  }
+  .promo-card{
+    display:flex;align-items:center;gap:24px;
+    background:rgba(255,255,255,0.05);border-radius:20px;padding:24px 32px;
+    border:1px solid rgba(255,255,255,0.08);
+    opacity:0;transform:translateX(-40px);
+    animation:slide-in-right 0.6s ease forwards;
+  }
+  .promo-card:nth-child(1){animation-delay:0.3s}
+  .promo-card:nth-child(2){animation-delay:0.5s}
+  .promo-card:nth-child(3){animation-delay:0.7s}
+  .promo-card .p-emoji{font-size:50px;flex-shrink:0}
+  .promo-card .p-text{font-size:28px;color:rgba(255,255,255,0.85);line-height:1.4}
+  @keyframes slide-in-right{to{opacity:1;transform:translateX(0)}}
+
+  /* ═══════════════════════════════════════════════════════
+     SCENE 6 — COCA COLA PROMO
+     ═══════════════════════════════════════════════════════ */
+  #scene-coke{background:radial-gradient(ellipse at 50% 50%,#1a0508 0%,#0a0a0f 100%)}
+
+  .coke-bottle{
+    font-size:180px;
+    animation:bounce-in 0.8s cubic-bezier(.16,1,.3,1) forwards;opacity:0;transform:scale(0);
+  }
+  .coke-title{
+    font-size:58px;font-weight:800;color:#E53935;text-align:center;
+    margin-top:20px;padding:0 60px;
+    text-shadow:0 0 30px rgba(229,57,53,0.4);
+    animation:fade-up 0.8s 0.3s ease forwards;opacity:0;transform:translateY(30px);
+  }
+  .coke-details{
+    margin-top:30px;padding:0 70px;display:flex;flex-direction:column;gap:18px;
+  }
+  .coke-detail{
+    display:flex;align-items:flex-start;gap:16px;
+    animation:fade-up 0.6s ease forwards;opacity:0;transform:translateY(20px);
+  }
+  .coke-detail:nth-child(1){animation-delay:0.5s}
+  .coke-detail:nth-child(2){animation-delay:0.65s}
+  .coke-detail:nth-child(3){animation-delay:0.8s}
+  .coke-detail:nth-child(4){animation-delay:0.95s}
+  .coke-detail .check{
+    font-size:32px;color:#00ff88;flex-shrink:0;margin-top:2px;
+  }
+  .coke-detail .text{font-size:28px;color:rgba(255,255,255,0.85);line-height:1.35}
+
+  .coke-limit{
+    margin-top:36px;padding:14px 40px;border-radius:12px;
+    background:rgba(229,57,53,0.15);border:1px solid rgba(229,57,53,0.3);
+    font-size:22px;color:rgba(255,255,255,0.6);text-align:center;
+    animation:fade-up 0.6s 1.1s ease forwards;opacity:0;transform:translateY(20px);
+  }
+
+  /* ═══════════════════════════════════════════════════════
+     SCENE 7 — CTA / DOWNLOAD
+     ═══════════════════════════════════════════════════════ */
+  #scene-cta{background:radial-gradient(ellipse at 50% 40%,#0d1a0f 0%,#0a0a0f 100%)}
+
+  .cta-logo{
+    font-size:90px;font-weight:900;letter-spacing:10px;color:#fff;
+    text-shadow:0 0 40px rgba(0,255,136,0.5);
+    animation:logo-enter 1s cubic-bezier(.16,1,.3,1) forwards;opacity:0;transform:scale(0.5);
+  }
+  .cta-beyond{
+    font-size:30px;font-weight:300;letter-spacing:12px;color:rgba(255,255,255,0.5);
+    margin-top:4px;animation:fade-up 0.8s 0.3s ease forwards;opacity:0;transform:translateY(20px);
+  }
+  .cta-line{
+    width:0;height:2px;background:linear-gradient(90deg,transparent,#00ff88,transparent);
+    margin:30px auto;animation:line-expand 1.2s 0.5s ease forwards;
+  }
+  .cta-message{
+    font-size:50px;font-weight:700;color:#fff;text-align:center;
+    padding:0 80px;line-height:1.3;
+    animation:fade-up 1s 0.7s ease forwards;opacity:0;transform:translateY(30px);
+  }
+  .cta-stores{
+    display:flex;gap:30px;margin-top:50px;
+    animation:fade-up 1s 1s ease forwards;opacity:0;transform:translateY(30px);
+  }
+  .store-badge{
+    padding:18px 40px;border-radius:14px;
+    background:rgba(255,255,255,0.08);border:2px solid rgba(255,255,255,0.15);
+    display:flex;align-items:center;gap:14px;
+  }
+  .store-badge .icon{font-size:36px}
+  .store-badge .store-text{display:flex;flex-direction:column}
+  .store-badge .store-text .small{font-size:16px;color:rgba(255,255,255,0.5)}
+  .store-badge .store-text .big{font-size:24px;color:#fff;font-weight:700}
+
+  /* ═══════════════════════════════════════════════════════
+     Progress bar
+     ═══════════════════════════════════════════════════════ */
+  #progress-bar{
+    position:absolute;bottom:0;left:0;height:4px;
+    background:linear-gradient(90deg,#00ff88,#00DDFF);
+    z-index:10000;transition:width linear;
+    box-shadow:0 0 10px rgba(0,255,136,0.5);
+  }
+
+  /* ═══════════════════════════════════════════════════════
+     Scene indicator dots
+     ═══════════════════════════════════════════════════════ */
+  #scene-dots{
+    position:absolute;bottom:24px;left:50%;transform:translateX(-50%);
+    display:flex;gap:12px;z-index:10000;
+  }
+  .dot{
+    width:10px;height:10px;border-radius:50%;
+    background:rgba(255,255,255,0.2);transition:all 0.4s ease;
+  }
+  .dot.active{
+    background:#00ff88;box-shadow:0 0 10px rgba(0,255,136,0.6);
+    transform:scale(1.3);
+  }
+
+  /* ── Utility animations ───────────────────────────────── */
+  .glow-text{
+    animation:glow 2s ease-in-out infinite alternate;
+  }
+  @keyframes glow{
+    from{text-shadow:0 0 20px rgba(0,255,136,0.4)}
+    to{text-shadow:0 0 60px rgba(0,255,136,0.8),0 0 100px rgba(0,255,136,0.3)}
+  }
+</style>
+</head>
+<body>
+
+<div id="rotation-wrapper">
+
+  <!-- CRT overlay -->
+  <div id="crt-overlay"></div>
+
+  <!-- ════════ SCENE 1: LAUNCH ════════ -->
+  <div id="scene-launch" class="scene active">
+    <!-- Particles -->
+    <div class="particle" style="left:10%;bottom:10%;animation-delay:0s"></div>
+    <div class="particle" style="left:25%;bottom:5%;animation-delay:0.8s"></div>
+    <div class="particle" style="left:50%;bottom:15%;animation-delay:1.6s"></div>
+    <div class="particle" style="left:70%;bottom:8%;animation-delay:0.4s"></div>
+    <div class="particle" style="left:85%;bottom:12%;animation-delay:1.2s"></div>
+    <div class="particle" style="left:40%;bottom:20%;animation-delay:2s"></div>
+
+    <div class="logo-text glow-text">T_STY</div>
+    <div class="subtitle">BEYOND</div>
+    <div class="neon-line"></div>
+    <div class="launch-tag neon-badge">NUEVA APP</div>
+    <div class="body-text launch-tag" style="animation-delay:1.5s;margin-top:50px">
+      Tu tienda favorita, ahora en tu bolsillo
+    </div>
+  </div>
+
+  <!-- ════════ SCENE 2: DELIVERY ════════ -->
+  <div id="scene-delivery" class="scene">
+    <div class="delivery-icon">🛒</div>
+    <div class="headline" style="margin-top:30px">
+      Tus compras<br><span class="accent-cyan">en tu puerta</span>
+    </div>
+    <div class="body-text">
+      Pide desde la app y recibe tus productos<br>sin salir de casa
+    </div>
+    <div class="delivery-items">
+      <div class="delivery-item"><span class="emoji">🥩</span><span class="label">Carnes</span></div>
+      <div class="delivery-item"><span class="emoji">🥛</span><span class="label">Lacteos</span></div>
+      <div class="delivery-item"><span class="emoji">🍎</span><span class="label">Frutas</span></div>
+      <div class="delivery-item"><span class="emoji">🧹</span><span class="label">Limpieza</span></div>
+      <div class="delivery-item"><span class="emoji">🍞</span><span class="label">Pan</span></div>
+    </div>
+    <div class="neon-badge" style="margin-top:50px;border-color:#00DDFF;color:#00DDFF;
+      box-shadow:0 0 30px rgba(0,221,255,0.25);text-shadow:0 0 20px rgba(0,221,255,0.6)">
+      ENVIO A DOMICILIO
+    </div>
+  </div>
+
+  <!-- ════════ SCENE 3: POINTS ════════ -->
+  <div id="scene-points" class="scene">
+    <div class="big-percent">1%</div>
+    <div class="points-desc">
+      En <span class="accent-amber">puntos</span> por cada compra
+    </div>
+    <div class="points-sub">
+      Acumula puntos y usarlos en tienda o en la app.<br>
+      Cada peso cuenta.
+    </div>
+    <div class="neon-badge" style="border-color:#FFB347;color:#FFB347;margin-top:50px;
+      box-shadow:0 0 30px rgba(255,179,71,0.25);text-shadow:0 0 20px rgba(255,179,71,0.6);
+      animation-name:badge-pulse-amber">
+      PUNTOS T_STY
+    </div>
+  </div>
+
+  <!-- ════════ SCENE 4: ARCADE GAMES ════════ -->
+  <div id="scene-games" class="scene">
+    <div class="arcade-title">JUEGOS OCULTOS</div>
+    <div class="arcade-subtitle">Juega y gana mas puntos</div>
+    <div class="games-grid">
+      <div class="game-card"><span class="emoji">🟦</span><span class="name">Bloques Caidos</span></div>
+      <div class="game-card"><span class="emoji">💣</span><span class="name">Campo Minado</span></div>
+      <div class="game-card"><span class="emoji">🍬</span><span class="name">Cascada Dulce</span></div>
+      <div class="game-card"><span class="emoji">🚀</span><span class="name">Caza Estelar</span></div>
+      <div class="game-card"><span class="emoji">👻</span><span class="name">Comecocos</span></div>
+      <div class="game-card"><span class="emoji">🔥</span><span class="name">Cripta Maldita</span></div>
+      <div class="game-card"><span class="emoji">🐸</span><span class="name">Rana Saltarina</span></div>
+      <div class="game-card"><span class="emoji">🐍</span><span class="name">Vibora Veloz</span></div>
+      <div class="game-card"><span class="emoji">✈️</span><span class="name">Kamikaze Flight</span></div>
+      <div class="game-card"><span class="emoji">🦕</span><span class="name">Dino Escape</span></div>
+      <div class="game-card"><span class="emoji">🧱</span><span class="name">Muro de Neon</span></div>
+      <div class="game-card"><span class="emoji">🏓</span><span class="name">Contragolpe</span></div>
+    </div>
+  </div>
+
+  <!-- ════════ SCENE 5: PROMOS ════════ -->
+  <div id="scene-promos" class="scene">
+    <div class="promo-icon">🏷️</div>
+    <div class="headline" style="margin-top:20px">
+      <span class="accent-pink">Promociones</span><br>en la app
+    </div>
+    <div class="promo-cards">
+      <div class="promo-card">
+        <span class="p-emoji">💰</span>
+        <span class="p-text">Ofertas exclusivas solo para usuarios de la app</span>
+      </div>
+      <div class="promo-card">
+        <span class="p-emoji">🎁</span>
+        <span class="p-text">Regalos y sorpresas por acumular puntos</span>
+      </div>
+      <div class="promo-card">
+        <span class="p-emoji">⭐</span>
+        <span class="p-text">Nuevas promociones cada semana</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════ SCENE 6: COCA COLA PROMO ════════ -->
+  <div id="scene-coke" class="scene">
+    <div class="coke-bottle">🥤</div>
+    <div class="coke-title">COCA COLA 500ml<br>GRATIS</div>
+    <div class="coke-details">
+      <div class="coke-detail">
+        <span class="check">✓</span>
+        <span class="text">Muestra la app instalada en tu celular</span>
+      </div>
+      <div class="coke-detail">
+        <span class="check">✓</span>
+        <span class="text">Ten tu cuenta de monedero digital vinculada</span>
+      </div>
+      <div class="coke-detail">
+        <span class="check">✓</span>
+        <span class="text">Trae tu botella vacia de 500ml</span>
+      </div>
+      <div class="coke-detail">
+        <span class="check">✓</span>
+        <span class="text">Recibe <span class="accent">1 Coca Cola de 500ml GRATIS</span></span>
+      </div>
+    </div>
+    <div class="coke-limit">
+      Limitado a 1 por persona, por cuenta, por monedero
+    </div>
+  </div>
+
+  <!-- ════════ SCENE 7: CTA ════════ -->
+  <div id="scene-cta" class="scene">
+    <div class="cta-logo glow-text">T_STY</div>
+    <div class="cta-beyond">BEYOND</div>
+    <div class="cta-line"></div>
+    <div class="cta-message">
+      Descarga hoy y<br>empieza a <span class="accent">ahorrar</span>
+    </div>
+    <div class="cta-stores">
+      <div class="store-badge">
+        <span class="icon">🍎</span>
+        <span class="store-text">
+          <span class="small">Disponible en</span>
+          <span class="big">App Store</span>
+        </span>
+      </div>
+      <div class="store-badge">
+        <span class="icon">▶️</span>
+        <span class="store-text">
+          <span class="small">Disponible en</span>
+          <span class="big">Google Play</span>
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Progress bar -->
+  <div id="progress-bar"></div>
+
+  <!-- Scene dots -->
+  <div id="scene-dots">
+    <div class="dot active"></div>
+    <div class="dot"></div>
+    <div class="dot"></div>
+    <div class="dot"></div>
+    <div class="dot"></div>
+    <div class="dot"></div>
+    <div class="dot"></div>
+  </div>
+</div>
+
+<script>
+(function(){
+  'use strict';
+
+  const SCENES = [
+    'scene-launch',
+    'scene-delivery',
+    'scene-points',
+    'scene-games',
+    'scene-promos',
+    'scene-coke',
+    'scene-cta'
+  ];
+
+  /* Duration each scene is visible (ms) */
+  const DURATIONS = [
+    6000,  // launch
+    7000,  // delivery
+    7000,  // points
+    8000,  // games
+    7000,  // promos
+    9000,  // coke
+    7000   // cta
+  ];
+
+  const TOTAL = DURATIONS.reduce((a,b)=>a+b,0);
+  const FADE_MS = 800; // transition overlap
+
+  let current = 0;
+  let elapsed = 0;
+  let lastTime = performance.now();
+
+  const progressBar = document.getElementById('progress-bar');
+  const dots = document.querySelectorAll('.dot');
+
+  function showScene(idx){
+    SCENES.forEach((id,i)=>{
+      const el = document.getElementById(id);
+      if(i===idx){
+        el.classList.add('active');
+        /* Re-trigger CSS animations by cloning */
+        resetAnimations(el);
+      } else {
+        el.classList.remove('active');
+      }
+    });
+    dots.forEach((d,i)=>{
+      d.classList.toggle('active',i===idx);
+    });
+  }
+
+  function resetAnimations(container){
+    container.getAnimations({subtree:true}).forEach(a=>{
+      a.cancel();
+      a.play();
+    });
+  }
+
+  function tick(now){
+    const dt = now - lastTime;
+    lastTime = now;
+    elapsed += dt;
+
+    /* Calculate which scene we're in */
+    let acc = 0;
+    for(let i=0;i<DURATIONS.length;i++){
+      acc += DURATIONS[i];
+      if(elapsed < acc){
+        if(i !== current){
+          current = i;
+          showScene(current);
+        }
+        break;
+      }
+    }
+
+    /* Loop */
+    if(elapsed >= TOTAL){
+      elapsed = 0;
+      current = 0;
+      showScene(0);
+    }
+
+    /* Progress bar: progress within current scene */
+    let scenePassed = 0;
+    for(let i=0;i<current;i++) scenePassed += DURATIONS[i];
+    const globalProgress = (elapsed / TOTAL) * 100;
+    progressBar.style.width = globalProgress + '%';
+    progressBar.style.transitionDuration = '100ms';
+
+    requestAnimationFrame(tick);
+  }
+
+  /* Boot */
+  showScene(0);
+  requestAnimationFrame(tick);
+})();
+</script>
+</body>
+</html>
