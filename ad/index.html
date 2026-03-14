@@ -123,7 +123,7 @@ html,body{width:1920px;height:1080px;overflow:hidden;background:#000;font-family
 @keyframes burst-in{to{opacity:1;transform:scale(1) rotate(0deg)}}
 
 /* ═══ DELIVERY ═══ */
-#scene-delivery{gap:40px;background:#FFFFFF}
+#scene-delivery{gap:30px;background:#FFFFFF;padding:60px 40px !important}
 .delivery-title{font-size:38px;color:#1A1A1A;text-align:center;line-height:1.8}
 .delivery-title .accent{color:rgba(26,26,26,0.4)}
 .delivery-cats{display:flex;gap:24px;flex-wrap:wrap;justify-content:center;animation:fade-up 0.8s 0.6s ease forwards;opacity:0;transform:translateY(30px)}
@@ -133,7 +133,7 @@ html,body{width:1920px;height:1080px;overflow:hidden;background:#000;font-family
 .delivery-badge{padding:16px 40px;border:3px solid #1A1A1A;color:#1A1A1A;font-size:18px;letter-spacing:6px;animation:fade-up 0.8s 1s ease forwards;opacity:0;transform:translateY(20px)}
 
 /* ═══ POINTS (phone mockup with card) ═══ */
-#scene-points{gap:24px;background:#FFFFFF;position:relative;overflow:hidden}
+#scene-points{gap:20px;background:#FFFFFF;position:relative;overflow:hidden;padding:40px 0 !important}
 .pts-bg-canvas{position:absolute;inset:0;z-index:0;pointer-events:none}
 .pts-phone{
   width:340px;height:500px;border:5px solid #333;border-radius:24px;
@@ -172,7 +172,7 @@ html,body{width:1920px;height:1080px;overflow:hidden;background:#000;font-family
 .pts-desc{font-size:16px;color:rgba(26,26,26,0.6);text-align:center;line-height:2}
 .pts-badge{padding:10px 30px;border:3px solid #1A1A1A;color:#1A1A1A;font-size:12px;letter-spacing:4px;animation:fade-up 0.8s 0.8s ease forwards;opacity:0;transform:translateY(20px);position:relative;z-index:2}
 .pts-coins-wrap{position:absolute;inset:0;pointer-events:none;z-index:1;overflow:hidden}
-.pts-coin{position:absolute;width:24px;height:24px;border-radius:50%;background:linear-gradient(135deg,#FFD700,#FFA500);border:2px solid #DAA520;animation:coin-fall linear infinite;opacity:0.15}
+.pts-coin{position:absolute;width:24px;height:24px;border-radius:50%;background:linear-gradient(135deg,#FFD700,#FFA500);border:2px solid #DAA520;animation:coin-fall linear infinite;opacity:0.35;box-shadow:0 0 8px rgba(255,215,0,0.3)}
 @keyframes card-shimmer{0%{background-position:0% 50%}50%{background-position:100% 50%}100%{background-position:0% 50%}}
 @keyframes coin-fall{0%{transform:translateY(-30px) rotate(0deg)}100%{transform:translateY(2000px) rotate(720deg)}}
 
@@ -198,9 +198,10 @@ html,body{width:1920px;height:1080px;overflow:hidden;background:#000;font-family
 .promo-card:nth-child(3){animation:card-burst 0.5s 0.9s cubic-bezier(.2,1,.3,1) forwards}
 @keyframes card-burst{0%{opacity:0;transform:translateX(-40px) scale(0.8) rotate(-2deg)}60%{opacity:1;transform:translateX(5px) scale(1.03) rotate(0.5deg)}100%{opacity:1;transform:translateX(0) scale(1) rotate(0deg)}}
 @keyframes spin-slow{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+@keyframes promo-pulse{0%{transform:scale(0.9);opacity:0.6}100%{transform:scale(1.1);opacity:1}}
 
 /* Pop-art explosion bursts for promos */
-.promo-explosion{position:absolute;pointer-events:none;z-index:1;animation:spin-slow 8s linear infinite}
+.promo-explosion{position:absolute;pointer-events:none;z-index:1;animation:promo-pulse 1.5s ease-in-out infinite alternate}
 .promo-explosion canvas{image-rendering:pixelated}
 
 /* ═══ COCA COLA (war-landing scene) ═══ */
@@ -211,38 +212,44 @@ html,body{width:1920px;height:1080px;overflow:hidden;background:#000;font-family
 .coke-war-canvas{position:absolute;inset:0;z-index:0;image-rendering:pixelated;width:100%;height:100%}
 .coke-bottom{
   position:relative;z-index:2;display:flex;flex-direction:column;align-items:center;
-  gap:10px;width:100%;padding:20px 40px 30px;
-  background:linear-gradient(transparent 0%,rgba(0,0,0,0.7) 20%,rgba(0,0,0,0.9) 100%);
+  gap:6px;width:100%;padding:12px 30px 16px;
+  background:linear-gradient(transparent 0%,rgba(0,0,0,0.6) 15%,rgba(0,0,0,0.85) 100%);
 }
 .coke-regalo{
-  font-size:44px;color:#E53935;text-align:center;
+  font-size:32px;color:#E53935;text-align:center;
   text-shadow:0 0 30px rgba(229,57,53,0.5),4px 4px 0 #8B0000;
   animation:pixel-pop 0.6s cubic-bezier(.2,1,.3,1) forwards;opacity:0;transform:scale(0);
 }
-.coke-subtitle{font-size:11px;color:#fff;text-align:center;line-height:2.4;max-width:700px;animation:fade-up 0.6s 0.3s ease forwards;opacity:0;transform:translateY(20px)}
+.coke-subtitle{font-size:9px;color:#fff;text-align:center;line-height:2.4;max-width:700px;animation:fade-up 0.6s 0.3s ease forwards;opacity:0;transform:translateY(20px)}
 .coke-badge{
-  padding:12px 30px;border:3px solid #E53935;color:#fff;font-size:12px;letter-spacing:3px;
+  padding:8px 20px;border:2px solid #E53935;color:#fff;font-size:10px;letter-spacing:2px;
   background:rgba(229,57,53,0.15);border-radius:4px;
   animation:fade-up 0.6s 0.5s ease forwards;opacity:0;transform:translateY(20px);
 }
-.coke-steps{display:flex;gap:24px;margin-top:6px;animation:fade-up 0.6s 0.7s ease forwards;opacity:0;transform:translateY(20px)}
+.coke-steps{display:flex;gap:16px;margin-top:2px;animation:fade-up 0.6s 0.7s ease forwards;opacity:0;transform:translateY(20px)}
 .coke-step{
   display:flex;flex-direction:column;align-items:center;gap:8px;
-  padding:8px 12px;background:rgba(255,255,255,0.05);border:2px solid rgba(229,57,53,0.2);border-radius:8px;
-  width:150px;
+  padding:6px 8px;background:rgba(255,255,255,0.05);border:1px solid rgba(229,57,53,0.2);border-radius:6px;
+  width:120px;
 }
-.coke-step-num{font-size:24px;color:#E53935;font-weight:bold}
-.coke-step-label{font-size:8px;color:#fff;text-align:center;line-height:2;letter-spacing:1px}
-.coke-step canvas{width:36px;height:36px;image-rendering:pixelated}
-.coke-footer{font-size:10px;color:rgba(255,255,255,0.5);text-align:center;line-height:2;animation:fade-up 0.6s 1s ease forwards;opacity:0;transform:translateY(20px)}
+.coke-step-num{font-size:18px;color:#E53935;font-weight:bold}
+.coke-step-label{font-size:7px;color:#fff;text-align:center;line-height:2;letter-spacing:1px}
+.coke-step canvas{width:28px;height:28px;image-rendering:pixelated}
+.coke-footer{font-size:8px;color:rgba(255,255,255,0.5);text-align:center;line-height:2;animation:fade-up 0.6s 1s ease forwards;opacity:0;transform:translateY(20px)}
 .coke-footer b{color:#fff}
 
 /* ═══ CTA ═══ */
-#scene-cta{gap:30px;background:#FFFFFF}
-.cta-star{font-size:140px;color:#1A1A1A;animation:pixel-pop 0.6s cubic-bezier(.2,1,.3,1) forwards;opacity:0;transform:scale(0)}
-.cta-big{font-size:48px;color:#1A1A1A;text-align:center;line-height:1.6;animation:fade-up 0.8s 0.3s ease forwards;opacity:0;transform:translateY(30px)}
-.cta-name{font-size:24px;color:rgba(26,26,26,0.4);letter-spacing:10px;animation:fade-up 0.8s 0.6s ease forwards;opacity:0;transform:translateY(20px)}
+#scene-cta{gap:24px;background:#FFFFFF}
+.cta-star{font-size:120px;color:#1A1A1A;animation:pixel-pop 0.6s cubic-bezier(.2,1,.3,1) forwards;opacity:0;transform:scale(0)}
+.cta-big{font-size:44px;color:#1A1A1A;text-align:center;line-height:1.6;animation:fade-up 0.8s 0.3s ease forwards;opacity:0;transform:translateY(30px)}
+.cta-name{font-size:22px;color:rgba(26,26,26,0.4);letter-spacing:10px;animation:fade-up 0.8s 0.6s ease forwards;opacity:0;transform:translateY(20px)}
 .cta-bar{width:0;height:6px;background:#1A1A1A;animation:line-grow 1s 0.8s ease forwards}
+.cta-stores{display:flex;gap:30px;margin-top:10px;animation:fade-up 0.8s 1s ease forwards;opacity:0;transform:translateY(20px)}
+.cta-store{display:flex;align-items:center;gap:14px;padding:14px 24px;border:3px solid #1A1A1A;border-radius:8px;background:rgba(0,0,0,0.03)}
+.cta-store canvas{width:40px;height:40px;image-rendering:pixelated}
+.cta-store-text{display:flex;flex-direction:column;gap:2px}
+.cta-store-sub{font-size:7px;color:rgba(26,26,26,0.5);letter-spacing:1px}
+.cta-store-name{font-size:12px;color:#1A1A1A;letter-spacing:1px}
 
 /* ═══ KEYFRAMES ═══ */
 @keyframes pixel-pop{0%{opacity:0;transform:scale(0) rotate(-5deg)}60%{opacity:1;transform:scale(1.08) rotate(1deg)}80%{transform:scale(0.97) rotate(-0.5deg)}100%{opacity:1;transform:scale(1) rotate(0deg)}}
@@ -352,7 +359,7 @@ html,body{width:1920px;height:1080px;overflow:hidden;background:#000;font-family
   <div class="spot-canvas-wrap" style="color:#FF44AA"><canvas class="spot-canvas" id="canvas-runner" width="200" height="200"></canvas></div>
   <div class="spot-info"><div class="spot-number">JUEGO 10 / 12</div><div class="spot-title" style="color:#FF44AA">DINO DASH</div>
     <div class="spot-tags"><span class="spot-tag" style="color:#FF44AA;border-color:#FF44AA">RUNNER</span><span class="spot-tag" style="color:#FF44AA;border-color:#FF44AA">ACCIÓN</span></div>
-    <div class="spot-blurb">Corre y salta sobre los obstáculos<br>con tu dinosaurio pixelado.<span class="spot-cursor">█</span></div></div>
+    <div class="spot-blurb">Corre como cavernícola y escapa<br>del dinosaurio que te persigue.<span class="spot-cursor">█</span></div></div>
 </div></div>
 
 <!-- SCENE 11: Neon Break (Breakout) -->
@@ -465,6 +472,10 @@ html,body{width:1920px;height:1080px;overflow:hidden;background:#000;font-family
   <div class="cta-big">DESCARGA<br>AHORA</div>
   <div class="cta-name">T_STY: BEYOND</div>
   <div class="cta-bar"></div>
+  <div class="cta-stores">
+    <div class="cta-store"><canvas id="icon-apple" width="20" height="20"></canvas><div class="cta-store-text"><span class="cta-store-sub">Disponible en</span><span class="cta-store-name">App Store</span></div></div>
+    <div class="cta-store"><canvas id="icon-google" width="20" height="20"></canvas><div class="cta-store-text"><span class="cta-store-sub">Consíguelo en</span><span class="cta-store-name">Google Play</span></div></div>
+  </div>
 </div>
 
 </div></div>
@@ -858,48 +869,63 @@ function tick(){fc++;
   aca=requestAnimationFrame(tick)}aca=requestAnimationFrame(tick)}
 
 function animRunner(){const cv=document.getElementById('canvas-runner');if(!cv)return;const ctx=cv.getContext('2d');const W=200,H=200;
-let dino={x:30,y:160,vy:0,jumping:false,leg:0},obstacles=[],fc=0,score=0,groundOff=0;
+let man={x:50,y:158,vy:0,jumping:false,leg:0},dinoX=180,dinoPhase=0,fc=0,score=0,groundOff=0,obstacles=[];
 function tick(){fc++;
   ctx.fillStyle='#1a0a14';ctx.fillRect(0,0,W,H);
-  // Moving ground
-  groundOff=(groundOff+2)%W;
+  groundOff=(groundOff+2.5)%W;
   ctx.fillStyle='#2a1a24';ctx.fillRect(0,175,W,25);
   for(let i=0;i<W+20;i+=20){ctx.fillStyle=(Math.floor((i-groundOff)/20))%2===0?'#3a2a34':'#2a1a24';ctx.fillRect((i-groundOff%20),175,20,25)}
   // Stars
   for(let i=0;i<12;i++){const sx=(i*53+fc*0.2)%W,sy=15+i*11;ctx.fillStyle='rgba(255,180,220,'+(0.3+0.2*Math.sin(fc*0.04+i))+')';ctx.fillRect(sx,sy,2,2)}
-  // Moon
-  ctx.fillStyle='rgba(255,200,255,0.1)';ctx.beginPath();ctx.arc(160,40,25,0,Math.PI*2);ctx.fill();
-  ctx.fillStyle='rgba(255,220,255,0.05)';ctx.beginPath();ctx.arc(160,40,35,0,Math.PI*2);ctx.fill();
-  // Dino jump
-  if(fc%50===0&&!dino.jumping){dino.jumping=true;dino.vy=-6}
-  if(dino.jumping){dino.vy+=0.35;dino.y+=dino.vy;if(dino.y>=160){dino.y=160;dino.jumping=false;dino.vy=0}}
-  dino.leg=Math.floor(fc/5)%2;
-  // Dino body (pixel art)
-  const dx=dino.x,dy=dino.y;
-  ctx.fillStyle='#FF44AA';
-  ctx.fillRect(dx,dy-16,12,12); // head
-  ctx.fillRect(dx-2,dy-6,14,10); // body
-  ctx.fillRect(dx+10,dy-14,4,3); // eye area
-  ctx.fillStyle='#fff';ctx.fillRect(dx+11,dy-13,2,2); // eye
-  ctx.fillStyle='#FF44AA';
-  if(dino.leg===0){ctx.fillRect(dx,dy+4,4,6);ctx.fillRect(dx+8,dy+2,4,4)}
-  else{ctx.fillRect(dx+2,dy+2,4,4);ctx.fillRect(dx+8,dy+4,4,6)}
-  ctx.fillRect(dx-4,dy-4,4,3); // tail
-  ctx.fillRect(dx-6,dy-6,3,3);
-  // Dust when running
-  if(!dino.jumping&&fc%3===0){ctx.fillStyle='rgba(255,68,170,0.2)';ctx.fillRect(dx-4+Math.random()*6,dy+8,3,2)}
-  // Obstacles (cacti)
-  if(fc%70===0)obstacles.push({x:W+10,type:Math.random()>0.5?'tall':'short'});
-  obstacles.forEach(o=>{o.x-=2.5;
-    ctx.fillStyle='#44FF88';
-    if(o.type==='tall'){ctx.fillRect(o.x,145,6,30);ctx.fillRect(o.x-4,150,4,6);ctx.fillRect(o.x+6,155,4,6)}
-    else{ctx.fillRect(o.x,158,8,17);ctx.fillRect(o.x+8,162,4,4)}
-    if(o.x<dx+12&&o.x+10>dx&&!o.scored){o.scored=true;score++}
-  });
+  // Volcano bg
+  ctx.fillStyle='#2a1520';ctx.beginPath();ctx.moveTo(140,175);ctx.lineTo(165,110);ctx.lineTo(190,175);ctx.fill();
+  ctx.fillStyle='#FF4400';ctx.fillRect(160,108,10,5);
+  // Caveman jump
+  if(fc%55===0&&!man.jumping){man.jumping=true;man.vy=-6}
+  if(man.jumping){man.vy+=0.35;man.y+=man.vy;if(man.y>=158){man.y=158;man.jumping=false;man.vy=0}}
+  man.leg=Math.floor(fc/4)%2;
+  const mx=man.x,my=man.y;
+  // Caveman body (skin tone + loincloth)
+  ctx.fillStyle='#D4956A';
+  ctx.fillRect(mx+2,my-14,8,8); // head
+  ctx.fillRect(mx,my-6,12,10); // torso
+  ctx.fillStyle='#8B4513';ctx.fillRect(mx+1,my-2,10,4); // loincloth
+  ctx.fillStyle='#D4956A';
+  if(man.leg===0){ctx.fillRect(mx+1,my+2,4,8);ctx.fillRect(mx+7,my+4,4,6)}
+  else{ctx.fillRect(mx+1,my+4,4,6);ctx.fillRect(mx+7,my+2,4,8)}
+  // Arms
+  ctx.fillStyle='#D4956A';ctx.fillRect(mx-3,my-5,4,3);ctx.fillRect(mx+11,my-5,4,3);
+  // Club in hand
+  ctx.fillStyle='#8B5E3C';ctx.fillRect(mx-5,my-10,3,8);ctx.fillStyle='#6B4226';ctx.fillRect(mx-7,my-13,7,5);
+  // Hair
+  ctx.fillStyle='#3a1a0a';ctx.fillRect(mx+2,my-16,8,3);ctx.fillRect(mx+1,my-15,3,4);
+  // Eye
+  ctx.fillStyle='#fff';ctx.fillRect(mx+7,my-13,3,2);ctx.fillStyle='#000';ctx.fillRect(mx+8,my-13,2,2);
+  // Dust
+  if(!man.jumping&&fc%3===0){ctx.fillStyle='rgba(255,200,150,0.3)';ctx.fillRect(mx-6+Math.random()*4,my+9,3,2)}
+  // Chasing T-Rex (behind caveman)
+  dinoPhase=Math.floor(fc/6)%2;
+  const ddx=dinoX-(fc*0.15)%30+15,ddy=140;
+  ctx.fillStyle='#44BB44';
+  ctx.fillRect(ddx-20,ddy-20,22,16); // head
+  ctx.fillRect(ddx-25,ddy-4,30,20); // body
+  ctx.fillRect(ddx-30,ddy+2,8,4); // tail1
+  ctx.fillRect(ddx-36,ddy-2,8,6); // tail2
+  // T-Rex legs
+  if(dinoPhase===0){ctx.fillRect(ddx-18,ddy+16,6,10);ctx.fillRect(ddx-4,ddy+14,6,8)}
+  else{ctx.fillRect(ddx-16,ddy+14,6,8);ctx.fillRect(ddx-6,ddy+16,6,10)}
+  // T-Rex arms (tiny)
+  ctx.fillRect(ddx-12,ddy+2,4,4);
+  // T-Rex eye
+  ctx.fillStyle='#FF4444';ctx.fillRect(ddx-6,ddy-17,4,3);
+  // T-Rex teeth
+  ctx.fillStyle='#fff';ctx.fillRect(ddx-4,ddy-5,2,3);ctx.fillRect(ddx-8,ddy-5,2,3);
+  // Obstacles (rocks)
+  if(fc%80===0)obstacles.push({x:W+10});
+  obstacles.forEach(o=>{o.x-=2.5;ctx.fillStyle='#555';ctx.fillRect(o.x,165,10,10);ctx.fillStyle='#666';ctx.fillRect(o.x+2,162,6,5);
+    if(o.x<mx+12&&o.x+10>mx&&!o.scored){o.scored=true;score++}});
   obstacles=obstacles.filter(o=>o.x>-20);
-  // Score
   ctx.fillStyle='#FF44AA';ctx.font='bold 10px monospace';ctx.fillText(score*100+'',4,12);
-  // Speed lines
   if(fc%2===0){const sy=40+Math.random()*130;ctx.fillStyle='rgba(255,68,170,0.15)';ctx.fillRect(0,sy,20+Math.random()*40,1)}
   aca=requestAnimationFrame(tick)}aca=requestAnimationFrame(tick)}
 
@@ -1069,31 +1095,21 @@ function initIcons(){
   const pals={R:'#E53935',K:'#1A1A1A',G:'#43A047',B:'#FFB347',A:'#FFB300',C:'#888'};
   document.querySelectorAll('.cat-icon,.promo-icon').forEach(cv=>{const icon=cv.dataset.icon;if(iconDefs[icon]){const ctx2=cv.getContext('2d');const px=iconDefs[icon];const s=cv.width/px[0].length;for(let r=0;r<px.length;r++)for(let c=0;c<px[r].length;c++){if(px[r][c]!=='.'&&px[r][c]!==' '&&pals[px[r][c]]){ctx2.fillStyle=pals[px[r][c]];ctx2.fillRect(c*s,r*s,s,s)}}}});
 
-  // Promo explosion canvases
-  ['promo-explode-1','promo-explode-2'].forEach(id=>{
-    const cv=document.getElementById(id);if(!cv)return;
-    const ctx=cv.getContext('2d');const W=200,H=200;
-    // Draw pixel starburst
-    ctx.fillStyle='#1A1A1A';
-    const cx=W/2,cy=H/2;
-    for(let i=0;i<12;i++){
-      const a=i*Math.PI/6;const len=60+Math.random()*30;
-      ctx.beginPath();ctx.moveTo(cx,cy);
-      ctx.lineTo(cx+Math.cos(a-0.15)*len,cy+Math.sin(a-0.15)*len);
-      ctx.lineTo(cx+Math.cos(a)*len*1.3,cy+Math.sin(a)*len*1.3);
-      ctx.lineTo(cx+Math.cos(a+0.15)*len,cy+Math.sin(a+0.15)*len);
-      ctx.fill();
-    }
-    // Inner burst
-    ctx.fillStyle='#fff';
-    for(let i=0;i<12;i++){
-      const a=i*Math.PI/6+0.26;const len=25;
-      ctx.beginPath();ctx.moveTo(cx,cy);
-      ctx.lineTo(cx+Math.cos(a-0.1)*len,cy+Math.sin(a-0.1)*len);
-      ctx.lineTo(cx+Math.cos(a)*len*1.2,cy+Math.sin(a)*len*1.2);
-      ctx.lineTo(cx+Math.cos(a+0.1)*len,cy+Math.sin(a+0.1)*len);
-      ctx.fill();
-    }
+  // Promo discount badge canvases (price tag style)
+  const promoData=[{id:'promo-explode-1',text:'-30%',bg:'#E53935'},{id:'promo-explode-2',text:'2x1',bg:'#FF8800'}];
+  promoData.forEach(pd=>{
+    const cv=document.getElementById(pd.id);if(!cv)return;
+    const ctx=cv.getContext('2d');const W=200,H=200,cx=W/2,cy=H/2;
+    // Jagged sale burst shape
+    ctx.fillStyle=pd.bg;ctx.beginPath();
+    for(let i=0;i<20;i++){const a=i*Math.PI/10;const r1=70,r2=55;const r=i%2===0?r1:r2;
+      if(i===0)ctx.moveTo(cx+Math.cos(a)*r,cy+Math.sin(a)*r);else ctx.lineTo(cx+Math.cos(a)*r,cy+Math.sin(a)*r)}
+    ctx.closePath();ctx.fill();
+    // Inner circle
+    ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(cx,cy,38,0,Math.PI*2);ctx.fill();
+    // Text
+    ctx.fillStyle=pd.bg;ctx.font='bold 28px monospace';ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText(pd.text,cx,cy);ctx.textAlign='left';
   });
 
   // Coke step icons
@@ -1105,14 +1121,34 @@ function initIcons(){
     else if(s==='bottle'){ctx.fillRect(8,1,4,4);ctx.fillRect(7,5,6,14);ctx.fillStyle='#fff';ctx.fillRect(8,7,4,4)}
   });
 
+  // App Store icon (Apple)
+  const apCv=document.getElementById('icon-apple');
+  if(apCv){const ac=apCv.getContext('2d');ac.fillStyle='#1A1A1A';
+    // Apple shape
+    ac.fillRect(8,4,4,2);ac.fillRect(9,2,2,3); // stem
+    ac.fillRect(4,6,12,3);ac.fillRect(3,9,14,6);ac.fillRect(4,15,12,3);ac.fillRect(6,18,8,2); // body
+    ac.fillRect(9,8,2,2); // bite
+    ac.fillStyle='#fff';ac.fillRect(9,8,2,3); // bite highlight
+    ac.fillStyle='#4CAF50';ac.fillRect(11,3,3,3); // leaf
+  }
+  // Google Play icon (triangle)
+  const gpCv=document.getElementById('icon-google');
+  if(gpCv){const gc=gpCv.getContext('2d');
+    gc.fillStyle='#4285F4';gc.fillRect(5,2,4,8);
+    gc.fillStyle='#EA4335';gc.fillRect(5,10,4,8);
+    gc.fillStyle='#FBBC04';gc.fillRect(9,6,4,4);gc.fillRect(13,8,2,4);
+    gc.fillStyle='#34A853';gc.fillRect(9,10,4,4);gc.fillRect(13,8,2,4);
+    // Triangle play button
+    gc.fillStyle='#fff';gc.beginPath();gc.moveTo(6,4);gc.lineTo(15,10);gc.lineTo(6,16);gc.fill();
+  }
   initCokeWar();
   initPointsBg();
 }
 
 function initPointsBg(){
-  // Falling coins
+  // Falling coins — dense coin rain
   const wrap=document.getElementById('pts-coins');
-  if(wrap){for(let i=0;i<10;i++){const c=document.createElement('div');c.className='pts-coin';c.style.left=Math.random()*100+'%';c.style.animationDuration=(6+Math.random()*8)+'s';c.style.animationDelay=(-Math.random()*14)+'s';c.style.width=(16+Math.random()*14)+'px';c.style.height=c.style.width;wrap.appendChild(c)}}
+  if(wrap){for(let i=0;i<25;i++){const c=document.createElement('div');c.className='pts-coin';c.style.left=Math.random()*100+'%';c.style.animationDuration=(4+Math.random()*6)+'s';c.style.animationDelay=(-Math.random()*10)+'s';const sz=14+Math.random()*18;c.style.width=sz+'px';c.style.height=sz+'px';wrap.appendChild(c)}}
   // Animated bg
   const cv=document.getElementById('pts-bg');if(!cv)return;
   const ctx=cv.getContext('2d');const W=1080,H=1920;
@@ -1135,363 +1171,245 @@ function initCokeWar(){
   ctx.imageSmoothingEnabled=false;
   const W=1080,H=1920;
 
-  // Parachute bottles
+  // Parachute bottles — more of them, spread across
   const bottles=[];
-  for(let i=0;i<8;i++){
+  for(let i=0;i<12;i++){
     bottles.push({
-      x:100+Math.random()*(W-200),
-      y:-100-Math.random()*800,
-      vy:0.6+Math.random()*0.4,
-      sway:Math.random()*Math.PI*2,
-      swayAmp:15+Math.random()*25,
-      swaySpd:0.01+Math.random()*0.015,
-      size:40+Math.random()*30,
-      delay:i*0.3
+      x:60+Math.random()*(W-120), y:-200-i*250,
+      vy:0.5+Math.random()*0.3, sway:Math.random()*Math.PI*2,
+      swayAmp:20+Math.random()*30, swaySpd:0.008+Math.random()*0.01,
+      size:35+Math.random()*25
     });
   }
 
-  // Jets
-  const jets=[];
-  function spawnJet(){
-    const fromLeft=Math.random()>0.5;
-    jets.push({
-      x:fromLeft?-120:W+120,
-      y:80+Math.random()*500,
-      vx:fromLeft?(4+Math.random()*4):-(4+Math.random()*4),
-      trail:[],size:1,
-      flip:!fromLeft,
-      life:0
-    });
-  }
+  // Fighter jets (detailed)
+  const jets=[];let jetTimer=0;
+  function spawnJet(){const left=Math.random()>0.5;jets.push({x:left?-150:W+150,y:60+Math.random()*600,vx:left?(5+Math.random()*6):-(5+Math.random()*6),flip:!left,life:0,dropping:Math.random()>0.5})}
   spawnJet();spawnJet();
 
-  // Missiles
-  const missiles=[];
-  function spawnMissile(){
-    const fromLeft=Math.random()>0.5;
-    missiles.push({
-      x:fromLeft?-30:W+30,
-      y:150+Math.random()*600,
-      vx:fromLeft?(6+Math.random()*5):-(6+Math.random()*5),
-      vy:-1+Math.random()*2,
-      trail:[],life:0,
-      maxLife:120+Math.random()*80
-    });
-  }
-  spawnMissile();spawnMissile();spawnMissile();
+  // Missiles and rockets
+  const missiles=[];let missileTimer=0;
+  function spawnMissile(){const left=Math.random()>0.5;missiles.push({x:left?-20:W+20,y:100+Math.random()*700,vx:left?(7+Math.random()*5):-(7+Math.random()*5),vy:-0.5+Math.random()*1,trail:[],life:0,maxLife:100+Math.random()*60})}
 
-  // Explosions
+  // Explosions — bigger, more dramatic
   const explosions=[];
-  function spawnExplosion(x,y,big){
-    const parts=[];const n=big?30:15;
-    for(let i=0;i<n;i++){
-      const a=Math.random()*Math.PI*2;
-      const spd=big?(2+Math.random()*5):(1+Math.random()*3);
-      parts.push({x:0,y:0,vx:Math.cos(a)*spd,vy:Math.sin(a)*spd,life:1,decay:0.015+Math.random()*0.02,
-        color:['#FF4400','#FF8800','#FFCC00','#FF2200','#FFF'][Math.floor(Math.random()*5)],
-        size:big?(3+Math.random()*5):(2+Math.random()*3)
-      });
-    }
-    explosions.push({x,y,parts,flash:big?12:6,ring:0,ringMax:big?60:35});
+  function spawnExplosion(x,y,size){
+    const parts=[];const n=size==='huge'?50:size==='big'?35:18;
+    for(let i=0;i<n;i++){const a=Math.random()*Math.PI*2;const spd=size==='huge'?(3+Math.random()*8):size==='big'?(2+Math.random()*6):(1+Math.random()*3);
+      parts.push({x:0,y:0,vx:Math.cos(a)*spd,vy:Math.sin(a)*spd,life:1,decay:0.01+Math.random()*0.015,
+        color:['#FF4400','#FF8800','#FFCC00','#FF2200','#FFF','#FF6600'][Math.floor(Math.random()*6)],
+        sz:size==='huge'?(4+Math.random()*8):size==='big'?(3+Math.random()*5):(2+Math.random()*3)});}
+    explosions.push({x,y,parts,flash:size==='huge'?20:size==='big'?14:8,ring:0,ringMax:size==='huge'?100:size==='big'?70:40});
   }
 
-  // Tracers (gunfire)
-  const tracers=[];
-  function spawnTracer(){
-    const fromLeft=Math.random()>0.5;
-    tracers.push({
-      x:fromLeft?0:W,
-      y:50+Math.random()*700,
-      vx:fromLeft?(10+Math.random()*8):-(10+Math.random()*8),
-      vy:-2+Math.random()*4,
-      life:30+Math.random()*20,
-      color:Math.random()>0.5?'#FFFF44':'#FF8844'
-    });
-  }
+  // Tracers (AA gunfire)
+  const tracers=[];let tracerTimer=0;
+  function spawnTracer(){const left=Math.random()>0.5;
+    // Fire from ground upward
+    const sx=100+Math.random()*(W-200);
+    tracers.push({x:sx,y:H*0.65,vx:(Math.random()-0.5)*3,vy:-(8+Math.random()*6),life:60+Math.random()*30,color:Math.random()>0.5?'#FFFF44':'#FF8844'})}
+
+  // Flak bursts
+  const flak=[];let flakTimer=0;
+  function spawnFlak(){flak.push({x:80+Math.random()*(W-160),y:80+Math.random()*550,life:1,r:0})}
+
+  // Bombing impacts on ground
+  const impacts=[];let impactTimer=0;
+  function spawnImpact(){const x=100+Math.random()*(W-200);spawnExplosion(x,H*0.64+Math.random()*40,'huge');impacts.push({x,y:H*0.65,r:0,life:1})}
 
   // Stars
-  const stars=[];
-  for(let i=0;i<80;i++) stars.push({x:Math.random()*W,y:Math.random()*H*0.6,a:Math.random(),twinkle:Math.random()*0.05});
+  const stars=[];for(let i=0;i<100;i++)stars.push({x:Math.random()*W,y:Math.random()*H*0.55,a:Math.random(),tw:Math.random()*0.05});
 
-  // Smoke clouds
-  const clouds=[];
-  for(let i=0;i<6;i++) clouds.push({x:Math.random()*W,y:300+Math.random()*400,r:60+Math.random()*100,a:0.03+Math.random()*0.04,dx:0.2+Math.random()*0.3});
+  // Smoke columns from ground
+  const smokeColumns=[];
+  for(let i=0;i<4;i++)smokeColumns.push({x:100+i*280,particles:[]});
 
-  // Flak bursts (anti-air puffs)
-  const flakBursts=[];
-  function spawnFlak(){
-    flakBursts.push({x:100+Math.random()*(W-200),y:100+Math.random()*500,life:1,r:0});
-  }
+  // Fire columns on ground
+  const fires=[];
+  for(let i=0;i<8;i++)fires.push({x:60+i*140,y:H*0.64+Math.random()*20,intensity:0.5+Math.random()*0.5});
 
   let frame=0;
-  let jetTimer=0,missileTimer=0,tracerTimer=0,flakTimer=0;
 
   function drawBottle(x,y,sz){
-    const p=sz;
+    const cx=x,cy=y-sz*1.3;
     // Parachute canopy
-    const cx=x,cy=y-sz*1.2;
-    ctx.fillStyle='#E53935';
-    ctx.beginPath();ctx.ellipse(cx,cy,sz*0.9,sz*0.45,0,Math.PI,0);ctx.fill();
-    // White stripes
-    for(let s=0;s<4;s++){
-      const sx=cx-sz*0.8+s*(sz*0.45);
-      if(s%2===0){ctx.fillStyle='#fff';ctx.fillRect(sx|0,(cy-sz*0.35)|0,(sz*0.22)|0,(sz*0.35)|0)}
-    }
+    ctx.fillStyle='#E53935';ctx.beginPath();ctx.ellipse(cx,cy,sz*1.0,sz*0.5,0,Math.PI,0);ctx.fill();
+    for(let s=0;s<5;s++){const sx2=cx-sz*0.9+s*(sz*0.45);if(s%2===0){ctx.fillStyle='#fff';ctx.fillRect(sx2|0,(cy-sz*0.4)|0,(sz*0.22)|0,(sz*0.4)|0)}}
     // Strings
     ctx.strokeStyle='rgba(255,255,255,0.4)';ctx.lineWidth=1;
-    ctx.beginPath();ctx.moveTo(cx-sz*0.7,cy);ctx.lineTo(x,y-sz*0.2);ctx.stroke();
-    ctx.beginPath();ctx.moveTo(cx+sz*0.7,cy);ctx.lineTo(x,y-sz*0.2);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(cx-sz*0.8,cy);ctx.lineTo(x,y-sz*0.2);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(cx+sz*0.8,cy);ctx.lineTo(x,y-sz*0.2);ctx.stroke();
     ctx.beginPath();ctx.moveTo(cx,cy+2);ctx.lineTo(x,y-sz*0.2);ctx.stroke();
-    // Bottle body
-    const bw=sz*0.3,bh=sz*0.8;
-    const bx=x,by=y;
-    // Cap
-    ctx.fillStyle='#C0C0C0';ctx.fillRect(bx-bw*0.25,by-bh*0.5,bw*0.5,bh*0.1);
-    // Neck
-    ctx.fillStyle='#E8E8E8';ctx.fillRect(bx-bw*0.2,by-bh*0.4,bw*0.4,bh*0.15);
-    // Body
-    ctx.fillStyle='#2A1508';ctx.fillRect(bx-bw*0.45,by-bh*0.25,bw*0.9,bh*0.6);
-    // Red label
-    ctx.fillStyle='#CC0000';ctx.fillRect(bx-bw*0.45,by-bh*0.1,bw*0.9,bh*0.2);
-    // Label text (white bar)
-    ctx.fillStyle='#fff';ctx.fillRect(bx-bw*0.25,by-bh*0.03,bw*0.5,bh*0.08);
-    // Bottom
-    ctx.fillStyle='#E8E8E8';ctx.fillRect(bx-bw*0.5,by+bh*0.35,bw*1.0,bh*0.05);
-    ctx.fillStyle='#2A1508';ctx.fillRect(bx-bw*0.45,by+bh*0.4,bw*0.9,bh*0.1);
+    // Bottle
+    const bw=sz*0.35,bh=sz*0.9;
+    ctx.fillStyle='#C0C0C0';ctx.fillRect(x-bw*0.2,y-bh*0.5,bw*0.4,bh*0.1);
+    ctx.fillStyle='#E8E8E8';ctx.fillRect(x-bw*0.2,y-bh*0.4,bw*0.4,bh*0.12);
+    ctx.fillStyle='#2A1508';ctx.fillRect(x-bw*0.45,y-bh*0.28,bw*0.9,bh*0.55);
+    ctx.fillStyle='#CC0000';ctx.fillRect(x-bw*0.45,y-bh*0.1,bw*0.9,bh*0.18);
+    ctx.fillStyle='#fff';ctx.fillRect(x-bw*0.2,y-bh*0.04,bw*0.4,bh*0.06);
+    ctx.fillStyle='#E8E8E8';ctx.fillRect(x-bw*0.5,y+bh*0.27,bw*1.0,bh*0.04);
+    ctx.fillStyle='#2A1508';ctx.fillRect(x-bw*0.45,y+bh*0.31,bw*0.9,bh*0.15);
   }
 
   function drawJet(j){
     const s=j.flip?-1:1;
     ctx.save();ctx.translate(j.x,j.y);ctx.scale(s,1);
-    // Fuselage
-    ctx.fillStyle='#556B7A';
-    ctx.fillRect(-40,-6,80,12);
-    // Nose
-    ctx.fillStyle='#778899';
-    ctx.beginPath();ctx.moveTo(40,-5);ctx.lineTo(55,0);ctx.lineTo(40,5);ctx.fill();
-    // Wings
+    ctx.fillStyle='#556B7A';ctx.fillRect(-50,-7,100,14);
+    ctx.fillStyle='#778899';ctx.beginPath();ctx.moveTo(50,-6);ctx.lineTo(68,0);ctx.lineTo(50,6);ctx.fill();
     ctx.fillStyle='#445566';
-    ctx.beginPath();ctx.moveTo(-5,-6);ctx.lineTo(15,-30);ctx.lineTo(20,-6);ctx.fill();
-    ctx.beginPath();ctx.moveTo(-5,6);ctx.lineTo(15,30);ctx.lineTo(20,6);ctx.fill();
-    // Tail
-    ctx.fillStyle='#445566';
-    ctx.beginPath();ctx.moveTo(-40,-6);ctx.lineTo(-50,-20);ctx.lineTo(-30,-6);ctx.fill();
-    ctx.beginPath();ctx.moveTo(-40,6);ctx.lineTo(-50,20);ctx.lineTo(-30,6);ctx.fill();
-    // Cockpit
-    ctx.fillStyle='#88CCFF';ctx.fillRect(20,-3,10,6);
-    // Engine glow
-    ctx.fillStyle='#FF8800';ctx.fillRect(-48,-3,10,6);
-    ctx.fillStyle='#FFCC00';ctx.fillRect(-45,-2,6,4);
+    ctx.beginPath();ctx.moveTo(-5,-7);ctx.lineTo(18,-38);ctx.lineTo(24,-7);ctx.fill();
+    ctx.beginPath();ctx.moveTo(-5,7);ctx.lineTo(18,38);ctx.lineTo(24,7);ctx.fill();
+    ctx.beginPath();ctx.moveTo(-50,-7);ctx.lineTo(-62,-24);ctx.lineTo(-38,-7);ctx.fill();
+    ctx.beginPath();ctx.moveTo(-50,7);ctx.lineTo(-62,24);ctx.lineTo(-38,7);ctx.fill();
+    ctx.fillStyle='#88CCFF';ctx.fillRect(28,-4,12,8);
+    // Dual engines
+    ctx.fillStyle='#FF8800';ctx.fillRect(-60,-5,14,4);ctx.fillRect(-60,1,14,4);
+    ctx.fillStyle='#FFCC00';ctx.fillRect(-56,-4,8,2);ctx.fillRect(-56,2,8,2);
     ctx.restore();
-    // Afterburner trail
-    for(let t=0;t<j.trail.length;t++){
-      const tr=j.trail[t];
-      ctx.fillStyle='rgba(255,136,0,'+(tr.a*0.5)+')';
-      ctx.fillRect(tr.x-tr.s/2,tr.y-tr.s/2,tr.s,tr.s);
-    }
-  }
-
-  function drawMissile(m){
-    const dir=m.vx>0?1:-1;
-    ctx.save();ctx.translate(m.x,m.y);
-    // Body
-    ctx.fillStyle='#888';ctx.fillRect(-12*dir<0?-12:0,-2,24,4);
-    // Nose (red)
-    ctx.fillStyle='#E53935';
-    ctx.beginPath();ctx.moveTo(12*dir,-3);ctx.lineTo(18*dir,0);ctx.lineTo(12*dir,3);ctx.fill();
-    // Fins
-    ctx.fillStyle='#666';
-    ctx.beginPath();ctx.moveTo(-10*dir,-2);ctx.lineTo(-14*dir,-7);ctx.lineTo(-8*dir,-2);ctx.fill();
-    ctx.beginPath();ctx.moveTo(-10*dir,2);ctx.lineTo(-14*dir,7);ctx.lineTo(-8*dir,2);ctx.fill();
-    // Exhaust
-    ctx.fillStyle='#FFAA00';ctx.fillRect(-14*dir-2,-2,6,4);
-    ctx.fillStyle='#FF4400';ctx.fillRect(-17*dir-2,-1,4,2);
-    ctx.restore();
-    // Smoke trail
-    for(let t=0;t<m.trail.length;t++){
-      const tr=m.trail[t];
-      ctx.fillStyle='rgba(200,200,200,'+(tr.a*0.3)+')';
-      ctx.fillRect(tr.x-tr.s/2,tr.y-tr.s/2,tr.s,tr.s);
-    }
   }
 
   function tick(){
     frame++;
-    ctx.fillStyle='#0a0a1a';ctx.fillRect(0,0,W,H);
-
-    // Sky gradient (dark navy to dark red near horizon)
+    // Sky
+    ctx.fillStyle='#050510';ctx.fillRect(0,0,W,H);
     const skyG=ctx.createLinearGradient(0,0,0,H*0.65);
-    skyG.addColorStop(0,'#050510');
-    skyG.addColorStop(0.3,'#0a0a2a');
-    skyG.addColorStop(0.7,'#1a0510');
-    skyG.addColorStop(1,'#2a0a0a');
+    skyG.addColorStop(0,'#02020a');skyG.addColorStop(0.2,'#080818');
+    skyG.addColorStop(0.5,'#150810');skyG.addColorStop(0.8,'#2a0a08');
+    skyG.addColorStop(1,'#3a1208');
     ctx.fillStyle=skyG;ctx.fillRect(0,0,W,H*0.7);
 
     // Stars
-    stars.forEach(s=>{
-      const a=s.a*(0.5+0.5*Math.sin(frame*s.twinkle));
-      ctx.fillStyle='rgba(255,255,255,'+a+')';
-      ctx.fillRect(s.x|0,s.y|0,2,2);
-    });
+    stars.forEach(s=>{const a=s.a*(0.4+0.4*Math.sin(frame*s.tw));ctx.fillStyle='rgba(255,255,255,'+a+')';ctx.fillRect(s.x|0,s.y|0,2,2)});
 
-    // Smoke clouds
-    clouds.forEach(c=>{
-      c.x+=c.dx;if(c.x>W+c.r)c.x=-c.r;
-      const g=ctx.createRadialGradient(c.x,c.y,0,c.x,c.y,c.r);
-      g.addColorStop(0,'rgba(80,40,20,'+c.a+')');g.addColorStop(1,'transparent');
-      ctx.fillStyle=g;ctx.fillRect(c.x-c.r,c.y-c.r,c.r*2,c.r*2);
-    });
+    // Ground — scorched earth
+    const gG=ctx.createLinearGradient(0,H*0.63,0,H);
+    gG.addColorStop(0,'#1a0805');gG.addColorStop(0.15,'#120604');gG.addColorStop(0.5,'#0a0403');gG.addColorStop(1,'#050202');
+    ctx.fillStyle=gG;ctx.fillRect(0,H*0.63,W,H*0.37);
 
-    // Ground (dark terrain)
-    const grdG=ctx.createLinearGradient(0,H*0.65,0,H);
-    grdG.addColorStop(0,'#1a0a05');grdG.addColorStop(0.3,'#0d0805');grdG.addColorStop(1,'#050303');
-    ctx.fillStyle=grdG;ctx.fillRect(0,H*0.65,W,H*0.35);
-    // Horizon fire glow
-    const hg=ctx.createLinearGradient(0,H*0.62,0,H*0.72);
-    hg.addColorStop(0,'transparent');
-    hg.addColorStop(0.3,'rgba(255,80,20,'+(0.08+0.04*Math.sin(frame*0.05))+')');
-    hg.addColorStop(0.7,'rgba(255,40,10,'+(0.05+0.03*Math.sin(frame*0.07))+')');
-    hg.addColorStop(1,'transparent');
-    ctx.fillStyle=hg;ctx.fillRect(0,H*0.62,W,H*0.1);
+    // Horizon fire glow (pulsing)
+    const hGlowA=0.12+0.06*Math.sin(frame*0.04);
+    const hG=ctx.createLinearGradient(0,H*0.60,0,H*0.72);
+    hG.addColorStop(0,'transparent');
+    hG.addColorStop(0.4,'rgba(255,60,10,'+hGlowA+')');
+    hG.addColorStop(0.7,'rgba(255,30,5,'+(hGlowA*0.6)+')');
+    hG.addColorStop(1,'transparent');
+    ctx.fillStyle=hG;ctx.fillRect(0,H*0.60,W,H*0.12);
 
     // Spawn timers
-    jetTimer++;missileTimer++;tracerTimer++;flakTimer++;
-    if(jetTimer>180){spawnJet();jetTimer=0}
-    if(missileTimer>60+Math.random()*40){spawnMissile();missileTimer=0}
-    if(tracerTimer>4){spawnTracer();tracerTimer=0}
-    if(flakTimer>50+Math.random()*40){spawnFlak();flakTimer=0}
+    jetTimer++;missileTimer++;tracerTimer++;flakTimer++;impactTimer++;
+    if(jetTimer>140){spawnJet();jetTimer=0}
+    if(missileTimer>35+Math.random()*25){spawnMissile();missileTimer=0}
+    if(tracerTimer>3){spawnTracer();tracerTimer=0}
+    if(flakTimer>35+Math.random()*30){spawnFlak();flakTimer=0}
+    if(impactTimer>100+Math.random()*60){spawnImpact();impactTimer=0}
 
-    // Update & draw flak bursts
-    for(let i=flakBursts.length-1;i>=0;i--){
-      const f=flakBursts[i];
-      f.life-=0.018;f.r+=1.5;
-      if(f.life<=0){flakBursts.splice(i,1);continue}
-      ctx.strokeStyle='rgba(255,200,100,'+f.life*0.6+')';ctx.lineWidth=2;
-      ctx.beginPath();ctx.arc(f.x,f.y,f.r,0,Math.PI*2);ctx.stroke();
-      // Inner puff
-      const g2=ctx.createRadialGradient(f.x,f.y,0,f.x,f.y,f.r*0.7);
-      g2.addColorStop(0,'rgba(255,220,150,'+f.life*0.3+')');g2.addColorStop(1,'transparent');
+    // Ground fires
+    fires.forEach(f=>{
+      const fi=f.intensity*(0.6+0.4*Math.sin(frame*0.08+f.x*0.01));
+      const fg=ctx.createRadialGradient(f.x,f.y,0,f.x,f.y,30+Math.sin(frame*0.06+f.x)*10);
+      fg.addColorStop(0,'rgba(255,100,20,'+fi*0.4+')');fg.addColorStop(0.5,'rgba(255,50,10,'+fi*0.2+')');fg.addColorStop(1,'transparent');
+      ctx.fillStyle=fg;ctx.fillRect(f.x-50,f.y-50,100,100);
+      // Fire pixels
+      for(let p=0;p<3;p++){const px=f.x-8+Math.random()*16,py=f.y-Math.random()*25;
+        ctx.fillStyle=['#FF4400','#FFAA00','#FF8800'][p];ctx.fillRect(px|0,py|0,3+Math.random()*3,3)}
+    });
+
+    // Smoke columns
+    smokeColumns.forEach(sc=>{
+      if(frame%4===0)sc.particles.push({x:sc.x+(Math.random()-0.5)*10,y:H*0.64,vx:(Math.random()-0.5)*0.5,vy:-1-Math.random()*1.5,a:0.2,r:5+Math.random()*10});
+      for(let i=sc.particles.length-1;i>=0;i--){const p=sc.particles[i];p.x+=p.vx;p.y+=p.vy;p.a-=0.002;p.r+=0.3;
+        if(p.a<=0){sc.particles.splice(i,1);continue}
+        ctx.fillStyle='rgba(60,40,30,'+p.a+')';ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);ctx.fill()}
+    });
+
+    // Flak bursts
+    for(let i=flak.length-1;i>=0;i--){const f=flak[i];f.life-=0.015;f.r+=2;
+      if(f.life<=0){flak.splice(i,1);continue}
+      ctx.strokeStyle='rgba(255,200,100,'+f.life*0.5+')';ctx.lineWidth=2;ctx.beginPath();ctx.arc(f.x,f.y,f.r,0,Math.PI*2);ctx.stroke();
+      const g2=ctx.createRadialGradient(f.x,f.y,0,f.x,f.y,f.r*0.6);
+      g2.addColorStop(0,'rgba(255,220,150,'+f.life*0.25+')');g2.addColorStop(1,'transparent');
       ctx.fillStyle=g2;ctx.fillRect(f.x-f.r,f.y-f.r,f.r*2,f.r*2);
-      // Debris pixels
-      for(let d=0;d<5;d++){
-        const da=d*Math.PI*2/5+frame*0.02;
-        const dr=f.r*(0.5+Math.random()*0.5);
-        ctx.fillStyle='rgba(255,180,80,'+f.life*0.5+')';
-        ctx.fillRect((f.x+Math.cos(da)*dr)|0,(f.y+Math.sin(da)*dr)|0,3,3);
-      }
+      for(let d=0;d<6;d++){const da=d*Math.PI*2/6+frame*0.02;const dr=f.r*(0.4+Math.random()*0.5);
+        ctx.fillStyle='rgba(255,180,80,'+f.life*0.4+')';ctx.fillRect((f.x+Math.cos(da)*dr)|0,(f.y+Math.sin(da)*dr)|0,3,3)}
     }
 
-    // Update & draw tracers (gunfire)
-    for(let i=tracers.length-1;i>=0;i--){
-      const t=tracers[i];
-      t.x+=t.vx;t.y+=t.vy;t.life--;
-      if(t.life<=0||t.x<-20||t.x>W+20){tracers.splice(i,1);continue}
-      ctx.fillStyle=t.color;
-      ctx.fillRect(t.x|0,t.y|0,4,2);
-      // Trail
+    // Tracers (AA fire from ground)
+    for(let i=tracers.length-1;i>=0;i--){const t=tracers[i];t.x+=t.vx;t.y+=t.vy;t.life--;
+      if(t.life<=0||t.y<-20){tracers.splice(i,1);continue}
+      ctx.fillStyle=t.color;ctx.fillRect(t.x|0,t.y|0,3,5);
       ctx.fillStyle=t.color.replace(')',',0.3)').replace('rgb','rgba');
-      ctx.fillRect((t.x-t.vx*0.5)|0,(t.y-t.vy*0.5)|0,3,2);
+      ctx.fillRect((t.x-t.vx*0.3)|0,(t.y-t.vy*0.3)|0,2,4)}
+
+    // Missiles with smoke trails
+    for(let i=missiles.length-1;i>=0;i--){const m=missiles[i];m.x+=m.vx;m.y+=m.vy;m.life++;
+      m.trail.push({x:m.x,y:m.y,s:3,a:0.8});
+      for(let t=m.trail.length-1;t>=0;t--){m.trail[t].a-=0.03;m.trail[t].s+=0.4;if(m.trail[t].a<=0)m.trail.splice(t,1)}
+      if(m.life>m.maxLife){spawnExplosion(m.x,m.y,'big');missiles.splice(i,1);continue}
+      if(m.x<-80||m.x>W+80){missiles.splice(i,1);continue}
+      // Draw trail
+      m.trail.forEach(tr=>{ctx.fillStyle='rgba(200,200,200,'+tr.a*0.2+')';ctx.fillRect(tr.x-tr.s/2,tr.y-tr.s/2,tr.s,tr.s)});
+      // Missile body
+      const dir=m.vx>0?1:-1;
+      ctx.fillStyle='#888';ctx.fillRect(m.x-10,m.y-2,20,4);
+      ctx.fillStyle='#E53935';ctx.beginPath();ctx.moveTo(m.x+12*dir,-3+m.y);ctx.lineTo(m.x+18*dir,m.y);ctx.lineTo(m.x+12*dir,3+m.y);ctx.fill();
+      ctx.fillStyle='#FFAA00';ctx.fillRect(m.x-14*dir,-2+m.y,6,4);
     }
 
-    // Update & draw missiles
-    for(let i=missiles.length-1;i>=0;i--){
-      const m=missiles[i];
-      m.x+=m.vx;m.y+=m.vy;m.life++;
-      m.trail.push({x:m.x-m.vx*2,y:m.y,s:3+Math.random()*2,a:1});
-      for(let t=m.trail.length-1;t>=0;t--){m.trail[t].a-=0.04;m.trail[t].s+=0.3;if(m.trail[t].a<=0)m.trail.splice(t,1)}
-      if(m.life>m.maxLife){
-        spawnExplosion(m.x,m.y,true);
-        missiles.splice(i,1);continue;
-      }
-      if(m.x<-60||m.x>W+60){missiles.splice(i,1);continue}
-      drawMissile(m);
-    }
-
-    // Update & draw jets
-    for(let i=jets.length-1;i>=0;i--){
-      const j=jets[i];
-      j.x+=j.vx;j.life++;
-      j.trail.push({x:j.x-(j.flip?-50:50),y:j.y,s:4,a:1});
-      for(let t=j.trail.length-1;t>=0;t--){j.trail[t].a-=0.025;j.trail[t].s+=0.5;if(j.trail[t].a<=0)j.trail.splice(t,1)}
+    // Jets
+    for(let i=jets.length-1;i>=0;i--){const j=jets[i];j.x+=j.vx;j.life++;
       if(j.x<-200||j.x>W+200){jets.splice(i,1);continue}
       drawJet(j);
+      // Afterburner trail
+      if(frame%2===0){
+        const tx=j.x-(j.flip?-60:60);
+        ctx.fillStyle='rgba(255,136,0,0.15)';ctx.fillRect(tx-3,j.y-3,6+Math.random()*10,6)}
+      // Dropping bombs occasionally
+      if(j.dropping&&j.life===40){spawnExplosion(j.x,H*0.64,'huge')}
     }
 
-    // Update & draw explosions
-    for(let i=explosions.length-1;i>=0;i--){
-      const e=explosions[i];
-      // Flash
-      if(e.flash>0){
-        const fa=e.flash/12;
-        const g3=ctx.createRadialGradient(e.x,e.y,0,e.x,e.y,80);
-        g3.addColorStop(0,'rgba(255,255,200,'+fa+')');g3.addColorStop(1,'transparent');
-        ctx.fillStyle=g3;ctx.fillRect(e.x-80,e.y-80,160,160);
-        e.flash--;
-      }
-      // Ring
-      if(e.ring<e.ringMax){
-        e.ring+=2;
-        ctx.strokeStyle='rgba(255,150,50,'+(1-e.ring/e.ringMax)*0.5+')';
-        ctx.lineWidth=3;
-        ctx.beginPath();ctx.arc(e.x,e.y,e.ring,0,Math.PI*2);ctx.stroke();
-      }
-      // Particles
+    // Explosions
+    for(let i=explosions.length-1;i>=0;i--){const e=explosions[i];
+      if(e.flash>0){const fa=e.flash/20;
+        const g3=ctx.createRadialGradient(e.x,e.y,0,e.x,e.y,120);
+        g3.addColorStop(0,'rgba(255,255,200,'+fa+')');g3.addColorStop(0.3,'rgba(255,150,50,'+fa*0.5+')');g3.addColorStop(1,'transparent');
+        ctx.fillStyle=g3;ctx.fillRect(e.x-120,e.y-120,240,240);e.flash--}
+      if(e.ring<e.ringMax){e.ring+=2.5;
+        ctx.strokeStyle='rgba(255,120,30,'+(1-e.ring/e.ringMax)*0.4+')';ctx.lineWidth=3;
+        ctx.beginPath();ctx.arc(e.x,e.y,e.ring,0,Math.PI*2);ctx.stroke()}
       let alive=false;
-      e.parts.forEach(p=>{
-        if(p.life<=0)return;alive=true;
-        p.x+=p.vx;p.y+=p.vy;p.vy+=0.05;p.life-=p.decay;
-        ctx.fillStyle=p.color;
-        ctx.globalAlpha=Math.max(0,p.life);
-        ctx.fillRect((e.x+p.x)|0,(e.y+p.y)|0,p.size|0,p.size|0);
-      });
+      e.parts.forEach(p=>{if(p.life<=0)return;alive=true;p.x+=p.vx;p.y+=p.vy;p.vy+=0.04;p.life-=p.decay;
+        ctx.fillStyle=p.color;ctx.globalAlpha=Math.max(0,p.life);ctx.fillRect((e.x+p.x)|0,(e.y+p.y)|0,p.sz|0,p.sz|0)});
       ctx.globalAlpha=1;
-      if(!alive&&e.ring>=e.ringMax)explosions.splice(i,1);
-    }
+      if(!alive&&e.ring>=e.ringMax)explosions.splice(i,1)}
 
-    // Parachute bottles (float down with sway)
+    // Parachute bottles
     bottles.forEach(b=>{
       const t=frame*b.swaySpd+b.sway;
       const bx=b.x+Math.sin(t)*b.swayAmp;
-      const by=b.y+frame*b.vy*0.5;
-      const wy=((by%((H*0.6)+b.size*3))-b.size*2);
-      if(wy>-b.size*2&&wy<H*0.6){
-        drawBottle(bx,wy,b.size);
-      }
+      const rawY=b.y+frame*b.vy*0.4;
+      const maxDrop=H*0.55+b.size*3;
+      const by=((rawY%maxDrop+maxDrop)%maxDrop)-b.size*2;
+      if(by>-b.size*2&&by<H*0.6) drawBottle(bx,by,b.size);
     });
 
-    // Searchlight beams from bottom
-    for(let i=0;i<2;i++){
-      const bx=200+i*680;
-      const angle=Math.sin(frame*0.008+i*2)*0.3;
-      ctx.save();ctx.translate(bx,H*0.68);ctx.rotate(angle);
-      const sg=ctx.createLinearGradient(0,0,0,-H*0.5);
-      sg.addColorStop(0,'rgba(255,255,200,0.04)');sg.addColorStop(1,'transparent');
-      ctx.fillStyle=sg;
-      ctx.beginPath();ctx.moveTo(-20,0);ctx.lineTo(-80,-H*0.5);ctx.lineTo(80,-H*0.5);ctx.lineTo(20,0);ctx.fill();
-      ctx.restore();
-    }
+    // Searchlights from ground
+    for(let i=0;i<3;i++){
+      const bx=150+i*380;const angle=Math.sin(frame*0.006+i*2.5)*0.35;
+      ctx.save();ctx.translate(bx,H*0.65);ctx.rotate(angle);
+      const sg=ctx.createLinearGradient(0,0,0,-H*0.55);
+      sg.addColorStop(0,'rgba(255,255,200,0.035)');sg.addColorStop(1,'transparent');
+      ctx.fillStyle=sg;ctx.beginPath();ctx.moveTo(-25,0);ctx.lineTo(-100,-H*0.55);ctx.lineTo(100,-H*0.55);ctx.lineTo(25,0);ctx.fill();
+      ctx.restore()}
 
-    // Distant ground fires (flickering orange spots)
-    for(let i=0;i<5;i++){
-      const fx=120+i*220;const fy=H*0.67+Math.sin(i*7)*20;
-      const fi=0.2+0.15*Math.sin(frame*0.1+i*3);
-      const fg=ctx.createRadialGradient(fx,fy,0,fx,fy,25+Math.sin(frame*0.08+i)*8);
-      fg.addColorStop(0,'rgba(255,100,20,'+fi+')');fg.addColorStop(1,'transparent');
-      ctx.fillStyle=fg;ctx.fillRect(fx-40,fy-40,80,80);
-    }
-
-    // Screen shake on explosion
-    if(explosions.length>0&&explosions.some(e=>e.flash>6)){
-      cv.style.transform='translate('+(Math.random()*4-2)+'px,'+(Math.random()*4-2)+'px)';
-    }else{
-      cv.style.transform='';
-    }
+    // Screen shake on big explosions
+    if(explosions.some(e=>e.flash>10)){
+      cv.style.transform='translate('+(Math.random()*6-3)+'px,'+(Math.random()*6-3)+'px)'}
+    else{cv.style.transform=''}
 
     requestAnimationFrame(tick);
   }
   requestAnimationFrame(tick);
 }
-
 window.addEventListener('DOMContentLoaded',()=>{initIcons();loop()});
 })();
 </script>
