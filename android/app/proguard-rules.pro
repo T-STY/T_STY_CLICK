@@ -16,3 +16,6 @@
 
 # Flutter wrapper classes
 -keep class io.flutter.** { *; }
+
+# Google Play Core (feature delivery)
+-keep class com.google.android.play.core.** { *; }
