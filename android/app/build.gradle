@@ -72,3 +72,8 @@ android {
 flutter {
     source = "../.."
 }
+
+dependencies {
+    // For in-app updates:
+    implementation 'com.google.android.play:app-update:2.1.0'
+}
