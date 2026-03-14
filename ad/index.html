@@ -12,8 +12,6 @@ html,body{width:100vw;height:100vh;overflow:hidden;background:#000;font-family:'
 
 .rotated-wrap{
   position:absolute;width:1080px;height:1920px;
-  top:50%;left:50%;
-  transform:translate(-50%,-50%) rotate(90deg);
   transform-origin:center center;overflow:hidden;
 }
 
@@ -209,7 +207,7 @@ html,body{width:100vw;height:100vh;overflow:hidden;background:#000;font-family:'
   gap:0;padding:0 !important;background:#0a0a1a;position:relative;overflow:hidden;
   justify-content:flex-end !important;
 }
-.coke-war-canvas{position:absolute;inset:0;z-index:0;image-rendering:pixelated;width:100%;height:100%}
+.coke-war-canvas{position:absolute;top:0;left:0;z-index:0;image-rendering:pixelated;width:1080px;height:1920px}
 .coke-bottom{
   position:relative;z-index:2;display:flex;flex-direction:column;align-items:center;
   gap:12px;width:100%;padding:24px 50px 30px;
@@ -451,7 +449,7 @@ html,body{width:100vw;height:100vh;overflow:hidden;background:#000;font-family:'
 </div>
 
 <!-- SCENE 12: COCA COLA (war-landing) -->
-<div id="scene-coke" class="scene">
+<div id="scene-coke" class="scene" style="background:#0a0a1a">
   <canvas class="coke-war-canvas" id="coke-war" width="1080" height="1920"></canvas>
   <div class="coke-bottom">
     <div class="coke-regalo">¡REGALO!</div>
@@ -1187,7 +1185,6 @@ function initIcons(){
     // Triangle play button
     gc.fillStyle='#fff';gc.beginPath();gc.moveTo(6,4);gc.lineTo(15,10);gc.lineTo(6,16);gc.fill();
   }
-  initCokeWar();
   initPointsBg();
 }
 
@@ -1212,10 +1209,15 @@ function initPointsBg(){
 
 /* ═══ COCA COLA WAR-LANDING ANIMATION ═══ */
 function initCokeWar(){
-  const cv=document.getElementById('coke-war');if(!cv)return;
+  const cv=document.getElementById('coke-war');
+  if(!cv){console.error('CokeWar: canvas #coke-war not found');return}
   const ctx=cv.getContext('2d');
+  if(!ctx){console.error('CokeWar: failed to get 2d context');return}
   ctx.imageSmoothingEnabled=false;
   const W=1080,H=1920;
+  // Immediate verify draw — dark sky fill
+  ctx.fillStyle='#050510';ctx.fillRect(0,0,W,H);
+  console.log('CokeWar: init OK, canvas',cv.width,'x',cv.height);
 
   // Parachute bottles — more of them, spread across
   const bottles=[];
@@ -1459,12 +1461,16 @@ function initCokeWar(){
 }
 function scaleToFit(){
   const wrap=document.querySelector('.rotated-wrap');if(!wrap)return;
-  // After 90deg rotation, the 1080x1920 element occupies 1920w x 1080h visually
-  const s=Math.min(window.innerWidth/1920,window.innerHeight/1080);
-  wrap.style.transform='translate(-50%,-50%) rotate(90deg) scale('+s+')';
+  const vw=window.innerWidth,vh=window.innerHeight;
+  // After 90deg rotation, visual size is 1920w × 1080h
+  const s=Math.min(vw/1920,vh/1080);
+  // Place element so its center (540,960) lands at viewport center
+  wrap.style.left=(vw/2-540)+'px';
+  wrap.style.top=(vh/2-960)+'px';
+  wrap.style.transform='rotate(90deg) scale('+s+')';
 }
 window.addEventListener('resize',scaleToFit);
-window.addEventListener('DOMContentLoaded',()=>{scaleToFit();initIcons();loop()});
+window.addEventListener('DOMContentLoaded',()=>{scaleToFit();initIcons();initCokeWar();loop()});
 })();
 </script>
 </body>
