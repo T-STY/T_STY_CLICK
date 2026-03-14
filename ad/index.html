@@ -262,6 +262,11 @@ html,body{width:100vw;height:100vh;overflow:hidden;background:#000;font-family:'
 </style>
 </head>
 <body>
+<div id="fs-overlay" style="position:fixed;inset:0;z-index:99999;background:#000;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-direction:column;gap:30px">
+  <div style="font-family:'Press Start 2P',monospace;font-size:32px;color:#fff;text-align:center;line-height:2;animation:pulse-fs 1.5s ease-in-out infinite alternate">TOCA PARA<br>COMENZAR</div>
+  <div style="font-family:'Press Start 2P',monospace;font-size:14px;color:rgba(255,255,255,0.4)">TAP TO START</div>
+</div>
+<style>@keyframes pulse-fs{0%{opacity:0.6;transform:scale(0.97)}100%{opacity:1;transform:scale(1.03)}}</style>
 <div class="rotated-wrap">
 <div class="stage" id="stage">
 
@@ -1469,7 +1474,19 @@ function scaleToFit(){
   wrap.style.transform='translate(-50%,-50%) rotate(90deg) scale('+s+')';
 }
 window.addEventListener('resize',scaleToFit);
-window.addEventListener('DOMContentLoaded',()=>{scaleToFit();initIcons();initCokeWar();loop()});
+document.addEventListener('fullscreenchange',()=>setTimeout(scaleToFit,100));
+window.addEventListener('DOMContentLoaded',()=>{
+  scaleToFit();initIcons();initCokeWar();
+  const fso=document.getElementById('fs-overlay');
+  fso.addEventListener('click',()=>{
+    const el=document.documentElement;
+    if(el.requestFullscreen)el.requestFullscreen().catch(()=>{});
+    else if(el.webkitRequestFullscreen)el.webkitRequestFullscreen();
+    fso.style.display='none';
+    scaleToFit();
+    loop();
+  },{once:true});
+});
 })();
 </script>
 </body>
