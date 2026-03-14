@@ -2,13 +2,13 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=1080,height=1920">
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <title>T_STY: Beyond — Vertical Ad 9:16</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
 
 *{margin:0;padding:0;box-sizing:border-box}
-html,body{width:1920px;height:1080px;overflow:hidden;background:#000;font-family:'Press Start 2P',monospace}
+html,body{width:100vw;height:100vh;overflow:hidden;background:#000;font-family:'Press Start 2P',monospace}
 
 .rotated-wrap{
   position:absolute;width:1080px;height:1920px;
@@ -504,7 +504,7 @@ for(let i=0;i<60;i++) particles.push({x:Math.random()*BW,y:Math.random()*BH,vx:(
 let bgFrame=0,currentSceneIdx=0;
 function animBg(){
   bgFrame++;bgCtx.clearRect(0,0,BW,BH);
-  const dark=currentSceneIdx===11; // coke scene has dark bg
+  const dark=currentSceneIdx===17; // coke scene has dark bg
   const col=dark?'rgba(255,255,255,':'rgba(26,26,26,';
   particles.forEach(p=>{p.x+=p.vx;p.y+=p.vy;if(p.y<-10){p.y=BH+10;p.x=Math.random()*BW}if(p.x<-10)p.x=BW+10;if(p.x>BW+10)p.x=-10;
     bgCtx.fillStyle=col+(p.alpha*(0.6+0.4*Math.sin(bgFrame*0.03+p.x*0.1)))+')';
@@ -1410,7 +1410,14 @@ function initCokeWar(){
   }
   requestAnimationFrame(tick);
 }
-window.addEventListener('DOMContentLoaded',()=>{initIcons();loop()});
+function scaleToFit(){
+  const wrap=document.querySelector('.rotated-wrap');if(!wrap)return;
+  // After 90deg rotation, the 1080x1920 element occupies 1920w x 1080h visually
+  const s=Math.min(window.innerWidth/1920,window.innerHeight/1080);
+  wrap.style.transform='translate(-50%,-50%) rotate(90deg) scale('+s+')';
+}
+window.addEventListener('resize',scaleToFit);
+window.addEventListener('DOMContentLoaded',()=>{scaleToFit();initIcons();loop()});
 })();
 </script>
 </body>
