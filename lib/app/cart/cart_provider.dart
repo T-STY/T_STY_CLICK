@@ -15,8 +15,12 @@ class CartProvider extends ChangeNotifier {
   double get promoDiscount => _promoDiscount;
 
   CartProvider() {
-    _loadCartFromStorage();
-    fetchActivePromotions();
+    _init();
+  }
+
+  Future<void> _init() async {
+    await fetchActivePromotions();
+    await _loadCartFromStorage();
   }
 
   Map<String, CartItem> get items => {..._items};
@@ -292,6 +296,7 @@ class CartProvider extends ChangeNotifier {
     _evaluatePromotions();
     notifyListeners();
     _saveCartToStorage();
+    fetchActivePromotions();
   }
 
   void setItem(String productId, String name, double price, String imageUrl,
@@ -335,6 +340,7 @@ class CartProvider extends ChangeNotifier {
     _evaluatePromotions();
     notifyListeners();
     _saveCartToStorage();
+    fetchActivePromotions();
   }
 
   void removeItem(String productId, {required bool isBulk}) {
@@ -368,6 +374,7 @@ class CartProvider extends ChangeNotifier {
     _evaluatePromotions();
     notifyListeners();
     _saveCartToStorage();
+    fetchActivePromotions();
   }
 
   void removeItemCompletely(String productId) {
@@ -375,6 +382,7 @@ class CartProvider extends ChangeNotifier {
     _evaluatePromotions();
     notifyListeners();
     _saveCartToStorage();
+    fetchActivePromotions();
   }
 
   CartItem? getItem(String productId) {
