@@ -47,12 +47,6 @@ html,body{width:100vw;height:100vh;overflow:hidden;background:#000;font-family:'
   display:flex;flex-direction:column;align-items:center;justify-content:center;
   opacity:0;visibility:hidden;z-index:2;overflow:hidden;padding:60px 0;
 }
-.scene-center-wrap{
-  position:absolute;inset:0;
-  display:flex;flex-direction:column;align-items:center;justify-content:center;
-  z-index:2;pointer-events:none;
-}
-.scene-center-wrap>*{pointer-events:auto}
 .scene.active{opacity:1;visibility:visible;z-index:3}
 
 /* Wipe overlay */
@@ -139,8 +133,7 @@ html,body{width:100vw;height:100vh;overflow:hidden;background:#000;font-family:'
 .delivery-badge{padding:28px 60px;border:4px solid #1A1A1A;color:#1A1A1A;font-size:28px;letter-spacing:8px;animation:fade-up 0.8s 1s ease forwards;opacity:0;transform:translateY(20px)}
 
 /* ═══ POINTS (phone mockup with card) ═══ */
-#scene-points{background:#FFFFFF;position:relative;overflow:hidden;padding:0 !important}
-#scene-points .scene-center-wrap{gap:50px;padding:80px 0}
+#scene-points{gap:50px;background:#FFFFFF;overflow:hidden;padding:80px 0 !important}
 .pts-bg-canvas{position:absolute;inset:0;z-index:0;pointer-events:none}
 .pts-phone{
   width:560px;height:820px;border:8px solid #333;border-radius:36px;
@@ -184,8 +177,7 @@ html,body{width:100vw;height:100vh;overflow:hidden;background:#000;font-family:'
 @keyframes coin-fall{0%{transform:translateY(-30px) rotate(0deg)}100%{transform:translateY(2000px) rotate(720deg)}}
 
 /* ═══ PROMOS (pop-art style) ═══ */
-#scene-promos{background:#FFFFFF;position:relative;overflow:hidden;padding:0 !important}
-#scene-promos .scene-center-wrap{gap:70px;padding:120px 80px}
+#scene-promos{gap:70px;background:#FFFFFF;overflow:hidden;padding:120px 80px !important}
 .promo-title{
   font-size:72px;color:#1A1A1A;text-align:center;line-height:1.6;
   animation:fade-up 0.6s ease forwards;opacity:0;transform:translateY(20px);
@@ -214,10 +206,10 @@ html,body{width:100vw;height:100vh;overflow:hidden;background:#000;font-family:'
 
 /* ═══ COCA COLA (war-landing scene) ═══ */
 #scene-coke{
-  gap:0;padding:0 !important;background:#0a0a1a;position:relative;overflow:hidden;
+  gap:0;padding:0 !important;background:#0a0a1a;overflow:hidden;
   justify-content:flex-end !important;
 }
-.coke-war-canvas{position:absolute;top:0;left:0;z-index:0;image-rendering:pixelated;width:1080px;height:1920px}
+.coke-war-canvas{position:absolute;inset:0;z-index:0;image-rendering:pixelated;width:100%;height:100%}
 .coke-bottom{
   position:relative;z-index:2;display:flex;flex-direction:column;align-items:center;
   gap:12px;width:100%;padding:24px 50px 30px;
@@ -420,7 +412,6 @@ html,body{width:100vw;height:100vh;overflow:hidden;background:#000;font-family:'
 <div id="scene-points" class="scene">
   <canvas class="pts-bg-canvas" id="pts-bg" width="1080" height="1920"></canvas>
   <div class="pts-coins-wrap" id="pts-coins"></div>
-  <div class="scene-center-wrap">
   <div class="pts-phone">
     <div class="pts-phone-notch"></div>
     <div class="pts-phone-screen">
@@ -445,27 +436,23 @@ html,body{width:100vw;height:100vh;overflow:hidden;background:#000;font-family:'
     <div class="pts-desc">En puntos por cada compra.<br>Acumula y usa en tienda.</div>
   </div>
   <div class="pts-badge">MONEDERO DIGITAL</div>
-  </div>
 </div>
 
 <!-- SCENE 11: PROMOS (pop-art) -->
 <div id="scene-promos" class="scene">
   <canvas class="promo-explosion" id="promo-explode-1" width="200" height="200" style="top:6%;left:2%;width:260px;height:260px"></canvas>
   <canvas class="promo-explosion" id="promo-explode-2" width="200" height="200" style="top:50%;right:2%;width:260px;height:260px;left:auto"></canvas>
-  <div class="scene-center-wrap">
   <div class="promo-title">PROMOCIONES<br>EN LA APP</div>
   <div class="promo-cards">
     <div class="promo-card"><canvas class="promo-icon" data-icon="tag" width="24" height="24"></canvas><span class="p-text">Ofertas exclusivas solo<br>para usuarios de la app</span></div>
     <div class="promo-card"><canvas class="promo-icon" data-icon="gift" width="24" height="24"></canvas><span class="p-text">Regalos y sorpresas por<br>acumular puntos</span></div>
     <div class="promo-card"><canvas class="promo-icon" data-icon="star" width="24" height="24"></canvas><span class="p-text">Nuevas promociones<br>cada semana</span></div>
   </div>
-  </div>
 </div>
 
 <!-- SCENE 12: COCA COLA (war-landing) -->
-<div id="scene-coke" class="scene" style="background:#E53935 !important">
+<div id="scene-coke" class="scene">
   <canvas class="coke-war-canvas" id="coke-war" width="1080" height="1920"></canvas>
-  <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:5;font-size:120px;color:#fff;text-shadow:0 0 40px #000;pointer-events:none" id="coke-debug">COCA-COLA</div>
   <div class="coke-bottom">
     <div class="coke-regalo">¡REGALO!</div>
     <div class="coke-subtitle">¡Estamos mas que generosos esta semana!<br>Gana una botella de Coca-Cola de 500ml gratis.</div>
