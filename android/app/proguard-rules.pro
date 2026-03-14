@@ -17,5 +17,7 @@
 # Flutter wrapper classes
 -keep class io.flutter.** { *; }
 
-# Google Play Core (feature delivery)
+# Google Play Core — keep classes used by modular libraries and
+# suppress R8 warnings for deferred-component classes Flutter references but never calls
 -keep class com.google.android.play.core.** { *; }
+-dontwarn com.google.android.play.core.**
