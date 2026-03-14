@@ -325,16 +325,21 @@ class CheckUserScreenState extends State<CheckUserScreen> {
 
     try {
       await user.reload();
-      if (mounted) {
-        Navigator.of(context).pushReplacement(
-            customPageRouteBuilder(const MainMenuScreen()));
-      }
     } catch (e) {
-      await FirebaseAuth.instance.signOut();
-      if (mounted) {
-        Navigator.of(context).pushReplacement(
-            customPageRouteBuilder(const MainMenuScreen()));
+      // Only sign out if the user account is truly invalid (disabled/deleted).
+      // Network errors should NOT force a logout — the cached token is still
+      // valid and Firebase will refresh it once connectivity returns.
+      if (e is FirebaseAuthException &&
+          (e.code == 'user-disabled' || e.code == 'user-not-found')) {
+        await FirebaseAuth.instance.signOut();
+      } else {
+        debugPrint('user.reload() failed (non-fatal): $e');
       }
+    }
+
+    if (mounted) {
+      Navigator.of(context).pushReplacement(
+          customPageRouteBuilder(const MainMenuScreen()));
     }
   }
 
