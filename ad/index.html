@@ -44,8 +44,8 @@ html,body{width:100vw;height:100vh;overflow:hidden;background:#000;font-family:'
 
 .scene{
   position:absolute;inset:0;
-  display:flex;flex-direction:column;align-items:center;justify-content:safe center;
-  opacity:0;visibility:hidden;z-index:2;overflow-y:auto;padding:60px 0;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  opacity:0;visibility:hidden;z-index:2;overflow:hidden;padding:60px 0;
 }
 .scene.active{opacity:1;visibility:visible;z-index:3}
 
@@ -396,7 +396,7 @@ html,body{width:100vw;height:100vh;overflow:hidden;background:#000;font-family:'
 
 <!-- SCENE 15: DELIVERY -->
 <div id="scene-delivery" class="scene">
-  <canvas id="pixel-cart" width="100" height="100" style="width:300px;height:300px;image-rendering:pixelated;animation:pixel-pop 0.6s cubic-bezier(.2,1,.3,1) forwards;opacity:0;transform:scale(0)"></canvas>
+  <canvas id="delivery-art" width="400" height="200" style="width:800px;height:400px;image-rendering:pixelated;animation:pixel-pop 0.6s cubic-bezier(.2,1,.3,1) forwards;opacity:0;transform:scale(0)"></canvas>
   <div class="delivery-title" style="animation:fade-up 0.6s 0.3s ease forwards;opacity:0;transform:translateY(20px)">Tus compras<br><span class="accent">en tu puerta</span></div>
   <div class="delivery-cats">
     <div class="delivery-cat"><canvas class="cat-icon" data-icon="meat" width="24" height="24"></canvas><span class="cat-label">Carnes</span></div>
@@ -869,7 +869,7 @@ function tick(){fc++;
   aca=requestAnimationFrame(tick)}aca=requestAnimationFrame(tick)}
 
 function animRunner(){const cv=document.getElementById('canvas-runner');if(!cv)return;const ctx=cv.getContext('2d');const W=200,H=200;
-let man={x:50,y:158,vy:0,jumping:false,leg:0},dinoX=180,dinoPhase=0,fc=0,score=0,groundOff=0,obstacles=[];
+let man={x:150,y:158,vy:0,jumping:false,leg:0},dinoX=30,dinoPhase=0,fc=0,score=0,groundOff=0,obstacles=[];
 function tick(){fc++;
   ctx.fillStyle='#1a0a14';ctx.fillRect(0,0,W,H);
   groundOff=(groundOff+2.5)%W;
@@ -878,8 +878,8 @@ function tick(){fc++;
   // Stars
   for(let i=0;i<12;i++){const sx=(i*53+fc*0.2)%W,sy=15+i*11;ctx.fillStyle='rgba(255,180,220,'+(0.3+0.2*Math.sin(fc*0.04+i))+')';ctx.fillRect(sx,sy,2,2)}
   // Volcano bg
-  ctx.fillStyle='#2a1520';ctx.beginPath();ctx.moveTo(140,175);ctx.lineTo(165,110);ctx.lineTo(190,175);ctx.fill();
-  ctx.fillStyle='#FF4400';ctx.fillRect(160,108,10,5);
+  ctx.fillStyle='#2a1520';ctx.beginPath();ctx.moveTo(5,175);ctx.lineTo(30,110);ctx.lineTo(55,175);ctx.fill();
+  ctx.fillStyle='#FF4400';ctx.fillRect(25,108,10,5);
   // Caveman jump
   if(fc%55===0&&!man.jumping){man.jumping=true;man.vy=-6}
   if(man.jumping){man.vy+=0.35;man.y+=man.vy;if(man.y>=158){man.y=158;man.jumping=false;man.vy=0}}
@@ -895,31 +895,31 @@ function tick(){fc++;
   else{ctx.fillRect(mx+1,my+4,4,6);ctx.fillRect(mx+7,my+2,4,8)}
   // Arms
   ctx.fillStyle='#D4956A';ctx.fillRect(mx-3,my-5,4,3);ctx.fillRect(mx+11,my-5,4,3);
-  // Club in hand
-  ctx.fillStyle='#8B5E3C';ctx.fillRect(mx-5,my-10,3,8);ctx.fillStyle='#6B4226';ctx.fillRect(mx-7,my-13,7,5);
+  // Club in hand (trailing behind)
+  ctx.fillStyle='#8B5E3C';ctx.fillRect(mx-5,my-8,3,8);ctx.fillStyle='#6B4226';ctx.fillRect(mx-7,my-11,7,5);
   // Hair
   ctx.fillStyle='#3a1a0a';ctx.fillRect(mx+2,my-16,8,3);ctx.fillRect(mx+1,my-15,3,4);
   // Eye
   ctx.fillStyle='#fff';ctx.fillRect(mx+7,my-13,3,2);ctx.fillStyle='#000';ctx.fillRect(mx+8,my-13,2,2);
   // Dust
   if(!man.jumping&&fc%3===0){ctx.fillStyle='rgba(255,200,150,0.3)';ctx.fillRect(mx-6+Math.random()*4,my+9,3,2)}
-  // Chasing T-Rex (behind caveman)
+  // Chasing T-Rex (behind caveman, facing right)
   dinoPhase=Math.floor(fc/6)%2;
-  const ddx=dinoX-(fc*0.15)%30+15,ddy=140;
+  const ddx=dinoX+(fc*0.15)%30-15,ddy=140;
   ctx.fillStyle='#44BB44';
-  ctx.fillRect(ddx-20,ddy-20,22,16); // head
-  ctx.fillRect(ddx-25,ddy-4,30,20); // body
-  ctx.fillRect(ddx-30,ddy+2,8,4); // tail1
-  ctx.fillRect(ddx-36,ddy-2,8,6); // tail2
+  ctx.fillRect(ddx-2,ddy-20,22,16); // head
+  ctx.fillRect(ddx-5,ddy-4,30,20); // body
+  ctx.fillRect(ddx+22,ddy+2,8,4); // tail1
+  ctx.fillRect(ddx+28,ddy-2,8,6); // tail2
   // T-Rex legs
-  if(dinoPhase===0){ctx.fillRect(ddx-18,ddy+16,6,10);ctx.fillRect(ddx-4,ddy+14,6,8)}
-  else{ctx.fillRect(ddx-16,ddy+14,6,8);ctx.fillRect(ddx-6,ddy+16,6,10)}
+  if(dinoPhase===0){ctx.fillRect(ddx+12,ddy+16,6,10);ctx.fillRect(ddx-2,ddy+14,6,8)}
+  else{ctx.fillRect(ddx+10,ddy+14,6,8);ctx.fillRect(ddx,ddy+16,6,10)}
   // T-Rex arms (tiny)
-  ctx.fillRect(ddx-12,ddy+2,4,4);
+  ctx.fillRect(ddx+8,ddy+2,4,4);
   // T-Rex eye
-  ctx.fillStyle='#FF4444';ctx.fillRect(ddx-6,ddy-17,4,3);
+  ctx.fillStyle='#FF4444';ctx.fillRect(ddx+2,ddy-17,4,3);
   // T-Rex teeth
-  ctx.fillStyle='#fff';ctx.fillRect(ddx-4,ddy-5,2,3);ctx.fillRect(ddx-8,ddy-5,2,3);
+  ctx.fillStyle='#fff';ctx.fillRect(ddx+2,ddy-5,2,3);ctx.fillRect(ddx+6,ddy-5,2,3);
   // Obstacles (rocks)
   if(fc%80===0)obstacles.push({x:W+10});
   obstacles.forEach(o=>{o.x-=2.5;ctx.fillStyle='#555';ctx.fillRect(o.x,165,10,10);ctx.fillStyle='#666';ctx.fillRect(o.x+2,162,6,5);
@@ -1088,8 +1088,54 @@ function tick(){fc++;
 
 /* ═══ PIXEL ART ICONS ═══ */
 function initIcons(){
-  const cart=document.getElementById('pixel-cart');
-  if(cart){const ctx=cart.getContext('2d');ctx.imageSmoothingEnabled=false;const p=['....KKKK......','....K..K......','..KKKKKKKKKKK.','..K..........K','..K..........K','..K..KK..KK..K','..K..KK..KK..K','..K..........K','..K..........K','..KKKKKKKKKKK.','...K.......K..','..KKK.....KKK.','..KKK.....KKK.','...K.......K..'];for(let r=0;r<p.length;r++)for(let c=0;c<p[r].length;c++){if(p[r][c]==='K'){ctx.fillStyle='#1A1A1A';ctx.fillRect(c*7,r*7,7,7)}}}
+  const delArt=document.getElementById('delivery-art');
+  if(delArt){const dc=delArt.getContext('2d');dc.imageSmoothingEnabled=false;
+    // Door (right side)
+    const dx=260,dy=20;
+    dc.fillStyle='#8B5E3C';dc.fillRect(dx,dy,100,160); // door panel
+    dc.fillStyle='#6B4226';dc.fillRect(dx,dy,100,6); // top frame
+    dc.fillRect(dx,dy,6,160); // left frame
+    dc.fillRect(dx+94,dy,6,160); // right frame
+    dc.fillRect(dx,dy+154,100,6); // bottom frame
+    dc.fillStyle='#A0724E';dc.fillRect(dx+15,dy+15,30,60); // upper panel
+    dc.fillRect(dx+55,dy+15,30,60); // upper panel right
+    dc.fillRect(dx+15,dy+85,30,60); // lower panel
+    dc.fillRect(dx+55,dy+85,30,60); // lower panel right
+    dc.fillStyle='#FFD700';dc.fillRect(dx+80,dy+80,8,8); // doorknob
+    dc.fillStyle='#DAA520';dc.fillRect(dx+82,dy+82,4,4); // doorknob center
+    // Welcome mat
+    dc.fillStyle='#556B2F';dc.fillRect(dx+10,dy+160,80,12);
+    dc.fillStyle='#6B8E23';dc.fillRect(dx+14,dy+162,72,8);
+    // Motorcycle (left side)
+    const mx=60,my=100;
+    // Wheels
+    dc.fillStyle='#1A1A1A';dc.beginPath();dc.arc(mx+20,my+60,22,0,Math.PI*2);dc.fill();
+    dc.beginPath();dc.arc(mx+120,my+60,22,0,Math.PI*2);dc.fill();
+    dc.fillStyle='#666';dc.beginPath();dc.arc(mx+20,my+60,14,0,Math.PI*2);dc.fill();
+    dc.beginPath();dc.arc(mx+120,my+60,14,0,Math.PI*2);dc.fill();
+    dc.fillStyle='#888';dc.beginPath();dc.arc(mx+20,my+60,6,0,Math.PI*2);dc.fill();
+    dc.beginPath();dc.arc(mx+120,my+60,6,0,Math.PI*2);dc.fill();
+    // Body/frame
+    dc.fillStyle='#E53935';dc.fillRect(mx+30,my+30,70,20); // main body
+    dc.fillRect(mx+40,my+15,40,18); // tank
+    dc.fillStyle='#CC0000';dc.fillRect(mx+90,my+32,20,12); // rear
+    // Seat
+    dc.fillStyle='#1A1A1A';dc.fillRect(mx+45,my+10,35,10);
+    // Handlebars
+    dc.fillStyle='#333';dc.fillRect(mx+28,my+5,8,28);
+    dc.fillStyle='#666';dc.fillRect(mx+22,my,6,10); // left grip
+    dc.fillRect(mx+34,my,6,10); // right grip
+    // Headlight
+    dc.fillStyle='#FFEE00';dc.fillRect(mx+24,my+25,8,8);
+    // Exhaust
+    dc.fillStyle='#888';dc.fillRect(mx+100,my+40,16,6);
+    dc.fillStyle='#666';dc.fillRect(mx+112,my+38,8,10);
+    // Delivery box on back
+    dc.fillStyle='#E53935';dc.fillRect(mx+75,my-10,40,30);
+    dc.fillStyle='#fff';dc.fillRect(mx+80,my-5,30,8);
+    // T_STY text on box
+    dc.fillStyle='#E53935';dc.font='bold 7px monospace';dc.fillText('T_STY',mx+81,my+2);
+  }
 
   const iconDefs={meat:['..RR....', '.RRRR...', 'RRRRRR..', 'RRRRRR..', '.RRRRRR.', '..RRRRRR', '...RRRR.', '....BB..'],dairy:['..KK KK..', '.KKKKKK.', '.K....K.', '.K.KK.K.', '.K.KK.K.', '.K....K.', '.KKKKKK.', '..KKKK..'],fruit:['...GG...', '..G.....', '.RRRRRR.', 'RRRRRRRR', 'RRRRRRRR', 'RRRRRRRR', '.RRRRRR.', '..RRRR..'],bread:['..BBBB..', '.BBBBBB.', 'BBBBBBBB', 'BBBABBBB', 'BBBBABBB', 'BBBBBBBB', '.BBBBBB.', '..BBBB..'],clean:['...CC...', '...CC...', '..CCCC..', '..CCCC..', '..CCCC..', '.CCCCCC.', '.CCCCCC.', '..CCCC..'],tag:['KKKKKK..', 'K....KK.', 'K.KK..KK', 'K.KK...K', 'K......K', 'KK....KK', '.KK..KK.', '..KKKK..'],gift:['..AAAA..', '.AAAAAA.', 'AAAKKAA.', 'AAAKKAA.', 'KKKKKKKK', 'AAAKKAA.', 'AAAKKAA.', 'AAAKKAA.'],star:['...KK...', '...KK...', '.KKKKKK.', 'KKKKKKKK', '.KKKKKK.', '..KKKK..', '.KK..KK.', 'KK....KK']};
   const pals={R:'#E53935',K:'#1A1A1A',G:'#43A047',B:'#FFB347',A:'#FFB300',C:'#888'};
@@ -1233,7 +1279,7 @@ function initCokeWar(){
   function drawBottle(x,y,sz){
     const cx=x,cy=y-sz*1.3;
     // Parachute canopy
-    ctx.fillStyle='#E53935';ctx.beginPath();ctx.ellipse(cx,cy,sz*1.0,sz*0.5,0,Math.PI,0);ctx.fill();
+    ctx.fillStyle='#E53935';ctx.beginPath();ctx.arc(cx,cy,sz*0.75,Math.PI,0);ctx.fill();
     for(let s=0;s<5;s++){const sx2=cx-sz*0.9+s*(sz*0.45);if(s%2===0){ctx.fillStyle='#fff';ctx.fillRect(sx2|0,(cy-sz*0.4)|0,(sz*0.22)|0,(sz*0.4)|0)}}
     // Strings
     ctx.strokeStyle='rgba(255,255,255,0.4)';ctx.lineWidth=1;
@@ -1268,7 +1314,7 @@ function initCokeWar(){
     ctx.restore();
   }
 
-  function tick(){
+  function tick(){try{
     frame++;
     // Sky
     ctx.fillStyle='#050510';ctx.fillRect(0,0,W,H);
@@ -1406,6 +1452,7 @@ function initCokeWar(){
       cv.style.transform='translate('+(Math.random()*6-3)+'px,'+(Math.random()*6-3)+'px)'}
     else{cv.style.transform=''}
 
+    }catch(e){console.error('CokeWar tick error:',e)}
     requestAnimationFrame(tick);
   }
   requestAnimationFrame(tick);
