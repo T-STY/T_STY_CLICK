@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android 12+ (API 31+) cloud-backup / device-transfer exclusion rules.
+  Prevents Firebase Auth tokens from being transferred to new devices or
+  restored from cloud backup in a broken state.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="sharedpref" path="com.google.firebase.auth.api.Store.prefs.xml" />
+        <exclude domain="sharedpref" path="com.google.firebase.common.prefs:.xml" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="sharedpref" path="com.google.firebase.auth.api.Store.prefs.xml" />
+        <exclude domain="sharedpref" path="com.google.firebase.common.prefs:.xml" />
+    </device-transfer>
+</data-extraction-rules>

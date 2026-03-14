@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Exclude Firebase Auth internal storage from Android Auto Backup.
+  Without this, stale/corrupt tokens can be restored, causing silent sign-outs
+  (especially on Google Play-signed builds where the signing key differs).
+-->
+<backup-rules xmlns:tools="http://schemas.android.com/tools">
+    <exclude domain="sharedpref" path="com.google.firebase.auth.api.Store.prefs.xml" />
+    <exclude domain="sharedpref" path="com.google.firebase.common.prefs:.xml" />
+</backup-rules>
