@@ -133,11 +133,12 @@ html,body{width:1920px;height:1080px;overflow:hidden;background:#000;font-family
 .delivery-badge{padding:16px 40px;border:3px solid #1A1A1A;color:#1A1A1A;font-size:18px;letter-spacing:6px;animation:fade-up 0.8s 1s ease forwards;opacity:0;transform:translateY(20px)}
 
 /* ═══ POINTS (phone mockup with card) ═══ */
-#scene-points{gap:30px;background:#FFFFFF}
+#scene-points{gap:24px;background:#FFFFFF;position:relative;overflow:hidden}
+.pts-bg-canvas{position:absolute;inset:0;z-index:0;pointer-events:none}
 .pts-phone{
   width:340px;height:500px;border:5px solid #333;border-radius:24px;
-  background:#f5f5f5;position:relative;overflow:hidden;
-  box-shadow:0 8px 30px rgba(0,0,0,0.12);
+  background:#f5f5f5;position:relative;overflow:hidden;z-index:2;
+  box-shadow:0 12px 50px rgba(0,0,0,0.2),0 0 80px rgba(26,26,26,0.06);
   animation:slide-up-bounce 0.8s cubic-bezier(.2,1,.3,1) forwards;opacity:0;transform:translateY(300px);
 }
 .pts-phone-notch{width:100px;height:8px;background:#333;border-radius:0 0 8px 8px;position:absolute;top:0;left:50%;transform:translateX(-50%);z-index:2}
@@ -145,7 +146,7 @@ html,body{width:1920px;height:1080px;overflow:hidden;background:#000;font-family
 .pts-logo-text{font-size:18px;color:#1A1A1A;letter-spacing:4px;font-weight:bold}
 /* The black card */
 .pts-card{
-  width:100%;aspect-ratio:1.6;border-radius:14px;background:linear-gradient(135deg,#1a1a1a 0%,#333 40%,#1a1a1a 70%,#222 100%);
+  width:100%;aspect-ratio:1.6;border-radius:14px;background:linear-gradient(135deg,#1a1a1a 0%,#333 30%,#1a1a1a 50%,#444 70%,#1a1a1a 100%);background-size:200% 200%;animation:card-shimmer 3s ease infinite;
   position:relative;overflow:hidden;padding:16px;display:flex;flex-direction:column;justify-content:space-between;
   box-shadow:0 4px 20px rgba(0,0,0,0.3);
 }
@@ -166,18 +167,23 @@ html,body{width:1920px;height:1080px;overflow:hidden;background:#000;font-family
 .pts-mon-label{font-size:10px;color:#fff}
 .pts-mon-amount{font-size:12px;color:#4CAF50}
 /* Bottom text */
-.pts-text{display:flex;flex-direction:column;align-items:center;gap:12px;animation:fade-up 0.8s 0.5s ease forwards;opacity:0;transform:translateY(20px)}
-.pts-big{font-size:60px;color:#1A1A1A;line-height:1}
-.pts-desc{font-size:18px;color:rgba(26,26,26,0.6);text-align:center;line-height:2}
+.pts-text{display:flex;flex-direction:column;align-items:center;gap:12px;animation:fade-up 0.8s 0.5s ease forwards;opacity:0;transform:translateY(20px);position:relative;z-index:2}
+.pts-big{font-size:52px;color:#1A1A1A;line-height:1;text-shadow:0 2px 20px rgba(0,0,0,0.08)}
+.pts-desc{font-size:16px;color:rgba(26,26,26,0.6);text-align:center;line-height:2}
+.pts-badge{padding:10px 30px;border:3px solid #1A1A1A;color:#1A1A1A;font-size:12px;letter-spacing:4px;animation:fade-up 0.8s 0.8s ease forwards;opacity:0;transform:translateY(20px);position:relative;z-index:2}
+.pts-coins-wrap{position:absolute;inset:0;pointer-events:none;z-index:1;overflow:hidden}
+.pts-coin{position:absolute;width:24px;height:24px;border-radius:50%;background:linear-gradient(135deg,#FFD700,#FFA500);border:2px solid #DAA520;animation:coin-fall linear infinite;opacity:0.15}
+@keyframes card-shimmer{0%{background-position:0% 50%}50%{background-position:100% 50%}100%{background-position:0% 50%}}
+@keyframes coin-fall{0%{transform:translateY(-30px) rotate(0deg)}100%{transform:translateY(2000px) rotate(720deg)}}
 
 /* ═══ PROMOS (pop-art style) ═══ */
-#scene-promos{gap:30px;background:#FFFFFF;position:relative;overflow:hidden}
+#scene-promos{gap:30px;background:#FFFFFF;position:relative;overflow:hidden;padding:60px 40px !important}
 .promo-title{
   font-size:42px;color:#1A1A1A;text-align:center;line-height:1.6;
   animation:fade-up 0.6s ease forwards;opacity:0;transform:translateY(20px);
   position:relative;z-index:2;
 }
-.promo-cards{display:flex;flex-direction:column;gap:24px;width:80%;max-width:750px;position:relative;z-index:2}
+.promo-cards{display:flex;flex-direction:column;gap:24px;width:100%;max-width:680px;position:relative;z-index:2}
 .promo-card{
   display:flex;align-items:center;gap:28px;
   padding:24px 30px;background:rgba(0,0,0,0.03);
@@ -185,7 +191,7 @@ html,body{width:1920px;height:1080px;overflow:hidden;background:#000;font-family
   opacity:0;transform:translateX(-40px) scale(0.9);
   position:relative;
 }
-.promo-card canvas{width:56px;height:56px;flex-shrink:0;image-rendering:pixelated}
+.promo-card canvas{width:48px;height:48px;flex-shrink:0;image-rendering:pixelated}
 .promo-card .p-text{font-size:14px;color:rgba(26,26,26,0.8);line-height:2.2}
 .promo-card:nth-child(1){animation:card-burst 0.5s 0.3s cubic-bezier(.2,1,.3,1) forwards}
 .promo-card:nth-child(2){animation:card-burst 0.5s 0.6s cubic-bezier(.2,1,.3,1) forwards}
@@ -202,18 +208,18 @@ html,body{width:1920px;height:1080px;overflow:hidden;background:#000;font-family
   gap:0;padding:0 !important;background:#0a0a1a;position:relative;overflow:hidden;
   justify-content:flex-end !important;
 }
-.coke-war-canvas{position:absolute;inset:0;z-index:0;image-rendering:pixelated}
+.coke-war-canvas{position:absolute;inset:0;z-index:0;image-rendering:pixelated;width:100%;height:100%}
 .coke-bottom{
   position:relative;z-index:2;display:flex;flex-direction:column;align-items:center;
-  gap:14px;width:100%;padding:40px 40px 60px;
-  background:linear-gradient(transparent 0%,rgba(0,0,0,0.85) 30%,rgba(0,0,0,0.95) 100%);
+  gap:10px;width:100%;padding:20px 40px 30px;
+  background:linear-gradient(transparent 0%,rgba(0,0,0,0.7) 20%,rgba(0,0,0,0.9) 100%);
 }
 .coke-regalo{
-  font-size:56px;color:#E53935;text-align:center;
+  font-size:44px;color:#E53935;text-align:center;
   text-shadow:0 0 30px rgba(229,57,53,0.5),4px 4px 0 #8B0000;
   animation:pixel-pop 0.6s cubic-bezier(.2,1,.3,1) forwards;opacity:0;transform:scale(0);
 }
-.coke-subtitle{font-size:13px;color:#fff;text-align:center;line-height:2.4;max-width:700px;animation:fade-up 0.6s 0.3s ease forwards;opacity:0;transform:translateY(20px)}
+.coke-subtitle{font-size:11px;color:#fff;text-align:center;line-height:2.4;max-width:700px;animation:fade-up 0.6s 0.3s ease forwards;opacity:0;transform:translateY(20px)}
 .coke-badge{
   padding:12px 30px;border:3px solid #E53935;color:#fff;font-size:12px;letter-spacing:3px;
   background:rgba(229,57,53,0.15);border-radius:4px;
@@ -222,10 +228,10 @@ html,body{width:1920px;height:1080px;overflow:hidden;background:#000;font-family
 .coke-steps{display:flex;gap:24px;margin-top:6px;animation:fade-up 0.6s 0.7s ease forwards;opacity:0;transform:translateY(20px)}
 .coke-step{
   display:flex;flex-direction:column;align-items:center;gap:8px;
-  padding:12px 16px;background:rgba(255,255,255,0.05);border:2px solid rgba(229,57,53,0.2);border-radius:8px;
-  width:180px;
+  padding:8px 12px;background:rgba(255,255,255,0.05);border:2px solid rgba(229,57,53,0.2);border-radius:8px;
+  width:150px;
 }
-.coke-step-num{font-size:32px;color:#E53935;font-weight:bold}
+.coke-step-num{font-size:24px;color:#E53935;font-weight:bold}
 .coke-step-label{font-size:8px;color:#fff;text-align:center;line-height:2;letter-spacing:1px}
 .coke-step canvas{width:36px;height:36px;image-rendering:pixelated}
 .coke-footer{font-size:10px;color:rgba(255,255,255,0.5);text-align:center;line-height:2;animation:fade-up 0.6s 1s ease forwards;opacity:0;transform:translateY(20px)}
@@ -287,7 +293,7 @@ html,body{width:1920px;height:1080px;overflow:hidden;background:#000;font-family
 <!-- SCENE 3: Block Drop (Tetris) -->
 <div id="scene-spot-0" class="scene"><div class="spotlight">
   <div class="spot-canvas-wrap" style="color:#BB44FF"><canvas class="spot-canvas" id="canvas-tetris" width="200" height="200"></canvas></div>
-  <div class="spot-info"><div class="spot-number">GAME 01 / 12</div><div class="spot-title" style="color:#BB44FF">BLOCK DROP</div>
+  <div class="spot-info"><div class="spot-number">JUEGO 01 / 12</div><div class="spot-title" style="color:#BB44FF">BLOCK DROP</div>
     <div class="spot-tags"><span class="spot-tag" style="color:#BB44FF;border-color:#BB44FF">PUZZLE</span><span class="spot-tag" style="color:#BB44FF;border-color:#BB44FF">CLÁSICO</span></div>
     <div class="spot-blurb">Apila las piezas y elimina líneas.<br>El clásico que nunca pasa de moda.<span class="spot-cursor">█</span></div></div>
 </div></div>
@@ -295,7 +301,7 @@ html,body{width:1920px;height:1080px;overflow:hidden;background:#000;font-family
 <!-- SCENE 4: Star Blaster (Shooter) -->
 <div id="scene-spot-1" class="scene"><div class="spotlight">
   <div class="spot-canvas-wrap" style="color:#FF4422"><canvas class="spot-canvas" id="canvas-shooter" width="200" height="200"></canvas></div>
-  <div class="spot-info"><div class="spot-number">GAME 04 / 12</div><div class="spot-title" style="color:#FF4422">STAR BLASTER</div>
+  <div class="spot-info"><div class="spot-number">JUEGO 04 / 12</div><div class="spot-title" style="color:#FF4422">STAR BLASTER</div>
     <div class="spot-tags"><span class="spot-tag" style="color:#FF4422;border-color:#FF4422">DISPAROS</span><span class="spot-tag" style="color:#FF4422;border-color:#FF4422">ACCIÓN</span></div>
     <div class="spot-blurb">Defiende la galaxia contra oleadas<br>de naves enemigas.<span class="spot-cursor">█</span></div></div>
 </div></div>
@@ -303,7 +309,7 @@ html,body{width:1920px;height:1080px;overflow:hidden;background:#000;font-family
 <!-- SCENE 5: Ghost Maze (Pac-Man) -->
 <div id="scene-spot-2" class="scene"><div class="spotlight">
   <div class="spot-canvas-wrap" style="color:#4488FF"><canvas class="spot-canvas" id="canvas-maze" width="200" height="200"></canvas></div>
-  <div class="spot-info"><div class="spot-number">GAME 05 / 12</div><div class="spot-title" style="color:#4488FF">GHOST MAZE</div>
+  <div class="spot-info"><div class="spot-number">JUEGO 05 / 12</div><div class="spot-title" style="color:#4488FF">GHOST MAZE</div>
     <div class="spot-tags"><span class="spot-tag" style="color:#4488FF;border-color:#4488FF">LABERINTO</span><span class="spot-tag" style="color:#4488FF;border-color:#4488FF">ARCADE</span></div>
     <div class="spot-blurb">Come todos los puntos y esquiva<br>a los fantasmas en el laberinto.<span class="spot-cursor">█</span></div></div>
 </div></div>
@@ -311,7 +317,7 @@ html,body{width:1920px;height:1080px;overflow:hidden;background:#000;font-family
 <!-- SCENE 6: Crypt Doom (FPS) -->
 <div id="scene-spot-3" class="scene"><div class="spotlight">
   <div class="spot-canvas-wrap" style="color:#FF8800"><canvas class="spot-canvas" id="canvas-raycaster" width="200" height="200"></canvas></div>
-  <div class="spot-info"><div class="spot-number">GAME 06 / 12</div><div class="spot-title" style="color:#FF8800">CRYPT DOOM</div>
+  <div class="spot-info"><div class="spot-number">JUEGO 06 / 12</div><div class="spot-title" style="color:#FF8800">CRYPT DOOM</div>
     <div class="spot-tags"><span class="spot-tag" style="color:#FF8800;border-color:#FF8800">FPS</span><span class="spot-tag" style="color:#FF8800;border-color:#FF8800">TERROR</span></div>
     <div class="spot-blurb">Explora la cripta maldita estilo Doom.<br>Dispara a los demonios y sobrevive.<span class="spot-cursor">█</span></div></div>
 </div></div>
@@ -319,7 +325,7 @@ html,body{width:1920px;height:1080px;overflow:hidden;background:#000;font-family
 <!-- SCENE 7: Neon Snake -->
 <div id="scene-spot-4" class="scene"><div class="spotlight">
   <div class="spot-canvas-wrap" style="color:#00FF88"><canvas class="spot-canvas" id="canvas-snake" width="200" height="200"></canvas></div>
-  <div class="spot-info"><div class="spot-number">GAME 08 / 12</div><div class="spot-title" style="color:#00FF88">NEON SNAKE</div>
+  <div class="spot-info"><div class="spot-number">JUEGO 08 / 12</div><div class="spot-title" style="color:#00FF88">NEON SNAKE</div>
     <div class="spot-tags"><span class="spot-tag" style="color:#00FF88;border-color:#00FF88">SERPIENTE</span><span class="spot-tag" style="color:#00FF88;border-color:#00FF88">RETRO</span></div>
     <div class="spot-blurb">Come, crece y no muerdas tu cola.<br>Simple pero adictivo.<span class="spot-cursor">█</span></div></div>
 </div></div>
@@ -327,12 +333,61 @@ html,body{width:1920px;height:1080px;overflow:hidden;background:#000;font-family
 <!-- SCENE 8: Frog Dash (Frogger) -->
 <div id="scene-spot-5" class="scene"><div class="spotlight">
   <div class="spot-canvas-wrap" style="color:#88FF44"><canvas class="spot-canvas" id="canvas-hopper" width="200" height="200"></canvas></div>
-  <div class="spot-info"><div class="spot-number">GAME 07 / 12</div><div class="spot-title" style="color:#88FF44">FROG DASH</div>
+  <div class="spot-info"><div class="spot-number">JUEGO 07 / 12</div><div class="spot-title" style="color:#88FF44">FROG DASH</div>
     <div class="spot-tags"><span class="spot-tag" style="color:#88FF44;border-color:#88FF44">FROGGER</span><span class="spot-tag" style="color:#88FF44;border-color:#88FF44">ESQUIVAR</span></div>
     <div class="spot-blurb">Cruza la carretera y el río sin<br>que te atrape el tráfico.<span class="spot-cursor">█</span></div></div>
 </div></div>
 
-<!-- SCENE 9: DELIVERY -->
+
+<!-- SCENE 9: Kamikaze Flight (Flappy) -->
+<div id="scene-spot-6" class="scene"><div class="spotlight">
+  <div class="spot-canvas-wrap" style="color:#00CCFF"><canvas class="spot-canvas" id="canvas-flappy" width="200" height="200"></canvas></div>
+  <div class="spot-info"><div class="spot-number">JUEGO 09 / 12</div><div class="spot-title" style="color:#00CCFF">KAMIKAZE FLIGHT</div>
+    <div class="spot-tags"><span class="spot-tag" style="color:#00CCFF;border-color:#00CCFF">FLAPPY</span><span class="spot-tag" style="color:#00CCFF;border-color:#00CCFF">ARCADE</span></div>
+    <div class="spot-blurb">Esquiva los obstáculos con tu avión<br>kamikaze. ¡No te estrelles!<span class="spot-cursor">█</span></div></div>
+</div></div>
+
+<!-- SCENE 10: Dino Dash (Runner) -->
+<div id="scene-spot-7" class="scene"><div class="spotlight">
+  <div class="spot-canvas-wrap" style="color:#FF44AA"><canvas class="spot-canvas" id="canvas-runner" width="200" height="200"></canvas></div>
+  <div class="spot-info"><div class="spot-number">JUEGO 10 / 12</div><div class="spot-title" style="color:#FF44AA">DINO DASH</div>
+    <div class="spot-tags"><span class="spot-tag" style="color:#FF44AA;border-color:#FF44AA">RUNNER</span><span class="spot-tag" style="color:#FF44AA;border-color:#FF44AA">ACCIÓN</span></div>
+    <div class="spot-blurb">Corre y salta sobre los obstáculos<br>con tu dinosaurio pixelado.<span class="spot-cursor">█</span></div></div>
+</div></div>
+
+<!-- SCENE 11: Neon Break (Breakout) -->
+<div id="scene-spot-8" class="scene"><div class="spotlight">
+  <div class="spot-canvas-wrap" style="color:#00DDFF"><canvas class="spot-canvas" id="canvas-breakout" width="200" height="200"></canvas></div>
+  <div class="spot-info"><div class="spot-number">JUEGO 11 / 12</div><div class="spot-title" style="color:#00DDFF">NEON BREAK</div>
+    <div class="spot-tags"><span class="spot-tag" style="color:#00DDFF;border-color:#00DDFF">BREAKOUT</span><span class="spot-tag" style="color:#00DDFF;border-color:#00DDFF">CLÁSICO</span></div>
+    <div class="spot-blurb">Destruye todos los ladrillos con la<br>pelota. ¡Rompe el muro de neón!<span class="spot-cursor">█</span></div></div>
+</div></div>
+
+<!-- SCENE 12: Volt Pong -->
+<div id="scene-spot-9" class="scene"><div class="spotlight">
+  <div class="spot-canvas-wrap" style="color:#FFAA00"><canvas class="spot-canvas" id="canvas-pong" width="200" height="200"></canvas></div>
+  <div class="spot-info"><div class="spot-number">JUEGO 12 / 12</div><div class="spot-title" style="color:#FFAA00">VOLT PONG</div>
+    <div class="spot-tags"><span class="spot-tag" style="color:#FFAA00;border-color:#FFAA00">PONG</span><span class="spot-tag" style="color:#FFAA00;border-color:#FFAA00">RETRO</span></div>
+    <div class="spot-blurb">El clásico ping pong de neón.<br>¡No dejes pasar la pelota!<span class="spot-cursor">█</span></div></div>
+</div></div>
+
+<!-- SCENE 13: Minefield (Minesweeper) -->
+<div id="scene-spot-10" class="scene"><div class="spotlight">
+  <div class="spot-canvas-wrap" style="color:#FFEE00"><canvas class="spot-canvas" id="canvas-logic" width="200" height="200"></canvas></div>
+  <div class="spot-info"><div class="spot-number">JUEGO 02 / 12</div><div class="spot-title" style="color:#FFEE00">MINEFIELD</div>
+    <div class="spot-tags"><span class="spot-tag" style="color:#FFEE00;border-color:#FFEE00">LÓGICA</span><span class="spot-tag" style="color:#FFEE00;border-color:#FFEE00">PUZZLE</span></div>
+    <div class="spot-blurb">Revela las casillas sin pisar una mina.<br>¡Un error y todo explota!<span class="spot-cursor">█</span></div></div>
+</div></div>
+
+<!-- SCENE 14: Candy Swap (Match-3) -->
+<div id="scene-spot-11" class="scene"><div class="spotlight">
+  <div class="spot-canvas-wrap" style="color:#FF44BB"><canvas class="spot-canvas" id="canvas-match3" width="200" height="200"></canvas></div>
+  <div class="spot-info"><div class="spot-number">JUEGO 03 / 12</div><div class="spot-title" style="color:#FF44BB">CANDY SWAP</div>
+    <div class="spot-tags"><span class="spot-tag" style="color:#FF44BB;border-color:#FF44BB">MATCH-3</span><span class="spot-tag" style="color:#FF44BB;border-color:#FF44BB">PUZZLE</span></div>
+    <div class="spot-blurb">Combina tres dulces del mismo color<br>y desata cascadas de puntos.<span class="spot-cursor">█</span></div></div>
+</div></div>
+
+<!-- SCENE 15: DELIVERY -->
 <div id="scene-delivery" class="scene">
   <canvas id="pixel-cart" width="100" height="100" style="width:180px;height:180px;image-rendering:pixelated;animation:pixel-pop 0.6s cubic-bezier(.2,1,.3,1) forwards;opacity:0;transform:scale(0)"></canvas>
   <div class="delivery-title" style="animation:fade-up 0.6s 0.3s ease forwards;opacity:0;transform:translateY(20px)">Tus compras<br><span class="accent">en tu puerta</span></div>
@@ -348,6 +403,8 @@ html,body{width:1920px;height:1080px;overflow:hidden;background:#000;font-family
 
 <!-- SCENE 10: POINTS (phone with card) -->
 <div id="scene-points" class="scene">
+  <canvas class="pts-bg-canvas" id="pts-bg" width="1080" height="1920"></canvas>
+  <div class="pts-coins-wrap" id="pts-coins"></div>
   <div class="pts-phone">
     <div class="pts-phone-notch"></div>
     <div class="pts-phone-screen">
@@ -371,6 +428,7 @@ html,body{width:1920px;height:1080px;overflow:hidden;background:#000;font-family
     <div class="pts-big">1% BACK</div>
     <div class="pts-desc">En puntos por cada compra.<br>Acumula y usa en tienda.</div>
   </div>
+  <div class="pts-badge">MONEDERO DIGITAL</div>
 </div>
 
 <!-- SCENE 11: PROMOS (pop-art) -->
@@ -452,9 +510,9 @@ function wipeIn(color){return new Promise(res=>{wc.forEach(c=>c.style.background
 function wipeOut(){return new Promise(res=>{for(let r=ROWS-1;r>=0;r--)for(let c=0;c<COLS;c++){const idx=r*COLS+c;setTimeout(()=>wc[idx].classList.remove('on'),(ROWS-1-r)*25)}setTimeout(res,ROWS*25+100)})}
 
 /* ═══ SCENE CONTROLLER ═══ */
-const SCENES=['scene-launch','scene-phone','scene-spot-0','scene-spot-1','scene-spot-2','scene-spot-3','scene-spot-4','scene-spot-5','scene-delivery','scene-points','scene-promos','scene-coke','scene-cta'];
-const DURATIONS=[6000,7000,5500,5500,5500,5500,5500,5500,7000,7000,7000,9000,5000];
-const WIPE_COLORS=['#1A1A1A','#1A1A1A','#BB44FF','#FF4422','#4488FF','#FF8800','#00FF88','#88FF44','#1A1A1A','#1A1A1A','#1A1A1A','#E53935','#1A1A1A'];
+const SCENES=['scene-launch','scene-phone','scene-spot-0','scene-spot-10','scene-spot-11','scene-spot-1','scene-spot-2','scene-spot-3','scene-spot-5','scene-spot-4','scene-spot-6','scene-spot-7','scene-spot-8','scene-spot-9','scene-delivery','scene-points','scene-promos','scene-coke','scene-cta'];
+const DURATIONS=[6000,7000,5500,5500,5500,5500,5500,5500,5500,5500,5500,5500,5500,5500,7000,7000,7000,9000,5000];
+const WIPE_COLORS=['#1A1A1A','#1A1A1A','#BB44FF','#FFEE00','#FF44BB','#FF4422','#4488FF','#FF8800','#88FF44','#00FF88','#00CCFF','#FF44AA','#00DDFF','#FFAA00','#1A1A1A','#1A1A1A','#1A1A1A','#E53935','#1A1A1A'];
 let current=0,running=false;
 function resetAnim(el){el.getAnimations({subtree:true}).forEach(a=>{a.cancel();a.play()})}
 function showScene(i){const p=document.querySelector('.scene.active');if(p)p.classList.remove('active');const n=document.getElementById(SCENES[i]);n.classList.add('active');resetAnim(n);currentSceneIdx=i}
@@ -464,7 +522,7 @@ function sleep(ms){return new Promise(r=>setTimeout(r,ms))}
 
 /* ═══ CANVAS ANIMATIONS ═══ */
 let aca=null;
-function startCanvas(i){if(aca)cancelAnimationFrame(aca);aca=null;const m={2:animTetris,3:animShooter,4:animMaze,5:animRaycaster,6:animSnake,7:animHopper};if(m[i])m[i]()}
+function startCanvas(i){if(aca)cancelAnimationFrame(aca);aca=null;const m={2:animTetris,3:animLogic,4:animMatch3,5:animShooter,6:animMaze,7:animRaycaster,8:animHopper,9:animSnake,10:animFlappy,11:animRunner,12:animBreakout,13:animPong};if(m[i])m[i]()}
 
 function animTetris(){const cv=document.getElementById('canvas-tetris');if(!cv)return;const ctx=cv.getContext('2d');const W=200,H=200,BS=10,C2=W/BS,R2=H/BS;const grid=[];for(let r=0;r<R2;r++){grid[r]=[];for(let c=0;c<C2;c++)grid[r][c]=null}const colors=['#BB44FF','#00DDFF','#FFB347','#E53935','#00FF88','#4488FF','#FF44BB'];const shapes=[[[1,1,1,1]],[[1,1],[1,1]],[[0,1,1],[1,1,0]],[[1,1,0],[0,1,1]],[[1,0,0],[1,1,1]],[[0,0,1],[1,1,1]],[[0,1,0],[1,1,1]]];let piece,px,py,pc,score=0,flashRows=[],flashTimer=0,shakeX=0,shakeY=0;
 function np(){const si=Math.floor(Math.random()*shapes.length);piece=shapes[si];pc=colors[si];px=Math.floor((C2-piece[0].length)/2);py=0}
@@ -754,6 +812,254 @@ function tick(){fc++;
   ctx.fillStyle='rgba(136,255,68,0.7)';ctx.font='bold 8px monospace';ctx.fillText(score+'',4,196);
   aca=requestAnimationFrame(tick)}aca=requestAnimationFrame(tick)}
 
+
+function animFlappy(){const cv=document.getElementById('canvas-flappy');if(!cv)return;const ctx=cv.getContext('2d');const W=200,H=200;
+let bird={x:50,y:100,vy:0},pipes=[],fc=0,score=0,clouds=[];
+for(let i=0;i<5;i++)clouds.push({x:Math.random()*W,y:20+Math.random()*60,w:30+Math.random()*40});
+function addPipe(){const gap=55+Math.random()*20,top=30+Math.random()*(H-gap-60);pipes.push({x:W,top:top,gap:gap,scored:false})}
+addPipe();
+function tick(){fc++;
+  ctx.fillStyle='#0a1628';ctx.fillRect(0,0,W,H);
+  // Sky gradient
+  const sg=ctx.createLinearGradient(0,0,0,H);sg.addColorStop(0,'#0a1628');sg.addColorStop(0.6,'#1a2a48');sg.addColorStop(1,'#2a1a18');ctx.fillStyle=sg;ctx.fillRect(0,0,W,H);
+  // Stars
+  for(let i=0;i<15;i++){ctx.fillStyle='rgba(255,255,255,'+(0.3+0.2*Math.sin(fc*0.05+i))+')';ctx.fillRect((i*47+fc*0.1)%W,i*12%80,2,2)}
+  // Clouds
+  clouds.forEach(c=>{c.x-=0.3;if(c.x<-c.w)c.x=W+10;ctx.fillStyle='rgba(100,160,255,0.08)';ctx.fillRect(c.x,c.y,c.w,10);ctx.fillRect(c.x+5,c.y-5,c.w-10,8)});
+  // Bird physics
+  bird.vy+=0.25;bird.y+=bird.vy;if(fc%40===0){bird.vy=-4.5}
+  if(bird.y>H-10)bird.y=H-10;if(bird.y<5)bird.y=5;
+  // Pipes
+  if(fc%80===0)addPipe();
+  pipes.forEach(p=>{p.x-=1.5;
+    // Pipe with glow
+    ctx.fillStyle='#00CCFF';ctx.fillRect(p.x,0,20,p.top);ctx.fillRect(p.x,p.top+p.gap,20,H-p.top-p.gap);
+    ctx.fillStyle='rgba(0,204,255,0.3)';ctx.fillRect(p.x-2,0,24,p.top);ctx.fillRect(p.x-2,p.top+p.gap,24,H-p.top-p.gap);
+    // Pipe caps
+    ctx.fillStyle='#00EEFF';ctx.fillRect(p.x-3,p.top-6,26,6);ctx.fillRect(p.x-3,p.top+p.gap,26,6);
+    if(!p.scored&&p.x<bird.x){p.scored=true;score++}
+  });
+  pipes=pipes.filter(p=>p.x>-30);
+  // Bird (plane)
+  const by=bird.y,bx=bird.x;
+  const tilt=Math.max(-0.3,Math.min(0.4,bird.vy*0.06));
+  ctx.save();ctx.translate(bx,by);ctx.rotate(tilt);
+  ctx.fillStyle='#00CCFF';ctx.fillRect(-10,-3,20,6);ctx.fillRect(-6,-7,4,4);ctx.fillRect(-6,3,4,4);
+  ctx.fillStyle='#FF4400';ctx.fillRect(-14,-2,6,4);ctx.fillStyle='#FFCC00';ctx.fillRect(-12,-1,3,2);
+  ctx.fillStyle='#fff';ctx.fillRect(6,-2,5,4);
+  ctx.restore();
+  // Engine trail
+  for(let i=0;i<3;i++){ctx.fillStyle='rgba(255,160,0,'+(0.4-i*0.12)+')';ctx.fillRect(bx-16-i*5+(Math.random()-0.5)*3,by-1+(Math.random()-0.5)*4,4,2)}
+  // Ground
+  ctx.fillStyle='#1a3020';ctx.fillRect(0,H-12,W,12);
+  for(let i=0;i<W;i+=8){ctx.fillStyle=(i/8+Math.floor(fc*0.05))%2?'#2a4830':'#1a3020';ctx.fillRect(i,H-12,8,12)}
+  // Score
+  ctx.fillStyle='#00CCFF';ctx.font='bold 10px monospace';ctx.fillText(score+'',4,12);
+  aca=requestAnimationFrame(tick)}aca=requestAnimationFrame(tick)}
+
+function animRunner(){const cv=document.getElementById('canvas-runner');if(!cv)return;const ctx=cv.getContext('2d');const W=200,H=200;
+let dino={x:30,y:160,vy:0,jumping:false,leg:0},obstacles=[],fc=0,score=0,groundOff=0;
+function tick(){fc++;
+  ctx.fillStyle='#1a0a14';ctx.fillRect(0,0,W,H);
+  // Moving ground
+  groundOff=(groundOff+2)%W;
+  ctx.fillStyle='#2a1a24';ctx.fillRect(0,175,W,25);
+  for(let i=0;i<W+20;i+=20){ctx.fillStyle=(Math.floor((i-groundOff)/20))%2===0?'#3a2a34':'#2a1a24';ctx.fillRect((i-groundOff%20),175,20,25)}
+  // Stars
+  for(let i=0;i<12;i++){const sx=(i*53+fc*0.2)%W,sy=15+i*11;ctx.fillStyle='rgba(255,180,220,'+(0.3+0.2*Math.sin(fc*0.04+i))+')';ctx.fillRect(sx,sy,2,2)}
+  // Moon
+  ctx.fillStyle='rgba(255,200,255,0.1)';ctx.beginPath();ctx.arc(160,40,25,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle='rgba(255,220,255,0.05)';ctx.beginPath();ctx.arc(160,40,35,0,Math.PI*2);ctx.fill();
+  // Dino jump
+  if(fc%50===0&&!dino.jumping){dino.jumping=true;dino.vy=-6}
+  if(dino.jumping){dino.vy+=0.35;dino.y+=dino.vy;if(dino.y>=160){dino.y=160;dino.jumping=false;dino.vy=0}}
+  dino.leg=Math.floor(fc/5)%2;
+  // Dino body (pixel art)
+  const dx=dino.x,dy=dino.y;
+  ctx.fillStyle='#FF44AA';
+  ctx.fillRect(dx,dy-16,12,12); // head
+  ctx.fillRect(dx-2,dy-6,14,10); // body
+  ctx.fillRect(dx+10,dy-14,4,3); // eye area
+  ctx.fillStyle='#fff';ctx.fillRect(dx+11,dy-13,2,2); // eye
+  ctx.fillStyle='#FF44AA';
+  if(dino.leg===0){ctx.fillRect(dx,dy+4,4,6);ctx.fillRect(dx+8,dy+2,4,4)}
+  else{ctx.fillRect(dx+2,dy+2,4,4);ctx.fillRect(dx+8,dy+4,4,6)}
+  ctx.fillRect(dx-4,dy-4,4,3); // tail
+  ctx.fillRect(dx-6,dy-6,3,3);
+  // Dust when running
+  if(!dino.jumping&&fc%3===0){ctx.fillStyle='rgba(255,68,170,0.2)';ctx.fillRect(dx-4+Math.random()*6,dy+8,3,2)}
+  // Obstacles (cacti)
+  if(fc%70===0)obstacles.push({x:W+10,type:Math.random()>0.5?'tall':'short'});
+  obstacles.forEach(o=>{o.x-=2.5;
+    ctx.fillStyle='#44FF88';
+    if(o.type==='tall'){ctx.fillRect(o.x,145,6,30);ctx.fillRect(o.x-4,150,4,6);ctx.fillRect(o.x+6,155,4,6)}
+    else{ctx.fillRect(o.x,158,8,17);ctx.fillRect(o.x+8,162,4,4)}
+    if(o.x<dx+12&&o.x+10>dx&&!o.scored){o.scored=true;score++}
+  });
+  obstacles=obstacles.filter(o=>o.x>-20);
+  // Score
+  ctx.fillStyle='#FF44AA';ctx.font='bold 10px monospace';ctx.fillText(score*100+'',4,12);
+  // Speed lines
+  if(fc%2===0){const sy=40+Math.random()*130;ctx.fillStyle='rgba(255,68,170,0.15)';ctx.fillRect(0,sy,20+Math.random()*40,1)}
+  aca=requestAnimationFrame(tick)}aca=requestAnimationFrame(tick)}
+
+function animBreakout(){const cv=document.getElementById('canvas-breakout');if(!cv)return;const ctx=cv.getContext('2d');const W=200,H=200;
+const colors=['#FF4444','#FF8844','#FFDD44','#44FF88','#00DDFF','#BB44FF'];
+let bricks=[];for(let r=0;r<6;r++)for(let c=0;c<8;c++)bricks.push({x:c*24+4,y:r*10+15,w:22,h:8,alive:true,color:colors[r]});
+let ball={x:100,y:150,vx:2,vy:-2.5},paddle={x:80,w:36},particles=[],fc=0,score=0;
+function tick(){fc++;
+  ctx.fillStyle='#000';ctx.fillRect(0,0,W,H);
+  // Subtle grid
+  ctx.strokeStyle='rgba(0,221,255,0.03)';for(let i=0;i<W;i+=12){ctx.beginPath();ctx.moveTo(i,0);ctx.lineTo(i,H);ctx.stroke()}
+  // Paddle AI
+  paddle.x+=(ball.x-paddle.x-paddle.w/2)*0.1;
+  ctx.fillStyle='#00DDFF';ctx.fillRect(paddle.x,H-14,paddle.w,6);
+  ctx.fillStyle='rgba(0,221,255,0.3)';ctx.fillRect(paddle.x-2,H-16,paddle.w+4,10);
+  // Bricks with glow
+  bricks.forEach(b=>{if(!b.alive)return;
+    ctx.fillStyle=b.color;ctx.fillRect(b.x,b.y,b.w,b.h);
+    ctx.fillStyle='rgba(255,255,255,0.2)';ctx.fillRect(b.x,b.y,b.w,2);
+    ctx.fillStyle='rgba(0,0,0,0.2)';ctx.fillRect(b.x,b.y+b.h-2,b.w,2);
+  });
+  // Ball
+  ball.x+=ball.vx;ball.y+=ball.vy;
+  if(ball.x<=2||ball.x>=W-4)ball.vx*=-1;
+  if(ball.y<=2)ball.vy*=-1;
+  if(ball.y>=H-16&&ball.x>paddle.x-2&&ball.x<paddle.x+paddle.w+2){ball.vy=-Math.abs(ball.vy);ball.vx+=(ball.x-paddle.x-paddle.w/2)*0.08}
+  if(ball.y>H+10){ball.x=100;ball.y=150;ball.vx=2;ball.vy=-2.5}
+  // Brick collision
+  bricks.forEach(b=>{if(!b.alive)return;
+    if(ball.x+4>b.x&&ball.x<b.x+b.w&&ball.y+4>b.y&&ball.y<b.y+b.h){
+      b.alive=false;ball.vy*=-1;score++;
+      for(let i=0;i<8;i++)particles.push({x:b.x+b.w/2,y:b.y+b.h/2,vx:(Math.random()-0.5)*4,vy:(Math.random()-0.5)*4,life:1,color:b.color});
+      if(bricks.every(bb=>!bb.alive)){bricks.forEach(bb=>bb.alive=true)}
+    }
+  });
+  // Ball glow
+  ctx.fillStyle='#fff';ctx.fillRect(ball.x,ball.y,4,4);
+  ctx.fillStyle='rgba(0,221,255,0.4)';ctx.fillRect(ball.x-2,ball.y-2,8,8);
+  // Ball trail
+  ctx.fillStyle='rgba(0,221,255,0.15)';ctx.fillRect(ball.x-ball.vx,ball.y-ball.vy,4,4);
+  // Particles
+  for(let i=particles.length-1;i>=0;i--){const p=particles[i];p.x+=p.vx;p.y+=p.vy;p.life-=0.03;
+    if(p.life<=0){particles.splice(i,1);continue}
+    ctx.fillStyle=p.color;ctx.globalAlpha=p.life;ctx.fillRect(p.x,p.y,3,3);ctx.globalAlpha=1}
+  ctx.fillStyle='#00DDFF';ctx.font='bold 8px monospace';ctx.fillText(score*50+'',4,10);
+  aca=requestAnimationFrame(tick)}aca=requestAnimationFrame(tick)}
+
+function animPong(){const cv=document.getElementById('canvas-pong');if(!cv)return;const ctx=cv.getContext('2d');const W=200,H=200;
+let ball={x:100,y:100,vx:2.5,vy:2},p1={y:85,h:30},p2={y:85,h:30},s1=0,s2=0,fc=0,trail=[];
+function tick(){fc++;
+  ctx.fillStyle='#000';ctx.fillRect(0,0,W,H);
+  // Center line
+  for(let i=0;i<H;i+=12){ctx.fillStyle='rgba(255,170,0,0.2)';ctx.fillRect(W/2-1,i,2,6)}
+  // AI paddles
+  p1.y+=(ball.y-p1.y-p1.h/2)*0.06;p2.y+=(ball.y-p2.y-p2.h/2)*0.08;
+  // Ball movement
+  trail.push({x:ball.x,y:ball.y,a:1});if(trail.length>10)trail.shift();
+  ball.x+=ball.vx;ball.y+=ball.vy;
+  if(ball.y<=2||ball.y>=H-4)ball.vy*=-1;
+  // Paddle collisions
+  if(ball.x<=14&&ball.y+4>p1.y&&ball.y<p1.y+p1.h){ball.vx=Math.abs(ball.vx);ball.vy+=(ball.y-p1.y-p1.h/2)*0.1}
+  if(ball.x>=W-18&&ball.y+4>p2.y&&ball.y<p2.y+p2.h){ball.vx=-Math.abs(ball.vx);ball.vy+=(ball.y-p2.y-p2.h/2)*0.1}
+  if(ball.x<-10){s2++;ball.x=100;ball.y=100;ball.vx=2.5;ball.vy=2*(Math.random()>0.5?1:-1)}
+  if(ball.x>W+10){s1++;ball.x=100;ball.y=100;ball.vx=-2.5;ball.vy=2*(Math.random()>0.5?1:-1)}
+  // Draw paddles with glow
+  ctx.fillStyle='#FFAA00';ctx.fillRect(8,p1.y,6,p1.h);ctx.fillRect(W-14,p2.y,6,p2.h);
+  ctx.fillStyle='rgba(255,170,0,0.2)';ctx.fillRect(4,p1.y-2,14,p1.h+4);ctx.fillRect(W-18,p2.y-2,14,p2.h+4);
+  // Ball trail
+  trail.forEach((t,i)=>{t.a-=0.1;if(t.a>0){ctx.fillStyle='rgba(255,170,0,'+t.a*0.3+')';ctx.fillRect(t.x,t.y,4,4)}});
+  // Ball
+  ctx.fillStyle='#fff';ctx.fillRect(ball.x,ball.y,4,4);
+  ctx.fillStyle='rgba(255,170,0,0.5)';ctx.fillRect(ball.x-1,ball.y-1,6,6);
+  // Scores
+  ctx.fillStyle='rgba(255,170,0,0.6)';ctx.font='bold 20px monospace';ctx.fillText(s1+'',W/2-30,30);ctx.fillText(s2+'',W/2+20,30);
+  aca=requestAnimationFrame(tick)}aca=requestAnimationFrame(tick)}
+
+function animLogic(){const cv=document.getElementById('canvas-logic');if(!cv)return;const ctx=cv.getContext('2d');const W=200,H=200,CS=20,cols=9,rows=9;
+let grid=[],revealed=[],flags=[],fc=0,revealQueue=[];
+function initGrid(){grid=[];revealed=[];flags=[];
+  for(let r=0;r<rows;r++){grid[r]=[];revealed[r]=[];flags[r]=[];for(let c=0;c<cols;c++){grid[r][c]=0;revealed[r][c]=false;flags[r][c]=false}}
+  let mines=12;while(mines>0){const r=Math.floor(Math.random()*rows),c=Math.floor(Math.random()*cols);if(grid[r][c]!==-1){grid[r][c]=-1;mines--}}
+  for(let r=0;r<rows;r++)for(let c=0;c<cols;c++){if(grid[r][c]===-1)continue;let n=0;for(let dr=-1;dr<=1;dr++)for(let dc=-1;dc<=1;dc++){const nr=r+dr,nc=c+dc;if(nr>=0&&nr<rows&&nc>=0&&nc<cols&&grid[nr][nc]===-1)n++}grid[r][c]=n}
+}
+initGrid();
+let revealTimer=0,revealIdx=0;
+const numColors=['','#4488FF','#44AA44','#FF4444','#8844AA','#AA4400','#00AAAA','#444','#888'];
+function tick(){fc++;
+  ctx.fillStyle='#1a1a0a';ctx.fillRect(0,0,W,H);
+  const ox=(W-cols*CS)/2,oy=(H-rows*CS)/2+5;
+  // Auto-reveal animation
+  revealTimer++;if(revealTimer%8===0&&revealIdx<rows*cols){const r=Math.floor(revealIdx/cols),c=revealIdx%cols;
+    if(grid[r][c]!==-1)revealed[r][c]=true;else flags[r][c]=true;revealIdx++;
+    if(revealIdx>=rows*cols){setTimeout(()=>{initGrid();revealIdx=0},2000)}}
+  // Draw grid
+  for(let r=0;r<rows;r++)for(let c=0;c<cols;c++){const x=ox+c*CS,y=oy+r*CS;
+    if(revealed[r][c]){
+      ctx.fillStyle='#2a2a1a';ctx.fillRect(x+1,y+1,CS-2,CS-2);
+      if(grid[r][c]>0){ctx.fillStyle=numColors[grid[r][c]];ctx.font='bold 11px monospace';ctx.textAlign='center';ctx.fillText(grid[r][c]+'',x+CS/2,y+CS/2+4);ctx.textAlign='left'}
+    } else if(flags[r][c]){
+      ctx.fillStyle='#3a3a1a';ctx.fillRect(x+1,y+1,CS-2,CS-2);
+      // Flag/mine reveal
+      ctx.fillStyle='#FF4444';ctx.fillRect(x+6,y+4,8,5);ctx.fillStyle='#444';ctx.fillRect(x+9,y+4,2,12);
+    } else {
+      ctx.fillStyle='#4a4a2a';ctx.fillRect(x+1,y+1,CS-2,CS-2);
+      ctx.fillStyle='rgba(255,238,0,0.04)';ctx.fillRect(x+1,y+1,CS-2,2);
+      ctx.fillStyle='rgba(0,0,0,0.1)';ctx.fillRect(x+1,y+CS-3,CS-2,2);
+    }
+  }
+  // Grid lines
+  ctx.strokeStyle='rgba(255,238,0,0.1)';ctx.lineWidth=1;
+  for(let r=0;r<=rows;r++){ctx.beginPath();ctx.moveTo(ox,oy+r*CS);ctx.lineTo(ox+cols*CS,oy+r*CS);ctx.stroke()}
+  for(let c=0;c<=cols;c++){ctx.beginPath();ctx.moveTo(ox+c*CS,oy);ctx.lineTo(ox+c*CS,oy+rows*CS);ctx.stroke()}
+  // Header
+  ctx.fillStyle='rgba(255,238,0,0.6)';ctx.font='bold 8px monospace';ctx.fillText('MINES: 12',ox,oy-4);
+  aca=requestAnimationFrame(tick)}aca=requestAnimationFrame(tick)}
+
+function animMatch3(){const cv=document.getElementById('canvas-match3');if(!cv)return;const ctx=cv.getContext('2d');const W=200,H=200,CS=24,cols=7,rows=7;
+const candyColors=['#FF4488','#44DDFF','#FFAA22','#88FF44','#BB44FF','#FF4444'];
+let grid2=[],particles2=[],fc=0,score=0;
+function initG(){grid2=[];for(let r=0;r<rows;r++){grid2[r]=[];for(let c=0;c<cols;c++)grid2[r][c]=Math.floor(Math.random()*candyColors.length)}}
+initG();
+let swapTimer=0,matchFlash=[];
+function tick(){fc++;
+  ctx.fillStyle='#1a0a1a';ctx.fillRect(0,0,W,H);
+  const ox=(W-cols*CS)/2,oy=(H-rows*CS)/2+8;
+  // Auto-swap every N frames
+  swapTimer++;
+  if(swapTimer%60===0){
+    // Find and "match" a random row/col
+    const mr=Math.floor(Math.random()*rows),mc=Math.floor(Math.random()*(cols-2));
+    const color=grid2[mr][mc];
+    grid2[mr][mc+1]=color;grid2[mr][mc+2]=color;
+    matchFlash=[{r:mr,c:mc},{r:mr,c:mc+1},{r:mr,c:mc+2}];
+    score+=300;
+    setTimeout(()=>{
+      matchFlash.forEach(m=>{
+        for(let i=0;i<6;i++)particles2.push({x:ox+m.c*CS+CS/2,y:oy+m.r*CS+CS/2,vx:(Math.random()-0.5)*4,vy:(Math.random()-0.5)*4,life:1,color:candyColors[color]});
+        grid2[m.r][m.c]=Math.floor(Math.random()*candyColors.length)});
+      matchFlash=[];
+    },400);
+  }
+  // Draw candies
+  for(let r=0;r<rows;r++)for(let c=0;c<cols;c++){
+    const x=ox+c*CS+2,y=oy+r*CS+2,s=CS-4;
+    const isFlash=matchFlash.some(m=>m.r===r&&m.c===c);
+    ctx.fillStyle=isFlash?(fc%4<2?'#fff':candyColors[grid2[r][c]]):candyColors[grid2[r][c]];
+    ctx.beginPath();ctx.arc(x+s/2,y+s/2,s/2-1,0,Math.PI*2);ctx.fill();
+    // Candy highlight
+    ctx.fillStyle='rgba(255,255,255,0.25)';ctx.beginPath();ctx.arc(x+s/2-2,y+s/2-2,s/4,0,Math.PI*2);ctx.fill();
+  }
+  // Grid outline
+  ctx.strokeStyle='rgba(255,68,187,0.1)';ctx.lineWidth=1;ctx.strokeRect(ox-1,oy-1,cols*CS+2,rows*CS+2);
+  // Particles
+  for(let i=particles2.length-1;i>=0;i--){const p=particles2[i];p.x+=p.vx;p.y+=p.vy;p.life-=0.025;
+    if(p.life<=0){particles2.splice(i,1);continue}
+    ctx.fillStyle=p.color;ctx.globalAlpha=p.life;ctx.fillRect(p.x,p.y,4,4);ctx.globalAlpha=1}
+  // Score
+  ctx.fillStyle='#FF44BB';ctx.font='bold 8px monospace';ctx.fillText(score+'',4,12);
+  aca=requestAnimationFrame(tick)}aca=requestAnimationFrame(tick)}
+
 /* ═══ PIXEL ART ICONS ═══ */
 function initIcons(){
   const cart=document.getElementById('pixel-cart');
@@ -800,6 +1106,26 @@ function initIcons(){
   });
 
   initCokeWar();
+  initPointsBg();
+}
+
+function initPointsBg(){
+  // Falling coins
+  const wrap=document.getElementById('pts-coins');
+  if(wrap){for(let i=0;i<10;i++){const c=document.createElement('div');c.className='pts-coin';c.style.left=Math.random()*100+'%';c.style.animationDuration=(6+Math.random()*8)+'s';c.style.animationDelay=(-Math.random()*14)+'s';c.style.width=(16+Math.random()*14)+'px';c.style.height=c.style.width;wrap.appendChild(c)}}
+  // Animated bg
+  const cv=document.getElementById('pts-bg');if(!cv)return;
+  const ctx=cv.getContext('2d');const W=1080,H=1920;
+  let sparkles=[];for(let i=0;i<30;i++)sparkles.push({x:Math.random()*W,y:Math.random()*H,phase:Math.random()*6.28,spd:0.02+Math.random()*0.03,sz:2+Math.random()*3});
+  let pf=0;
+  function ptsTick(){pf++;ctx.clearRect(0,0,W,H);
+    // Radiating circles from center
+    for(let i=0;i<3;i++){const r=((pf*0.5+i*120)%400);const a=Math.max(0,(1-r/400)*0.04);
+      ctx.strokeStyle='rgba(26,26,26,'+a+')';ctx.lineWidth=2;ctx.beginPath();ctx.arc(W/2,H*0.38,r,0,Math.PI*2);ctx.stroke()}
+    // Sparkles
+    sparkles.forEach(s=>{const a=0.08+0.06*Math.sin(pf*s.spd+s.phase);ctx.fillStyle='rgba(26,26,26,'+a+')';ctx.fillRect(s.x|0,s.y|0,s.sz,s.sz)});
+    requestAnimationFrame(ptsTick)}
+  requestAnimationFrame(ptsTick)
 }
 
 /* ═══ COCA COLA WAR-LANDING ANIMATION ═══ */
