@@ -317,25 +317,26 @@ class CheckUserScreenState extends State<CheckUserScreen> {
   }
 
   Future<void> _checkUser() async {
-    // After a force-close (cold start), FirebaseAuth.instance.currentUser
-    // can be null even though the user IS logged in — the SDK hasn't finished
-    // restoring the persisted session yet.  Listening to authStateChanges()
-    // guarantees we wait until the auth state is fully loaded from disk.
+    // On cold start (force-close / reboot), authStateChanges().first can
+    // return null IMMEDIATELY — the native Firebase SDK hasn't finished
+    // reading the persisted token from EncryptedSharedPreferences / Keychain
+    // yet.  A second emission with the real user follows milliseconds later.
     //
-    // We use a generous 10s timeout; on slow devices after force-close the
-    // keychain/keystore read can take a few seconds.  If the timeout fires
-    // we still fall back to checking currentUser synchronously — if the SDK
-    // restored the token in the meantime we won't wrongly kick the user out.
+    // Strategy: grab the first emission.  If null, wait briefly for the
+    // token-restoration emission before giving up.
     User? user;
     try {
-      user = await FirebaseAuth.instance
-          .authStateChanges()
-          .first
-          .timeout(const Duration(seconds: 10), onTimeout: () {
-        // Timeout: fall back to synchronous check — token may have loaded
-        // after the stream was first polled.
-        return FirebaseAuth.instance.currentUser;
-      });
+      user = await FirebaseAuth.instance.authStateChanges().first;
+
+      if (user == null) {
+        // First emission was null — token may still be loading.
+        // Wait up to 2 s for the SDK to emit the restored user.
+        user = await FirebaseAuth.instance
+            .authStateChanges()
+            .where((u) => u != null)
+            .first
+            .timeout(const Duration(seconds: 2), onTimeout: () => null);
+      }
     } catch (_) {
       user = FirebaseAuth.instance.currentUser;
     }
@@ -349,7 +350,6 @@ class CheckUserScreenState extends State<CheckUserScreen> {
         if (e is FirebaseAuthException &&
             (e.code == 'user-disabled' || e.code == 'user-not-found')) {
           await FirebaseAuth.instance.signOut();
-          // user is now null effectively — fall through to MainMenuScreen as guest
         } else {
           // Network error, timeout, etc. — keep the session alive.
           debugPrint('user.reload() failed (non-fatal): $e');
