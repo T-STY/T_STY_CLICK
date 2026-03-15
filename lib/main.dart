@@ -313,7 +313,14 @@ class CheckUserScreenState extends State<CheckUserScreen> {
   }
 
   Future<void> _checkUser() async {
-    final user = FirebaseAuth.instance.currentUser;
+    // IMPORTANT: After a force-close (cold start), FirebaseAuth.instance.currentUser
+    // can be null even though the user IS logged in — the SDK hasn't finished
+    // restoring the persisted session yet.  Listening to authStateChanges()
+    // guarantees we wait until the auth state is fully loaded from disk.
+    final user = await FirebaseAuth.instance
+        .authStateChanges()
+        .first
+        .timeout(const Duration(seconds: 5), onTimeout: () => null);
 
     if (user == null) {
       if (mounted) {
