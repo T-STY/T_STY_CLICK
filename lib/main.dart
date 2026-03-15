@@ -317,48 +317,28 @@ class CheckUserScreenState extends State<CheckUserScreen> {
   }
 
   Future<void> _checkUser() async {
-    // On cold start (force-close / reboot), authStateChanges().first can
-    // return null IMMEDIATELY — the native Firebase SDK hasn't finished
-    // reading the persisted token from EncryptedSharedPreferences / Keychain
-    // yet.  A second emission with the real user follows milliseconds later.
+    // By this point, Firebase.initializeApp() ran in main() AND
+    // _checkForUpdate() just finished a Remote Config network call,
+    // so the native auth SDK has had several seconds to restore the
+    // persisted token from EncryptedSharedPreferences / Keychain.
     //
-    // Strategy: grab the first emission.  If null, wait briefly for the
-    // token-restoration emission before giving up.
-    User? user;
-    try {
-      user = await FirebaseAuth.instance.authStateChanges().first;
+    // IMPORTANT: We intentionally do NOT call user.reload() here.
+    // reload() makes a network request that can fail (App Check,
+    // bad network, expired refresh token), and on some SDK versions
+    // a failed reload() clears currentUser as a side effect — which
+    // would silently log the user out.  Individual Firestore/API
+    // calls will fail gracefully if the account is truly invalid.
+    User? user = FirebaseAuth.instance.currentUser;
 
-      if (user == null) {
-        // First emission was null — token may still be loading.
-        // Wait up to 2 s for the SDK to emit the restored user.
-        user = await FirebaseAuth.instance
-            .authStateChanges()
-            .where((u) => u != null)
-            .first
-            .timeout(const Duration(seconds: 2), onTimeout: () => null);
-      }
-    } catch (_) {
-      // Stream error — ignore.
-    }
-
-    // Belt-and-suspenders: the native SDK may have finished token
-    // restoration without emitting on our stream subscription.
-    user ??= FirebaseAuth.instance.currentUser;
-
-    // If we got a user, verify the account is still valid.
-    // NEVER call signOut() for network errors — only for truly invalid accounts.
-    if (user != null) {
-      try {
-        await user.reload().timeout(const Duration(seconds: 5));
-      } catch (e) {
-        if (e is FirebaseAuthException &&
-            (e.code == 'user-disabled' || e.code == 'user-not-found')) {
-          await FirebaseAuth.instance.signOut();
-        } else {
-          // Network error, timeout, etc. — keep the session alive.
-          debugPrint('user.reload() failed (non-fatal): $e');
-        }
-      }
+    // If null, give the auth SDK one more moment — on very slow
+    // devices the keystore read may still be in flight.
+    if (user == null) {
+      user = await FirebaseAuth.instance
+          .authStateChanges()
+          .where((u) => u != null)
+          .first
+          .timeout(const Duration(seconds: 3), onTimeout: () => null);
+      user ??= FirebaseAuth.instance.currentUser;
     }
 
     // Always go to MainMenuScreen — guest browsing is supported.
