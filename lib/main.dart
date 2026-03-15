@@ -43,10 +43,14 @@ Future<void> main() async {
   );
   SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
 
-  await FirebaseAppCheck.instance.activate(
-    androidProvider: AndroidProvider.playIntegrity,
-    appleProvider: AppleProvider.appAttest,
-  );
+  try {
+    await FirebaseAppCheck.instance.activate(
+      androidProvider: AndroidProvider.playIntegrity,
+      appleProvider: AppleProvider.appAttest,
+    );
+  } catch (e) {
+    debugPrint('App Check activation failed (non-fatal): $e');
+  }
 
   runApp(
     MultiProvider(

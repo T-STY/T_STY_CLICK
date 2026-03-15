@@ -5,6 +5,12 @@
 -dontwarn androidx.window.extensions.**
 -dontwarn androidx.window.sidecar.**
 
+# Keep attributes needed by reflection-based libraries (Firebase, Tink, etc.)
+-keepattributes Signature
+-keepattributes *Annotation*
+-keepattributes InnerClasses
+-keepattributes EnclosingMethod
+
 # Firebase — prevent R8 from stripping classes needed at runtime
 -keep class com.google.firebase.** { *; }
 -keep class com.google.android.gms.** { *; }
@@ -13,6 +19,13 @@
 
 # Firebase App Check (Play Integrity)
 -keep class com.google.firebase.appcheck.** { *; }
+
+# Firebase Auth token persistence — EncryptedSharedPreferences + Tink crypto.
+# Without these, R8 (especially Google Play's additional optimization pass on AABs)
+# strips reflection-accessed crypto classes, breaking token storage on cold start.
+-keep class androidx.security.crypto.** { *; }
+-keep class com.google.crypto.tink.** { *; }
+-dontwarn com.google.crypto.tink.**
 
 # Flutter wrapper classes
 -keep class io.flutter.** { *; }
