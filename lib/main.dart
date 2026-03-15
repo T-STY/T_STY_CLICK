@@ -338,8 +338,12 @@ class CheckUserScreenState extends State<CheckUserScreen> {
             .timeout(const Duration(seconds: 2), onTimeout: () => null);
       }
     } catch (_) {
-      user = FirebaseAuth.instance.currentUser;
+      // Stream error — ignore.
     }
+
+    // Belt-and-suspenders: the native SDK may have finished token
+    // restoration without emitting on our stream subscription.
+    user ??= FirebaseAuth.instance.currentUser;
 
     // If we got a user, verify the account is still valid.
     // NEVER call signOut() for network errors — only for truly invalid accounts.
