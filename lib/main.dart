@@ -74,7 +74,7 @@ class NetworkAwareApp extends StatefulWidget {
 }
 
 class NetworkAwareAppState extends State<NetworkAwareApp> {
-  bool _isOnline = false;
+  bool _isOnline = true;
 
   @override
   void initState() {
@@ -94,37 +94,6 @@ class NetworkAwareAppState extends State<NetworkAwareApp> {
 
   @override
   Widget build(BuildContext context) {
-    if (!_isOnline) {
-      return MaterialApp(
-        debugShowCheckedModeBanner: false,
-        home: Scaffold(
-          body: Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(Icons.wifi_off, size: 50, color: Colors.grey),
-                const SizedBox(height: 20),
-                const Text("No Internet Connection", style: TextStyle(fontSize: 18)),
-                const SizedBox(height: 20),
-                ElevatedButton(
-                  onPressed: _checkConnectivity,
-                  child: const Text("Retry"),
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
-    }
-    return const MyApp();
-  }
-}
-
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
-
-  @override
-  Widget build(BuildContext context) {
     return Consumer<ThemeNotifier>(
       builder: (context, themeNotifier, child) {
         _setStatusBarStyle(context);
@@ -133,35 +102,42 @@ class MyApp extends StatelessWidget {
           debugShowCheckedModeBanner: false,
           title: 'T_STY: Beyond',
           theme: themeNotifier.currentTheme,
-          initialRoute: '/',
-          onGenerateRoute: _generateRoute,
-          onUnknownRoute: (settings) => customPageRouteBuilder(Center(
-            child: Text('Unknown route: ${settings.name}'),
-          )),
+          home: _isOnline
+              ? const CheckUserScreen()
+              : Scaffold(
+                  body: Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.wifi_off, size: 50, color: Colors.grey),
+                        const SizedBox(height: 20),
+                        const Text("No Internet Connection",
+                            style: TextStyle(fontSize: 18)),
+                        const SizedBox(height: 20),
+                        ElevatedButton(
+                          onPressed: _checkConnectivity,
+                          child: const Text("Retry"),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
         );
       },
     );
-  }
-
-  Route? _generateRoute(RouteSettings settings) {
-    switch (settings.name) {
-      case '/':
-        return customPageRouteBuilder(const CheckUserScreen());
-      default:
-        return customPageRouteBuilder(
-          const Scaffold(body: Center(child: Text('Route not found'))),
-        );
-    }
   }
 
   void _setStatusBarStyle(BuildContext context) {
     ThemeData theme = Theme.of(context);
     SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
-      statusBarIconBrightness: theme.brightness == Brightness.dark ? Brightness.light : Brightness.dark,
+      statusBarIconBrightness: theme.brightness == Brightness.dark
+          ? Brightness.light
+          : Brightness.dark,
     ));
   }
 }
+
 
 PageRouteBuilder<T> customPageRouteBuilder<T>(Widget page) {
   return PageRouteBuilder<T>(
