@@ -394,8 +394,10 @@ class _SettingsPageState extends State<SettingsPage> {
                 onPressed: () async {
                   await FirebaseAuth.instance.signOut();
                   if (!mounted) return;
-                  Navigator.of(context).pushReplacement(
-                      MaterialPageRoute(builder: (context) => const LoginPage()));
+                  Navigator.of(context).pushAndRemoveUntil(
+                    MaterialPageRoute(builder: (context) => const LoginPage()),
+                    (route) => false,
+                  );
                 },
               ),
             ),

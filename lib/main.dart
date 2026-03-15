@@ -317,37 +317,49 @@ class CheckUserScreenState extends State<CheckUserScreen> {
   }
 
   Future<void> _checkUser() async {
-    // IMPORTANT: After a force-close (cold start), FirebaseAuth.instance.currentUser
+    // After a force-close (cold start), FirebaseAuth.instance.currentUser
     // can be null even though the user IS logged in — the SDK hasn't finished
     // restoring the persisted session yet.  Listening to authStateChanges()
     // guarantees we wait until the auth state is fully loaded from disk.
-    final user = await FirebaseAuth.instance
-        .authStateChanges()
-        .first
-        .timeout(const Duration(seconds: 5), onTimeout: () => null);
-
-    if (user == null) {
-      if (mounted) {
-        Navigator.of(context).pushReplacement(
-            customPageRouteBuilder(const MainMenuScreen()));
-      }
-      return;
-    }
-
+    //
+    // We use a generous 10s timeout; on slow devices after force-close the
+    // keychain/keystore read can take a few seconds.  If the timeout fires
+    // we still fall back to checking currentUser synchronously — if the SDK
+    // restored the token in the meantime we won't wrongly kick the user out.
+    User? user;
     try {
-      await user.reload();
-    } catch (e) {
-      // Only sign out if the user account is truly invalid (disabled/deleted).
-      // Network errors should NOT force a logout — the cached token is still
-      // valid and Firebase will refresh it once connectivity returns.
-      if (e is FirebaseAuthException &&
-          (e.code == 'user-disabled' || e.code == 'user-not-found')) {
-        await FirebaseAuth.instance.signOut();
-      } else {
-        debugPrint('user.reload() failed (non-fatal): $e');
+      user = await FirebaseAuth.instance
+          .authStateChanges()
+          .first
+          .timeout(const Duration(seconds: 10), onTimeout: () {
+        // Timeout: fall back to synchronous check — token may have loaded
+        // after the stream was first polled.
+        return FirebaseAuth.instance.currentUser;
+      });
+    } catch (_) {
+      user = FirebaseAuth.instance.currentUser;
+    }
+
+    // If we got a user, verify the account is still valid.
+    // NEVER call signOut() for network errors — only for truly invalid accounts.
+    if (user != null) {
+      try {
+        await user.reload().timeout(const Duration(seconds: 5));
+      } catch (e) {
+        if (e is FirebaseAuthException &&
+            (e.code == 'user-disabled' || e.code == 'user-not-found')) {
+          await FirebaseAuth.instance.signOut();
+          // user is now null effectively — fall through to MainMenuScreen as guest
+        } else {
+          // Network error, timeout, etc. — keep the session alive.
+          debugPrint('user.reload() failed (non-fatal): $e');
+        }
       }
     }
 
+    // Always go to MainMenuScreen — guest browsing is supported.
+    // Individual screens check FirebaseAuth.instance.currentUser to gate
+    // authenticated features (cart, checkout, orders, settings, etc.).
     if (mounted) {
       Navigator.of(context).pushReplacement(
           customPageRouteBuilder(const MainMenuScreen()));
