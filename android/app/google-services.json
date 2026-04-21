@@ -51,6 +51,14 @@
       },
       "oauth_client": [
         {
+          "client_id": "163376358846-3r3l5rj9s8h9qagblf6irc84eaag59me.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.t_sty.mx.click",
+            "certificate_hash": "eef121291394ffbc0f3d86d843186d1e0c3fbc92"
+          }
+        },
+        {
           "client_id": "163376358846-jrh5r99ujlmm87rd011f5v368fc6tfis.apps.googleusercontent.com",
           "client_type": 3
         }

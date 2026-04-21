@@ -46,3 +46,26 @@ app.*.map.json
 
 # Bundletool
 bundletool.jar
+
+# Editor / IDE
+.vscode/
+devtools_options.yaml
+
+# Firebase
+.firebase/
+.firebaserc
+ios/Runner/GoogleService-Info.plist
+
+# Build artifacts
+/Flutter/
+/android/app/.cxx/
+/android/app/build/
+/android/build/
+/ios/build/
+/ios/Flutter/Frameworks/
+**/ios/Flutter/ephemeral/
+packages/flutter_credit_card-master/example/macos/Podfile
+packages/flutter_credit_card-master/example/macos/Podfile.lock
+
+# Misc local
+T_STY.html
