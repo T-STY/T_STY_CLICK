@@ -1,4 +1,29 @@
 rules_version = '2';
+
+// ─────────────────────────────────────────────────────────────────────────
+// UNIFIED RULESET — shared by BOTH repos on Firebase project arthemis-f2966:
+//   • client : /Users/cotton/StudioProjects/click-main      (T_STY: Beyond)
+//   • admin  : /Users/cotton/StudioProjects/t_sty_delivery   (Admin Delivery)
+//
+// This exact file lives in both repos. Whichever repo runs
+// `firebase deploy --only firestore:rules` overwrites the project's rules, so
+// the two copies MUST stay byte-for-byte identical. When you change one, copy
+// it to the other.
+//
+// Security model:
+// 1. Admins = full access (catch-all at the bottom). Two true admins.
+// 2. Stock editors = trusted employees who may edit a product's `stock` only
+//    (diff-checked) plus append inventory/correction logs — nothing else.
+// 3. Workers write employee data only via /users/{uid}/workerActions, applied
+//    by the processWorkerAction Cloud Function with admin credentials.
+// 4. Wallets (`rewards`) are Cloud-Function-only — clients get NO direct
+//    access so PINs/PII can't be read and balances can't be tampered with.
+// 5. Storefront content (products, coupons, promotions, home_sections, ads)
+//    is publicly readable so the customer app renders for guests too.
+// Keep the [AdminGuard] Dart lists in the admin app in lock-step with the
+// isAdmin()/isStockEditor() UID lists below.
+// ─────────────────────────────────────────────────────────────────────────
+
 service cloud.firestore {
   match /databases/{database}/documents {
 
@@ -6,8 +31,15 @@ service cloud.firestore {
     function isAdmin() {
       return request.auth != null && request.auth.uid in [
         'HnqE2Asz6HPvmM10OAIAsu1RaL62',
+        'dZ8iFN6Gg4N3vykY7GUya2hyYiL2',
+      ];
+    }
+
+    function isStockEditor() {
+      return request.auth != null && request.auth.uid in [
         'MzmOCRtAwgU6NgkxzCfRuEnfRug1',
-        'dZ8iFN6Gg4N3vykY7GUya2hyYiL2'
+        'sQRF7ztfOOWJZnmQsBftBOmSgVH2',
+        'CU6jbAP7iPh9PeaL3KEV1CGYGxJ2',
       ];
     }
 
@@ -19,15 +51,22 @@ service cloud.firestore {
       return request.auth != null && request.auth.uid == userId;
     }
 
-    // Only the 'saldo' field changed, decremented by a positive amount, stays >= 0
-    function isValidSaldoDecrement() {
-      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['saldo'])
-          && request.resource.data.saldo is number
-          && request.resource.data.saldo < resource.data.saldo
-          && request.resource.data.saldo >= 0;
+    // The worker that owns employeeDoc == the caller.
+    function isOwnedBy(employeeId) {
+      return isAuth()
+        && exists(/databases/$(database)/documents/employee/$(employeeId))
+        && get(/databases/$(database)/documents/employee/$(employeeId)).data.uuid == request.auth.uid;
     }
 
-    // Only 'remaining_uses' changed, decremented by exactly 1, was > 0
+    // Stock-editor update gate: the diff must only touch `stock`. Any attempt
+    // to co-edit price / cost / name alongside the stock number is rejected.
+    function isStockOnlyUpdate() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['stock'])
+          && request.resource.data.stock is number
+          && request.resource.data.stock >= 0;
+    }
+
+    // Only 'remaining_uses' changed, decremented by exactly 1, was > 0.
     function isValidCouponClaim() {
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['remaining_uses'])
           && request.resource.data.remaining_uses == resource.data.remaining_uses - 1
@@ -36,66 +75,196 @@ service cloud.firestore {
 
     // ─── 1. MASTER COUPONS ────────────────────────────────────
     match /coupons/{couponId} {
-      allow read:            if true;
-      allow update:          if isAdmin() || isValidCouponClaim();
-      allow create, delete:  if isAdmin();
+      allow read:           if true;
+      allow update:         if isAdmin() || isValidCouponClaim();
+      allow create, delete: if isAdmin();
     }
 
     // ─── 2. ORDERS ────────────────────────────────────────────
     match /orders/{orderId} {
       allow create: if isAuth() && request.resource.data.userId == request.auth.uid;
       allow read, update, delete: if isAuth() && resource.data.userId == request.auth.uid;
+      // Admin covered by catch-all.
     }
 
-    // ─── 3. PRODUCTS & RECIPES ────────────────────────────────
+    // ─── 3. PRODUCTS, RECIPES & PROMOTIONS ────────────────────
     match /products/{docId} {
       allow read:   if true;
-      allow write:  if isAdmin();
+      allow create, delete: if isAdmin();
+      // Admin: any field. StockEditor: only `stock` (diff-checked).
+      allow update: if isAdmin() || (isStockEditor() && isStockOnlyUpdate());
     }
 
     match /recipes/{docId} {
-      allow read:   if isAuth();
-      allow write:  if isAdmin();
+      allow read:  if isAuth();
+      allow write: if isAdmin();
     }
 
-    // ─── 4. REWARDS ───────────────────────────────────────────
-    // Read open to any authed user so linking flow can query by
-    // cardNumber + cvvCode. Doc ID = userId for app-created cards;
-    // in-store cards may have arbitrary IDs until claimed.
+    // Public read: the customer home shows a promo carousel + cart combos to
+    // guests too. Promotions are marketing data (no PII).
+    match /promotions/{docId} {
+      allow read:  if true;
+      allow write: if isAdmin();
+    }
+
+    // ─── 4. REWARDS (server-managed) ──────────────────────────
+    // All access goes through Cloud Functions (admin SDK), which bypass these
+    // rules. Clients get NO direct access, so wallet PINs/PII cannot be read
+    // or brute-forced and balances cannot be tampered with. Linking/creation/
+    // updates/redemption all run server-side (createRewardsWallet,
+    // linkRewardsWallet, updateRewardsCard, getRewardsBalance, placeOrder).
+    // The PDV recharger signs in as an admin UID, so it still has access.
     match /rewards/{docId} {
-      allow read:            if isAuth();
-      allow create, delete:  if isAdmin();
-      allow update:          if isAdmin() || (isAuth() && isValidSaldoDecrement());
+      allow read, write: if isAdmin();
     }
 
-    // ─── 5. CATEGORIES ───────────────────────────────────────
+    // Rate-limit bookkeeping for wallet linking — Functions/admin only.
+    match /rewardsLinkAttempts/{docId} {
+      allow read, write: if isAdmin();
+    }
+
+    // ─── 5. CATEGORIES ────────────────────────────────────────
     match /private/categories/{docId} {
-      allow read:   if isAuth();
-      allow write:  if isAdmin();
+      allow read:  if isAuth();
+      allow write: if isAdmin();
+    }
+
+    // Both spellings/locations kept so neither repo loses a rule it had.
+    match /employeecategories/{docId} {
+      allow read:  if isAuth();
+      allow write: if isAdmin();
     }
 
     match /employee/categories/{docId} {
-      allow read:   if isAuth();
-      allow write:  if isAdmin();
+      allow read:  if isAuth();
+      allow write: if isAdmin();
     }
 
-    // ─── 6. USER DATA ────────────────────────────────────────
+    // ─── 6. USER DATA ─────────────────────────────────────────
+    // Each signed-in user owns their own document + subcollections (cart,
+    // FCM tokens, etc.). `workerActions` is the staging inbox the worker
+    // writes to; the CF reads it, mutates the canonical employee tree, then
+    // marks the doc processed.
     match /users/{userId} {
       allow read, write: if isOwner(userId);
+
+      match /workerActions/{actionId} {
+        allow create: if isOwner(userId)
+          && request.resource.data.keys().hasAll(['type', 'payload', 'status', 'createdAt'])
+          && request.resource.data.status == 'pending'
+          && request.resource.data.type in [
+               'clock_in',
+               'task_complete',
+               'task_evidence',
+               'vacation_request',
+               'cancel_vacation_request'
+             ];
+        allow read: if isOwner(userId) || isAdmin();
+        allow update, delete: if isAdmin();
+      }
 
       match /{sub=**} {
         allow read, write: if isOwner(userId);
       }
     }
 
-    // ─── 7. SETTINGS ─────────────────────────────────────────
-    match /settings/{docId} {
-      allow read:   if isAuth();
-      allow write:  if isAdmin();
+    // ─── 7. STORE CONFIG / SETTINGS ───────────────────────────
+    match /store/config {
+      allow read:  if isAdmin() || isStockEditor();
+      allow write: if isAdmin();
     }
 
-    // ─── 8. ADMIN GLOBAL OVERRIDE ────────────────────────────
-    // Must be last — grants admins full access to any path
+    match /store/permissions {
+      allow read:  if isAuth();
+      allow write: if isAdmin();
+    }
+
+    match /store/specifics {
+      // Bulk screens + product editor read brand/distributor option lists.
+      allow read:  if isAuth();
+      allow write: if isAdmin();
+    }
+
+    // Generic settings (store pricing, delivery fees by colonia, etc.).
+    match /settings/{docId} {
+      allow read:  if isAuth();
+      allow write: if isAdmin();
+    }
+
+    // ─── 7b. STOCK-CORRECTION AUDIT LOG ───────────────────────
+    // Stock editors + admins append entries. No edits/deletes once written.
+    match /stock_corrections/{docId} {
+      allow read:   if isAdmin() || isStockEditor();
+      allow create: if isAdmin() || (isStockEditor()
+        && request.resource.data.uid == request.auth.uid);
+      allow update, delete: if isAdmin();
+    }
+
+    // ─── 7c. INVENTORY ENTRY LOGS ─────────────────────────────
+    match /inventory_logs/{docId} {
+      allow read:   if isAdmin() || isStockEditor();
+      allow create: if isAdmin() || isStockEditor();
+      allow update, delete: if isAdmin();
+    }
+
+    // ─── 8. EMPLOYEE TREE ─────────────────────────────────────
+    // Canonical source of truth for employee data. Workers READ only — every
+    // write is CF-mediated via /users/{uid}/workerActions.
+    match /employee/{employeeId} {
+      allow read: if isAdmin()
+        || (isAuth() && resource.data.uuid == request.auth.uid);
+      // Write: admin only (catch-all).
+
+      match /schedules/{monthId} {
+        allow read: if isAdmin() || isOwnedBy(employeeId);
+      }
+
+      match /tasks/{taskId} {
+        allow read: if isAdmin() || isOwnedBy(employeeId);
+      }
+
+      match /recurringTasks/{ruleId} {
+        allow read: if isAdmin() || isOwnedBy(employeeId);
+      }
+
+      match /recurringSkips/{skipId} {
+        allow read: if isAdmin() || isOwnedBy(employeeId);
+      }
+
+      match /vacationRequests/{requestId} {
+        allow read: if isAdmin() || isOwnedBy(employeeId);
+      }
+
+      match /scheduleTemplates/{templateId} {
+        allow read, write: if isAdmin();
+      }
+    }
+
+    match /employee {
+      allow list: if isAuth();
+    }
+
+    // ─── 8b. STOREFRONT CONTENT (customer-facing) ─────────────
+    // Customer app (incl. guest browsing) reads these to render the home
+    // screen; writes are admin-only from the dashboard.
+    match /home_sections/{docId} {
+      allow read:  if true;
+      allow write: if isAdmin();
+    }
+
+    match /ads/{docId} {
+      allow read:  if true;
+      allow write: if isAdmin();
+    }
+
+    // Coupon broadcasts: admin composes; the sendCouponBroadcast CF (admin
+    // credentials) fans out the FCM push and writes status back. Admin-only.
+    match /coupon_broadcasts/{docId} {
+      allow read, write: if isAdmin();
+    }
+
+    // ─── 9. ADMIN GLOBAL OVERRIDE ─────────────────────────────
+    // Must be last — grants admins full access to any path not matched above.
     match /{document=**} {
       allow read, write: if isAdmin();
     }
