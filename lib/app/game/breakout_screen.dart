@@ -4,40 +4,33 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'arcade_input_controller.dart';
+import 'game_saldo.dart';
 import 'high_score_service.dart';
-
-// ─── Constants ────────────────────────────────────────────────────────────────
 
 const _kBW = 120.0, _kBH = 80.0;
 
-// Brick grid
 const _kCols = 10, _kRows = 6;
 const _kBrickW = 11.0, _kBrickH = 5.0, _kBrickGapH = 1.0;
 const _kBrickLeft = 5.0, _kBrickTop = 4.0;
 
-// Paddle
 const _kPaddleH = 3.0, _kPaddleY = 73.0;
 const _kPaddleSpdBase = 78.0;
 double _kPaddleW(int level) => (24.0 - level * 1.6).clamp(11.0, 24.0);
 
-// Ball
 const _kBallR = 1.4;
 double _kBallSpd(int level) => (72.0 + level * 8.0).clamp(72.0, 135.0);
 
-// Brick HP by row (top = hardest)
 const _kBrickHp = [3, 2, 1, 1, 1, 1];
 
-// Neon brick colours by row — vivid, saturated
 const _kBrickColors = <Color>[
-  Color(0xFFFF1155), // row 0 – hot pink/red    (3 hits)
-  Color(0xFFFF6600), // row 1 – neon orange     (2 hits)
-  Color(0xFFFFEE00), // row 2 – electric yellow
-  Color(0xFF00FF66), // row 3 – neon green
-  Color(0xFF00EEFF), // row 4 – cyan
-  Color(0xFF8833FF), // row 5 – purple
+  Color(0xFFFF1155),
+  Color(0xFFFF6600),
+  Color(0xFFFFEE00),
+  Color(0xFF00FF66),
+  Color(0xFF00EEFF),
+  Color(0xFF8833FF),
 ];
 
-// Darker shade for each row (gradient bottom)
 const _kBrickColorsDark = <Color>[
   Color(0xFF880022),
   Color(0xFF883300),
@@ -48,8 +41,6 @@ const _kBrickColorsDark = <Color>[
 ];
 
 enum _BKState { start, playing, levelClear, dead, gameOver }
-
-// ─── Widget ───────────────────────────────────────────────────────────────────
 
 class BreakoutScreen extends StatefulWidget {
   final String userId;
@@ -72,19 +63,13 @@ class BreakoutScreen extends StatefulWidget {
 }
 
 class _BreakoutScreenState extends State<BreakoutScreen> {
-  // Paddle
-  double _padX = (_kBW - 24) / 2; // left edge of paddle
-  // Ball
+  double _padX = (_kBW - 24) / 2;
   double _bx = _kBW / 2, _by = _kPaddleY - _kBallR - 1;
   double _bvx = 0, _bvy = 0;
   bool _launched = false;
-  // Bricks: _bricks[row][col] = current HP (0 = gone)
   List<List<int>> _bricks = [];
-  // Combo — counts consecutive brick hits without touching paddle
   int _combo = 0;
-  // Ball trail — last few positions for motion blur effect
   final List<Offset> _trail = [];
-  // Game state
   int _score = 0, _hiScore = 0, _lives = 3, _level = 0;
   bool _paused = false;
   late double _saldo;
@@ -142,6 +127,8 @@ class _BreakoutScreenState extends State<BreakoutScreen> {
           _resetBall();
           setState(() => _state = _BKState.playing);
           _startTimer();
+        } else if (_state == _BKState.gameOver) {
+          _payAndReplay();
         } else {
           _startLevel();
         }
@@ -151,6 +138,18 @@ class _BreakoutScreenState extends State<BreakoutScreen> {
         _launchBall();
       }
     }
+  }
+
+  Future<void> _payAndReplay() async {
+    final ns = await chargeForReplay(
+        userId: widget.userId,
+        rewardsDocRef: widget.rewardsDocRef,
+        currentSaldo: _saldo);
+    if (ns == null) return;
+    if (!mounted) return;
+    _saldo = ns;
+    widget.onSaldoChanged(ns);
+    _startLevel();
   }
 
   void _startLevel() {
@@ -164,9 +163,9 @@ class _BreakoutScreenState extends State<BreakoutScreen> {
 
   void _launchBall() {
     final spd = _kBallSpd(_level);
-    final angle = (Random().nextDouble() - 0.5) * pi * 0.5; // ±45° from vertical
+    final angle = (Random().nextDouble() - 0.5) * pi * 0.5;
     _bvx = spd * sin(angle);
-    _bvy = -spd * cos(angle); // always launch upward
+    _bvy = -spd * cos(angle);
     _launched = true;
   }
 
@@ -190,18 +189,15 @@ class _BreakoutScreenState extends State<BreakoutScreen> {
     final pw = _kPaddleW(_level);
     final spd = _kPaddleSpdBase * dt;
 
-    // Paddle movement
     if (c.isHeld(ArcadeButton.left)) _padX = (_padX - spd).clamp(0, _kBW - pw);
     if (c.isHeld(ArcadeButton.right)) _padX = (_padX + spd).clamp(0, _kBW - pw);
 
     if (!_launched) {
-      // Ball sticks to paddle before launch
       _bx = _padX + pw / 2;
       setState(() {});
       return;
     }
 
-    // Sub-step physics to avoid tunnelling through thin bricks
     const steps = 3;
     final sdx = _bvx * dt / steps;
     final sdy = _bvy * dt / steps;
@@ -210,29 +206,25 @@ class _BreakoutScreenState extends State<BreakoutScreen> {
       _bx += sdx;
       _by += sdy;
 
-      // Side walls
       if (_bx - _kBallR <= 0) { _bx = _kBallR; _bvx = _bvx.abs(); }
       if (_bx + _kBallR >= _kBW) { _bx = _kBW - _kBallR; _bvx = -_bvx.abs(); }
-      // Ceiling
       if (_by - _kBallR <= 0) { _by = _kBallR; _bvy = _bvy.abs(); }
 
-      // Paddle collision (ball coming down)
       if (_bvy > 0 &&
           _by + _kBallR >= _kPaddleY &&
           _by + _kBallR <= _kPaddleY + _kPaddleH + 2 &&
           _bx >= _padX - _kBallR &&
           _bx <= _padX + pw + _kBallR) {
         _by = _kPaddleY - _kBallR;
-        final relHit = (_bx - (_padX + pw / 2)) / (pw / 2); // -1 to 1
-        final angle = relHit * pi * 0.38; // max ~70° from vertical
+        final relHit = (_bx - (_padX + pw / 2)) / (pw / 2);
+        final angle = relHit * pi * 0.38;
         final ballSpd = sqrt(_bvx * _bvx + _bvy * _bvy);
         _bvx = ballSpd * sin(angle);
-        _bvy = -ballSpd * cos(angle).abs(); // always go up
-        _combo = 0; // reset combo on paddle touch
+        _bvy = -ballSpd * cos(angle).abs();
+        _combo = 0;
         HapticFeedback.lightImpact();
       }
 
-      // Ball lost below paddle
       if (_by - _kBallR > _kBH + 5) {
         _lives--;
         HapticFeedback.mediumImpact();
@@ -248,7 +240,6 @@ class _BreakoutScreenState extends State<BreakoutScreen> {
         return;
       }
 
-      // Brick collision
       bool hitAny = false;
       for (int row = 0; row < _kRows && !hitAny; row++) {
         for (int col = 0; col < _kCols && !hitAny; col++) {
@@ -260,7 +251,6 @@ class _BreakoutScreenState extends State<BreakoutScreen> {
           if (_bx + _kBallR < bl || _bx - _kBallR > br ||
               _by + _kBallR < bt || _by - _kBallR > bb) continue;
 
-          // Which face did we hit?
           final overlapL = _bx + _kBallR - bl;
           final overlapR = br - (_bx - _kBallR);
           final overlapT = _by + _kBallR - bt;
@@ -276,7 +266,6 @@ class _BreakoutScreenState extends State<BreakoutScreen> {
 
           _bricks[row][col]--;
           if (_bricks[row][col] <= 0) {
-            // Brick destroyed — combo multiplier
             _combo++;
             final multiplier = _combo >= 5 ? 3 : _combo >= 3 ? 2 : 1;
             final pts = ((_kBrickHp[row] * 10) + _level * 5) * multiplier;
@@ -288,11 +277,9 @@ class _BreakoutScreenState extends State<BreakoutScreen> {
       }
     }
 
-    // Update ball trail
     _trail.add(Offset(_bx, _by));
     if (_trail.length > 8) _trail.removeAt(0);
 
-    // Check level clear
     final remaining = _bricks.expand((r) => r).where((hp) => hp > 0).length;
     if (remaining == 0) {
       _gameTimer?.cancel();
@@ -418,7 +405,6 @@ class _BreakoutScreenState extends State<BreakoutScreen> {
           ],
         ),
         child: Column(mainAxisSize: MainAxisSize.min, children: [
-          // Decorative top line
           Container(
             width: 48,
             height: 2,
@@ -431,7 +417,6 @@ class _BreakoutScreenState extends State<BreakoutScreen> {
             ),
           ),
           const SizedBox(height: 12),
-          // Title with glow
           Text(
             title,
             textAlign: TextAlign.center,
@@ -448,7 +433,6 @@ class _BreakoutScreenState extends State<BreakoutScreen> {
             ),
           ),
           const SizedBox(height: 8),
-          // Subtitle
           Text(
             subtitle,
             textAlign: TextAlign.center,
@@ -460,7 +444,6 @@ class _BreakoutScreenState extends State<BreakoutScreen> {
             ),
           ),
           const SizedBox(height: 16),
-          // Action button
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
             decoration: BoxDecoration(
@@ -490,7 +473,6 @@ class _BreakoutScreenState extends State<BreakoutScreen> {
             ),
           ),
           const SizedBox(height: 12),
-          // Decorative bottom line
           Container(
             width: 48,
             height: 2,
@@ -507,8 +489,6 @@ class _BreakoutScreenState extends State<BreakoutScreen> {
     );
   }
 }
-
-// ─── Painter ──────────────────────────────────────────────────────────────────
 
 class _BreakoutPainter extends CustomPainter {
   final double padX, bx, by;
@@ -533,32 +513,24 @@ class _BreakoutPainter extends CustomPainter {
     final scaleY = size.height / _kBH;
     final p = Paint()..isAntiAlias = true;
 
-    // ── Background ────────────────────────────────────────────────────────────
     _drawBackground(canvas, size, p);
 
-    // ── Bricks ────────────────────────────────────────────────────────────────
     _drawBricks(canvas, size, scaleX, scaleY, p);
 
-    // ── Paddle ────────────────────────────────────────────────────────────────
     _drawPaddle(canvas, size, scaleX, scaleY, p);
 
-    // ── Ball trail ────────────────────────────────────────────────────────────
     _drawTrail(canvas, scaleX, scaleY, p);
 
-    // ── Ball ──────────────────────────────────────────────────────────────────
     _drawBall(canvas, scaleX, scaleY, p);
 
-    // ── HUD ───────────────────────────────────────────────────────────────────
     _drawHud(canvas, size);
   }
 
   void _drawBackground(Canvas canvas, Size size, Paint p) {
-    // Deep dark base
     final bgRect = Rect.fromLTWH(0, 0, size.width, size.height);
     p.color = const Color(0xFF04000C);
     canvas.drawRect(bgRect, p);
 
-    // Subtle grid lines (low opacity)
     p
       ..color = const Color(0xFF00EEFF).withOpacity(0.035)
       ..strokeWidth = 0.5
@@ -572,7 +544,6 @@ class _BreakoutPainter extends CustomPainter {
     }
     p.style = PaintingStyle.fill;
 
-    // Faint diagonal accent lines for depth
     p
       ..color = const Color(0xFF8833FF).withOpacity(0.018)
       ..strokeWidth = 0.4
@@ -582,7 +553,6 @@ class _BreakoutPainter extends CustomPainter {
     }
     p.style = PaintingStyle.fill;
 
-    // Edge vignette (radial dark overlay)
     final vignetteShader = RadialGradient(
       center: Alignment.center,
       radius: 0.8,
@@ -616,18 +586,15 @@ class _BreakoutPainter extends CustomPainter {
         final maxHp = _kBrickHp[row];
         final hpFrac = maxHp > 1 ? hp / maxHp : 1.0;
 
-        // Fade colour toward dark when damaged
         final topColor = Color.lerp(darkColor.withOpacity(0.55), baseColor, hpFrac)!;
         final botColor = Color.lerp(darkColor.withOpacity(0.3), darkColor, hpFrac)!;
 
-        // Outer neon glow (blurred, wide)
         p
           ..color = baseColor.withOpacity(0.18 * hpFrac)
           ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6);
         canvas.drawRRect(
             RRect.fromLTRBR(bl - 3, bt - 3, bl + bw + 3, bt + bh + 3, rr), p);
 
-        // Inner tighter glow
         p
           ..color = baseColor.withOpacity(0.30 * hpFrac)
           ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2.5);
@@ -635,7 +602,6 @@ class _BreakoutPainter extends CustomPainter {
             RRect.fromLTRBR(bl - 1, bt - 1, bl + bw + 1, bt + bh + 1, rr), p);
         p.maskFilter = null;
 
-        // Gradient fill (lighter top → darker bottom)
         final gradShader = LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
@@ -645,7 +611,6 @@ class _BreakoutPainter extends CustomPainter {
         canvas.drawRRect(brickRect, p);
         p.shader = null;
 
-        // Bright neon border stroke
         p
           ..color = baseColor.withOpacity(0.85 * hpFrac)
           ..style = PaintingStyle.stroke
@@ -653,7 +618,6 @@ class _BreakoutPainter extends CustomPainter {
         canvas.drawRRect(brickRect, p);
         p.style = PaintingStyle.fill;
 
-        // Top-left highlight streak
         final hlRect = RRect.fromLTRBR(
             bl + 2, bt + 1.5, bl + bw * 0.55, bt + bh * 0.32,
             const Radius.circular(2));
@@ -669,14 +633,12 @@ class _BreakoutPainter extends CustomPainter {
         canvas.drawRRect(hlRect, p);
         p.shader = null;
 
-        // HP crack marks for multi-hit bricks (show damage)
         if (maxHp > 1 && hp < maxHp) {
           final damageFrac = 1.0 - hpFrac;
           p
             ..color = Colors.black.withOpacity(0.6 * damageFrac)
             ..style = PaintingStyle.stroke
             ..strokeWidth = 0.7;
-          // Draw a diagonal crack line scaled to damage
           final crackX1 = bl + bw * 0.3;
           final crackY1 = bt + bh * 0.2;
           final crackX2 = bl + bw * (0.3 + 0.4 * damageFrac);
@@ -702,7 +664,6 @@ class _BreakoutPainter extends CustomPainter {
     final paddleRRect = RRect.fromLTRBR(
         padLeft, padTop, padLeft + pw, padTop + padH, paddleRadius);
 
-    // Wide outer glow
     p
       ..color = const Color(0xFF00EEFF).withOpacity(0.20)
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
@@ -711,7 +672,6 @@ class _BreakoutPainter extends CustomPainter {
             padTop + padH + 3, paddleRadius),
         p);
 
-    // Tighter inner glow
     p
       ..color = const Color(0xFF00EEFF).withOpacity(0.40)
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
@@ -721,14 +681,13 @@ class _BreakoutPainter extends CustomPainter {
         p);
     p.maskFilter = null;
 
-    // Metallic body gradient (silver-blue top → darker blue bottom)
     final bodyShader = LinearGradient(
       begin: Alignment.topCenter,
       end: Alignment.bottomCenter,
       colors: const [
-        Color(0xFFB0E8FF), // light silver-blue top
-        Color(0xFF1AACDD), // mid cyan
-        Color(0xFF006688), // dark teal bottom
+        Color(0xFFB0E8FF),
+        Color(0xFF1AACDD),
+        Color(0xFF006688),
       ],
       stops: const [0.0, 0.45, 1.0],
     ).createShader(Rect.fromLTWH(padLeft, padTop, pw, padH));
@@ -736,7 +695,6 @@ class _BreakoutPainter extends CustomPainter {
     canvas.drawRRect(paddleRRect, p);
     p.shader = null;
 
-    // Neon cyan border
     p
       ..color = const Color(0xFF00EEFF).withOpacity(0.90)
       ..style = PaintingStyle.stroke
@@ -744,7 +702,6 @@ class _BreakoutPainter extends CustomPainter {
     canvas.drawRRect(paddleRRect, p);
     p.style = PaintingStyle.fill;
 
-    // Top highlight shine
     final shinePath = RRect.fromLTRBR(
         padLeft + 3, padTop + 0.5, padLeft + pw - 3, padTop + padH * 0.42,
         const Radius.circular(2));
@@ -771,7 +728,6 @@ class _BreakoutPainter extends CustomPainter {
       final cx = trail[i].dx * scaleX;
       final cy = trail[i].dy * scaleY;
 
-      // Each ghost ball: cyan with radial fade
       final trailShader = RadialGradient(
         colors: [
           const Color(0xFF00EEFF).withOpacity(alpha),
@@ -790,20 +746,17 @@ class _BreakoutPainter extends CustomPainter {
     final br = _kBallR * min(scaleX, scaleY) * 1.6;
     final bscr = Offset(bx * scaleX, by * scaleY);
 
-    // Large outer glow (wide, very soft)
     p
       ..color = const Color(0xFF00EEFF).withOpacity(0.15)
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
     canvas.drawCircle(bscr, br * 2.8, p);
 
-    // Medium glow ring
     p
       ..color = const Color(0xFF00EEFF).withOpacity(0.35)
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
     canvas.drawCircle(bscr, br * 1.7, p);
     p.maskFilter = null;
 
-    // Radial gradient core: white centre → cyan → transparent
     final ballShader = RadialGradient(
       colors: const [
         Colors.white,
@@ -817,7 +770,6 @@ class _BreakoutPainter extends CustomPainter {
     canvas.drawCircle(bscr, br * 1.2, p);
     p.shader = null;
 
-    // Tiny specular highlight
     p.color = Colors.white.withOpacity(0.9);
     canvas.drawCircle(
         Offset(bscr.dx - br * 0.25, bscr.dy - br * 0.25), br * 0.22, p);
@@ -829,7 +781,6 @@ class _BreakoutPainter extends CustomPainter {
 
     void glowText(String s, double x, double y, Color col, double fs,
         {double glowRadius = 6.0}) {
-      // Glow pass
       tp.text = TextSpan(
           text: s,
           style: TextStyle(
@@ -845,7 +796,6 @@ class _BreakoutPainter extends CustomPainter {
       tp.paint(canvas, Offset(x, y));
     }
 
-    // Score — cyan glow
     glowText(
       '$score',
       size.width * 0.04,
@@ -855,7 +805,6 @@ class _BreakoutPainter extends CustomPainter {
       glowRadius: 8,
     );
 
-    // Level — yellow
     glowText(
       'NIV ${level + 1}',
       size.width * 0.42,
@@ -865,7 +814,6 @@ class _BreakoutPainter extends CustomPainter {
       glowRadius: 6,
     );
 
-    // Hi-score — dim purple
     glowText(
       'REC $hiScore',
       size.width * 0.66,
@@ -875,7 +823,6 @@ class _BreakoutPainter extends CustomPainter {
       glowRadius: 5,
     );
 
-    // Combo indicator — shown when combo >= 2
     if (combo >= 2) {
       final comboColor = combo >= 5
           ? const Color(0xFFFFEE00)
@@ -891,7 +838,6 @@ class _BreakoutPainter extends CustomPainter {
       );
     }
 
-    // Lives as glowing orb icons
     final orbR = hfs * 0.45;
     final orbY = size.height - orbR * 2.5;
     final orbCount = lives.clamp(0, 5);
@@ -899,14 +845,12 @@ class _BreakoutPainter extends CustomPainter {
       final cx = size.width * 0.04 + i * (orbR * 2.6);
       final center = Offset(cx, orbY);
 
-      // Orb outer glow
       final orbP = Paint()
         ..color = const Color(0xFFFF1155).withOpacity(0.25)
         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
       canvas.drawCircle(center, orbR * 1.6, orbP);
       orbP.maskFilter = null;
 
-      // Orb fill gradient
       final orbShader = RadialGradient(
         colors: const [
           Color(0xFFFF88AA),
@@ -919,7 +863,6 @@ class _BreakoutPainter extends CustomPainter {
       canvas.drawCircle(center, orbR, orbP);
       orbP.shader = null;
 
-      // Orb specular
       orbP.color = Colors.white.withOpacity(0.6);
       canvas.drawCircle(
           Offset(cx - orbR * 0.28, orbY - orbR * 0.28), orbR * 0.22, orbP);

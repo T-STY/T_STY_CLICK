@@ -44,6 +44,8 @@ class AppTheme {
       appBarTheme: AppBarTheme(
         backgroundColor: Colors.transparent,
         elevation: 0,
+        scrolledUnderElevation: 0,
+        surfaceTintColor: Colors.transparent,
         centerTitle: true,
         titleTextStyle: Theme.of(context)
             .textTheme
@@ -103,6 +105,8 @@ class AppTheme {
       appBarTheme: AppBarTheme(
         backgroundColor: AppColors.appBarDark,
         elevation: 0,
+        scrolledUnderElevation: 0,
+        surfaceTintColor: Colors.transparent,
         centerTitle: true,
         titleTextStyle: Theme.of(context)
             .textTheme

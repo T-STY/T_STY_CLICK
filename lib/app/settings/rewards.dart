@@ -1,8 +1,9 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_credit_card/flutter_credit_card.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../../components/bottom_fade.dart';
 import '../../components/shimmer_placeholder.dart';
 import '../../constants/app_images.dart';
 
@@ -17,11 +18,13 @@ class RewardsCardPage extends StatefulWidget {
 }
 
 class _RewardsCardPageState extends State<RewardsCardPage> {
-  Map<String, dynamic>? _rewardsCardData;
+  double _saldo = 0.0;
+  String _cvv = '';
   final _phoneNumberController = TextEditingController();
   final _existingCardNumberController = TextEditingController();
   final _cvvController = TextEditingController();
   bool _isAddingExistingCard = false;
+  bool _showNip = false;
 
   @override
   void didChangeDependencies() {
@@ -29,67 +32,31 @@ class _RewardsCardPageState extends State<RewardsCardPage> {
     _fetchRewardsCardData();
   }
 
-  Stream<DocumentSnapshot<Map<String, dynamic>>> _userCardStream() {
-    final userId = FirebaseAuth.instance.currentUser?.uid;
-    return FirebaseFirestore.instance
-        .collection('users')
-        .doc(userId)
-        .collection('rewardsCard')
-        .doc('cardInfo')
-        .snapshots();
-  }
-
-  Stream<QuerySnapshot<Map<String, dynamic>>> _rewardsCardStream(
-      String cardNumber) {
-    return FirebaseFirestore.instance
-        .collection('rewards')
-        .where('cardNumber', isEqualTo: cardNumber)
-        .snapshots();
-  }
+  late final Stream<DocumentSnapshot<Map<String, dynamic>>> _cardStream =
+      FirebaseFirestore.instance
+          .collection('users')
+          .doc(FirebaseAuth.instance.currentUser?.uid)
+          .collection('rewardsCard')
+          .doc('cardInfo')
+          .snapshots();
 
   Future<void> _fetchRewardsCardData() async {
     final userId = FirebaseAuth.instance.currentUser?.uid;
     if (userId == null) return;
 
     try {
-      final userCardDoc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(userId)
-          .collection('rewardsCard')
-          .doc('cardInfo')
-          .get();
-
-      if (userCardDoc.exists) {
-        _rewardsCardData = userCardDoc.data();
-        String? cardNumber = _rewardsCardData?['cardNumber'];
-
-        if (cardNumber != null) {
-          final querySnapshot = await FirebaseFirestore.instance
-              .collection('rewards')
-              .where('cardNumber', isEqualTo: cardNumber)
-              .get();
-
-          if (querySnapshot.docs.isNotEmpty) {
-            var rewardsData = querySnapshot.docs.first.data();
-            double? saldo = rewardsData['saldo'] is String
-                ? double.tryParse(rewardsData['saldo'])
-                : (rewardsData['saldo'] is int)
-                ? (rewardsData['saldo'] as int).toDouble()
-                : rewardsData['saldo'];
-
-            if (mounted) {
-              setState(() {
-                _rewardsCardData = {
-                  ..._rewardsCardData!,
-                  'saldo': saldo ?? 0.0,
-                };
-              });
-            }
-          }
-        }
+      final result = await FirebaseFunctions.instance
+          .httpsCallable('getRewardsBalance')
+          .call();
+      final data = Map<String, dynamic>.from(result.data as Map);
+      if (data['hasWallet'] == true && mounted) {
+        setState(() {
+          _saldo = (data['saldo'] as num?)?.toDouble() ?? 0.0;
+          _cvv = (data['cvvCode'] as String?) ?? '';
+        });
       }
     } catch (e) {
-      if (kDebugMode) debugPrint('Error fetching card data: $e');
+      if (kDebugMode) debugPrint('Error fetching balance: $e');
     }
   }
 
@@ -122,40 +89,23 @@ class _RewardsCardPageState extends State<RewardsCardPage> {
       return;
     }
 
-    String prefixedCardNumber = 'T_STY-$cardNumber';
-
     try {
-      final querySnapshot = await FirebaseFirestore.instance
-          .collection('rewards')
-          .where('cardNumber', isEqualTo: prefixedCardNumber)
-          .where('cvvCode', isEqualTo: cvv)
-          .get();
+      await FirebaseFunctions.instance
+          .httpsCallable('linkRewardsWallet')
+          .call(<String, dynamic>{'phone': cardNumber, 'pin': cvv});
 
-      if (querySnapshot.docs.isNotEmpty) {
-        var rewardsData = querySnapshot.docs.first.data();
-        final userId = FirebaseAuth.instance.currentUser?.uid;
-
-        if (userId != null) {
-          await FirebaseFirestore.instance
-              .collection('users')
-              .doc(userId)
-              .collection('rewardsCard')
-              .doc('cardInfo')
-              .set(rewardsData);
-
-          if (!mounted) return;
-          _showAlertDialog('Éxito', 'Monedero agregado a tu cuenta');
-
-          setState(() {
-            _isAddingExistingCard = false;
-            _existingCardNumberController.clear();
-            _cvvController.clear();
-          });
-        }
-      } else {
-        _showAlertDialog('Error',
-            'No se encontró un monedero con esos datos. Verifica tu número y NIP.');
-      }
+      if (!mounted) return;
+      _showAlertDialog('Éxito', 'Monedero agregado a tu cuenta');
+      setState(() {
+        _isAddingExistingCard = false;
+        _existingCardNumberController.clear();
+        _cvvController.clear();
+      });
+      _fetchRewardsCardData();
+    } on FirebaseFunctionsException catch (e) {
+      if (!mounted) return;
+      _showAlertDialog('Error',
+          e.message ?? 'No se encontró un monedero con esos datos.');
     } catch (e) {
       if (kDebugMode) debugPrint('Error adding card: $e');
       _showAlertDialog('Error', 'Error al agregar el monedero. Intenta de nuevo.');
@@ -170,40 +120,17 @@ class _RewardsCardPageState extends State<RewardsCardPage> {
       return;
     }
 
-    final userId = FirebaseAuth.instance.currentUser?.uid;
-    if (userId == null) {
-      _showAlertDialog('Error', 'Usuario no autenticado');
-      return;
-    }
-
     try {
-      final userDocRef = FirebaseFirestore.instance
-          .collection('users')
-          .doc(userId)
-          .collection('rewardsCard')
-          .doc('cardInfo');
-
-      await userDocRef.update({
-        'cvvCode': cvv,
-      });
-
-      final querySnapshot = await FirebaseFirestore.instance
-          .collection('rewards')
-          .where('cardNumber', isEqualTo: _rewardsCardData?['cardNumber'])
-          .get();
-
-      if (querySnapshot.docs.isNotEmpty) {
-        final rewardsDocRef = querySnapshot.docs.first.reference;
-
-        await rewardsDocRef.update({
-          'cvvCode': cvv,
-        });
-
-        if (!mounted) return;
-        _showAlertDialog('Éxito', 'NIP actualizado con éxito');
-      } else {
-        _showAlertDialog('Error', 'No se encontró ningún monedero');
-      }
+      await FirebaseFunctions.instance
+          .httpsCallable('updateRewardsCard')
+          .call(<String, dynamic>{'pin': cvv});
+      if (!mounted) return;
+      _showAlertDialog('Éxito', 'NIP actualizado con éxito');
+      _fetchRewardsCardData();
+    } on FirebaseFunctionsException catch (e) {
+      if (!mounted) return;
+      _showAlertDialog('Error',
+          e.message ?? 'No se pudo actualizar el NIP. Intenta de nuevo.');
     } catch (e) {
       if (kDebugMode) debugPrint('Error updating CVV: $e');
       _showAlertDialog('Error', 'No se pudo actualizar el NIP. Intenta de nuevo.');
@@ -219,47 +146,17 @@ class _RewardsCardPageState extends State<RewardsCardPage> {
       return;
     }
 
-    final userId = FirebaseAuth.instance.currentUser?.uid;
-    if (userId == null) {
-      _showAlertDialog('Error', 'Usuario no autenticado');
-      return;
-    }
-
-    String updatedPhoneNumber = "T_STY-$phoneNumber";
-
     try {
-      final userDocRef = FirebaseFirestore.instance
-          .collection('users')
-          .doc(userId)
-          .collection('rewardsCard')
-          .doc('cardInfo');
-
-      await userDocRef.update({
-        'cardNumber': updatedPhoneNumber,
-      });
-
-      final querySnapshot = await FirebaseFirestore.instance
-          .collection('rewards')
-          .where('cardNumber', isEqualTo: _rewardsCardData?['cardNumber'])
-          .get();
-
-      if (querySnapshot.docs.isNotEmpty) {
-        final rewardsDocRef = querySnapshot.docs.first.reference;
-
-        await rewardsDocRef.update({
-          'cardNumber': updatedPhoneNumber,
-        });
-
-        if (mounted) {
-          setState(() {
-            _rewardsCardData?['cardNumber'] = updatedPhoneNumber;
-          });
-        }
-
-        _showAlertDialog('Éxito', 'Número de teléfono actualizado');
-      } else {
-        _showAlertDialog('Error', 'No se encontró ningún monedero');
-      }
+      await FirebaseFunctions.instance
+          .httpsCallable('updateRewardsCard')
+          .call(<String, dynamic>{'phone': phoneNumber});
+      if (!mounted) return;
+      _showAlertDialog('Éxito', 'Número de teléfono actualizado');
+      _fetchRewardsCardData();
+    } on FirebaseFunctionsException catch (e) {
+      if (!mounted) return;
+      _showAlertDialog('Error',
+          e.message ?? 'No se pudo actualizar el número. Intenta de nuevo.');
     } catch (e) {
       if (kDebugMode) debugPrint('Error updating phone: $e');
       _showAlertDialog(
@@ -293,6 +190,7 @@ class _RewardsCardPageState extends State<RewardsCardPage> {
   @override
   Widget build(BuildContext context) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final bool keyboardOpen = MediaQuery.of(context).viewInsets.bottom > 0;
 
     return PopScope(
       canPop: false,
@@ -302,6 +200,7 @@ class _RewardsCardPageState extends State<RewardsCardPage> {
       },
       child: Scaffold(
         appBar: AppBar(
+          automaticallyImplyLeading: false,
           title: Padding(
             padding: const EdgeInsets.all(0),
             child: SizedBox(
@@ -327,8 +226,11 @@ class _RewardsCardPageState extends State<RewardsCardPage> {
           ),
         ),
         backgroundColor: Colors.white,
-        body: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-          stream: _userCardStream(),
+        body: BottomFade(
+          clearHeight: keyboardOpen ? 0 : 96,
+          fadeHeight: keyboardOpen ? 0 : 48,
+          child: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+          stream: _cardStream,
           builder: (context, userCardSnapshot) {
             if (userCardSnapshot.connectionState == ConnectionState.waiting) {
               return _buildShimmerLoading();
@@ -345,214 +247,296 @@ class _RewardsCardPageState extends State<RewardsCardPage> {
               return _buildNoCardView();
             }
 
-            return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-              stream: _rewardsCardStream(cardNumber),
-              builder: (context, rewardsSnapshot) {
-                if (rewardsSnapshot.connectionState ==
-                    ConnectionState.waiting) {
-                  return _buildShimmerLoading();
-                }
-
-                if (!rewardsSnapshot.hasData ||
-                    rewardsSnapshot.data!.docs.isEmpty) {
-                  return _buildNoCardView();
-                }
-
-                var rewardsData = rewardsSnapshot.data!.docs.first.data();
-                double? saldo = (rewardsData['saldo'] is int)
-                    ? (rewardsData['saldo'] as int).toDouble()
-                    : rewardsData['saldo'];
-
-                return SingleChildScrollView(
+            final double saldo = _saldo;
+            return SingleChildScrollView(
                   padding: const EdgeInsets.all(16.0),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
-                      CreditCardWidget(
-                        cardNumber: cardNumber,
-                        obscureCardNumber: false,
-                        expiryDate: userData?['customerSince'] ?? 'MM/YY',
-                        cardHolderName:
-                        userData?['cardHolderName'] ?? 'Card Holder',
-                        cvvCode: userData?['cvvCode'] ?? '****',
-                        obscureCardCvv: false,
-                        showBackView: false,
-                        isHolderNameVisible: true,
-                        cardType: CardType.t_sty,
-                        bankName: 'T_STY',
-                        backgroundImage: 'assets/images/card_bg.png',
-                        customCardTypeIcons: <CustomCardTypeIcon>[
-                          CustomCardTypeIcon(
-                            cardType: CardType.t_sty,
-                            cardImage: Image.asset(
-                              'assets/images/visa.png',
-                              height: 48,
-                              width: 48,
-                            ),
-                          ),
-                        ],
-                        onCreditCardWidgetChange: (creditCardBrand) {},
-                      ),
-                      const SizedBox(height: 10),
-                      Card(
-                        color: Colors.black87,
-                        elevation: 4,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        margin: const EdgeInsets.symmetric(
-                            vertical: 4, horizontal: 16),
-                        child: ListTile(
-                          leading: const Icon(Icons.account_balance_wallet,
-                              color: Colors.white),
-                          title: const Text(
-                            'Monedero',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.white,
-                            ),
-                          ),
-                          trailing: Text(
-                            '\$${saldo?.toStringAsFixed(2) ?? '0.00'}',
-                            style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.lightGreenAccent,
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 20),
+                      _buildBalanceCard(userData, cardNumber, saldo),
+                      const SizedBox(height: 24),
                       CustomExpansionTile(
-                        title: 'Actualizar Teléfono',
+                        title: 'Actualizar teléfono',
+                        leading: const Icon(Icons.phone_android,
+                            color: Colors.black),
                         children: [_buildPhoneNumberUpdateSection()],
                       ),
-                      const SizedBox(height: 20),
+                      const SizedBox(height: 12),
                       CustomExpansionTile(
                         title: 'Actualizar NIP',
+                        leading: const Icon(Icons.lock_outline,
+                            color: Colors.black),
                         children: [_buildCVVUpdateSection()],
                       ),
                       const SizedBox(height: 120),
                     ],
                   ),
                 );
-              },
-            );
           },
+        ),
         ),
       ),
     );
   }
 
-  Widget _buildPhoneNumberUpdateSection() {
-    final accentColor = Colors.grey[700]!;
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8),
-      child: IntrinsicHeight(
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Expanded(
-              child: TextFormField(
-                controller: _phoneNumberController,
-                keyboardType: TextInputType.number,
-                maxLength: 10,
-                decoration: InputDecoration(
-                  hintText: 'Número de Teléfono (10 dígitos)',
-                  filled: true,
-                  fillColor: Colors.grey[100],
-                  contentPadding:
-                  const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide.none,
-                  ),
-                ),
-                style: const TextStyle(color: Colors.black),
-              ),
-            ),
-            const SizedBox(width: 10),
-            SizedBox(
-              width: 50,
-              child: ElevatedButton(
-                onPressed: _updatePhoneNumber,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: accentColor,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  padding: EdgeInsets.zero,
-                ),
-                child: const Icon(
-                  Icons.check_circle,
-                  color: Colors.white,
-                ),
-              ),
-            ),
-          ],
+  Widget _buildBalanceCard(
+      Map<String, dynamic>? userData, String number, double saldo) {
+    final holder = (userData?['cardHolderName'] ?? 'Titular').toString();
+    return Container(
+      width: double.infinity,
+      height: 200,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(24),
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF141414), Color(0xFF3A3A3A)],
         ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.28),
+            blurRadius: 22,
+            offset: const Offset(0, 12),
+          ),
+        ],
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Stack(
+        children: [
+          Positioned(top: -34, right: -24, child: _decorCircle(130, 0.06)),
+          Positioned(bottom: -56, right: 48, child: _decorCircle(150, 0.05)),
+          Padding(
+            padding: const EdgeInsets.all(22),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(7),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.12),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(Icons.savings,
+                              color: Colors.white, size: 18),
+                        ),
+                        const SizedBox(width: 8),
+                        const Text(
+                          'Cochinito',
+                          style: TextStyle(
+                            color: Colors.white70,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const Text(
+                      'T_STY',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 2.5,
+                      ),
+                    ),
+                  ],
+                ),
+                const Spacer(),
+                const Text(
+                  'Saldo disponible',
+                  style: TextStyle(color: Colors.white60, fontSize: 12),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '\$${saldo.toStringAsFixed(2)}',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 34,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+                const Spacer(),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _formatNumber(number),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 1.5,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            holder.toUpperCase(),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: Colors.white54,
+                              fontSize: 11,
+                              letterSpacing: 0.8,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    GestureDetector(
+                      onTap: () => setState(() => _showNip = !_showNip),
+                      behavior: HitTestBehavior.opaque,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            'NIP ${_showNip && _cvv.isNotEmpty ? _cvv : '••••'}',
+                            style: const TextStyle(
+                              color: Colors.white70,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 1.2,
+                            ),
+                          ),
+                          const SizedBox(width: 5),
+                          Icon(
+                            _showNip
+                                ? Icons.visibility_off
+                                : Icons.visibility,
+                            color: Colors.white54,
+                            size: 16,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _decorCircle(double size, double alpha) => Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: Colors.white.withValues(alpha: alpha),
+        ),
+      );
+
+  String _formatNumber(String number) {
+    final d = number.replaceAll(RegExp(r'\D'), '');
+    if (d.length == 10) {
+      return '${d.substring(0, 3)} ${d.substring(3, 6)} ${d.substring(6)}';
+    }
+    return d.isEmpty ? number : d;
+  }
+
+  Widget _buildPhoneNumberUpdateSection() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+      child: Column(
+        children: [
+          TextFormField(
+            controller: _phoneNumberController,
+            keyboardType: TextInputType.number,
+            maxLength: 10,
+            decoration: InputDecoration(
+              hintText: 'Nuevo número (10 dígitos)',
+              counterText: '',
+              prefixIcon: const Icon(Icons.phone_android, size: 20),
+              filled: true,
+              fillColor: Colors.grey[100],
+              contentPadding:
+                  const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide.none,
+              ),
+            ),
+            style: const TextStyle(color: Colors.black),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            height: 48,
+            child: ElevatedButton(
+              onPressed: _updatePhoneNumber,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.black,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+              ),
+              child: const Text('Actualizar teléfono',
+                  style: TextStyle(fontWeight: FontWeight.bold)),
+            ),
+          ),
+        ],
       ),
     );
   }
 
   Widget _buildCVVUpdateSection() {
-    final accentColor = Colors.grey[700]!;
-
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8),
-      child: IntrinsicHeight(
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Expanded(
-              child: TextFormField(
-                controller: _cvvController,
-                keyboardType: TextInputType.number,
-                maxLength: 4,
-                obscureText: true,
-                decoration: InputDecoration(
-                  hintText: 'NIP (4 dígitos)',
-                  filled: true,
-                  fillColor: Colors.grey[100],
-                  contentPadding:
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+      child: Column(
+        children: [
+          TextFormField(
+            controller: _cvvController,
+            keyboardType: TextInputType.number,
+            maxLength: 4,
+            obscureText: true,
+            decoration: InputDecoration(
+              hintText: 'Nuevo NIP (4 dígitos)',
+              counterText: '',
+              prefixIcon: const Icon(Icons.lock_outline, size: 20),
+              filled: true,
+              fillColor: Colors.grey[100],
+              contentPadding:
                   const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide.none,
-                  ),
-                ),
-                style: const TextStyle(color: Colors.black),
-                onEditingComplete: () {
-                  String cvv = _cvvController.text.trim();
-                  if (cvv.length != 4) {
-                    _showAlertDialog(
-                        'Error', 'El NIP debe tener exactamente 4 dígitos');
-                  }
-                },
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide.none,
               ),
             ),
-            const SizedBox(width: 10),
-            SizedBox(
-              width: 50,
-              child: ElevatedButton(
-                onPressed: _updateCVV,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: accentColor,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                ),
-                child: const Icon(
-                  Icons.check_circle,
-                  color: Colors.white,
-                ),
+            style: const TextStyle(color: Colors.black),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            height: 48,
+            child: ElevatedButton(
+              onPressed: _updateCVV,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.black,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
               ),
+              child: const Text('Actualizar NIP',
+                  style: TextStyle(fontWeight: FontWeight.bold)),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -825,6 +809,7 @@ class _CustomExpansionTileState extends State<CustomExpansionTile>
             ),
             child: ListTile(
               onTap: _handleTap,
+              leading: widget.leading,
               title: Text(
                 widget.title,
                 style: const TextStyle(

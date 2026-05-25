@@ -1,11 +1,11 @@
 {
-    "name": "click",
-    "short_name": "click",
+    "name": "T_STY: Mi Supercito",
+    "short_name": "T_STY",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
     "theme_color": "#0175C2",
-    "description": "T_STY Click",
+    "description": "T_STY: Mi Supercito",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

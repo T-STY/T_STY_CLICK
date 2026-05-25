@@ -14,13 +14,18 @@ import 'package:provider/provider.dart';
 
 import '../../auth/login_page.dart';
 import '../../custom_page_route.dart';
+import '../components/bottom_fade.dart';
 import '../components/custom_loader.dart';
 import '../components/shimmer_placeholder.dart';
 import '../constants/app_images.dart';
 import 'cart/cart_provider.dart';
 import 'category/filter_dialog.dart';
+import 'category/product_display.dart';
 import 'game/arcade_center_screen.dart';
 import 'constants/gridview.dart';
+import 'ads_carousel.dart';
+import 'home_blocks.dart';
+import 'combos/combo_detail.dart';
 
 void testNetworkAccess() async {
   try {
@@ -48,43 +53,58 @@ class AlgoliaService {
 }
 
 class Home extends StatefulWidget {
-  const Home({super.key});
+  final void Function(int tabIndex)? onSwitchTab;
+
+  const Home({super.key, this.onSwitchTab});
 
   @override
-  State<Home> createState() => _HomeState();
+  State<Home> createState() => HomeState();
 }
 
-class _HomeState extends State<Home> with TickerProviderStateMixin {
+class HomeState extends State<Home> with TickerProviderStateMixin {
   final TextEditingController _searchController = TextEditingController();
   String _searchText = '';
   List<AlgoliaObjectSnapshot> _searchResults = [];
   bool _isSearching = false;
   bool _showRecipeDetail = false;
   bool _showPromoDetail = false;
+  bool _showProductDisplay = false;
+  String? _pdCategory;
+  String? _pdBrand;
+  String? _pdDistributor;
+  List<String>? _pdProductIds;
+  String? _pdTitle;
+  String? _pdImageUrl;
+  bool _showComboDetail = false;
+  String? _comboId;
   Map<String, dynamic> _selectedFilters = {};
   String? selectedRecipeId;
   String? selectedPromoId;
   List<DocumentSnapshot> _filteredProducts = [];
 
+  late final Stream<QuerySnapshot<Map<String, dynamic>>> _homeSectionsStream =
+      FirebaseFirestore.instance.collection('home_sections').snapshots();
+
   final PageController _pageController = PageController();
 
-  // ─── Game entry ────────────────────────────────────────────────────────────
-  int  _tapCount   = 0;          // needs 3 taps to launch
-  bool _shaking    = false;
-  // Firestore data cached after validation, used by terminal page
   String?            _pendingUid;
   DocumentReference? _pendingRewardsRef;
   double             _pendingSaldo = 0;
   late AnimationController _shakeCtrl;
   late Animation<double>   _shakeAnim;
 
-  // ── CRT TV-off animation (on 3rd logo tap) ─────────────────────────────────
   bool _crtActive = false;
   late final AnimationController _crtCtrl;
   late final Animation<double> _crtSquish;
   late final Animation<double> _crtLine;
   late final Animation<double> _crtFade;
-  OverlayEntry? _crtBlackOverlay; // covers nav bar during black-fade phase
+  OverlayEntry? _crtBlackOverlay;
+
+  late final AnimationController _spinCtrl;
+  Timer? _spinTimer;
+
+  StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _saldoSub;
+  double _walletSaldo = 0;
 
   @override
   void initState() {
@@ -116,6 +136,13 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
         _navigateToArcade();
       }
     });
+
+    _spinCtrl = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 1100));
+    _spinTimer = Timer.periodic(const Duration(seconds: 4), (_) {
+      if (mounted && !_spinCtrl.isAnimating) _spinCtrl.forward(from: 0);
+    });
+    _initSaldoListener();
   }
 
   @override
@@ -125,6 +152,9 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
     _pageController.dispose();
     _shakeCtrl.dispose();
     _crtCtrl.dispose();
+    _spinTimer?.cancel();
+    _spinCtrl.dispose();
+    _saldoSub?.cancel();
     _crtBlackOverlay?.remove();
     _crtBlackOverlay = null;
     super.dispose();
@@ -168,10 +198,77 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
         .where('price', isLessThanOrEqualTo: priceRange.end);
 
     query.get().then((snapshot) {
+      final docs = snapshot.docs
+          .where((d) =>
+              ((d.data() as Map<String, dynamic>?)?['hide_online'] as bool?) !=
+              true)
+          .toList()
+        ..sort((a, b) {
+          final an = ((a.data() as Map<String, dynamic>?)?['nombre'] ?? '')
+              .toString()
+              .toLowerCase();
+          final bn = ((b.data() as Map<String, dynamic>?)?['nombre'] ?? '')
+              .toString()
+              .toLowerCase();
+          return an.compareTo(bn);
+        });
       setState(() {
-        _filteredProducts = snapshot.docs;
+        _filteredProducts = docs;
       });
     });
+  }
+
+  String _normalizeForSearch(String s) {
+    s = s.toLowerCase().trim();
+    const accents = {
+      'á': 'a', 'à': 'a', 'ä': 'a', 'â': 'a', 'ã': 'a',
+      'é': 'e', 'è': 'e', 'ë': 'e', 'ê': 'e',
+      'í': 'i', 'ì': 'i', 'ï': 'i', 'î': 'i',
+      'ó': 'o', 'ò': 'o', 'ö': 'o', 'ô': 'o', 'õ': 'o',
+      'ú': 'u', 'ù': 'u', 'ü': 'u', 'û': 'u',
+      'ñ': 'n',
+    };
+    accents.forEach((k, v) => s = s.replaceAll(k, v));
+    return s;
+  }
+
+  int _levenshtein(String s, String t) {
+    if (s == t) return 0;
+    if (s.isEmpty) return t.length;
+    if (t.isEmpty) return s.length;
+    List<int> prev = List<int>.generate(t.length + 1, (i) => i);
+    List<int> curr = List<int>.filled(t.length + 1, 0);
+    for (int i = 0; i < s.length; i++) {
+      curr[0] = i + 1;
+      for (int j = 0; j < t.length; j++) {
+        final cost = s[i] == t[j] ? 0 : 1;
+        final del = curr[j] + 1;
+        final ins = prev[j + 1] + 1;
+        final sub = prev[j] + cost;
+        curr[j + 1] =
+            del < ins ? (del < sub ? del : sub) : (ins < sub ? ins : sub);
+      }
+      final tmp = prev;
+      prev = curr;
+      curr = tmp;
+    }
+    return prev[t.length];
+  }
+
+  bool _fuzzyMatch(String text, String query) {
+    if (query.isEmpty) return true;
+    if (text.contains(query)) return true;
+    final words = text.split(RegExp(r'\s+')).where((w) => w.isNotEmpty);
+    final tokens =
+        query.split(RegExp(r'\s+')).where((t) => t.isNotEmpty).toList();
+    if (tokens.isEmpty) return false;
+    for (final token in tokens) {
+      final maxDist = token.length <= 4 ? 1 : 2;
+      final ok = words
+          .any((w) => w.contains(token) || _levenshtein(token, w) <= maxDist);
+      if (!ok) return false;
+    }
+    return true;
   }
 
   Future<void> _searchAlgolia(String searchText) async {
@@ -186,8 +283,24 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
         print('Querying Algolia with: $searchText');
       }
       AlgoliaQuerySnapshot snapshot = await query.getObjects();
+      final String q = _normalizeForSearch(searchText);
+      final hits = snapshot.hits.where((h) {
+        if ((h.data['hide_online'] as bool?) == true) return false;
+        final name = _normalizeForSearch((h.data['nombre'] ?? '').toString());
+        final variante =
+            _normalizeForSearch((h.data['variante'] ?? '').toString());
+        return _fuzzyMatch(name, q) || _fuzzyMatch(variante, q);
+      }).toList()
+        ..sort((a, b) {
+          final an = _normalizeForSearch((a.data['nombre'] ?? '').toString());
+          final bn = _normalizeForSearch((b.data['nombre'] ?? '').toString());
+          final aExact = an.contains(q) ? 0 : 1;
+          final bExact = bn.contains(q) ? 0 : 1;
+          if (aExact != bExact) return aExact - bExact;
+          return an.compareTo(bn);
+        });
       setState(() {
-        _searchResults = snapshot.hits;
+        _searchResults = hits;
         _isSearching = false;
       });
     } catch (e) {
@@ -211,6 +324,26 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
     setState(() {
       _showRecipeDetail = false;
       _showPromoDetail = false;
+      _showProductDisplay = false;
+      _showComboDetail = false;
+    });
+  }
+
+  bool handleBack() {
+    if (_showRecipeDetail ||
+        _showPromoDetail ||
+        _showProductDisplay ||
+        _showComboDetail) {
+      _navigateBackToGrid();
+      return true;
+    }
+    return false;
+  }
+
+  void _openCombo(String comboId) {
+    setState(() {
+      _comboId = comboId;
+      _showComboDetail = true;
     });
   }
 
@@ -221,21 +354,51 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
     });
   }
 
-  // ─── Game entry ─────────────────────────────────────────────────────────────
-
-  void _handleLogoTap() {
-    if (_shaking) return;
-    _tapCount++;
-    _shaking = true;
-    _shakeCtrl.forward(from: 0).then((_) {
-      _shaking = false;
-      if (_tapCount >= 3) {
-        _tapCount = 0;
-        _launchGame();
-      } else {
-        setState(() {}); // redraw pips
-      }
+  void _openProductDisplay({
+    String? category,
+    String? brand,
+    String? provedor,
+    List<String>? productIds,
+    String? title,
+    String? imageUrl,
+  }) {
+    setState(() {
+      _pdCategory = category;
+      _pdBrand = brand;
+      _pdDistributor = provedor;
+      _pdProductIds = productIds;
+      _pdTitle = title;
+      _pdImageUrl = imageUrl;
+      _showProductDisplay = true;
     });
+  }
+
+  Future<void> _initSaldoListener() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    try {
+      final cardDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .collection('rewardsCard')
+          .doc('cardInfo')
+          .get();
+      final cardNumber = cardDoc.data()?['cardNumber'] as String?;
+      if (cardNumber == null || cardNumber.isEmpty) return;
+      final q = await FirebaseFirestore.instance
+          .collection('rewards')
+          .where('cardNumber', isEqualTo: cardNumber)
+          .limit(1)
+          .get();
+      if (q.docs.isEmpty) return;
+      _saldoSub = q.docs.first.reference.snapshots().listen((snap) {
+        final raw = snap.data()?['saldo'];
+        final s = raw is num
+            ? raw.toDouble()
+            : (raw is String ? (double.tryParse(raw) ?? 0.0) : 0.0);
+        if (mounted) setState(() => _walletSaldo = s);
+      });
+    } catch (_) {}
   }
 
   Future<void> _launchGame() async {
@@ -269,7 +432,7 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
             ? raw.toDouble()
             : (raw as double? ?? 0.0);
 
-    if (saldo < 10) return;
+    if (saldo < 5) return;
     if (!mounted) return;
 
     _pendingUid        = uid;
@@ -277,7 +440,6 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
     _pendingSaldo      = saldo;
     if (!_crtActive) {
       setState(() => _crtActive = true);
-      // Root overlay covers nav bar during the final black-fade phase
       _crtBlackOverlay = OverlayEntry(
         builder: (_) => AnimatedBuilder(
           animation: _crtFade,
@@ -290,6 +452,22 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
       Overlay.of(context, rootOverlay: true).insert(_crtBlackOverlay!);
       _crtCtrl.forward();
     }
+  }
+
+  Widget _buildGameIcon(bool isDarkMode) {
+    return RotationTransition(
+      turns: _spinCtrl.drive(CurveTween(curve: Curves.elasticOut)),
+      child: IconButton(
+        tooltip: 'Arcade',
+        splashRadius: 22,
+        icon: Icon(
+          Icons.sports_esports,
+          size: 28,
+          color: isDarkMode ? Colors.white : Colors.black,
+        ),
+        onPressed: _launchGame,
+      ),
+    );
   }
 
   void _navigateToArcade() {
@@ -305,14 +483,11 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
         reverseTransitionDuration: Duration.zero,
       ),
     ).then((_) {
-      // Returning from arcade — overlay is already gone, just reset state
       if (mounted) {
-        setState(() { _tapCount = 0; _crtActive = false; });
+        setState(() => _crtActive = false);
         _crtCtrl.reset();
       }
     });
-    // Arcade terminal starts black — remove overlay shortly after push
-    // so the terminal renders underneath before the overlay lifts
     Future.delayed(const Duration(milliseconds: 80), () {
       _crtBlackOverlay?.remove();
       _crtBlackOverlay = null;
@@ -322,54 +497,45 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
   @override
   Widget build(BuildContext context) {
     final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final bool showGameIcon =
+        FirebaseAuth.instance.currentUser != null && _walletSaldo >= 5;
 
-    final body = PopScope(
-      canPop: !_showRecipeDetail && !_showPromoDetail,
-      onPopInvokedWithResult: (didPop, result) {
-        if (didPop) return;
-        if (_showRecipeDetail || _showPromoDetail) {
-          _navigateBackToGrid();
-        }
-      },
-      child: Scaffold(
+    final body = Scaffold(
         appBar: AppBar(
+          automaticallyImplyLeading: false,
           scrolledUnderElevation: 0,
           backgroundColor: Colors.transparent,
-          title: GestureDetector(
-            onTap: _handleLogoTap,
-            behavior: HitTestBehavior.opaque,
-            child: SizedBox(
-              height: 180,
-              width: 300,
-              child: AspectRatio(
-                aspectRatio: 1 / 1,
-                child: AnimatedBuilder(
-                    animation: _shakeAnim,
-                    builder: (_, child) => Transform.translate(
-                      offset: Offset(_shakeAnim.value, 0),
-                      child: child,
-                    ),
-                    child: Image.asset(
-                      isDarkMode ? AppImages.logowhite : AppImages.logo,
-                      fit: BoxFit.contain,
-                    ),
+          leadingWidth: showGameIcon ? 48 : null,
+          leading: showGameIcon ? const SizedBox(width: 48) : null,
+          title: SizedBox(
+            height: 180,
+            width: 300,
+            child: AspectRatio(
+              aspectRatio: 1 / 1,
+              child: AnimatedBuilder(
+                  animation: _shakeAnim,
+                  builder: (_, child) => Transform.translate(
+                    offset: Offset(_shakeAnim.value, 0),
+                    child: child,
                   ),
-              ),
+                  child: Image.asset(
+                    isDarkMode ? AppImages.logowhite : AppImages.logo,
+                    fit: BoxFit.contain,
+                  ),
+                ),
             ),
           ),
           centerTitle: true,
+          actions: [if (showGameIcon) _buildGameIcon(isDarkMode)],
         ),
-        body: _showRecipeDetail
-            ? RecipeDetailPage(
-          recipeId: selectedRecipeId!,
-          onBackPressed: _navigateBackToGrid,
-        )
-            : _showPromoDetail
-            ? PromotionDetailPage(
-          promotionId: selectedPromoId!,
-          onBackPressed: _navigateBackToGrid,
-        )
-            : Column(
+        body: IndexedStack(
+          index: _showComboDetail
+              ? 4
+              : _showProductDisplay
+                  ? 3
+                  : (_showRecipeDetail ? 1 : (_showPromoDetail ? 2 : 0)),
+          children: [
+            Column(
           children: [
             Padding(
               padding: const EdgeInsets.all(8.0),
@@ -404,12 +570,8 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
                   IconButton(
                     icon: const Icon(Icons.filter_list),
                     onPressed: () async {
-                      final result = await showDialog(
-                        context: context,
-                        builder: (context) => FilterDialog(
-                          initialFilters: _selectedFilters,
-                        ),
-                      );
+                      final result =
+                          await showFilterSheet(context, _selectedFilters);
 
                       if (result != null) {
                         if (result['clear'] == true) {
@@ -427,33 +589,72 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
               ),
             ),
             Expanded(
-              child: _isSearching
-                  ? const CustomLoader()
-                  : (_searchText.isNotEmpty
-                  ? _buildSearchResults()
-                  : (_selectedFilters.isNotEmpty
-                  ? _buildFilteredProductList()
-                  : _buildProductGrids())),
+              child: BottomFade(
+                clearHeight: 96,
+                fadeHeight: 48,
+                child: _isSearching
+                    ? const CustomLoader()
+                    : (_searchText.isNotEmpty
+                    ? _buildSearchResults()
+                    : (_selectedFilters.isNotEmpty
+                    ? _buildFilteredProductList()
+                    : _buildProductGrids())),
+              ),
             ),
           ],
+            ),
+            _showRecipeDetail && selectedRecipeId != null
+                ? RecipeDetailPage(
+                    recipeId: selectedRecipeId!,
+                    onBackPressed: _navigateBackToGrid,
+                  )
+                : const SizedBox.shrink(),
+            _showPromoDetail && selectedPromoId != null
+                ? PromotionDetailPage(
+                    promotionId: selectedPromoId!,
+                    onBackPressed: _navigateBackToGrid,
+                  )
+                : const SizedBox.shrink(),
+            _showProductDisplay
+                ? ProductDisplayPage(
+                    key: ValueKey('pd_${_pdTitle}_${_pdCategory}_'
+                        '${_pdBrand}_${_pdDistributor}_'
+                        '${_pdProductIds?.join(',')}_$_pdImageUrl'),
+                    selectedCategory: _pdCategory,
+                    brand: _pdBrand,
+                    distributorName: _pdDistributor,
+                    productIds: _pdProductIds,
+                    title: _pdTitle,
+                    imageUrl: _pdImageUrl,
+                    onBack: _navigateBackToGrid,
+                  )
+                : const SizedBox.shrink(),
+            _showComboDetail && _comboId != null
+                ? ComboDetailPage(
+                    key: ValueKey('combo_$_comboId'),
+                    comboId: _comboId!,
+                    onBack: _navigateBackToGrid,
+                  )
+                : const SizedBox.shrink(),
+          ],
         ),
-      ),
-    );
+      );
 
-    // CRT squish + white-line flash (nav bar black-fade is handled by root overlay)
     return AnimatedBuilder(
       animation: _crtCtrl,
       builder: (ctx, child) {
-        if (!_crtActive) return child!;
         return Stack(children: [
           Transform(
             alignment: Alignment.center,
-            transform: Matrix4.diagonal3Values(1.0, _crtSquish.value, 1.0),
+            transform: _crtActive
+                ? Matrix4.diagonal3Values(1.0, _crtSquish.value, 1.0)
+                : Matrix4.identity(),
             child: child!,
           ),
-          if (_crtLine.value > 0.01)
-            Positioned.fill(child: ColoredBox(
-                color: Colors.white.withOpacity(_crtLine.value * 0.92))),
+          if (_crtActive && _crtLine.value > 0.01)
+            Positioned.fill(
+                child: ColoredBox(
+                    color: Colors.white.withOpacity(_crtLine.value * 0.92))),
         ]);
       },
       child: body,
@@ -480,48 +681,195 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
     return SingleChildScrollView(
       child: Padding(
         padding: const EdgeInsets.all(5.0),
-        child: Column(
-          children: [
-            RecipeGrid(
-              title: "Rincon de Recetas 🌞",
-              query: FirebaseFirestore.instance.collection('recipes'),
-              onRecipeSelected: _navigateToRecipeDetail,
-              onPromotionSelected: _navigateToPromoDetail,
-            ),
-            FirestoreProductGrid(
-              title: "¡Lo más top! 🔥",
-              query: FirebaseFirestore.instance
-                  .collection('products')
-                  .orderBy('sales_in_past', descending: true)
-                  .limit(15),
-            ),
-            FirestoreProductGrid(
-              title: "¡Descuentos del Dia! ✨",
-              query: FirebaseFirestore.instance
-                  .collection('products')
-                  .where('current_day', isEqualTo: true)
-                  .limit(15),
-            ),
-            FirestoreProductGrid(
-              title: "Nuestras Recomendaciones ✨",
-              query: FirebaseFirestore.instance
-                  .collection('products')
-                  .where('recommended', isEqualTo: true)
-                  .limit(15),
-            ),
-            Text(
-              'Isaías 45:7–9 ',
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.grey[600],
-                fontStyle: FontStyle.italic,
-              ),
-            ),
-            const SizedBox(height: 115),
-          ],
+        child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+          stream: _homeSectionsStream,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Padding(
+                padding: EdgeInsets.only(top: 60),
+                child: CustomLoader(),
+              );
+            }
+
+            final docs = (snapshot.data?.docs ?? [])
+                .where((d) => (d.data()['enabled'] as bool?) ?? true)
+                .toList()
+              ..sort((a, b) => ((a.data()['order'] as num?) ?? 0)
+                  .compareTo((b.data()['order'] as num?) ?? 0));
+
+            final List<Widget> sections = docs.isEmpty
+                ? _defaultSections()
+                : docs.map((d) => _buildSection(context, d.id, d.data())).toList();
+
+            return Column(
+              children: [
+                ...sections,
+                Text(
+                  'Isaías 45:7–9 ',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.grey[600],
+                    fontStyle: FontStyle.italic,
+                  ),
+                ),
+                const SizedBox(height: 115),
+              ],
+            );
+          },
         ),
       ),
     );
+  }
+
+  Widget _buildSection(
+      BuildContext context, String id, Map<String, dynamic> data) {
+    final String type = data['type'] as String? ?? 'product_grid';
+    final String title = data['title'] as String? ?? '';
+    final Key key = ValueKey('section_$id');
+
+    switch (type) {
+      case 'product_grid':
+        final source = (data['source'] as Map<String, dynamic>?) ?? const {};
+        final mode = source['mode'] as String? ?? 'query';
+        final orderedIds = mode == 'productIds'
+            ? (source['productIds'] as List?)?.cast<String>()
+            : null;
+        return FirestoreProductGrid(
+          key: key,
+          title: title,
+          query: _queryFromSource(source),
+          orderedIds: orderedIds,
+        );
+      case 'ad_carousel':
+        return AdsCarousel(
+          key: key,
+          placement: data['placement'] as String? ?? 'home_carousel',
+          title: title,
+          onProductTarget: _openProductDisplay,
+          onCombo: _openCombo,
+          adIds: (data['adIds'] as List?)?.cast<String>(),
+        );
+      case 'hero_banner':
+        return HeroBanner(
+          key: key,
+          data: data,
+          onProductTarget: _openProductDisplay,
+          onCombo: _openCombo,
+        );
+      case 'spotlight':
+        return SpotlightBlock(key: key, data: data);
+      case 'combo_showcase':
+        return ComboShowcase(
+          key: key,
+          title: title.isEmpty ? 'Combos 🍔' : title,
+          onCombo: _openCombo,
+        );
+      case 'recipe_carousel':
+        return RecipeCarousel(
+          key: key,
+          title: title.isEmpty ? 'Recetas' : title,
+          query: FirebaseFirestore.instance.collection('recipes'),
+          onRecipeSelected: _navigateToRecipeDetail,
+          onSeeAll: widget.onSwitchTab == null
+              ? null
+              : () => widget.onSwitchTab!(0),
+        );
+      case 'promo_carousel':
+        return PromoCarousel(
+          key: key,
+          title: title.isEmpty ? 'Promociones 🏷️' : title,
+          onPromotionSelected: _navigateToPromoDetail,
+        );
+      default:
+        return const SizedBox.shrink();
+    }
+  }
+
+  List<Widget> _defaultSections() {
+    return [
+      RecipeCarousel(
+        title: "Rincon de Recetas 🍽️",
+        query: FirebaseFirestore.instance.collection('recipes'),
+        onRecipeSelected: _navigateToRecipeDetail,
+      ),
+      FirestoreProductGrid(
+        title: "¡Lo más top! 🔥",
+        query: FirebaseFirestore.instance
+            .collection('products')
+            .orderBy('sales_in_past', descending: true)
+            .limit(15),
+      ),
+      FirestoreProductGrid(
+        title: "¡Descuentos del Dia! ✨",
+        query: FirebaseFirestore.instance
+            .collection('products')
+            .where('current_day', isEqualTo: true)
+            .limit(15),
+      ),
+      FirestoreProductGrid(
+        title: "Nuestras Recomendaciones ✨",
+        query: FirebaseFirestore.instance
+            .collection('products')
+            .where('recommended', isEqualTo: true)
+            .limit(15),
+      ),
+    ];
+  }
+
+  Query<Map<String, dynamic>> _queryFromSource(Map<String, dynamic> source) {
+    Query<Map<String, dynamic>> q =
+        FirebaseFirestore.instance.collection('products');
+
+    final mode = source['mode'] as String? ?? 'query';
+    if (mode == 'productIds') {
+      final ids = (source['productIds'] as List?)?.cast<String>() ?? const [];
+      if (ids.isNotEmpty) {
+        q = q.where(FieldPath.documentId, whereIn: ids.take(30).toList());
+      }
+      return q;
+    }
+
+    final filters = (source['filters'] as List?) ?? const [];
+    for (final f in filters) {
+      if (f is! Map) continue;
+      final field = f['field'] as String?;
+      if (field == null) continue;
+      final op = f['op'] as String? ?? '==';
+      final value = f['value'];
+      switch (op) {
+        case '==':
+          q = q.where(field, isEqualTo: value);
+          break;
+        case '!=':
+          q = q.where(field, isNotEqualTo: value);
+          break;
+        case '>':
+          q = q.where(field, isGreaterThan: value);
+          break;
+        case '>=':
+          q = q.where(field, isGreaterThanOrEqualTo: value);
+          break;
+        case '<':
+          q = q.where(field, isLessThan: value);
+          break;
+        case '<=':
+          q = q.where(field, isLessThanOrEqualTo: value);
+          break;
+        case 'array-contains':
+          q = q.where(field, arrayContains: value);
+          break;
+      }
+    }
+
+    final orderBy = source['orderBy'];
+    if (orderBy is Map && orderBy['field'] is String) {
+      q = q.orderBy(orderBy['field'] as String,
+          descending: (orderBy['dir'] as String?) == 'desc');
+    }
+
+    final limit = (source['limit'] as num?)?.toInt() ?? 15;
+    if (limit > 0) q = q.limit(limit);
+    return q;
   }
 
   Widget _buildSearchResults() {
@@ -591,65 +939,77 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
           ),
         ],
       ),
-      child: ListTile(
-        contentPadding:
-        const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
-        leading: ClipRRect(
-          borderRadius: BorderRadius.circular(8.0),
-          child: CachedNetworkImage(
-            imageUrl: imageUrl ?? '',
-            width: 50,
-            height: 50,
-            fit: BoxFit.contain,
-            placeholder: (context, url) =>
-            const ShimmerPlaceholder(width: 50, height: 50),
-            errorWidget: (context, url, error) => const Icon(Icons.error),
-          ),
-        ),
-        title: Text(
-          name ?? 'Unnamed',
-          style: TextStyle(fontWeight: FontWeight.bold, color: textColor),
-        ),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            if (variante != null && variante.isNotEmpty)
-              Text(
-                variante,
-                style: TextStyle(color: textColor, fontSize: 12),
-              ),
-            ImageFiltered(
-              imageFilter: ImageFilter.blur(
-                sigmaX: isGuest ? 6.0 : 0.0,
-                sigmaY: isGuest ? 6.0 : 0.0,
-              ),
-              child: Text(
-                _formatPrice(price),
-                style: const TextStyle(color: Colors.green),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(10.0),
+              child: CachedNetworkImage(
+                imageUrl: imageUrl ?? '',
+                width: 90,
+                height: 90,
+                fit: BoxFit.contain,
+                placeholder: (context, url) =>
+                const ShimmerPlaceholder(width: 90, height: 90),
+                errorWidget: (context, url, error) => const Icon(Icons.error),
               ),
             ),
-            if (typeSpecific != null && typeSpecific.isNotEmpty)
-              Text(
-                typeSpecific,
-                style: const TextStyle(color: Colors.grey, fontSize: 12),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    name ?? 'Unnamed',
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                        fontWeight: FontWeight.bold, color: textColor),
+                  ),
+                  if (variante != null && variante.isNotEmpty)
+                    Text(
+                      variante,
+                      style: TextStyle(color: textColor, fontSize: 12),
+                    ),
+                  ImageFiltered(
+                    imageFilter: ImageFilter.blur(
+                      sigmaX: isGuest ? 6.0 : 0.0,
+                      sigmaY: isGuest ? 6.0 : 0.0,
+                    ),
+                    child: Text(
+                      _formatPrice(price),
+                      style: const TextStyle(color: Colors.green),
+                    ),
+                  ),
+                  if (typeSpecific != null && typeSpecific.isNotEmpty)
+                    Text(
+                      typeSpecific,
+                      style: const TextStyle(color: Colors.grey, fontSize: 12),
+                    ),
+                ],
               ),
+            ),
+            const SizedBox(width: 8),
+            SizedBox(
+              width: 100,
+              child: _AddToCartButton(
+                data: {
+                  'docId': docId,
+                  'nombre': name,
+                  'price': price,
+                  'image_url': imageUrl,
+                  'bulk': isBulk,
+                  'stock': stock,
+                  'type_specific': typeSpecific,
+                  'variante': variante,
+                },
+                textColor: textColor,
+              ),
+            ),
           ],
-        ),
-        trailing: SizedBox(
-          width: 100,
-          child: _AddToCartButton(
-            data: {
-              'docId': docId,
-              'nombre': name,
-              'price': price,
-              'image_url': imageUrl,
-              'bulk': isBulk,
-              'stock': stock,
-              'type_specific': typeSpecific,
-              'variante': variante,
-            },
-            textColor: textColor,
-          ),
         ),
       ),
     );
@@ -661,21 +1021,30 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
   }
 }
 
-class FirestoreProductGrid extends StatelessWidget {
+class FirestoreProductGrid extends StatefulWidget {
   final String title;
   final Query<Map<String, dynamic>> query;
+  final List<String>? orderedIds;
 
   const FirestoreProductGrid({
     super.key,
     required this.title,
     required this.query,
+    this.orderedIds,
   });
+
+  @override
+  State<FirestoreProductGrid> createState() => _FirestoreProductGridState();
+}
+
+class _FirestoreProductGridState extends State<FirestoreProductGrid> {
+  late final Stream<QuerySnapshot> _stream = widget.query.snapshots();
 
   @override
   Widget build(BuildContext context) {
     return Column(
       children: [
-        _buildSection(context, title),
+        _buildSection(context, widget.title),
         _buildHorizontalGridView(context),
       ],
     );
@@ -701,18 +1070,53 @@ class FirestoreProductGrid extends StatelessWidget {
     );
   }
 
+  Widget _buildSkeletonRow() {
+    return ListView.builder(
+      scrollDirection: Axis.horizontal,
+      itemCount: 3,
+      itemBuilder: (context, i) => Container(
+        width: 150,
+        margin: const EdgeInsets.fromLTRB(8, 8, 5, 8),
+        decoration: BoxDecoration(
+          color: Colors.grey.withValues(alpha: 0.15),
+          borderRadius: BorderRadius.circular(12),
+        ),
+      ),
+    );
+  }
+
   Widget _buildHorizontalGridView(BuildContext context) {
     return SizedBox(
       height: 300,
       child: StreamBuilder<QuerySnapshot>(
-        stream: query.snapshots(),
+        stream: _stream,
         builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting &&
+              !snapshot.hasData) {
+            return _buildSkeletonRow();
+          }
           if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
             return const Center(child: Text("No se encontraron productos"));
           }
-          List<Widget> items = snapshot.data!.docs
-              .map((doc) => _buildGridItem(context, doc))
-              .toList();
+          var docs = snapshot.data!.docs.where((d) {
+            final m = d.data() as Map<String, dynamic>;
+            return (m['hide_online'] as bool?) != true;
+          }).toList();
+          if (docs.isEmpty) {
+            return const Center(child: Text("No se encontraron productos"));
+          }
+          final ordered = widget.orderedIds;
+          if (ordered != null && ordered.isNotEmpty) {
+            final indexById = <String, int>{
+              for (int i = 0; i < ordered.length; i++) ordered[i]: i,
+            };
+            const last = 1 << 30;
+            docs = docs.toList()
+              ..sort((a, b) => (indexById[a.id] ?? last)
+                  .compareTo(indexById[b.id] ?? last));
+          }
+          List<Widget> items =
+              docs.map((doc) => _buildGridItem(context, doc)).toList();
           return ListView(
             scrollDirection: Axis.horizontal,
             children: items,
@@ -875,6 +1279,7 @@ class _AddToCartButton extends StatefulWidget {
 class _AddToCartButtonState extends State<_AddToCartButton> {
   bool _showSwitchTile = false;
   bool _showAgregadoButton = false;
+  bool _pendingCommit = false;
   double _quantity = 1;
   Timer? _timer;
   late double stock;
@@ -920,13 +1325,16 @@ class _AddToCartButtonState extends State<_AddToCartButton> {
       if (cartItem != null && cartItem.quantity > 0) {
         setState(() {
           _quantity = cartItem.quantity;
-          _showSwitchTile = true;
-          _showAgregadoButton = true;
+          if (!_pendingCommit) {
+            _showSwitchTile = true;
+            _showAgregadoButton = true;
+          }
         });
       } else {
         setState(() {
           _showSwitchTile = false;
           _showAgregadoButton = false;
+          _pendingCommit = false;
         });
       }
     }
@@ -960,15 +1368,17 @@ class _AddToCartButtonState extends State<_AddToCartButton> {
           _showSwitchTile = true;
           _quantity = 1;
           _showAgregadoButton = false;
+          _pendingCommit = true;
         });
 
-        _resetAndStartTimer(docId, name, price, imageUrl, cartProvider, isBulk,
+        _commitToCart(docId, name, price, imageUrl, cartProvider, isBulk,
             typeSpecific, variante);
+        _resetAndStartTimer();
       }
     }
   }
 
-  void _resetAndStartTimer(
+  void _commitToCart(
       String docId,
       String name,
       double price,
@@ -977,31 +1387,32 @@ class _AddToCartButtonState extends State<_AddToCartButton> {
       bool isBulk,
       String? typeSpecific,
       String? variante) {
+    if (_quantity > 0) {
+      cartProvider.setItem(
+        docId,
+        name,
+        price,
+        imageUrl,
+        _quantity,
+        isBulk: isBulk,
+        stock: stock,
+        typeSpecific: typeSpecific,
+        variante: variante,
+      );
+    } else {
+      cartProvider.removeItemCompletely(docId);
+    }
+  }
+
+  void _resetAndStartTimer() {
     _timer?.cancel();
 
     _timer = Timer(const Duration(seconds: 2), () {
       if (mounted) {
         setState(() {
-          if (_quantity > 0) {
-            cartProvider.setItem(
-              docId,
-              name,
-              price,
-              imageUrl,
-              _quantity,
-              isBulk: isBulk,
-              stock: stock,
-              typeSpecific: typeSpecific,
-              variante: variante,
-            );
-          } else {
-            cartProvider.removeItemCompletely(docId);
-          }
+          _pendingCommit = false;
           _showSwitchTile = false;
           _showAgregadoButton = true;
-          if (kDebugMode) {
-            print('Set quantity of $name to $_quantity in cart');
-          }
         });
       }
     });
@@ -1018,6 +1429,7 @@ class _AddToCartButtonState extends State<_AddToCartButton> {
     if (_quantity < stock) {
       setState(() {
         _quantity++;
+        _pendingCommit = true;
       });
 
       final String? docId = widget.data['docId'] as String?;
@@ -1029,8 +1441,9 @@ class _AddToCartButtonState extends State<_AddToCartButton> {
       final String? typeSpecific = widget.data['type_specific'];
       final String? variante = widget.data['variante'];
 
-      _resetAndStartTimer(docId!, name!, price!, imageUrl!, cartProvider,
-          isBulk, typeSpecific, variante);
+      _commitToCart(docId!, name!, price!, imageUrl!, cartProvider, isBulk,
+          typeSpecific, variante);
+      _resetAndStartTimer();
     }
   }
 
@@ -1038,6 +1451,7 @@ class _AddToCartButtonState extends State<_AddToCartButton> {
     if (_quantity > 1) {
       setState(() {
         _quantity--;
+        _pendingCommit = true;
       });
 
       final String? docId = widget.data['docId'] as String?;
@@ -1049,8 +1463,9 @@ class _AddToCartButtonState extends State<_AddToCartButton> {
       final String? typeSpecific = widget.data['type_specific'];
       final String? variante = widget.data['variante'];
 
-      _resetAndStartTimer(docId!, name!, price!, imageUrl!, cartProvider,
-          isBulk, typeSpecific, variante);
+      _commitToCart(docId!, name!, price!, imageUrl!, cartProvider, isBulk,
+          typeSpecific, variante);
+      _resetAndStartTimer();
     }
   }
 
@@ -1097,18 +1512,26 @@ class _AddToCartButtonState extends State<_AddToCartButton> {
       );
     } else if (_showSwitchTile) {
       return Column(
+        mainAxisSize: MainAxisSize.min,
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Row(
+            mainAxisSize: MainAxisSize.min,
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               IconButton(
-                icon: const Icon(Icons.remove),
+                icon: const Icon(Icons.remove, size: 18),
+                padding: EdgeInsets.zero,
+                visualDensity: VisualDensity.compact,
+                constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
                 onPressed: _quantity > 1 ? _decrementQuantity : null,
               ),
               Text('$_quantity', style: TextStyle(color: widget.textColor)),
               IconButton(
-                icon: const Icon(Icons.add),
+                icon: const Icon(Icons.add, size: 18),
+                padding: EdgeInsets.zero,
+                visualDensity: VisualDensity.compact,
+                constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
                 onPressed: _incrementQuantity,
               ),
             ],
@@ -1320,11 +1743,7 @@ class _AddToCartButtonState extends State<_AddToCartButton> {
                   onPressed: () {
                     final kilos = double.tryParse(kilosController.text) ?? 0.0;
                     if (kilos > stock) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('No hay suficiente stock disponible'),
-                        ),
-                      );
+                      return;
                     } else {
                       Navigator.of(context).pop();
                       if (widget.data['docId'] != null &&
@@ -1359,7 +1778,6 @@ class _AddToCartButtonState extends State<_AddToCartButton> {
     return '\$${(price as num).toStringAsFixed(2)}';
   }
 }
-// ─── Arcade launch transition page ───────────────────────────────────────────
 enum _TermPhase { booting, awaitingKey, keyError, hacking }
 
 class _ArcadeLaunchPage extends StatefulWidget {
@@ -1386,7 +1804,6 @@ class _ArcadeLaunchPageState extends State<_ArcadeLaunchPage> {
   final FocusNode _keyFocus = FocusNode();
   final ScrollController _scrollCtrl = ScrollController();
 
-  // ── Boot sequence ──────────────────────────────────────────────────────────
   static const _bootLines = [
     '',
     ' ╔══════════════════════════════════╗',
@@ -1412,7 +1829,6 @@ class _ArcadeLaunchPageState extends State<_ArcadeLaunchPage> {
     ' [!] ENTER CONFIRMATION CODE TO CONTINUE',
   ];
 
-  // ── Hacker script (shown after correct key) ────────────────────────────────
   static const _hackerLines = [
     '',
     r' C:\> cls && ./h4ck.sh --silent --escalate',
@@ -1459,7 +1875,7 @@ class _ArcadeLaunchPageState extends State<_ArcadeLaunchPage> {
       if (mounted) {
         setState(() => _expectedKey = (doc.data()?['key_word'] as String?)?.trim().toLowerCase());
       }
-    } catch (_) { /* non-critical */ }
+    } catch (_) { }
   }
 
   void _scrollToBottom() {
@@ -1489,7 +1905,6 @@ class _ArcadeLaunchPageState extends State<_ArcadeLaunchPage> {
   void _checkKey() {
     final input = _keyCtrl.text.trim().toLowerCase();
     if (_expectedKey == null || _expectedKey!.isEmpty) {
-      // Key not loaded yet or not set — allow through
       _startHackerScript();
       return;
     }
@@ -1589,7 +2004,6 @@ class _ArcadeLaunchPageState extends State<_ArcadeLaunchPage> {
               ),
             ),
           ),
-          // Content: anchored to bottom, scrolls upward as lines fill
           SafeArea(
             child: LayoutBuilder(
               builder: (ctx, constraints) {
@@ -1597,7 +2011,6 @@ class _ArcadeLaunchPageState extends State<_ArcadeLaunchPage> {
                   controller: _scrollCtrl,
                   padding: const EdgeInsets.fromLTRB(18, 14, 18, 28),
                   child: ConstrainedBox(
-                    // minHeight = full viewport so short content sits at bottom
                     constraints: BoxConstraints(minWidth: double.infinity, minHeight: constraints.maxHeight - 48),
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.end,
@@ -1618,14 +2031,12 @@ class _ArcadeLaunchPageState extends State<_ArcadeLaunchPage> {
     );
   }
 
-  // Input row — tap anywhere on it to open keyboard; blends with terminal
   Widget _buildKeyInput() {
     return GestureDetector(
       onTap: () => _keyFocus.requestFocus(),
       child: Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        // Static prompt prefix — same style as a command line
         const Text(
           r' C:\> ACCESS_CODE: ',
           style: TextStyle(
@@ -1669,12 +2080,11 @@ class _ArcadeLaunchPageState extends State<_ArcadeLaunchPage> {
           ),
         ),
       ],
-    ),   // Row
-    );   // GestureDetector
+    ),
+    );
   }
 }
 
-// ── Terminal line widget ───────────────────────────────────────────────────────
 class _TermLine extends StatelessWidget {
   final String text;
   final bool isHacker;
@@ -1733,7 +2143,6 @@ class _TermLine extends StatelessWidget {
   }
 }
 
-// ── Blinking cursor ────────────────────────────────────────────────────────────
 class _BlinkCursor extends StatefulWidget {
   const _BlinkCursor();
   @override
@@ -1770,7 +2179,6 @@ class _BlinkCursorState extends State<_BlinkCursor> with SingleTickerProviderSta
   }
 }
 
-// ─── CRT scanline overlay for terminal screen ────────────────────────────────
 class _CrtScanlinePainter extends CustomPainter {
   const _CrtScanlinePainter();
 

@@ -4,9 +4,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'arcade_input_controller.dart';
+import 'game_saldo.dart';
 import 'high_score_service.dart';
-
-// ─── Cell State ──────────────────────────────────────────────────────────────
 
 enum _CellState { hidden, revealed, flagged }
 
@@ -19,8 +18,6 @@ class _Cell {
         neighborCount = 0,
         state = _CellState.hidden;
 }
-
-// ─── Screen ──────────────────────────────────────────────────────────────────
 
 class LogicGridScreen extends StatefulWidget {
   final String userId;
@@ -43,7 +40,6 @@ class LogicGridScreen extends StatefulWidget {
 }
 
 class _LogicGridScreenState extends State<LogicGridScreen> {
-  // Grid
   late List<List<_Cell>> _grid;
   int _cursorRow = 4, _cursorCol = 4;
   bool _firstReveal = true;
@@ -60,7 +56,6 @@ class _LogicGridScreenState extends State<LogicGridScreen> {
   Timer? _ticker;
   int _elapsedSeconds = 0;
 
-  // Track which mine was triggered first (for color highlight)
   int _triggeredMineRow = -1;
   int _triggeredMineCol = -1;
 
@@ -94,7 +89,14 @@ class _LogicGridScreenState extends State<LogicGridScreen> {
     _triggeredMineCol = -1;
   }
 
-  void _restart() {
+  Future<void> _restart() async {
+    final ns = await chargeForReplay(
+        userId: widget.userId,
+        rewardsDocRef: widget.rewardsDocRef,
+        currentSaldo: _saldo);
+    if (ns == null) return;
+    if (!mounted) return;
+    widget.onSaldoChanged(ns);
     _ticker?.cancel();
     _ticker = null;
     _isRunning = false;
@@ -103,12 +105,10 @@ class _LogicGridScreenState extends State<LogicGridScreen> {
     _score = 0;
     _awardingPoints = false;
     _initGrid();
-    setState(() {});
+    setState(() => _saldo = ns);
   }
 
-  // ─── Mine Placement ────────────────────────────────────────────────────────
-
-  static const int _kMineCount = 15; // was 12 — harder
+  static const int _kMineCount = 15;
 
   void _placeMines(int safeRow, int safeCol) {
     final rng = Random();
@@ -120,7 +120,6 @@ class _LogicGridScreenState extends State<LogicGridScreen> {
       _grid[r][c].hasMine = true;
       placed++;
     }
-    // Count neighbors
     for (int r = 0; r < 9; r++) {
       for (int c = 0; c < 9; c++) {
         if (_grid[r][c].hasMine) continue;
@@ -137,8 +136,6 @@ class _LogicGridScreenState extends State<LogicGridScreen> {
     }
   }
 
-  // ─── Reveal (flood-fill) ───────────────────────────────────────────────────
-
   void _reveal(int row, int col) {
     if (row < 0 || row >= 9 || col < 0 || col >= 9) return;
     final cell = _grid[row][col];
@@ -154,11 +151,8 @@ class _LogicGridScreenState extends State<LogicGridScreen> {
     }
   }
 
-  // ─── Win / Loss ────────────────────────────────────────────────────────────
-
   void _checkWin() {
     if (_revealedCount >= 81 - _kMineCount) {
-      // 81 - 12 mines = 69
       _isWon = true;
       _ticker?.cancel();
       _ticker = null;
@@ -183,7 +177,6 @@ class _LogicGridScreenState extends State<LogicGridScreen> {
   void _triggerLoss() {
     _triggeredMineRow = _cursorRow;
     _triggeredMineCol = _cursorCol;
-    // Reveal all mines
     for (int r = 0; r < 9; r++) {
       for (int c = 0; c < 9; c++) {
         if (_grid[r][c].hasMine) {
@@ -202,13 +195,10 @@ class _LogicGridScreenState extends State<LogicGridScreen> {
     });
   }
 
-  // ─── Controller ────────────────────────────────────────────────────────────
-
   void _onControllerEvent() {
     final event = widget.controller.lastEvent;
     if (event == null || !event.isDown) return;
 
-    // If game over/won, any relevant button restarts
     if (_isWon || _isLost) {
       if (event.button == ArcadeButton.start || event.button == ArcadeButton.a) {
         _restart();
@@ -216,10 +206,8 @@ class _LogicGridScreenState extends State<LogicGridScreen> {
       return;
     }
 
-    // Start screen: mark running on any button press
     if (!_isRunning) {
       setState(() => _isRunning = true);
-      // Only navigate or flag after running, fall through to handle input
     }
 
     setState(() {
@@ -271,7 +259,6 @@ class _LogicGridScreenState extends State<LogicGridScreen> {
     if (_firstReveal) {
       _placeMines(row, col);
       _firstReveal = false;
-      // Start timer
       _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
         if (mounted && !_isWon && !_isLost) {
           setState(() => _elapsedSeconds++);
@@ -290,7 +277,7 @@ class _LogicGridScreenState extends State<LogicGridScreen> {
   }
 
   void _handleFlag() {
-    if (_firstReveal) return; // don't allow flags before first reveal
+    if (_firstReveal) return;
     final cell = _grid[_cursorRow][_cursorCol];
     if (cell.state == _CellState.revealed) return;
     if (cell.state == _CellState.flagged) {
@@ -304,8 +291,6 @@ class _LogicGridScreenState extends State<LogicGridScreen> {
       HapticFeedback.selectionClick();
     }
   }
-
-  // ─── Firestore ─────────────────────────────────────────────────────────────
 
   Future<void> _updateFirestore(double newSaldo) async {
     try {
@@ -323,15 +308,12 @@ class _LogicGridScreenState extends State<LogicGridScreen> {
     }
   }
 
-  // ─── Build ─────────────────────────────────────────────────────────────────
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFF110E08),
       body: Stack(
         children: [
-          // Main game painter
           Positioned.fill(
             child: CustomPaint(
               painter: _GridPainter(
@@ -348,11 +330,8 @@ class _LogicGridScreenState extends State<LogicGridScreen> {
               ),
             ),
           ),
-          // Start overlay
           if (!_isRunning) _buildStartOverlay(),
-          // Win overlay
           if (_isWon) _buildWinOverlay(),
-          // Loss overlay
           if (_isLost) _buildLossOverlay(),
           if (_paused && _isRunning) _buildPauseOverlay(),
         ],
@@ -506,8 +485,6 @@ class _LogicGridScreenState extends State<LogicGridScreen> {
   );
 }
 
-// ─── Painter ─────────────────────────────────────────────────────────────────
-
 class _GridPainter extends CustomPainter {
   final List<List<_Cell>> grid;
   final int cursorRow, cursorCol;
@@ -538,7 +515,6 @@ class _GridPainter extends CustomPainter {
     final bx = ((size.width - cs * kCols) / 2).floorToDouble();
     const by = 36.0;
 
-    // Full background
     final fullBg = Paint()..color = const Color(0xFF110E08)..isAntiAlias = false;
     canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), fullBg);
 
@@ -557,7 +533,6 @@ class _GridPainter extends CustomPainter {
       ..isAntiAlias = false;
     canvas.drawRect(Rect.fromLTWH(0, 0, size.width, 36), hudPaint);
 
-    // Danger stripe at bottom of HUD
     final stripePaint = Paint()..color = const Color(0xFFFF6600)..isAntiAlias = false;
     canvas.drawRect(Rect.fromLTWH(0, 34, size.width, 2), stripePaint);
 
@@ -579,7 +554,6 @@ class _GridPainter extends CustomPainter {
   }
 
   void _paintGrid(Canvas canvas, double cs, double bx, double by) {
-    // Board frame
     final framePaint = Paint()
       ..color = const Color(0xFF5A4A20)
       ..isAntiAlias = false
@@ -587,7 +561,6 @@ class _GridPainter extends CustomPainter {
       ..strokeWidth = 2;
     canvas.drawRect(Rect.fromLTWH(bx - 1, by - 1, cs * kCols + 2, cs * kRows + 2), framePaint);
 
-    // Background
     final bgPaint = Paint()
       ..color = const Color(0xFF1E1A0E)
       ..isAntiAlias = false;
@@ -603,7 +576,6 @@ class _GridPainter extends CustomPainter {
       }
     }
 
-    // Cursor border (on top of cells)
     final cx = bx + cursorCol * cs;
     final cy = by + cursorRow * cs;
     final cursorPaint = Paint()
@@ -618,35 +590,28 @@ class _GridPainter extends CustomPainter {
     final rect = Rect.fromLTWH(x, y, cs, cs);
 
     if (cell.state == _CellState.hidden || cell.state == _CellState.flagged) {
-      // Hidden / flagged: military embossed
       final basePaint = Paint()
         ..color = const Color(0xFF3D3820)
         ..isAntiAlias = false;
       canvas.drawRect(rect, basePaint);
 
-      // Top edge bright (brass highlight)
       final brightPaint = Paint()
         ..color = const Color(0xFF6B6030)
         ..isAntiAlias = false;
       canvas.drawRect(Rect.fromLTWH(x, y, cs, 1), brightPaint);
-      // Left edge bright
       canvas.drawRect(Rect.fromLTWH(x, y, 1, cs), brightPaint);
 
-      // Bottom edge dark
       final darkPaint = Paint()
         ..color = const Color(0xFF1A1600)
         ..isAntiAlias = false;
       canvas.drawRect(Rect.fromLTWH(x, y + cs - 1, cs, 1), darkPaint);
-      // Right edge dark
       canvas.drawRect(Rect.fromLTWH(x + cs - 1, y, 1, cs), darkPaint);
 
       if (cell.state == _CellState.flagged) {
         _paintFlag(canvas, x, y, cs);
       }
     } else {
-      // Revealed
       if (cell.hasMine) {
-        // Mine background
         final Color mineBgColor;
         if (r == triggeredMineRow && c == triggeredMineCol) {
           mineBgColor = const Color(0xFFFF6600);
@@ -659,13 +624,11 @@ class _GridPainter extends CustomPainter {
         canvas.drawRect(rect, mineBgPaint);
         _paintMine(canvas, x, y, cs);
       } else {
-        // Revealed empty / numbered
         final revealedPaint = Paint()
           ..color = const Color(0xFF2A2610)
           ..isAntiAlias = false;
         canvas.drawRect(rect, revealedPaint);
 
-        // Inner border (inset look)
         final innerBorderPaint = Paint()
           ..color = const Color(0xFF1A1600)
           ..isAntiAlias = false;
@@ -680,15 +643,15 @@ class _GridPainter extends CustomPainter {
   }
 
   static const List<Color> _numColors = [
-    Colors.transparent, // 0 (unused)
-    Color(0xFF4444FF), // 1
-    Color(0xFF44AA44), // 2
-    Color(0xFFFF4444), // 3
-    Color(0xFF000088), // 4
-    Color(0xFF880000), // 5
-    Color(0xFF008888), // 6
-    Color(0xFF000000), // 7
-    Color(0xFF888888), // 8
+    Colors.transparent,
+    Color(0xFF4444FF),
+    Color(0xFF44AA44),
+    Color(0xFFFF4444),
+    Color(0xFF000088),
+    Color(0xFF880000),
+    Color(0xFF008888),
+    Color(0xFF000000),
+    Color(0xFF888888),
   ];
 
   void _paintNumber(Canvas canvas, int n, double x, double y, double cs) {
@@ -708,7 +671,6 @@ class _GridPainter extends CustomPainter {
   }
 
   void _paintMine(Canvas canvas, double x, double y, double cs) {
-    // Center a 7×7 sprite area
     final cx = (x + cs / 2).floorToDouble();
     final cy = (y + cs / 2).floorToDouble();
 
@@ -716,18 +678,15 @@ class _GridPainter extends CustomPainter {
       ..color = const Color(0xFF111111)
       ..isAntiAlias = false;
 
-    // Body: 3 overlapping rects (5×3, 3×5, 7×1 center)
-    canvas.drawRect(Rect.fromLTWH(cx - 2, cy - 1, 5, 3), minePaint); // 5×3
-    canvas.drawRect(Rect.fromLTWH(cx - 1, cy - 2, 3, 5), minePaint); // 3×5
-    canvas.drawRect(Rect.fromLTWH(cx - 3, cy, 7, 1), minePaint); // 7×1 center
+    canvas.drawRect(Rect.fromLTWH(cx - 2, cy - 1, 5, 3), minePaint);
+    canvas.drawRect(Rect.fromLTWH(cx - 1, cy - 2, 3, 5), minePaint);
+    canvas.drawRect(Rect.fromLTWH(cx - 3, cy, 7, 1), minePaint);
 
-    // 4 spikes (1×2 rects)
-    canvas.drawRect(Rect.fromLTWH(cx, cy - 4, 1, 2), minePaint); // up
-    canvas.drawRect(Rect.fromLTWH(cx, cy + 3, 1, 2), minePaint); // down
-    canvas.drawRect(Rect.fromLTWH(cx - 4, cy, 2, 1), minePaint); // left
-    canvas.drawRect(Rect.fromLTWH(cx + 3, cy, 2, 1), minePaint); // right
+    canvas.drawRect(Rect.fromLTWH(cx, cy - 4, 1, 2), minePaint);
+    canvas.drawRect(Rect.fromLTWH(cx, cy + 3, 1, 2), minePaint);
+    canvas.drawRect(Rect.fromLTWH(cx - 4, cy, 2, 1), minePaint);
+    canvas.drawRect(Rect.fromLTWH(cx + 3, cy, 2, 1), minePaint);
 
-    // Highlight dot
     final hlPaint = Paint()
       ..color = const Color(0xFFFFFFFF)
       ..isAntiAlias = false;
@@ -739,20 +698,16 @@ class _GridPainter extends CustomPainter {
     final artH = size.height - artTop - 4;
     if (artH < 30) return;
 
-    // Hazard stripe bar at top
     final stripeH = 8.0;
     final stripeW = 14.0;
     int stripeCount = (boardW / (stripeW * 2)).ceil() + 2;
     for (int i = 0; i < stripeCount; i++) {
       final sx = bx + i * stripeW * 2 - stripeW;
-      // Yellow stripe
       canvas.drawRect(Rect.fromLTWH(sx, artTop, stripeW, stripeH),
           Paint()..color = const Color(0xFFFFCC00)..isAntiAlias = false);
-      // Black stripe
       canvas.drawRect(Rect.fromLTWH(sx + stripeW, artTop, stripeW, stripeH),
           Paint()..color = const Color(0xFF1A1600)..isAntiAlias = false);
     }
-    // Clip hazard stripes to board width
     canvas.drawRect(
       Rect.fromLTWH(0, artTop, bx, stripeH),
       Paint()..color = const Color(0xFF110E08)..isAntiAlias = false,
@@ -766,13 +721,10 @@ class _GridPainter extends CustomPainter {
     final contentH = size.height - contentTop - 4;
     if (contentH < 20) return;
 
-    // Central mine graphic — use absolute layout so mine and text never overlap
     final cx = size.width / 2;
-    final mineR = (contentH * 0.22).clamp(12.0, 28.0); // capped smaller
-    // Title sits at top, mine centered after it, stats below mine
-    final cy = contentTop + 20 + mineR * 1.6; // 20px for title row
+    final mineR = (contentH * 0.22).clamp(12.0, 28.0);
+    final cy = contentTop + 20 + mineR * 1.6;
 
-    // Glow rings
     for (int i = 3; i >= 1; i--) {
       canvas.drawCircle(
         Offset(cx, cy),
@@ -784,17 +736,14 @@ class _GridPainter extends CustomPainter {
       );
     }
 
-    // Mine body
     final minePaint = Paint()..color = const Color(0xFF2A2A2A)..isAntiAlias = true;
     canvas.drawCircle(Offset(cx, cy), mineR, minePaint);
 
-    // Shine on mine
     final shinePaint = Paint()
       ..color = const Color(0xFF555555)
       ..isAntiAlias = true;
     canvas.drawCircle(Offset(cx - mineR * 0.3, cy - mineR * 0.3), mineR * 0.25, shinePaint);
 
-    // Spikes (8 directions)
     final spikeL = mineR * 0.55;
     final spikeW = mineR * 0.12;
     final spikePaint = Paint()..color = const Color(0xFF333333)..isAntiAlias = false;
@@ -814,7 +763,6 @@ class _GridPainter extends CustomPainter {
       canvas.drawPath(path, spikePaint);
     }
 
-    // Fuse
     final fusePaint = Paint()
       ..color = const Color(0xFF886633)
       ..strokeWidth = 2
@@ -825,12 +773,10 @@ class _GridPainter extends CustomPainter {
       ..cubicTo(cx + 8, cy - mineR - 10, cx + 14, cy - mineR - 6, cx + 10, cy - mineR - 18);
     canvas.drawPath(fusePath, fusePaint);
 
-    // Spark at fuse tip
     final sparkPaint = Paint()..color = const Color(0xFFFFAA00)..isAntiAlias = true;
     canvas.drawCircle(Offset(cx + 10, cy - mineR - 18), 3, sparkPaint);
     canvas.drawCircle(Offset(cx + 10, cy - mineR - 18), 2, Paint()..color = const Color(0xFFFFFFCC)..isAntiAlias = true);
 
-    // "ZONA PELIGROSA" text
     final textY = contentTop + 2.0;
     final titlePainter = TextPainter(
       text: const TextSpan(
@@ -847,7 +793,6 @@ class _GridPainter extends CustomPainter {
     titlePainter.layout(maxWidth: size.width);
     titlePainter.paint(canvas, Offset((size.width - titlePainter.width) / 2, textY));
 
-    // Stats text below mine — always placed below mine spikes
     final statsY = cy + mineR * 1.6 + 6;
     final statsPainter = TextPainter(
       text: const TextSpan(
@@ -874,10 +819,8 @@ class _GridPainter extends CustomPainter {
     final poleTop = (y + cs * 0.2).floorToDouble();
     final poleH = (cs * 0.6).floorToDouble();
 
-    // Pole: 1px wide
     canvas.drawRect(Rect.fromLTWH(poleX, poleTop, 1, poleH), polePaint);
 
-    // Flag: 3px wide, cs*0.3 tall at top of pole
     final flagW = (cs * 0.35).floorToDouble();
     final flagH = (cs * 0.3).floorToDouble();
     canvas.drawRect(Rect.fromLTWH(poleX + 1, poleTop, flagW, flagH), flagPaint);

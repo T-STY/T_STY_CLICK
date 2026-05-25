@@ -4,15 +4,67 @@ import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+class CartGroup {
+  final String name;
+  final String? comboInstanceId;
+  final Map<String, double> claimed;
+  final double savings;
+
+  CartGroup({
+    required this.name,
+    required this.claimed,
+    required this.savings,
+    this.comboInstanceId,
+  });
+}
+
+class ComboInstance {
+  final String instanceId;
+  final String comboId;
+  final String name;
+  final List<Map<String, dynamic>> components;
+  final double savings;
+
+  ComboInstance({
+    required this.instanceId,
+    required this.comboId,
+    required this.name,
+    required this.components,
+    required this.savings,
+  });
+
+  Map<String, dynamic> toMap() => {
+        'instanceId': instanceId,
+        'comboId': comboId,
+        'name': name,
+        'components': components,
+        'savings': savings,
+      };
+
+  factory ComboInstance.fromJson(Map<String, dynamic> j) => ComboInstance(
+        instanceId: j['instanceId'] as String,
+        comboId: j['comboId'] as String? ?? '',
+        name: j['name'] as String? ?? 'Combo',
+        components: (j['components'] as List?)
+                ?.map((e) => Map<String, dynamic>.from(e as Map))
+                .toList() ??
+            const [],
+        savings: (j['savings'] as num?)?.toDouble() ?? 0.0,
+      );
+}
+
 class CartProvider extends ChangeNotifier {
   Map<String, CartItem> _items = {};
+  List<ComboInstance> _comboInstances = [];
 
   List<Map<String, dynamic>> _activePromotions = [];
-  double _promoDiscount = 0.0;
-  List<String> _appliedPromosList = [];
+  double _totalDiscount = 0.0;
+  List<CartGroup> _groups = [];
 
-  List<String> get appliedPromosList => _appliedPromosList;
-  double get promoDiscount => _promoDiscount;
+  List<String> get appliedPromosList => _groups.map((g) => g.name).toList();
+  double get promoDiscount => _totalDiscount;
+
+  List<CartGroup> get groups => List.unmodifiable(_groups);
 
   CartProvider() {
     _init();
@@ -33,15 +85,24 @@ class CartProvider extends ChangeNotifier {
     return total;
   }
 
-  double get discountAmount => _promoDiscount;
+  double get discountAmount => _totalDiscount;
 
   double get totalPriceAfterDiscount {
     final result = totalPrice - discountAmount;
     return result < 0 ? 0 : result;
   }
 
-  int get totalItemCount {
-    return _items.length;
+  int get totalItemCount => _items.length;
+
+  double ungroupedQuantity(String productId) {
+    final item = _items[productId];
+    if (item == null) return 0;
+    double claimed = 0;
+    for (final g in _groups) {
+      claimed += g.claimed[productId] ?? 0;
+    }
+    final remaining = item.quantity - claimed;
+    return remaining < 0 ? 0 : remaining;
   }
 
   Future<void> fetchActivePromotions() async {
@@ -51,7 +112,8 @@ class CartProvider extends ChangeNotifier {
           .where('active', isEqualTo: true)
           .get();
 
-      _activePromotions = snapshot.docs.map((doc) => {'id': doc.id, ...doc.data()}).toList();
+      _activePromotions =
+          snapshot.docs.map((doc) => {'id': doc.id, ...doc.data()}).toList();
       _evaluatePromotions();
       notifyListeners();
     } catch (e) {
@@ -60,202 +122,272 @@ class CartProvider extends ChangeNotifier {
   }
 
   void _evaluatePromotions() {
-    double totalPromoDiscount = 0.0;
-    List<String> applied = [];
+    final available = <String, double>{};
+    _items.forEach((k, v) => available[k] = v.quantity);
+    final groups = <CartGroup>[];
+    double totalDiscount = 0.0;
 
-    // Virtual copy of quantities to safely consume them
-    Map<String, double> availableQuantities = {};
-    _items.forEach((key, item) {
-      availableQuantities[key] = item.quantity;
-    });
+    final kept = <ComboInstance>[];
+    for (final inst in _comboInstances) {
+      bool ok = inst.components.isNotEmpty;
+      for (final c in inst.components) {
+        final pid = c['productId'] as String;
+        final q = (c['quantity'] as num).toDouble();
+        if ((available[pid] ?? 0) < q) {
+          ok = false;
+          break;
+        }
+      }
+      if (!ok) continue;
+      final claimed = <String, double>{};
+      for (final c in inst.components) {
+        final pid = c['productId'] as String;
+        final q = (c['quantity'] as num).toDouble();
+        available[pid] = (available[pid] ?? 0) - q;
+        claimed[pid] = (claimed[pid] ?? 0) + q;
+      }
+      groups.add(CartGroup(
+        name: inst.name,
+        comboInstanceId: inst.instanceId,
+        claimed: claimed,
+        savings: inst.savings,
+      ));
+      totalDiscount += inst.savings;
+      kept.add(inst);
+    }
+    _comboInstances = kept;
 
     for (var promo in _activePromotions) {
+      final type = promo['type'];
+      final name = (promo['name'] ?? 'Promoción').toString();
 
-      // TYPE 1: EXACT COMBO
-      if (promo['type'] == 'combo_exact') {
-        List<dynamic> rawIds = promo['requiredProductIds'] ?? [];
-        List<String> requiredIds = rawIds.map((e) => e.toString()).toList();
-        double comboPrice = (promo['comboPrice'] as num?)?.toDouble() ?? 0.0;
-
-        Map<String, int> requiredCounts = {};
-        for (String id in requiredIds) {
+      if (type == 'combo_exact') {
+        final rawIds = (promo['requiredProductIds'] as List?) ?? [];
+        final requiredIds = rawIds.map((e) => e.toString()).toList();
+        final comboPrice = (promo['comboPrice'] as num?)?.toDouble() ?? 0.0;
+        final requiredCounts = <String, int>{};
+        for (final id in requiredIds) {
           requiredCounts[id] = (requiredCounts[id] ?? 0) + 1;
         }
-
-        bool canApply = true;
+        bool canApply = requiredCounts.isNotEmpty;
         int timesToApply = 999999;
-
         requiredCounts.forEach((reqId, reqQty) {
-          int available = (availableQuantities[reqId] ?? 0).toInt();
-          if (available < reqQty) {
+          final avail = (available[reqId] ?? 0).toInt();
+          if (avail < reqQty) {
             canApply = false;
           } else {
-            timesToApply = min(timesToApply, available ~/ reqQty);
+            timesToApply = min(timesToApply, avail ~/ reqQty);
           }
         });
-
         if (canApply && timesToApply > 0) {
           double normalPrice = 0.0;
+          final claimed = <String, double>{};
           requiredCounts.forEach((reqId, reqQty) {
             normalPrice += (_items[reqId]!.price * reqQty);
-            availableQuantities[reqId] = availableQuantities[reqId]! - (reqQty * timesToApply);
+            available[reqId] = available[reqId]! - (reqQty * timesToApply);
+            claimed[reqId] = (claimed[reqId] ?? 0) + (reqQty * timesToApply);
           });
-
-          double discount = (normalPrice - comboPrice) * timesToApply;
+          final discount = (normalPrice - comboPrice) * timesToApply;
           if (discount > 0) {
-            totalPromoDiscount += discount;
-            applied.add("${promo['name']} (x$timesToApply)");
+            groups.add(CartGroup(
+              name: timesToApply > 1 ? '$name (x$timesToApply)' : name,
+              claimed: claimed,
+              savings: discount,
+            ));
+            totalDiscount += discount;
           }
         }
       }
 
-      // TYPE 2: BRAND COMBO
-      else if (promo['type'] == 'combo_brand') {
-        String triggerId = promo['triggerProductId']?.toString() ?? '';
-        String targetBrand = (promo['targetBrand']?.toString() ?? '').toLowerCase().trim();
-        double comboPrice = (promo['comboPrice'] as num?)?.toDouble() ?? 0.0;
-
-        int triggersAvailable = (availableQuantities[triggerId] ?? 0).toInt();
-
+      else if (type == 'combo_brand') {
+        final triggerId = promo['triggerProductId']?.toString() ?? '';
+        final targetBrand =
+            (promo['targetBrand']?.toString() ?? '').toLowerCase().trim();
+        final comboPrice = (promo['comboPrice'] as num?)?.toDouble() ?? 0.0;
+        int triggersAvailable = (available[triggerId] ?? 0).toInt();
+        final claimed = <String, double>{};
+        double savings = 0;
         while (triggersAvailable > 0) {
           String? pairedId;
-          for (String id in availableQuantities.keys) {
-            if (availableQuantities[id]! > 0 && id != triggerId) {
-              String itemBrand = _items[id]!.brand.toLowerCase().trim();
+          for (final id in available.keys) {
+            if ((available[id] ?? 0) > 0 && id != triggerId) {
+              final itemBrand = (_items[id]?.brand ?? '').toLowerCase().trim();
               if (itemBrand == targetBrand || itemBrand.contains(targetBrand)) {
                 pairedId = id;
                 break;
               }
             }
           }
-
           if (pairedId != null) {
-            double normalPrice = _items[triggerId]!.price + _items[pairedId]!.price;
-            double discount = normalPrice - comboPrice;
-
-            if (discount > 0) {
-              totalPromoDiscount += discount;
-              applied.add(promo['name']);
-            }
-            availableQuantities[triggerId] = availableQuantities[triggerId]! - 1;
-            availableQuantities[pairedId] = availableQuantities[pairedId]! - 1;
+            final normalPrice =
+                _items[triggerId]!.price + _items[pairedId]!.price;
+            final discount = normalPrice - comboPrice;
+            if (discount > 0) savings += discount;
+            available[triggerId] = available[triggerId]! - 1;
+            available[pairedId] = available[pairedId]! - 1;
+            claimed[triggerId] = (claimed[triggerId] ?? 0) + 1;
+            claimed[pairedId] = (claimed[pairedId] ?? 0) + 1;
             triggersAvailable--;
           } else {
             break;
           }
         }
+        if (savings > 0) {
+          groups.add(
+              CartGroup(name: name, claimed: claimed, savings: savings));
+          totalDiscount += savings;
+        }
       }
 
-      // TYPE 3: BxGy
-      else if (promo['type'] == 'bxgy') {
-        String targetId = promo['targetProductId']?.toString() ?? '';
-        int buyQty = promo['buyQuantity'] ?? 3;
-        int payQty = promo['payQuantity'] ?? 2;
-
-        if (availableQuantities.containsKey(targetId)) {
-          int qty = availableQuantities[targetId]!.toInt();
-          int freeItemsCount = qty ~/ buyQty;
-
-          if (freeItemsCount > 0) {
-            int itemsFreePerCombo = buyQty - payQty;
-            double discount = (freeItemsCount * itemsFreePerCombo) * _items[targetId]!.price;
-
-            if (discount > 0) {
-              totalPromoDiscount += discount;
-              availableQuantities[targetId] = availableQuantities[targetId]! - (freeItemsCount * buyQty);
-              applied.add("${promo['name']} (x$freeItemsCount)");
-            }
+      else if (type == 'bxgy') {
+        final targetId = promo['targetProductId']?.toString() ?? '';
+        final buyQty = (promo['buyQuantity'] as num?)?.toInt() ?? 3;
+        final payQty = (promo['payQuantity'] as num?)?.toInt() ?? 2;
+        final qty = (available[targetId] ?? 0).toInt();
+        final freeItemsCount = buyQty > 0 ? qty ~/ buyQty : 0;
+        if (freeItemsCount > 0 && _items[targetId] != null) {
+          final itemsFreePerCombo = buyQty - payQty;
+          final discount =
+              (freeItemsCount * itemsFreePerCombo) * _items[targetId]!.price;
+          final consumed = (freeItemsCount * buyQty).toDouble();
+          if (discount > 0) {
+            available[targetId] = (available[targetId] ?? 0) - consumed;
+            groups.add(CartGroup(
+              name: freeItemsCount > 1 ? '$name (x$freeItemsCount)' : name,
+              claimed: {targetId: consumed},
+              savings: discount,
+            ));
+            totalDiscount += discount;
           }
         }
       }
 
-      // TYPE 4: COMBO CHOICE
-      else if (promo['type'] == 'combo_choice') {
-        String triggerId = promo['triggerProductId']?.toString() ?? '';
-        List<dynamic> rawTargetIds = promo['targetProductIds'] ?? [];
-        List<String> targetIds = rawTargetIds.map((e) => e.toString()).toList();
-        double comboPrice = (promo['comboPrice'] as num?)?.toDouble() ?? 0.0;
-
-        int triggersAvailable = (availableQuantities[triggerId] ?? 0).toInt();
-
+      else if (type == 'combo_choice') {
+        final triggerId = promo['triggerProductId']?.toString() ?? '';
+        final rawTargetIds = (promo['targetProductIds'] as List?) ?? [];
+        final targetIds = rawTargetIds.map((e) => e.toString()).toList();
+        final comboPrice = (promo['comboPrice'] as num?)?.toDouble() ?? 0.0;
+        int triggersAvailable = (available[triggerId] ?? 0).toInt();
+        final claimed = <String, double>{};
+        double savings = 0;
         while (triggersAvailable > 0) {
           String? pairedId;
-          for (String id in targetIds) {
-            if ((availableQuantities[id] ?? 0) > 0) {
+          for (final id in targetIds) {
+            if ((available[id] ?? 0) > 0) {
               pairedId = id;
               break;
             }
           }
-
           if (pairedId != null) {
-            double normalPrice = _items[triggerId]!.price + _items[pairedId]!.price;
-            double discount = normalPrice - comboPrice;
-
-            if (discount > 0) {
-              totalPromoDiscount += discount;
-              applied.add(promo['name']);
-            }
-            availableQuantities[triggerId] = availableQuantities[triggerId]! - 1;
-            availableQuantities[pairedId] = availableQuantities[pairedId]! - 1;
+            final normalPrice =
+                _items[triggerId]!.price + _items[pairedId]!.price;
+            final discount = normalPrice - comboPrice;
+            if (discount > 0) savings += discount;
+            available[triggerId] = available[triggerId]! - 1;
+            available[pairedId] = available[pairedId]! - 1;
+            claimed[triggerId] = (claimed[triggerId] ?? 0) + 1;
+            claimed[pairedId] = (claimed[pairedId] ?? 0) + 1;
             triggersAvailable--;
           } else {
             break;
           }
         }
+        if (savings > 0) {
+          groups.add(
+              CartGroup(name: name, claimed: claimed, savings: savings));
+          totalDiscount += savings;
+        }
       }
     }
 
-    _promoDiscount = totalPromoDiscount;
-    _appliedPromosList = applied;
+    _groups = groups;
+    _totalDiscount = totalDiscount;
   }
 
   Future<void> _saveCartToStorage() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      String encodedData = jsonEncode(
-        _items.map((key, item) => MapEntry(key, item.toMap())),
+      await prefs.setString(
+        'tsty_cart_data',
+        jsonEncode(_items.map((key, item) => MapEntry(key, item.toMap()))),
       );
-      await prefs.setString('tsty_cart_data', encodedData);
+      await prefs.setString(
+        'tsty_combo_instances',
+        jsonEncode(_comboInstances.map((c) => c.toMap()).toList()),
+      );
     } catch (e) {
-      if (kDebugMode) {
-        print('Error al guardar el carrito: $e');
-      }
+      if (kDebugMode) print('Error al guardar el carrito: $e');
     }
   }
 
   Future<void> _loadCartFromStorage() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      String? savedData = prefs.getString('tsty_cart_data');
-
+      final savedData = prefs.getString('tsty_cart_data');
       if (savedData != null) {
-        Map<String, dynamic> decodedData = jsonDecode(savedData);
-        _items = decodedData.map((key, value) =>
-            MapEntry(key, CartItem.fromJson(value as Map<String, dynamic>))
-        );
-        _evaluatePromotions();
-        notifyListeners();
+        final decoded = jsonDecode(savedData) as Map<String, dynamic>;
+        _items = decoded.map(
+            (key, value) => MapEntry(key, CartItem.fromJson(value as Map<String, dynamic>)));
+        _items.removeWhere((key, _) => key.startsWith('combo_'));
       }
+      final combosData = prefs.getString('tsty_combo_instances');
+      if (combosData != null) {
+        final list = jsonDecode(combosData) as List;
+        _comboInstances = list
+            .map((e) => ComboInstance.fromJson(Map<String, dynamic>.from(e as Map)))
+            .toList();
+      }
+      _evaluatePromotions();
+      notifyListeners();
     } catch (e) {
-      if (kDebugMode) {
-        print('Error al cargar el carrito: $e');
-      }
+      if (kDebugMode) print('Error al cargar el carrito: $e');
     }
   }
 
+  void _mergeItem(String productId, String name, double price, String imageUrl,
+      double quantity,
+      {required bool isBulk,
+      required double stock,
+      String? typeSpecific,
+      String? variante,
+      String brand = ''}) {
+    final existing = _items[productId];
+    double newQty = (existing?.quantity ?? 0) + quantity;
+    if (stock > 0 && newQty > stock) newQty = stock;
+    if (newQty <= 0) {
+      _items.remove(productId);
+      return;
+    }
+    _items[productId] = CartItem(
+      nombre: name,
+      price: price,
+      quantity: newQty,
+      imageUrl: imageUrl,
+      objectID: productId,
+      isBulk: isBulk,
+      stock: stock,
+      typeSpecific: typeSpecific ?? existing?.typeSpecific ?? '',
+      variante: variante ?? existing?.variante ?? '',
+      brand: brand.isNotEmpty ? brand : (existing?.brand ?? ''),
+    );
+  }
+
   void addItem(String productId, String name, double price, String imageUrl,
-      {double quantity = 1.0, required bool isBulk, required double stock, String? typeSpecific, String? variante, String brand = ''}) {
+      {double quantity = 1.0,
+      required bool isBulk,
+      required double stock,
+      String? typeSpecific,
+      String? variante,
+      String brand = ''}) {
     if (_items.containsKey(productId)) {
       _items.update(
         productId,
-            (existingCartItem) {
+        (existingCartItem) {
           double newQuantity = existingCartItem.quantity + quantity;
-
           if (newQuantity > stock) {
             newQuantity = stock;
             _showStockExceededDialog(existingCartItem.nombre);
           }
-
           return CartItem(
             nombre: existingCartItem.nombre,
             price: existingCartItem.price,
@@ -276,10 +408,9 @@ class CartProvider extends ChangeNotifier {
         initialQuantity = stock;
         _showStockExceededDialog(name);
       }
-
       _items.putIfAbsent(
         productId,
-            () => CartItem(
+        () => CartItem(
           nombre: name,
           price: price,
           quantity: initialQuantity,
@@ -300,7 +431,12 @@ class CartProvider extends ChangeNotifier {
   }
 
   void setItem(String productId, String name, double price, String imageUrl,
-      double quantity, {required bool isBulk, required double stock, String? typeSpecific, String? variante, String brand = ''}) {
+      double quantity,
+      {required bool isBulk,
+      required double stock,
+      String? typeSpecific,
+      String? variante,
+      String brand = ''}) {
     if (quantity > stock) {
       quantity = stock;
       _showStockExceededDialog(name);
@@ -309,7 +445,7 @@ class CartProvider extends ChangeNotifier {
     if (quantity > 0) {
       _items.update(
         productId,
-            (existingCartItem) => CartItem(
+        (existingCartItem) => CartItem(
           nombre: name,
           price: price,
           quantity: quantity,
@@ -348,7 +484,7 @@ class CartProvider extends ChangeNotifier {
       if (_items[productId]!.quantity > 1) {
         _items.update(
           productId,
-              (existingCartItem) {
+          (existingCartItem) {
             double newQuantity = existingCartItem.quantity - 1;
             if (isBulk) {
               newQuantity = existingCartItem.quantity - 0.5;
@@ -385,14 +521,98 @@ class CartProvider extends ChangeNotifier {
     fetchActivePromotions();
   }
 
+  void _reduceItemBy(String productId, double amount) {
+    final item = _items[productId];
+    if (item == null) return;
+    final remaining = item.quantity - amount;
+    if (remaining <= 0.0001) {
+      _items.remove(productId);
+      return;
+    }
+    _items[productId] = CartItem(
+      nombre: item.nombre,
+      price: item.price,
+      quantity: remaining,
+      imageUrl: item.imageUrl,
+      objectID: item.objectID,
+      isBulk: item.isBulk,
+      stock: item.stock,
+      typeSpecific: item.typeSpecific,
+      variante: item.variante,
+      brand: item.brand,
+    );
+  }
+
+  void clearGroup(CartGroup group) {
+    if (group.comboInstanceId != null) {
+      _comboInstances
+          .removeWhere((c) => c.instanceId == group.comboInstanceId);
+    }
+    group.claimed.forEach((pid, qty) => _reduceItemBy(pid, qty));
+    _evaluatePromotions();
+    notifyListeners();
+    _saveCartToStorage();
+    fetchActivePromotions();
+  }
+
+  void clearUngrouped() {
+    for (final id in _items.keys.toList()) {
+      final ungrouped = ungroupedQuantity(id);
+      if (ungrouped > 0) _reduceItemBy(id, ungrouped);
+    }
+    _evaluatePromotions();
+    notifyListeners();
+    _saveCartToStorage();
+    fetchActivePromotions();
+  }
+
+  void addCombo({
+    required String comboId,
+    required String name,
+    required double savings,
+    required List<Map<String, dynamic>> components,
+  }) {
+    for (final c in components) {
+      _mergeItem(
+        c['productId'] as String,
+        (c['nombre'] ?? 'Producto') as String,
+        (c['price'] as num?)?.toDouble() ?? 0.0,
+        (c['imageUrl'] ?? '') as String,
+        (c['quantity'] as num?)?.toDouble() ?? 1.0,
+        isBulk: c['isBulk'] as bool? ?? false,
+        stock: (c['stock'] as num?)?.toDouble() ?? 0.0,
+        typeSpecific: c['typeSpecific'] as String?,
+        variante: c['variante'] as String?,
+        brand: (c['brand'] ?? '') as String,
+      );
+    }
+    _comboInstances.add(ComboInstance(
+      instanceId:
+          '${comboId}_${DateTime.now().microsecondsSinceEpoch}_${Random().nextInt(99999)}',
+      comboId: comboId,
+      name: name,
+      components: components
+          .map((c) => {
+                'productId': c['productId'],
+                'quantity': (c['quantity'] as num?)?.toDouble() ?? 1.0,
+              })
+          .toList(),
+      savings: savings,
+    ));
+    _evaluatePromotions();
+    notifyListeners();
+    _saveCartToStorage();
+  }
+
   CartItem? getItem(String productId) {
     return _items[productId];
   }
 
   void clearCart() {
     _items.clear();
-    _promoDiscount = 0.0;
-    _appliedPromosList.clear();
+    _comboInstances.clear();
+    _groups = [];
+    _totalDiscount = 0.0;
     notifyListeners();
     _saveCartToStorage();
   }

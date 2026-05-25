@@ -3,13 +3,17 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:slide_to_act_reborn/slide_to_act_reborn.dart';
 
+import '../../components/bottom_fade.dart';
 import '../../constants/app_colors.dart';
 import '../../constants/app_defaults.dart';
 import '../../constants/app_images.dart';
 import '../cart/cart_provider.dart';
+import '../cart/components/product_tile_cart.dart';
+import '../../utils/phone_format.dart';
 import '../settings/addresses_section.dart';
 
 import 'components/address_card.dart';
@@ -33,7 +37,6 @@ class _CheckoutPageState extends State<CheckoutPage> {
 
   String? _selectedAddressId;
 
-  Map<String, dynamic>? _rewardsCardData;
   bool _useRewardsBalance = false;
 
   List<Map<String, dynamic>> _assignedCoupons = [];
@@ -45,6 +48,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
   double _subtotal = 0.0;
   double _deliveryFee = 0.0;
   double _total = 0.0;
+
+  bool _isInstorePickup = false;
 
   double _rewardsBalance = 0.0;
   double _appliedRewards = 0.0;
@@ -99,6 +104,14 @@ class _CheckoutPageState extends State<CheckoutPage> {
   }
 
   void _calculateDeliveryFee() {
+    if (_isInstorePickup) {
+      setState(() {
+        _deliveryFee = 0.0;
+      });
+      _calculateTotal();
+      return;
+    }
+
     if (_selectedAddressId == null || _addresses.isEmpty) {
       setState(() {
         _deliveryFee = 0.0;
@@ -136,7 +149,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
       });
     } else {
       setState(() {
-        _deliveryFee = 0.0;
+        _deliveryFee = 20.0;
       });
     }
     _calculateTotal();
@@ -154,23 +167,18 @@ class _CheckoutPageState extends State<CheckoutPage> {
         .get();
 
     if (userCardDoc.exists) {
-      _rewardsCardData = userCardDoc.data();
-      String? cardNumber = _rewardsCardData?['cardNumber'];
-
-      if (cardNumber != null) {
-        final querySnapshot = await FirebaseFirestore.instance
-            .collection('rewards')
-            .where('cardNumber', isEqualTo: cardNumber)
-            .get();
-
-        if (querySnapshot.docs.isNotEmpty) {
-          var rewardsData = querySnapshot.docs.first.data();
-          double? saldo = _toDouble(rewardsData['saldo']);
-
+      try {
+        final result = await FirebaseFunctions.instance
+            .httpsCallable('getRewardsBalance')
+            .call();
+        final data = Map<String, dynamic>.from(result.data as Map);
+        if (data['hasWallet'] == true) {
           setState(() {
-            _rewardsBalance = saldo;
+            _rewardsBalance = _toDouble(data['saldo']);
           });
         }
+      } catch (e) {
+        if (kDebugMode) debugPrint('Error fetching rewards balance: $e');
       }
     }
   }
@@ -196,7 +204,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
         return data.containsKey('expiry_date') &&
             data['expiry_date'] is Timestamp;
       })
-          .map((doc) => {'code': doc.id, ...doc.data()})
+          .map((doc) => {...doc.data(), 'code': doc.id})
           .toList();
 
       setState(() {
@@ -292,9 +300,10 @@ class _CheckoutPageState extends State<CheckoutPage> {
               TextField(
                 controller: phoneController,
                 keyboardType: TextInputType.phone,
+                inputFormatters: [MxPhoneFormatter()],
                 decoration: InputDecoration(
                   labelText: 'Número de Teléfono',
-                  hintText: '10 dígitos',
+                  hintText: '(xxx) xxx - xxxx',
                   filled: true,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
@@ -317,7 +326,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
                 ),
               ),
               onPressed: () async {
-                String newPhone = phoneController.text.trim();
+                String newPhone =
+                    phoneController.text.replaceAll(RegExp(r'\D'), '');
 
                 if (_isValidPhoneNumber(newPhone)) {
                   final userId = FirebaseAuth.instance.currentUser?.uid;
@@ -343,12 +353,6 @@ class _CheckoutPageState extends State<CheckoutPage> {
                       _showAlertDialog('Error', 'No se pudo actualizar. Intenta de nuevo.');
                     }
                   }
-                } else {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                        content: Text(
-                            'Por favor ingresa un número de 10 dígitos válido (no consecutivos ni repetidos).')),
-                  );
                 }
               },
               child:
@@ -397,76 +401,26 @@ class _CheckoutPageState extends State<CheckoutPage> {
   }
 
   Future<void> _applyCoupon(String code) async {
-    final userId = FirebaseAuth.instance.currentUser?.uid;
-    if (userId == null) return;
-    final firestore = FirebaseFirestore.instance;
-
+    final upper = code.toUpperCase();
     try {
-      await firestore.runTransaction((transaction) async {
-        final couponDocRef =
-        firestore.collection('coupons').doc(code.toUpperCase());
-        final couponSnapshot = await transaction.get(couponDocRef);
-
-        if (!couponSnapshot.exists) {
-          throw Exception('Cupón no válido.');
-        }
-
-        final couponData = couponSnapshot.data()!;
-        int remainingUses = couponData['remaining_uses'] ?? 0;
-
-        if (remainingUses < 1) {
-          throw Exception('Este cupón ya no está disponible.');
-        }
-
-        final expiryTimestamp = couponData['expiry_date'];
-        if (expiryTimestamp != null) {
-          final expiryDate = expiryTimestamp.toDate();
-          if (expiryDate.isBefore(DateTime.now())) {
-            throw Exception('Este cupón ha expirado.');
-          }
-        }
-
-        final userCouponRef = firestore
-            .collection('users')
-            .doc(userId)
-            .collection('coupons')
-            .doc(code.toUpperCase());
-
-        final userCouponSnapshot = await transaction.get(userCouponRef);
-
-        if (userCouponSnapshot.exists) {
-          final existingCoupon = userCouponSnapshot.data()!;
-          if (!(existingCoupon['used'] ?? true)) {
-            throw Exception('Ya has aplicado este cupón.');
-          } else {
-            throw Exception('Este cupón ya ha sido utilizado.');
-          }
-        }
-
-        transaction.set(userCouponRef, {
-          'code': couponData['code'],
-          'max_discount': couponData['max_discount'],
-          'percentage': couponData['percentage'],
-          'expiry_date': couponData['expiry_date'],
-          'used': false,
-        });
-
-        transaction.update(couponDocRef, {
-          'remaining_uses': remainingUses - 1,
-        });
-      });
+      await FirebaseFunctions.instance
+          .httpsCallable('claimCoupon')
+          .call(<String, dynamic>{'code': upper});
 
       await _fetchAssignedCoupons();
       if (!mounted) return;
       setState(() {
-        _selectedCouponCode = code.toUpperCase();
+        _selectedCouponCode = upper;
         _calculateDiscount();
       });
 
       _showAlertDialog('Éxito', 'Cupón aplicado exitosamente.');
-    } catch (e) {
+    } on FirebaseFunctionsException catch (e) {
       if (!mounted) return;
-      _showAlertDialog('Error', e.toString().replaceFirst('Exception: ', ''));
+      _showAlertDialog('Error', e.message ?? 'No se pudo aplicar el cupón.');
+    } catch (_) {
+      if (!mounted) return;
+      _showAlertDialog('Error', 'No se pudo aplicar el cupón.');
     }
   }
 
@@ -524,116 +478,32 @@ class _CheckoutPageState extends State<CheckoutPage> {
     if (userId == null) return;
     final cartProvider = Provider.of<CartProvider>(context, listen: false);
 
-    if (_selectedAddressId == null) {
+    if (!_isInstorePickup && _selectedAddressId == null) {
       _showAlertDialog(
           'Error', 'Por favor, selecciona una dirección de entrega.');
       return;
     }
 
-    Map<String, dynamic>? selectedCouponData;
-    if (_selectedCouponCode != null) {
-      try {
-        selectedCouponData = _assignedCoupons.firstWhere(
-              (coupon) => coupon['code'] == _selectedCouponCode,
-        );
-      } catch (e) {
-        selectedCouponData = null;
-      }
-    }
-
-    Map<String, dynamic> orderData = {
-      'userId': userId,
-      'addressId': _selectedAddressId,
-      'paymentMethod': _selectedPaymentMethod,
-      'items': cartProvider.items.values.map((item) => item.toMap()).toList(),
-      'subtotal': _subtotal,
-      'deliveryFee': _deliveryFee,
-      'discount': _discount,
-      'total': _total,
-      'useRewardsBalance': _useRewardsBalance,
-      'timestamp': FieldValue.serverTimestamp(),
-      'appliedCoupon': selectedCouponData != null
-          ? {
-        'code': selectedCouponData['code'],
-        'percentage': selectedCouponData['percentage'],
-        'max_discount': selectedCouponData['max_discount'],
-      }
-          : null,
-      'state': 'En Revision',
-    };
-
     try {
-      final firestore = FirebaseFirestore.instance;
-
-      await firestore.runTransaction((transaction) async {
-        // If using rewards, read current saldo inside transaction for atomicity
-        double verifiedSaldo = 0.0;
-        DocumentReference? rewardsDocRef;
-        DocumentReference? userRewardsSaldoRef;
-
-        if (_useRewardsBalance && _appliedRewards > 0) {
-          userRewardsSaldoRef = firestore
-              .collection('users')
-              .doc(userId)
-              .collection('rewardsCard')
-              .doc('cardInfo');
-
-          final userRewardsSnap = await transaction.get(userRewardsSaldoRef);
-          if (!userRewardsSnap.exists) {
-            throw Exception('No se encontró información de monedero.');
-          }
-
-          final rewardsQuery = await firestore
-              .collection('rewards')
-              .where('cardNumber', isEqualTo: _rewardsCardData?['cardNumber'])
-              .limit(1)
-              .get();
-
-          if (rewardsQuery.docs.isNotEmpty) {
-            rewardsDocRef = rewardsQuery.docs.first.reference;
-            final rewardsSnap = await transaction.get(rewardsDocRef);
-            verifiedSaldo = _toDouble((rewardsSnap.data() as Map<String, dynamic>?)?['saldo'] ?? 0);
-          }
-
-          if (verifiedSaldo < _appliedRewards) {
-            throw Exception('Saldo insuficiente en el monedero.');
-          }
-        }
-
-        // Create order
-        DocumentReference orderRef = firestore.collection('orders').doc();
-        transaction.set(orderRef, orderData);
-
-        // User order history
-        DocumentReference userOrderHistoryRef = firestore
-            .collection('users')
-            .doc(userId)
-            .collection('orderHistory')
-            .doc(orderRef.id);
-        transaction.set(userOrderHistoryRef, orderData);
-
-        // Deduct rewards atomically
-        if (_useRewardsBalance && _appliedRewards > 0 && rewardsDocRef != null && userRewardsSaldoRef != null) {
-          double newRewardsSaldo = (verifiedSaldo - _appliedRewards).clamp(0.0, double.infinity);
-          double newUserSaldo = (_rewardsBalance - _appliedRewards).clamp(0.0, double.infinity);
-
-          transaction.update(userRewardsSaldoRef, {'saldo': newUserSaldo});
-          transaction.update(rewardsDocRef, {'saldo': newRewardsSaldo});
-        }
-
-        // Mark coupon as used
-        if (_selectedCouponCode != null) {
-          DocumentReference userCouponRef = firestore
-              .collection('users')
-              .doc(userId)
-              .collection('coupons')
-              .doc(_selectedCouponCode);
-          transaction.update(userCouponRef, {'used': true});
-        }
+      await FirebaseFunctions.instance
+          .httpsCallable('placeOrder')
+          .call(<String, dynamic>{
+        'items':
+            cartProvider.items.values.map((item) => item.toMap()).toList(),
+        'subtotal': _subtotal,
+        'addressId': _isInstorePickup ? null : _selectedAddressId,
+        'paymentMethod': _selectedPaymentMethod,
+        'useRewardsBalance': _useRewardsBalance,
+        'isInstorePickup': _isInstorePickup,
+        'couponCode': _selectedCouponCode,
       });
 
       cartProvider.clearCart();
       widget.onOrderPlaced();
+    } on FirebaseFunctionsException catch (e) {
+      if (!mounted) return;
+      _showAlertDialog('Error',
+          e.message ?? 'No se pudo completar el pedido. Intenta de nuevo.');
     } catch (e) {
       if (!mounted) return;
       if (kDebugMode) debugPrint('Error placing order: $e');
@@ -645,6 +515,85 @@ class _CheckoutPageState extends State<CheckoutPage> {
   void dispose() {
     _couponController.dispose();
     super.dispose();
+  }
+
+  Widget _buildOrderReview() {
+    final cartProvider = Provider.of<CartProvider>(context);
+    if (cartProvider.items.isEmpty) return const SizedBox.shrink();
+
+    final children = <Widget>[
+      const Padding(
+        padding: EdgeInsets.fromLTRB(16.0, 0, 16.0, 4.0),
+        child: Text(
+          'Tu Pedido',
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        ),
+      ),
+    ];
+
+    Widget tile(String pid, double qty) {
+      final item = cartProvider.getItem(pid);
+      if (item == null) return const SizedBox.shrink();
+      return ProductTileCart(
+        objectId: pid,
+        name: item.nombre,
+        price: item.price,
+        imageUrl: item.imageUrl,
+        quantity: qty,
+        isBulk: item.isBulk,
+        typeSpecific: item.typeSpecific,
+        variante: item.variante,
+        readOnly: true,
+      );
+    }
+
+    for (final g in cartProvider.groups) {
+      children.add(Padding(
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 2),
+        child: Row(
+          children: [
+            const Icon(Icons.local_offer, size: 16, color: Colors.orange),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(g.name,
+                  style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                      color: Colors.orange[800]),
+                  overflow: TextOverflow.ellipsis),
+            ),
+            if (g.savings > 0)
+              Text('-\$${g.savings.toStringAsFixed(2)}',
+                  style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13,
+                      color: Color(0xFF2E7D32))),
+          ],
+        ),
+      ));
+      g.claimed.forEach((pid, qty) {
+        if (qty > 0) children.add(tile(pid, qty));
+      });
+    }
+
+    final ungrouped = cartProvider.items.values
+        .where((it) => cartProvider.ungroupedQuantity(it.objectID) > 0)
+        .toList();
+    if (cartProvider.groups.isNotEmpty && ungrouped.isNotEmpty) {
+      children.add(Padding(
+        padding: const EdgeInsets.fromLTRB(20, 14, 20, 2),
+        child: Text('Otros productos',
+            style: TextStyle(
+                fontWeight: FontWeight.w800,
+                fontSize: 13,
+                color: Colors.grey[600])),
+      ));
+    }
+    for (final item in ungrouped) {
+      children.add(tile(item.objectID, cartProvider.ungroupedQuantity(item.objectID)));
+    }
+
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: children);
   }
 
   Widget _buildRewardsSection() {
@@ -689,7 +638,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
       appBar: AppBar(
         scrolledUnderElevation: 0,
         backgroundColor: Colors.white,
-        automaticallyImplyLeading: true,
+        automaticallyImplyLeading: false,
         title: Padding(
           padding: const EdgeInsets.all(0),
           child: SizedBox(
@@ -707,7 +656,10 @@ class _CheckoutPageState extends State<CheckoutPage> {
       ),
       resizeToAvoidBottomInset: true,
       body: SafeArea(
-        child: SingleChildScrollView(
+        child: BottomFade(
+          clearHeight: 90,
+          fadeHeight: 45,
+          child: SingleChildScrollView(
           child: Column(
             children: [
               const SizedBox(height: 16.0),
@@ -724,14 +676,23 @@ class _CheckoutPageState extends State<CheckoutPage> {
                   },
                   userName: _userName,
                   userPhone: _userPhone,
+                  isInstorePickup: _isInstorePickup,
+                  onPickupToggled: (bool value) {
+                    setState(() {
+                      _isInstorePickup = value;
+                    });
+                    _calculateDeliveryFee();
+                  },
                 ),
               ),
               const SizedBox(height: 16.0),
+              _buildOrderReview(),
+              const SizedBox(height: 16.0),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                child: Text(
+                child: const Text(
                   'Información de Facturación',
-                  style: Theme.of(context).textTheme.titleLarge,
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                 ),
               ),
               const SizedBox(height: 8.0),
@@ -745,13 +706,21 @@ class _CheckoutPageState extends State<CheckoutPage> {
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: CheckoutBillingInformation(
-                    subtotal: _subtotal,
-                    deliveryFee: _deliveryFee,
+                    rawSubtotal:
+                        Provider.of<CartProvider>(context, listen: false)
+                            .totalPrice,
+                    comboDiscount:
+                        Provider.of<CartProvider>(context, listen: false)
+                            .discountAmount,
+                    comboNames:
+                        Provider.of<CartProvider>(context, listen: false)
+                            .appliedPromosList,
                     discount: _discount,
+                    couponCode: _selectedCouponCode,
+                    deliveryFee: _deliveryFee,
                     appliedRewards: _appliedRewards,
                     total: _total,
-                    useRewardsBalance: _useRewardsBalance,
-                    rewardsBalance: _rewardsBalance,
+                    isInstorePickup: _isInstorePickup,
                   ),
                 ),
               ),
@@ -849,6 +818,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
             ],
           ),
         ),
+        ),
       ),
     );
   }
@@ -866,103 +836,179 @@ class _CheckoutPageState extends State<CheckoutPage> {
           highlightColor: Colors.transparent,
         ),
         child: ExpansionTile(
+          leading: const Icon(Icons.local_offer_outlined, color: Colors.black),
           title: const Text(
-            'Aplicar Cupón',
+            'Cupones',
             style: TextStyle(fontWeight: FontWeight.bold),
           ),
+          childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
           children: [
-            if (_assignedCoupons.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                child: ListView(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  children: _assignedCoupons.map((coupon) {
-                    bool isSelected = _selectedCouponCode == coupon['code'];
-                    return ListTile(
-                      leading: CircularCheckbox(
-                        value: isSelected,
-                        activeColor: Colors.black,
-                        checkColor: Colors.white,
-                      ),
-                      title: Text(
-                        '${coupon['code']} - ${coupon['percentage']}% de descuento',
-                        style: TextStyle(
-                          color: isSelected ? Colors.black : Colors.grey,
-                        ),
-                      ),
-                      subtitle: Text(
-                        'Expira: ${coupon['expiry_date'].toDate().toLocal().toString().split(' ')[0]}',
-                        style: TextStyle(
-                          color: isSelected ? Colors.black : Colors.grey,
-                        ),
-                      ),
-                      onTap: () {
-                        setState(() {
-                          if (isSelected) {
-                            _selectedCouponCode = null;
-                          } else {
-                            _selectedCouponCode = coupon['code'];
-                          }
-                          _calculateTotal();
-                        });
-                      },
-                    );
-                  }).toList(),
-                ),
-              ),
-            const Divider(),
-            Padding(
-              padding: const EdgeInsets.all(AppDefaults.padding),
-              child: Row(
+            if (_assignedCoupons.isNotEmpty) ...[
+              ..._assignedCoupons.map(_buildSelectableCoupon),
+              const SizedBox(height: 6),
+              Row(
                 children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _couponController,
-                      decoration: const InputDecoration(
-                        hintText: 'Código de Cupón',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
+                  Expanded(child: Divider(color: Colors.grey.shade300)),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                    child: Text('o ingresa un código',
+                        style:
+                            TextStyle(fontSize: 12, color: Colors.grey[500])),
                   ),
-                  const SizedBox(width: 8.0),
-                  SizedBox(
-                    width: 100,
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        foregroundColor: Colors.white,
-                        backgroundColor: AppColors.primary,
-                        padding: const EdgeInsets.symmetric(vertical: 16.0),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8.0),
-                        ),
-                      ),
-                      onPressed: () {
-                        String code = _couponController.text.trim();
-                        if (code.isNotEmpty) {
-                          _applyCoupon(code).then((_) {
-                            _couponController.clear();
-                          });
-                        } else {
-                          _showAlertDialog('Error',
-                              'Por favor, ingresa un código de cupón.');
-                        }
-                      },
-                      child: const Text(
-                        'Aplicar',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ),
+                  Expanded(child: Divider(color: Colors.grey.shade300)),
                 ],
               ),
+              const SizedBox(height: 12),
+            ],
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _couponController,
+                    textCapitalization: TextCapitalization.characters,
+                    decoration: InputDecoration(
+                      hintText: 'Código de cupón',
+                      isDense: true,
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 14),
+                      filled: true,
+                      fillColor: Colors.grey[100],
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: Colors.grey.shade300),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: Colors.grey.shade300),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                SizedBox(
+                  height: 48,
+                  width: 96,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      foregroundColor: Colors.white,
+                      backgroundColor: Colors.black,
+                      elevation: 0,
+                      padding: EdgeInsets.zero,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    onPressed: () {
+                      String code = _couponController.text.trim();
+                      if (code.isNotEmpty) {
+                        _applyCoupon(code).then((_) {
+                          _couponController.clear();
+                        });
+                      } else {
+                        _showAlertDialog('Error',
+                            'Por favor, ingresa un código de cupón.');
+                      }
+                    },
+                    child: const Text('Aplicar',
+                        style: TextStyle(fontWeight: FontWeight.bold)),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
       ),
     );
+  }
+
+  Widget _buildSelectableCoupon(Map<String, dynamic> coupon) {
+    final bool isSelected = _selectedCouponCode == coupon['code'];
+    final code = (coupon['code'] ?? '').toString();
+    final pct = (coupon['percentage'] as num?)?.toDouble() ?? 0;
+    final exp = coupon['expiry_date'];
+    final String expText = exp is Timestamp ? _fmtCheckoutDate(exp) : '';
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () {
+          setState(() {
+            _selectedCouponCode = isSelected ? null : code;
+            _calculateTotal();
+          });
+        },
+        child: Container(
+          height: 62,
+          decoration: BoxDecoration(
+            color: isSelected ? Colors.black.withValues(alpha: 0.04) : Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: isSelected ? Colors.black : Colors.grey.shade300,
+              width: isSelected ? 1.5 : 1,
+            ),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Container(
+                width: 58,
+                alignment: Alignment.center,
+                color: isSelected ? Colors.black : Colors.grey.shade400,
+                child: Text(
+                  '${pct.toStringAsFixed(0)}%',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      code,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 14,
+                        letterSpacing: 0.5,
+                        color: isSelected ? Colors.black : Colors.black87,
+                      ),
+                    ),
+                    if (expText.isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text('Vence $expText',
+                          style:
+                              TextStyle(fontSize: 11.5, color: Colors.grey[600])),
+                    ],
+                  ],
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.only(right: 12),
+                child: Icon(
+                  isSelected ? Icons.check_circle : Icons.circle_outlined,
+                  color: isSelected ? Colors.black : Colors.grey[400],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _fmtCheckoutDate(Timestamp ts) {
+    final d = ts.toDate().toLocal();
+    String two(int n) => n.toString().padLeft(2, '0');
+    return '${two(d.day)}/${two(d.month)}/${d.year}';
   }
 }
 
@@ -1008,6 +1054,8 @@ class AddressCardWidget extends StatelessWidget {
   final ValueChanged<String?> onAddressSelected;
   final String userName;
   final String userPhone;
+  final bool isInstorePickup;
+  final ValueChanged<bool> onPickupToggled;
 
   const AddressCardWidget({
     super.key,
@@ -1016,6 +1064,8 @@ class AddressCardWidget extends StatelessWidget {
     required this.onAddressSelected,
     required this.userName,
     required this.userPhone,
+    required this.isInstorePickup,
+    required this.onPickupToggled,
   });
 
   @override
@@ -1023,55 +1073,134 @@ class AddressCardWidget extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'Dirección de Entrega',
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        Padding(
+          padding: const EdgeInsets.only(right: 20.0),
+          child: Row(
+            children: [
+              const Expanded(
+                child: Text(
+                  'Dirección de Entrega',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+              ),
+              GestureDetector(
+                onTap: () => onPickupToggled(!isInstorePickup),
+                behavior: HitTestBehavior.opaque,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.storefront,
+                      size: 18,
+                      color: isInstorePickup
+                          ? AppColors.primary
+                          : Colors.grey[700],
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      'Pick-Up',
+                      style: TextStyle(
+                        color: isInstorePickup
+                            ? AppColors.primary
+                            : Colors.grey[700],
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
         const SizedBox(height: 8.0),
-        addresses.isEmpty
-            ? const Padding(
-          padding: EdgeInsets.all(16.0),
-          child: Text('No tienes direcciones guardadas.'),
-        )
-            : Column(
-          children: addresses.map((address) {
-            return GestureDetector(
-              onTap: () {
-                onAddressSelected(address['id']);
-              },
-              child: AddressCard(
-                label: userName,
-                number: userPhone,
-                address:
-                '${address['street']} ${address['streetNumber']}, ${address['colonia']}, ${address['city']}, ${address['state']}',
-                isSelected: selectedAddressId == address['id'],
+        if (isInstorePickup)
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+            decoration: BoxDecoration(
+              color: AppColors.primary.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: AppColors.primary.withValues(alpha: 0.3),
               ),
-            );
-          }).toList(),
-        ),
+            ),
+            child: Column(
+              children: [
+                Icon(
+                  Icons.storefront,
+                  size: 56,
+                  color: AppColors.primary,
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Recoger en tienda',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Pasa por tu pedido sin costo de envío.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey[700],
+                  ),
+                ),
+              ],
+            ),
+          )
+        else if (addresses.isEmpty)
+          const Padding(
+            padding: EdgeInsets.all(16.0),
+            child: Text('No tienes direcciones guardadas.'),
+          )
+        else
+          Column(
+            children: addresses.map((address) {
+              return GestureDetector(
+                onTap: () {
+                  onAddressSelected(address['id']);
+                },
+                child: AddressCard(
+                  label: userName,
+                  number: formatMxPhone(userPhone),
+                  address:
+                  '${address['street']} ${address['streetNumber']}, ${address['colonia']}, ${address['city']}, ${address['state']}',
+                  isSelected: selectedAddressId == address['id'],
+                ),
+              );
+            }).toList(),
+          ),
       ],
     );
   }
 }
 
 class CheckoutBillingInformation extends StatelessWidget {
-  final double subtotal;
-  final double deliveryFee;
+  final double rawSubtotal;
+  final double comboDiscount;
+  final List<String> comboNames;
   final double discount;
+  final String? couponCode;
+  final double deliveryFee;
   final double appliedRewards;
   final double total;
-  final bool useRewardsBalance;
-  final double rewardsBalance;
+  final bool isInstorePickup;
 
   const CheckoutBillingInformation({
     super.key,
-    required this.subtotal,
-    required this.deliveryFee,
+    required this.rawSubtotal,
+    required this.comboDiscount,
+    required this.comboNames,
     required this.discount,
+    required this.couponCode,
+    required this.deliveryFee,
     required this.appliedRewards,
     required this.total,
-    required this.useRewardsBalance,
-    required this.rewardsBalance,
+    this.isInstorePickup = false,
   });
 
   @override
@@ -1080,82 +1209,89 @@ class CheckoutBillingInformation extends StatelessWidget {
       padding: const EdgeInsets.all(AppDefaults.padding),
       child: Column(
         children: [
-          Row(
-            children: [
-              const Text(
-                'Subtotal',
-                style: TextStyle(fontWeight: FontWeight.w500),
-              ),
-              const Spacer(),
-              Text(
-                '\$${subtotal.toStringAsFixed(2)}',
-                style: Theme.of(context).textTheme.bodyLarge,
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          if (discount > 0)
-            Row(
-              children: [
-                const Text(
-                  'Descuento',
-                  style: TextStyle(fontWeight: FontWeight.w500),
-                ),
-                const Spacer(),
-                Text(
-                  '-\$${discount.toStringAsFixed(2)}',
-                  style: Theme.of(context).textTheme.bodyLarge,
-                ),
-              ],
+          _row(context, 'Subtotal', '\$${rawSubtotal.toStringAsFixed(2)}'),
+          if (comboDiscount > 0) ...[
+            const SizedBox(height: 10),
+            _row(
+              context,
+              comboNames.length == 1
+                  ? 'Descuento de combo: ${comboNames.first}'
+                  : 'Descuento de combo',
+              '-\$${comboDiscount.toStringAsFixed(2)}',
+              valueColor: Colors.red,
             ),
-          const SizedBox(height: 10),
-          if (appliedRewards > 0)
-            Row(
-              children: [
-                const Text(
-                  'Saldo de Recompensas Aplicado',
-                  style: TextStyle(fontWeight: FontWeight.w500),
+            if (comboNames.length > 1)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 2.0, left: 4.0),
+                  child: Text(
+                    comboNames.join(', '),
+                    style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                  ),
                 ),
-                const Spacer(),
-                Text(
-                  '-\$${appliedRewards.toStringAsFixed(2)}',
-                  style: Theme.of(context).textTheme.bodyLarge,
-                ),
-              ],
+              ),
+          ],
+          if (discount > 0) ...[
+            const SizedBox(height: 10),
+            _row(
+              context,
+              (couponCode != null && couponCode!.isNotEmpty)
+                  ? 'Descuento de cupón: $couponCode'
+                  : 'Descuento',
+              '-\$${discount.toStringAsFixed(2)}',
+              valueColor: Colors.red,
             ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              const Text(
-                'Tarifa de Envío',
-                style: TextStyle(fontWeight: FontWeight.w500),
-              ),
-              const Spacer(),
-              Text(
-                '\$${deliveryFee.toStringAsFixed(2)}',
-                style: Theme.of(context).textTheme.bodyLarge,
-              ),
-            ],
-          ),
+          ],
+          if (!isInstorePickup) ...[
+            const SizedBox(height: 10),
+            _row(context, 'Tarifa de Envío',
+                '\$${deliveryFee.toStringAsFixed(2)}'),
+          ],
           const SizedBox(height: 10),
           const Divider(),
+          if (appliedRewards > 0) ...[
+            _row(
+              context,
+              'Saldo de monedero aplicado',
+              '-\$${appliedRewards.toStringAsFixed(2)}',
+              valueColor: Colors.red,
+            ),
+            const Divider(),
+          ],
           Row(
             children: [
-              const Text(
-                'Total',
-                style: TextStyle(fontWeight: FontWeight.w600),
-              ),
+              const Text('Total', style: TextStyle(fontWeight: FontWeight.w600)),
               const Spacer(),
               Text(
                 '\$${total.toStringAsFixed(2)}',
-                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
+                style: Theme.of(context)
+                    .textTheme
+                    .bodyLarge
+                    ?.copyWith(fontWeight: FontWeight.bold),
               ),
             ],
           ),
         ],
       ),
+    );
+  }
+
+  Widget _row(BuildContext context, String label, String value,
+      {Color? valueColor}) {
+    return Row(
+      children: [
+        Expanded(
+          child:
+              Text(label, style: const TextStyle(fontWeight: FontWeight.w500)),
+        ),
+        const SizedBox(width: 8),
+        Text(
+          value,
+          style:
+              Theme.of(context).textTheme.bodyLarge?.copyWith(color: valueColor),
+        ),
+      ],
     );
   }
 }

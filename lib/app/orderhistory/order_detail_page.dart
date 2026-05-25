@@ -1,8 +1,10 @@
 import 'dart:math';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../components/bottom_fade.dart';
 import '../../components/custom_loader.dart';
 import '../../components/shimmer_placeholder.dart';
 import '../../constants/app_colors.dart';
@@ -124,7 +126,8 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
 
     return Scaffold(
       backgroundColor: Colors.white,
-      body: SingleChildScrollView(
+      body: BottomFade(
+        child: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -198,6 +201,7 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
             const SizedBox(height: 110),
           ],
         ),
+        ),
       ),
     );
   }
@@ -266,16 +270,18 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
               ),
               const Divider(),
             ],
+            if (widget.order.appliedRewards > 0) ...[
+              _buildFinancialRow(
+                'Saldo de Monedero Usado',
+                -widget.order.appliedRewards,
+                isRewards: true,
+              ),
+              const Divider(),
+            ],
             _buildFinancialRow(
               'Total',
               widget.order.total,
               isTotal: true,
-            ),
-            const Divider(),
-            _buildFinancialRow(
-              'Saldo de Monedero',
-              widget.order.useRewardsBalance ? 'Sí' : 'No',
-              isRewards: true,
             ),
           ],
         ),
@@ -299,9 +305,7 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
 
     String displayValue;
     if (isCoupon) {
-      displayValue = value;
-    } else if (isRewards) {
-      displayValue = value;
+      displayValue = value as String;
     } else {
       displayValue = value is double
           ? '\$${value.toStringAsFixed(2)} MXN'
@@ -389,7 +393,7 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            'Cantidad: ${item.quantity.toStringAsFixed(2)}', // Updated format
+                            'Cantidad: ${item.quantity.toStringAsFixed(2)}',
                             style: TextStyle(
                               color: Colors.grey[600],
                               fontSize: 12,
@@ -550,12 +554,6 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
 
   Future<void> _cancelOrder() async {
     if (widget.order.status.toLowerCase() != 'en revision') {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content:
-            Text('Este pedido no puede ser cancelado en su estado actual.')),
-      );
       return;
     }
 
@@ -586,9 +584,6 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
       final orderId = widget.order.id;
 
       if (userId == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Usuario no ha iniciado sesión.')),
-        );
         return;
       }
 
@@ -633,8 +628,23 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
           widget.order.status = 'Cancelado';
         });
       } catch (e) {
+        if (kDebugMode) debugPrint('Error cancelling order: $e');
         if (!mounted) return;
         Navigator.of(context).pop();
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Error'),
+            content: const Text(
+                'No se pudo cancelar el pedido. Intenta de nuevo.'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        );
       }
     }
   }

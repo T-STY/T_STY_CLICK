@@ -1,14 +1,18 @@
 import 'package:animations/animations.dart';
 import 'package:click/app/settings/settings.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_iconly/flutter_iconly.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../constants/app_colors.dart';
+import '../components/coupon_notification_dialog.dart';
+import '../components/geo_nav_icons.dart';
+import '../services/local_notifications_service.dart';
+import '../services/notification_actions.dart';
 import 'cart/cart_page.dart';
 import 'cart/cart_provider.dart';
-import 'category/category.dart';
 import 'home.dart';
 import 'orderhistory/order_history_page.dart';
+import 'recipes_tab.dart';
 
 class MainMenuScreen extends StatefulWidget {
 
@@ -23,29 +27,27 @@ class MainMenuScreen extends StatefulWidget {
   MainMenuScreenState createState() => MainMenuScreenState();
 }
 
-class MainMenuScreenState extends State<MainMenuScreen> with TickerProviderStateMixin {
+class MainMenuScreenState extends State<MainMenuScreen>
+    with TickerProviderStateMixin, WidgetsBindingObserver {
   late AnimationController _animationController;
+  final GlobalKey<CartPageState> _cartKey = GlobalKey<CartPageState>();
+  final GlobalKey<HomeState> _homeKey = GlobalKey<HomeState>();
+  final GlobalKey<RecetasScreenState> _recetasKey =
+      GlobalKey<RecetasScreenState>();
+  DateTime? _lastBackPressed;
   late final List<Widget> _allScreens = [
-    const CategoriesPage(),
+    RecetasScreen(key: _recetasKey),
     const OrderHistoryPage(),
-    const Home(),
-    const CartPage(),
+    Home(key: _homeKey, onSwitchTab: updateMenu),
+    CartPage(key: _cartKey),
     const SettingsPage(),
   ];
-  final List<IconData> _selectedIcons = [
-    IconlyBold.category,
-    IconlyBold.notification,
-    Icons.home,
-    IconlyBold.bag,
-    IconlyBold.setting
-  ];
-
-  final List<IconData> _unselectedIcons = [
-    IconlyLight.category,
-    IconlyLight.notification,
-    Icons.home,
-    IconlyLight.bag,
-    IconlyLight.setting
+  final List<GeoIconKind> _navIcons = [
+    GeoIconKind.recipe,
+    GeoIconKind.orders,
+    GeoIconKind.home,
+    GeoIconKind.cart,
+    GeoIconKind.settings,
   ];
 
   @override
@@ -56,17 +58,73 @@ class MainMenuScreenState extends State<MainMenuScreen> with TickerProviderState
       duration: const Duration(milliseconds: 300),
       vsync: this,
     );
+
+    WidgetsBinding.instance.addObserver(this);
+    NotificationActions.instance.pending.addListener(_onPendingAction);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _onPendingAction());
   }
 
   @override
   void dispose() {
+    NotificationActions.instance.pending.removeListener(_onPendingAction);
+    WidgetsBinding.instance.removeObserver(this);
     _animationController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (!mounted) return;
+    final cart = Provider.of<CartProvider>(context, listen: false);
+    if (state == AppLifecycleState.paused) {
+      if (cart.items.isNotEmpty) {
+        LocalNotificationsService.instance.scheduleCartReminders();
+      }
+    } else if (state == AppLifecycleState.resumed) {
+      LocalNotificationsService.instance.cancelCartReminders();
+    }
+  }
+
+  void _onPendingAction() {
+    final data = NotificationActions.instance.pending.value;
+    if (data == null || !mounted) return;
+    NotificationActions.instance.consume();
+
+    final type = data['type'];
+    if (type == 'order_status') {
+      _goToTab(1);
+    } else if (type == 'cart_reminder') {
+      _goToTab(3);
+    } else if (type == 'coupon') {
+      final code =
+          (data['couponCode'] ?? data['code'] ?? '').toString().trim();
+      final message = (data['message'] ?? data['body'])?.toString();
+      if (code.isNotEmpty) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            CouponNotificationDialog.show(context, code, message: message);
+          }
+        });
+      }
+    }
+  }
+
+  void _goToTab(int index) {
+    if (!mounted) return;
+    setState(() {
+      _currentIndex = index;
+      _animationController.forward(from: 0);
+    });
   }
 
   int _currentIndex = 2;
 
   void updateMenu(int index) {
+    if (index == _currentIndex) {
+      if (index == 0) _recetasKey.currentState?.handleBack();
+      if (index == 2) _homeKey.currentState?.handleBack();
+      if (index == 3) _cartKey.currentState?.handleBack();
+    }
     setState(() {
       _currentIndex = index;
       _animationController.forward(from: 0);
@@ -75,7 +133,31 @@ class MainMenuScreenState extends State<MainMenuScreen> with TickerProviderState
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        if (_currentIndex == 0 &&
+            (_recetasKey.currentState?.handleBack() ?? false)) {
+          return;
+        }
+        if (_currentIndex == 2 &&
+            (_homeKey.currentState?.handleBack() ?? false)) {
+          return;
+        }
+        if (_currentIndex == 3 &&
+            (_cartKey.currentState?.handleBack() ?? false)) {
+          return;
+        }
+        final now = DateTime.now();
+        if (_lastBackPressed == null ||
+            now.difference(_lastBackPressed!) > const Duration(seconds: 2)) {
+          _lastBackPressed = now;
+        } else {
+          SystemNavigator.pop();
+        }
+      },
+      child: Scaffold(
       appBar: PreferredSize(
         preferredSize: const Size.fromHeight(0.0),
         child: AppBar(
@@ -91,12 +173,11 @@ class MainMenuScreenState extends State<MainMenuScreen> with TickerProviderState
       body: Stack(
         children: [
           PageTransitionSwitcher(
-            duration: const Duration(milliseconds: 300),
+            duration: const Duration(milliseconds: 400),
             transitionBuilder: (child, animation, secondAnimation) {
-              return SharedAxisTransition(
+              return FadeThroughTransition(
                 animation: animation,
                 secondaryAnimation: secondAnimation,
-                transitionType: SharedAxisTransitionType.horizontal,
                 child: child,
               );
             },
@@ -107,6 +188,7 @@ class MainMenuScreenState extends State<MainMenuScreen> with TickerProviderState
             child: _buildElevatedNavBar(),
           ),
         ],
+      ),
       ),
     );
   }
@@ -120,7 +202,7 @@ class MainMenuScreenState extends State<MainMenuScreen> with TickerProviderState
 
     return Container(
       margin: EdgeInsets.symmetric(
-        horizontal: screenWidth > 600 ? 40.0 : 16.0,
+        horizontal: screenWidth > 600 ? 40.0 : 8.0,
         vertical: screenWidth > 600 ? 30.0 : 20.0,
       ),
       height: navBarHeight,
@@ -171,8 +253,18 @@ class MainMenuScreenState extends State<MainMenuScreen> with TickerProviderState
   }
 
   Widget _buildNavItem(int index) {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    final bool selected = _currentIndex == index;
+    final Color color = selected
+        ? (isDark ? Colors.white : AppColors.primary)
+        : (isDark ? Colors.grey[500]! : const Color(0xFFD0D0D0));
+    final double iconSize =
+        (MediaQuery.of(context).size.width * 0.08).clamp(24.0, 32.0);
+    final Widget icon =
+        GeoNavIcon(kind: _navIcons[index], color: color, size: iconSize);
+
     return ScaleTransition(
-      scale: _currentIndex == index
+      scale: selected
           ? _animationController.drive(Tween<double>(begin: 1.0, end: 1.2))
           : const AlwaysStoppedAnimation(1.0),
       child: index == 3
@@ -183,19 +275,11 @@ class MainMenuScreenState extends State<MainMenuScreen> with TickerProviderState
                   label: Text(itemCount.toString()),
                   isLabelVisible: itemCount > 0,
                   backgroundColor: AppColors.primary,
-                  child: Icon(
-                    _currentIndex == index
-                        ? _selectedIcons[index]
-                        : _unselectedIcons[index],
-                  ),
+                  child: icon,
                 );
               },
             )
-          : Icon(
-              _currentIndex == index
-                  ? _selectedIcons[index]
-                  : _unselectedIcons[index],
-            ),
+          : icon,
     );
   }
 }

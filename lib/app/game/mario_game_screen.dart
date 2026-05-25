@@ -6,8 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'arcade_input_controller.dart';
-
-// ─── Data classes ─────────────────────────────────────────────────────────────
+import 'game_saldo.dart';
 
 class _Plat {
   final double x, y, w, h;
@@ -51,8 +50,6 @@ class _Fireball {
         alive = true;
 }
 
-// ─── Screen ──────────────────────────────────────────────────────────────────
-
 class MarioGameScreen extends StatefulWidget {
   final String userId;
   final DocumentReference rewardsDocRef;
@@ -74,10 +71,9 @@ class MarioGameScreen extends StatefulWidget {
 }
 
 class _MarioGameScreenState extends State<MarioGameScreen> {
-  // Physics
   static const double kGravity    = 30.0;
   static const double kLowGravity = 10.0;
-  static const double kMaxJumpHold = 0.5; // seconds
+  static const double kMaxJumpHold = 0.5;
   static const double kWalkSpeed  = 5.5;
   static const double kRunSpeed   = 9.0;
   static const double kJumpVel    = -13.5;
@@ -86,18 +82,16 @@ class _MarioGameScreenState extends State<MarioGameScreen> {
   static const double kPlayerH    = 1.1;
   static const double kEnemyW     = 0.82;
   static const double kEnemyH     = 0.72;
-  static const double kPbW        = 0.55; // power block width
+  static const double kPbW        = 0.55;
   static const double kPbH        = 0.55;
   static const int   kCols        = 10;
 
-  // Player
   double _px = 1.0, _py = 0.0;
   double _pvx = 0.0, _pvy = 0.0;
   bool   _pOnGround = false;
   bool   _pFacingRight = true;
   double _jumpHoldTimer = 0.0;
 
-  // Power-ups
   bool   _isBig = false;
   bool   _hasFireball = false;
   double _fireballActiveTimer = 0.0;
@@ -105,10 +99,8 @@ class _MarioGameScreenState extends State<MarioGameScreen> {
   bool   _invincible = false;
   double _invTimer = 0.0;
 
-  // Camera
   double _camX = 0.0;
 
-  // World
   double _worldW = 32.0;
   double _flagX  = 30.0;
   List<_Plat>       _platforms   = [];
@@ -117,7 +109,6 @@ class _MarioGameScreenState extends State<MarioGameScreen> {
   List<_PowerBlock> _powerBlocks = [];
   List<_Fireball>   _fireballs   = [];
 
-  // State
   bool _isRunning = false;
   bool _isDead    = false;
   bool _isLevelComplete = false;
@@ -143,8 +134,6 @@ class _MarioGameScreenState extends State<MarioGameScreen> {
     widget.controller.removeListener(_onControllerEvent);
     super.dispose();
   }
-
-  // ─── Controller ───────────────────────────────────────────────────────────
 
   void _onControllerEvent() {
     final event = widget.controller.lastEvent;
@@ -189,8 +178,6 @@ class _MarioGameScreenState extends State<MarioGameScreen> {
     if (mounted) setState(() {});
   }
 
-  // ─── Physics & game logic ─────────────────────────────────────────────────
-
   void _update(double dt) {
     final left  = widget.controller.isHeld(ArcadeButton.left);
     final right = widget.controller.isHeld(ArcadeButton.right);
@@ -199,7 +186,6 @@ class _MarioGameScreenState extends State<MarioGameScreen> {
     final holdJump = widget.controller.isHeld(ArcadeButton.a) ||
                      widget.controller.isHeld(ArcadeButton.up);
 
-    // Timers
     if (_fireballCooldown > 0) _fireballCooldown -= dt;
     if (_fireballActiveTimer > 0) {
       _fireballActiveTimer -= dt;
@@ -207,7 +193,6 @@ class _MarioGameScreenState extends State<MarioGameScreen> {
     }
     if (_invincible) { _invTimer -= dt; if (_invTimer <= 0) _invincible = false; }
 
-    // Horizontal movement
     final spd = run ? kRunSpeed : kWalkSpeed;
     if (left)       { _pvx = -spd; _pFacingRight = false; }
     else if (right) { _pvx =  spd; _pFacingRight = true;  }
@@ -216,7 +201,6 @@ class _MarioGameScreenState extends State<MarioGameScreen> {
     _px += _pvx * dt;
     _px  = _px.clamp(0, _worldW - kPlayerW);
 
-    // Horizontal platform collision
     for (final p in _platforms) {
       if (_py + kPlayerH <= p.y + 0.05 || _py >= p.y + p.h - 0.05) continue;
       if (_px + kPlayerW > p.x && _px < p.x + p.w) {
@@ -226,7 +210,6 @@ class _MarioGameScreenState extends State<MarioGameScreen> {
       }
     }
 
-    // Jump hold: low gravity for up to kMaxJumpHold seconds
     if (holdJump && _pvy < 0 && _jumpHoldTimer < kMaxJumpHold) {
       _pvy += kLowGravity * dt;
       _jumpHoldTimer += dt;
@@ -235,7 +218,6 @@ class _MarioGameScreenState extends State<MarioGameScreen> {
     }
     _pvy = _pvy.clamp(-40.0, kMaxFall);
 
-    // Vertical movement
     final prevY = _py;
     _py += _pvy * dt;
     _pOnGround = false;
@@ -252,7 +234,6 @@ class _MarioGameScreenState extends State<MarioGameScreen> {
       }
     }
 
-    // Power block hit (player head rises through block bottom)
     for (final pb in _powerBlocks) {
       if (pb.hit) continue;
       if (_pvy >= 0) continue;
@@ -265,13 +246,10 @@ class _MarioGameScreenState extends State<MarioGameScreen> {
       }
     }
 
-    // Camera
     _camX = (_px - kCols / 2.0 + kPlayerW / 2).clamp(0, _worldW - kCols);
 
-    // Death by falling
     if (_py > 20) { _triggerDeath(); return; }
 
-    // Enemies
     for (final e in _enemies) {
       if (!e.alive) continue;
       if (e.stomped) {
@@ -302,7 +280,6 @@ class _MarioGameScreenState extends State<MarioGameScreen> {
       }
     }
 
-    // Coins
     for (final c in _coins) {
       if (c.collected) continue;
       if ((_px + kPlayerW / 2 - (c.x + 0.25)).abs() < 0.55 &&
@@ -311,10 +288,8 @@ class _MarioGameScreenState extends State<MarioGameScreen> {
       }
     }
 
-    // Fireballs
     _updateFireballs(dt);
 
-    // Flag
     if ((_px + kPlayerW / 2 - (_flagX + 0.3)).abs() < 1.0 && _py + kPlayerH > 6) {
       _levelComplete();
     }
@@ -324,7 +299,7 @@ class _MarioGameScreenState extends State<MarioGameScreen> {
     switch (type) {
       case _PowerType.fireball:
         _hasFireball = true;
-        _fireballActiveTimer = 25.0; // 25 seconds
+        _fireballActiveTimer = 25.0;
         HapticFeedback.heavyImpact();
       case _PowerType.life:
         _lives++;
@@ -351,7 +326,6 @@ class _MarioGameScreenState extends State<MarioGameScreen> {
       fb.x  += fb.vx * dt;
       fb.y  += fb.vy * dt;
 
-      // Bounce off platforms
       for (final p in _platforms) {
         final fbL = fb.x - 0.15, fbR = fb.x + 0.15;
         if (fbR <= p.x || fbL >= p.x + p.w) continue;
@@ -363,10 +337,8 @@ class _MarioGameScreenState extends State<MarioGameScreen> {
         }
       }
 
-      // Off-screen
       if (fb.x < -1 || fb.x > _worldW + 1 || fb.y > 20) fb.alive = false;
 
-      // Hit enemies
       for (final e in _enemies) {
         if (!e.alive || e.stomped) continue;
         if (fb.x > e.x && fb.x < e.x + kEnemyW && fb.y > e.y && fb.y < e.y + kEnemyH) {
@@ -385,7 +357,6 @@ class _MarioGameScreenState extends State<MarioGameScreen> {
       _invincible = true;
       _invTimer = 2.0;
     } else if (_invincible) {
-      // no-op
     } else {
       _triggerDeath();
     }
@@ -405,8 +376,20 @@ class _MarioGameScreenState extends State<MarioGameScreen> {
     if (mounted) setState(() { _isLevelComplete = true; _isRunning = false; });
   }
 
-  void _tryRestart() {
-    if (_lives <= 0) { _lives = 3; _score = 0; _level = 1; }
+  Future<void> _tryRestart() async {
+    if (_lives <= 0) {
+      final ns = await chargeForReplay(
+          userId: widget.userId,
+          rewardsDocRef: widget.rewardsDocRef,
+          currentSaldo: _saldo);
+      if (ns == null) return;
+      if (!mounted) return;
+      setState(() => _saldo = ns);
+      widget.onSaldoChanged();
+      _lives = 3;
+      _score = 0;
+      _level = 1;
+    }
     _generateMap();
     _startGame();
   }
@@ -417,8 +400,6 @@ class _MarioGameScreenState extends State<MarioGameScreen> {
     _startGame();
   }
 
-  // ─── Procedural map generation ────────────────────────────────────────────
-
   void _generateMap() {
     _ticker?.cancel();
     _isRunning = false; _isDead = false; _isLevelComplete = false;
@@ -428,9 +409,8 @@ class _MarioGameScreenState extends State<MarioGameScreen> {
     _fireballs = [];
 
     final rng   = Random();
-    final diff  = (_level - 1).clamp(0, 5); // difficulty 0-5
+    final diff  = (_level - 1).clamp(0, 5);
 
-    // World dimensions
     _worldW = 28.0 + diff * 2.0 + rng.nextDouble() * 4.0;
     _flagX  = _worldW - 2.5;
     _px = 1.0; _py = 11.4;
@@ -440,7 +420,6 @@ class _MarioGameScreenState extends State<MarioGameScreen> {
     _coins       = [];
     _powerBlocks = [];
 
-    // ── Ground with gaps ─────────────────────────────────────────────────
     final gapCount    = 1 + (diff ~/ 2).clamp(0, 2);
     final gaps        = <(double, double)>[];
     double safeStart  = 6.0;
@@ -461,27 +440,23 @@ class _MarioGameScreenState extends State<MarioGameScreen> {
     }
     _platforms.add(_Plat(prevEnd, 13.0, _worldW - prevEnd, 3.0, isGround: true));
 
-    // ── Floating platforms ───────────────────────────────────────────────
     double x = 2.5;
     while (x < _worldW - 4.5) {
-      final platY = 10.0 + rng.nextDouble() * 2.5; // y 10.0–12.5
+      final platY = 10.0 + rng.nextDouble() * 2.5;
       final platW = 1.5 + rng.nextDouble() * 1.8;
       _platforms.add(_Plat(x, platY, platW, 0.5));
 
-      // Enemy (~25% + diff * 5%)
       if (rng.nextDouble() < 0.25 + diff * 0.05) {
         final baseSpeed = 0.8 + rng.nextDouble() * (1.0 + diff * 0.3);
         _enemies.add(_Goomba(x: x + 0.1, y: platY - kEnemyH, vx: baseSpeed));
       }
 
-      // Coins above platform
       final coinCount = 1 + rng.nextInt(3);
       for (int i = 0; i < coinCount; i++) {
         final cx = x + (i - (coinCount - 1) / 2.0) * 0.65 + platW / 2;
         _coins.add(_Coin(cx, platY - 1.1));
       }
 
-      // Power block (~12%, rare)
       if (rng.nextDouble() < 0.12) {
         final typeRoll = rng.nextDouble();
         final type = typeRoll < 0.45
@@ -495,7 +470,6 @@ class _MarioGameScreenState extends State<MarioGameScreen> {
       x += 2.4 + rng.nextDouble() * 2.2;
     }
 
-    // ── Ground enemies ───────────────────────────────────────────────────
     for (final p in _platforms.where((p) => p.isGround)) {
       if (p.w > 3.5 && rng.nextDouble() < 0.45) {
         final ex = p.x + 2.0 + rng.nextDouble() * (p.w - 2.5);
@@ -504,8 +478,6 @@ class _MarioGameScreenState extends State<MarioGameScreen> {
       }
     }
   }
-
-  // ─── Firestore ───────────────────────────────────────────────────────────
 
   Future<void> _updateFirestore(double newSaldo) async {
     try {
@@ -518,8 +490,6 @@ class _MarioGameScreenState extends State<MarioGameScreen> {
       await batch.commit();
     } catch (e) { debugPrint('Mario Firestore error: $e'); }
   }
-
-  // ─── Build ───────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
@@ -548,7 +518,6 @@ class _MarioGameScreenState extends State<MarioGameScreen> {
           ),
           child: SizedBox(width: cons.maxWidth, height: cons.maxHeight),
         ),
-        // HUD
         Positioned(
           top: 4, left: 4, right: 4,
           child: Row(
@@ -648,8 +617,6 @@ class _MarioGameScreenState extends State<MarioGameScreen> {
   );
 }
 
-// ─── Painter ─────────────────────────────────────────────────────────────────
-
 class _MarioPainter extends CustomPainter {
   final List<_Plat>       platforms;
   final List<_Goomba>     enemies;
@@ -688,7 +655,6 @@ class _MarioPainter extends CustomPainter {
 
     _drawClouds(canvas, cs);
 
-    // Platforms
     for (final p in platforms) {
       final scx = sx(p.x, cs);
       final scw = p.w * cs;
@@ -711,7 +677,6 @@ class _MarioPainter extends CustomPainter {
       }
     }
 
-    // Power blocks
     for (final pb in powerBlocks) {
       final pbsx = sx(pb.x, cs);
       if (pbsx + kPbW * cs < 0 || pbsx > size.width) continue;
@@ -721,7 +686,6 @@ class _MarioPainter extends CustomPainter {
         canvas.drawRect(Rect.fromLTWH(pbsx, pbsy, pbw, pbh),
             Paint()..color = const Color(0xFF8B6914));
       } else {
-        // Yellow ? block
         final blockColor = switch (pb.type) {
           _PowerType.fireball  => const Color(0xFFFF6F00),
           _PowerType.life      => const Color(0xFF2E7D32),
@@ -735,7 +699,6 @@ class _MarioPainter extends CustomPainter {
           RRect.fromRectAndRadius(Rect.fromLTWH(pbsx, pbsy, pbw, pbh), Radius.circular(cs * 0.08)),
           Paint()..color = Colors.white24..style = PaintingStyle.stroke..strokeWidth = 1.5,
         );
-        // "?" symbol
         final tp = TextPainter(
           text: TextSpan(text: '?', style: TextStyle(color: Colors.white, fontSize: pbh * 0.7, fontWeight: FontWeight.bold)),
           textDirection: TextDirection.ltr,
@@ -744,7 +707,6 @@ class _MarioPainter extends CustomPainter {
       }
     }
 
-    // Coins
     for (final c in coins) {
       if (c.collected) continue;
       final cx = sx(c.x + 0.25, cs), cy = sy(c.y + 0.25, cs);
@@ -753,14 +715,12 @@ class _MarioPainter extends CustomPainter {
       canvas.drawCircle(Offset(cx, cy), cs * 0.12, Paint()..color = const Color(0xFFFFA000));
     }
 
-    // Fireballs
     for (final fb in fireballs) {
       final fbsx = sx(fb.x, cs), fbsy = sy(fb.y, cs);
       canvas.drawCircle(Offset(fbsx, fbsy), cs * 0.18, Paint()..color = const Color(0xFFFF6D00));
       canvas.drawCircle(Offset(fbsx, fbsy), cs * 0.10, Paint()..color = Colors.yellow);
     }
 
-    // Flag / goal
     final fsx = sx(flagX + 0.3, cs);
     if (fsx > -cs && fsx < size.width + cs) {
       final poleTop = sy(6.0, cs), poleBot = sy(13.0, cs);
@@ -773,7 +733,6 @@ class _MarioPainter extends CustomPainter {
       canvas.drawPath(fp, Paint()..color = Colors.red);
     }
 
-    // Enemies
     for (final e in enemies) {
       if (!e.alive) continue;
       final esx = sx(e.x, cs);
@@ -793,7 +752,6 @@ class _MarioPainter extends CustomPainter {
       }
     }
 
-    // Player (blink when invincible)
     if (!invincible || (DateTime.now().millisecondsSinceEpoch ~/ 120).isEven) {
       _drawPlayer(canvas, cs);
     }

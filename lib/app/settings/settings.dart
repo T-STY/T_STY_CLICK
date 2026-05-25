@@ -1,14 +1,20 @@
+import 'dart:math' as math;
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:lottie/lottie.dart';
+import '../../utils/phone_format.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../auth/login_page.dart';
+import '../../components/bottom_fade.dart';
 import '../../components/custom_loader.dart';
 import '../../constants/app_images.dart';
 import 'addresses_section.dart';
 import 'rewards.dart';
 import 'create_new_card.dart';
+import 'coupons_section.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -108,7 +114,7 @@ class _SettingsPageState extends State<SettingsPage> {
       if (userInfoDoc.exists) {
         setState(() {
           _phoneNumberController.text =
-              userInfoDoc.data()?['phoneNumber'] ?? '';
+              formatMxPhone(userInfoDoc.data()?['phoneNumber'] ?? '');
           _isLoading = false;
         });
       } else {
@@ -172,7 +178,6 @@ class _SettingsPageState extends State<SettingsPage> {
     final firestore = FirebaseFirestore.instance;
     final userDocRef = firestore.collection('users').doc(userId);
 
-    // Delete known subcollection documents
     final subcollections = ['rewardsCard', 'userInfo', 'addresses', 'orderHistory', 'coupons'];
     for (final sub in subcollections) {
       final snapshot = await userDocRef.collection(sub).get();
@@ -185,7 +190,6 @@ class _SettingsPageState extends State<SettingsPage> {
       }
     }
 
-    // Delete the root user document
     await userDocRef.delete();
   }
 
@@ -258,12 +262,12 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   String? _validatePhoneNumber(String? value) {
-    if (value == null || value.isEmpty) {
+    final digits = (value ?? '').replaceAll(RegExp(r'\D'), '');
+    if (digits.isEmpty) {
       return 'Por favor, ingresa tu número de teléfono';
     }
-    final phoneRegex = RegExp(r'^\+?\d{10,15}$');
-    if (!phoneRegex.hasMatch(value)) {
-      return 'Por favor, ingresa un número de teléfono válido';
+    if (digits.length != 10) {
+      return 'Por favor, ingresa un número de teléfono válido de 10 dígitos';
     }
     return null;
   }
@@ -294,6 +298,7 @@ class _SettingsPageState extends State<SettingsPage> {
       AddressesSection(onBack: _navigateToSettings),
       RewardsCardPage(onBack: _navigateToSettings),
       CreateNewCard(onBack: _navigateToSettings),
+      CouponsSection(onBack: _navigateToSettings),
     ];
   }
 
@@ -306,6 +311,7 @@ class _SettingsPageState extends State<SettingsPage> {
     if (user == null) {
       return Scaffold(
         appBar: AppBar(
+          automaticallyImplyLeading: false,
           title: SizedBox(
             height: 180,
             width: 300,
@@ -369,8 +375,6 @@ class _SettingsPageState extends State<SettingsPage> {
       },
       child: Scaffold(
         appBar: AppBar(
-          leading: const SizedBox(),
-          leadingWidth: 60,
           title: SizedBox(
             height: 180,
             width: 300,
@@ -386,31 +390,17 @@ class _SettingsPageState extends State<SettingsPage> {
           elevation: 0,
           centerTitle: true,
           scrolledUnderElevation: 0,
-          actions: [
-            Padding(
-              padding: const EdgeInsets.only(right: 16.0),
-              child: IconButton(
-                icon: const Icon(Icons.logout, color: Colors.black),
-                onPressed: () async {
-                  await FirebaseAuth.instance.signOut();
-                  if (!mounted) return;
-                  Navigator.of(context).pushAndRemoveUntil(
-                    MaterialPageRoute(builder: (context) => const LoginPage()),
-                    (route) => false,
-                  );
-                },
-              ),
-            ),
-          ],
         ),
         backgroundColor: Colors.white,
         body: _isLoading
             ? const CustomLoader()
-            : ListView(
-          padding: const EdgeInsets.all(16.0),
+            : BottomFade(
+                child: ListView(
+          padding: const EdgeInsets.fromLTRB(16.0, 16.0, 16.0, 130.0),
           children: [
             _buildHeaderSection(cardColor),
-            const SizedBox(height: 24),
+            const SizedBox(height: 20),
+            _sectionLabel('Cuenta'),
             Card(
               color: cardColor,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -430,34 +420,25 @@ class _SettingsPageState extends State<SettingsPage> {
               controller: _phoneNumberController,
               icon: Icons.phone_android,
               keyboardType: TextInputType.phone,
+              inputFormatters: [MxPhoneFormatter()],
               validator: _validatePhoneNumber,
-              onSave: () => _updateUserInfo(
-                  'phoneNumber', _phoneNumberController.text),
+              onSave: () => _updateUserInfo('phoneNumber',
+                  _phoneNumberController.text.replaceAll(RegExp(r'\D'), '')),
               cardColor: cardColor,
               accentColor: accentColor,
               tileKey: const Key('phone_tile'),
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 22),
+            _sectionLabel('Seguridad'),
             _buildPasswordExpansionTile(
               cardColor: cardColor,
               accentColor: accentColor,
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 22),
+            _sectionLabel('Compras y recompensas'),
             _buildExpansionOption(
-              title: 'Domicilio',
-              icon: Icons.location_on,
-              accentColor: accentColor,
-              cardColor: cardColor,
-              onTap: () {
-                setState(() {
-                  _currentIndex = 1;
-                });
-              },
-            ),
-            const SizedBox(height: 10),
-            _buildExpansionOption(
-              title: 'Monedero',
-              icon: Icons.card_membership,
+              title: 'Cochinito',
+              icon: Icons.savings_outlined,
               accentColor: accentColor,
               cardColor: cardColor,
               onTap: () {
@@ -467,29 +448,58 @@ class _SettingsPageState extends State<SettingsPage> {
               },
             ),
             const SizedBox(height: 10),
-            ListTile(
-              leading:
-              const Icon(Icons.delete_forever, color: Colors.red),
-              title: const Text(
-                'Eliminar Cuenta',
-                style: TextStyle(
-                  color: Colors.red,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
-                ),
-              ),
-              onTap: _deleteAccount,
+            _buildExpansionOption(
+              title: 'Cupones',
+              icon: Icons.confirmation_number_outlined,
+              accentColor: accentColor,
+              cardColor: cardColor,
+              onTap: () {
+                setState(() {
+                  _currentIndex = 4;
+                });
+              },
+            ),
+            const SizedBox(height: 10),
+            _buildExpansionOption(
+              title: 'Domicilio',
+              icon: Icons.location_on_outlined,
+              accentColor: accentColor,
+              cardColor: cardColor,
+              onTap: () {
+                setState(() {
+                  _currentIndex = 1;
+                });
+              },
             ),
           ],
-        ),
+                ),
+              ),
       ),
     );
   }
 
+  Future<void> _logout() async {
+    await FirebaseAuth.instance.signOut();
+    if (!mounted) return;
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (context) => const LoginPage()),
+      (route) => false,
+    );
+  }
+
   Widget _buildHeaderSection(Color cardColor) {
+    return _FlipCard(
+      front: _headerFront(cardColor),
+      back: _headerBack(cardColor),
+    );
+  }
+
+  Widget _headerFront(Color cardColor) {
     return Stack(
       children: [
         Container(
+          height: 155,
+          width: double.infinity,
           decoration: BoxDecoration(
             color: cardColor,
             borderRadius: BorderRadius.circular(16),
@@ -497,7 +507,7 @@ class _SettingsPageState extends State<SettingsPage> {
               BoxShadow(color: Colors.black12, blurRadius: 10, spreadRadius: 2),
             ],
           ),
-          padding: const EdgeInsets.fromLTRB(20, 30, 20, 10),
+          padding: const EdgeInsets.fromLTRB(20, 24, 20, 12),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -510,20 +520,30 @@ class _SettingsPageState extends State<SettingsPage> {
               ),
               Text(
                 _nameController.text.isEmpty ? 'Usuario' : _nameController.text,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
                     fontSize: 26,
                     fontWeight: FontWeight.w600,
                     color: Colors.black87),
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 12),
               Divider(color: Colors.grey[400], thickness: 1),
-              Text(
-                'Filipenses 1:9-10',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Colors.grey[600],
-                  fontStyle: FontStyle.italic,
-                ),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Filipenses 1:9-10',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey[600],
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                  ),
+                  Icon(Icons.touch_app_outlined,
+                      size: 18, color: Colors.grey[500]),
+                ],
               ),
             ],
           ),
@@ -547,12 +567,67 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
+  Widget _headerBack(Color cardColor) {
+    return Container(
+      height: 170,
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: cardColor,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: const [
+          BoxShadow(color: Colors.black12, blurRadius: 10, spreadRadius: 2),
+        ],
+      ),
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          SizedBox(
+            width: double.infinity,
+            height: 48,
+            child: ElevatedButton.icon(
+              onPressed: _logout,
+              icon: const Icon(Icons.logout, size: 20),
+              label: const Text('Cerrar sesión',
+                  style: TextStyle(fontWeight: FontWeight.bold)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.black,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            height: 48,
+            child: OutlinedButton.icon(
+              onPressed: _deleteAccount,
+              icon: const Icon(Icons.delete_forever, size: 20, color: Colors.red),
+              label: const Text('Eliminar cuenta',
+                  style: TextStyle(
+                      fontWeight: FontWeight.bold, color: Colors.red)),
+              style: OutlinedButton.styleFrom(
+                side: const BorderSide(color: Colors.red),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildExpandingInputCard({
     required String title,
     required TextEditingController controller,
     required IconData icon,
     TextInputType keyboardType = TextInputType.text,
     bool isPassword = false,
+    List<TextInputFormatter>? inputFormatters,
     required String? Function(String?) validator,
     required VoidCallback onSave,
     required Color cardColor,
@@ -602,6 +677,7 @@ class _SettingsPageState extends State<SettingsPage> {
                         controller: controller,
                         obscureText: isPassword,
                         keyboardType: keyboardType,
+                        inputFormatters: inputFormatters,
                         validator: validator,
                         decoration: InputDecoration(
                           hintText: 'Ingresa $title',
@@ -749,6 +825,21 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
+  Widget _sectionLabel(String text) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
+      child: Text(
+        text.toUpperCase(),
+        style: TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 0.8,
+          color: Colors.grey[500],
+        ),
+      ),
+    );
+  }
+
   Widget _buildExpansionOption({
     required String title,
     required IconData icon,
@@ -817,6 +908,65 @@ class _SettingsPageState extends State<SettingsPage> {
     return IndexedStack(
       index: _currentIndex,
       children: _buildPages(),
+    );
+  }
+}
+
+class _FlipCard extends StatefulWidget {
+  final Widget front;
+  final Widget back;
+  const _FlipCard({required this.front, required this.back});
+
+  @override
+  State<_FlipCard> createState() => _FlipCardState();
+}
+
+class _FlipCardState extends State<_FlipCard>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 450),
+  );
+
+  void _flip() {
+    if (_controller.isAnimating) return;
+    if (_controller.value == 0) {
+      _controller.forward();
+    } else {
+      _controller.reverse();
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: _flip,
+      child: AnimatedBuilder(
+        animation: _controller,
+        builder: (context, _) {
+          final double angle = _controller.value * math.pi;
+          final bool showBack = angle > math.pi / 2;
+          return Transform(
+            alignment: Alignment.center,
+            transform: Matrix4.identity()
+              ..setEntry(3, 2, 0.001)
+              ..rotateY(angle),
+            child: showBack
+                ? Transform(
+                    alignment: Alignment.center,
+                    transform: Matrix4.identity()..rotateY(math.pi),
+                    child: widget.back,
+                  )
+                : widget.front,
+          );
+        },
+      ),
     );
   }
 }

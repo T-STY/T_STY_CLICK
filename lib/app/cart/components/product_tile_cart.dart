@@ -13,6 +13,8 @@ class ProductTileCart extends StatelessWidget {
   final bool isBulk;
   final String? typeSpecific;
   final String? variante;
+  final bool readOnly;
+  final VoidCallback? onRemove;
 
   const ProductTileCart({
     super.key,
@@ -26,6 +28,8 @@ class ProductTileCart extends StatelessWidget {
     required this.isBulk,
     this.typeSpecific,
     this.variante,
+    this.readOnly = false,
+    this.onRemove,
   });
 
   @override
@@ -104,34 +108,66 @@ class ProductTileCart extends StatelessWidget {
             Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.remove_circle_outline),
-                      onPressed: decreaseQuantity,
-                      color: Colors.red,
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(),
-                      visualDensity: VisualDensity.compact,
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                      child: Text(
-                        quantity.toStringAsFixed(isBulk ? 2 : 0),
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                onRemove != null
+                    ? Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            isBulk
+                                ? '${quantity.toStringAsFixed(2)} kg'
+                                : 'x${quantity.toStringAsFixed(0)}',
+                            style: const TextStyle(
+                                fontWeight: FontWeight.bold, fontSize: 16),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.delete_outline),
+                            onPressed: onRemove,
+                            color: Colors.red,
+                            visualDensity: VisualDensity.compact,
+                          ),
+                        ],
+                      )
+                    : readOnly
+                    ? Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                        child: Text(
+                          isBulk
+                              ? '${quantity.toStringAsFixed(2)} kg'
+                              : 'x${quantity.toStringAsFixed(0)}',
+                          style: const TextStyle(
+                              fontWeight: FontWeight.bold, fontSize: 16),
+                        ),
+                      )
+                    : Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.remove_circle_outline),
+                            onPressed: decreaseQuantity,
+                            color: Colors.red,
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(),
+                            visualDensity: VisualDensity.compact,
+                          ),
+                          Padding(
+                            padding:
+                                const EdgeInsets.symmetric(horizontal: 8.0),
+                            child: Text(
+                              quantity.toStringAsFixed(isBulk ? 2 : 0),
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.bold, fontSize: 16),
+                            ),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.add_circle_outline),
+                            onPressed: increaseQuantity,
+                            color: Colors.blue,
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(),
+                            visualDensity: VisualDensity.compact,
+                          ),
+                        ],
                       ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.add_circle_outline),
-                      onPressed: increaseQuantity,
-                      color: Colors.blue,
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(),
-                      visualDensity: VisualDensity.compact,
-                    ),
-                  ],
-                ),
               ],
             ),
           ],

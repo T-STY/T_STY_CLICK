@@ -6,27 +6,23 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'arcade_input_controller.dart';
+import 'game_saldo.dart';
 import 'high_score_service.dart';
-
-// ─── Constants ────────────────────────────────────────────────────────────────
 
 const _kCols = 7;
 const _kRows = 8;
 const _kCandyTypes = 6;
-const _kRoundTime = 25;  // seconds per round (was 30)
+const _kRoundTime = 25;
 const _kMinMatch = 3;
 
-// Candy colour palette — bright & distinct
 const _kCandyPalette = [
-  Color(0xFFFF2266), // strawberry red
-  Color(0xFFFF7700), // orange
-  Color(0xFFFFDD00), // lemon yellow
-  Color(0xFF22CC44), // lime green
-  Color(0xFF3388FF), // blueberry blue
-  Color(0xFFCC44FF), // grape purple
+  Color(0xFFFF2266),
+  Color(0xFFFF7700),
+  Color(0xFFFFDD00),
+  Color(0xFF22CC44),
+  Color(0xFF3388FF),
+  Color(0xFFCC44FF),
 ];
-
-// ─── Widget ──────────────────────────────────────────────────────────────────
 
 class Match3Screen extends StatefulWidget {
   final String userId;
@@ -48,8 +44,6 @@ class Match3Screen extends StatefulWidget {
   State<Match3Screen> createState() => _Match3ScreenState();
 }
 
-// ─── State ────────────────────────────────────────────────────────────────────
-
 class _Match3ScreenState extends State<Match3Screen> with SingleTickerProviderStateMixin {
   late List<List<int>> _board;
 
@@ -70,15 +64,13 @@ class _Match3ScreenState extends State<Match3Screen> with SingleTickerProviderSt
   bool _roundCompleteDelay = false;
   int _comboCount = 0;
 
-  // Swipe state
   Offset? _swipeStartPos;
   int? _swipeStartCol, _swipeStartRow;
 
-  // Swap animation
   late AnimationController _swapAnimCtrl;
   int _animC1 = -1, _animR1 = -1, _animC2 = -1, _animR2 = -1;
   bool _isAnimating = false;
-  bool _swapForward = true; // true = forward swap, false = reverse (invalid)
+  bool _swapForward = true;
 
   Timer? _secondTicker;
   final Random _rng = Random();
@@ -108,8 +100,6 @@ class _Match3ScreenState extends State<Match3Screen> with SingleTickerProviderSt
     super.dispose();
   }
 
-  // ── Board init ─────────────────────────────────────────────────────────────
-
   void _initBoard() {
     _board = List.generate(_kRows, (_) =>
         List.generate(_kCols, (_) => _rng.nextInt(_kCandyTypes)));
@@ -131,8 +121,6 @@ class _Match3ScreenState extends State<Match3Screen> with SingleTickerProviderSt
     if (r >= 2 && _board[r - 1][c] == gem && _board[r - 2][c] == gem) return true;
     return false;
   }
-
-  // ── D-pad / button input ───────────────────────────────────────────────────
 
   void _onControllerEvent() {
     final event = widget.controller.lastEvent;
@@ -191,8 +179,6 @@ class _Match3ScreenState extends State<Match3Screen> with SingleTickerProviderSt
     }
   }
 
-  // ── Swipe touch input ──────────────────────────────────────────────────────
-
   void _onBoardPanStart(DragStartDetails d, double cellW, double cellH, double boardTop) {
     final x = d.localPosition.dx, y = d.localPosition.dy - boardTop;
     _swipeStartPos = d.localPosition;
@@ -222,8 +208,6 @@ class _Match3ScreenState extends State<Match3Screen> with SingleTickerProviderSt
     _swipeStartPos = null;
   }
 
-  // ── Match logic ────────────────────────────────────────────────────────────
-
   void _doSwap(int c1, int r1, int c2, int r2) {
     if (_isAnimating) return;
     _animC1 = c1; _animR1 = r1;
@@ -235,14 +219,12 @@ class _Match3ScreenState extends State<Match3Screen> with SingleTickerProviderSt
 
   void _onSwapAnimDone() {
     if (_swapForward) {
-      // Commit swap in board
       final tmp = _board[_animR1][_animC1];
       _board[_animR1][_animC1] = _board[_animR2][_animC2];
       _board[_animR2][_animC2] = tmp;
 
       final matches = _findMatches();
       if (matches.isEmpty) {
-        // Invalid swap — reverse: swap back in board and animate back
         final tmp2 = _board[_animR1][_animC1];
         _board[_animR1][_animC1] = _board[_animR2][_animC2];
         _board[_animR2][_animC2] = tmp2;
@@ -257,7 +239,6 @@ class _Match3ScreenState extends State<Match3Screen> with SingleTickerProviderSt
         _resolveMatches();
       }
     } else {
-      // Reverse animation done
       _isAnimating = false;
       _animC1 = _animR1 = _animC2 = _animR2 = -1;
       setState(() { _selCol = null; _selRow = null; });
@@ -279,7 +260,6 @@ class _Match3ScreenState extends State<Match3Screen> with SingleTickerProviderSt
 
     for (final pos in matches) _board[pos.$1][pos.$2] = -1;
 
-    // Gravity
     for (int c = 0; c < _kCols; c++) {
       final col = [for (int r = 0; r < _kRows; r++) _board[r][c]];
       final gems = col.where((g) => g != -1).toList();
@@ -346,8 +326,6 @@ class _Match3ScreenState extends State<Match3Screen> with SingleTickerProviderSt
     setState(() {});
   }
 
-  // ── Lifecycle ──────────────────────────────────────────────────────────────
-
   void _startGame() {
     setState(() {
       _score = 0; _round = 1; _timeLeft = _kRoundTime;
@@ -383,7 +361,17 @@ class _Match3ScreenState extends State<Match3Screen> with SingleTickerProviderSt
     HighScoreService.load('match3').then((v) => setState(() => _hiScore = v));
   }
 
-  void _restart() => _startGame();
+  Future<void> _restart() async {
+    final ns = await chargeForReplay(
+        userId: widget.userId,
+        rewardsDocRef: widget.rewardsDocRef,
+        currentSaldo: _saldo);
+    if (ns == null) return;
+    if (!mounted) return;
+    setState(() => _saldo = ns);
+    widget.onSaldoChanged(ns);
+    _startGame();
+  }
 
   Future<void> _awardRoundSaldo() async {
     final newSaldo = _saldo + 1.0;
@@ -400,17 +388,13 @@ class _Match3ScreenState extends State<Match3Screen> with SingleTickerProviderSt
     } catch (e) { debugPrint('DulceRacha Firestore: $e'); }
   }
 
-  // ── Build ──────────────────────────────────────────────────────────────────
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFF55AADE),
       body: Stack(children: [
-        // Candy sky background
         const SizedBox.expand(child: CustomPaint(painter: _CandySkyPainter())),
 
-        // Main content
         LayoutBuilder(builder: (ctx, constraints) {
           final totalW = constraints.maxWidth;
           final totalH = constraints.maxHeight;
@@ -423,12 +407,10 @@ class _Match3ScreenState extends State<Match3Screen> with SingleTickerProviderSt
           final cellH = boardH / _kRows;
 
           return Column(children: [
-            // Header bar
             _buildHeader(totalW, headerH),
 
             const SizedBox(height: headerGap),
 
-            // Board in dark wooden container
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: hPad),
               child: Container(
@@ -465,7 +447,6 @@ class _Match3ScreenState extends State<Match3Screen> with SingleTickerProviderSt
               ),
             ),
 
-            // Bottom candy landscape
             Expanded(
               child: CustomPaint(
                 painter: const _CandyLandPainter(),
@@ -475,7 +456,6 @@ class _Match3ScreenState extends State<Match3Screen> with SingleTickerProviderSt
           ]);
         }),
 
-        // Round complete banner
         if (_roundComplete && !_isDead)
           Center(
             child: Container(
@@ -497,7 +477,6 @@ class _Match3ScreenState extends State<Match3Screen> with SingleTickerProviderSt
             ),
           ),
 
-        // Pause overlay
         if (_paused && _isPlaying)
           Container(
             color: Colors.black.withOpacity(0.75),
@@ -519,16 +498,12 @@ class _Match3ScreenState extends State<Match3Screen> with SingleTickerProviderSt
             ),
           ),
 
-        // Start overlay
         if (!_isPlaying && !_isDead) _buildStartOverlay(),
 
-        // Death overlay
         if (_isDead) _buildDeathOverlay(),
       ]),
     );
   }
-
-  // ── Header (candy-crush style) ─────────────────────────────────────────────
 
   Widget _buildHeader(double w, double h) {
     final timeFrac = (_timeLeft / _kRoundTime).clamp(0.0, 1.0);
@@ -548,7 +523,6 @@ class _Match3ScreenState extends State<Match3Screen> with SingleTickerProviderSt
       child: Padding(
           padding: const EdgeInsets.fromLTRB(10, 4, 10, 4),
           child: Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
-            // Left: circular timer
             SizedBox(
               width: 52, height: 52,
               child: Stack(alignment: Alignment.center, children: [
@@ -565,12 +539,10 @@ class _Match3ScreenState extends State<Match3Screen> with SingleTickerProviderSt
             ),
             const SizedBox(width: 8),
 
-            // Center: score + level + candy-type mini icons
             Expanded(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  // Candy type color dots with counts
                   Row(mainAxisAlignment: MainAxisAlignment.center,
                     children: List.generate(min(_kCandyTypes, 4), (t) {
                       final cnt = _board.expand((r) => r).where((c) => c == t).length;
@@ -603,7 +575,6 @@ class _Match3ScreenState extends State<Match3Screen> with SingleTickerProviderSt
             ),
             const SizedBox(width: 8),
 
-            // Right: pause button
             GestureDetector(
               onTap: _togglePause,
               child: Container(
@@ -621,8 +592,6 @@ class _Match3ScreenState extends State<Match3Screen> with SingleTickerProviderSt
         ),
     );
   }
-
-  // ── Overlays ───────────────────────────────────────────────────────────────
 
   Widget _buildStartOverlay() {
     return Container(
@@ -718,15 +687,12 @@ class _Match3ScreenState extends State<Match3Screen> with SingleTickerProviderSt
   }
 }
 
-// ─── Candy Board Painter ──────────────────────────────────────────────────────
-
 class _CandyBoardPainter extends CustomPainter {
   final List<List<int>> board;
   final int cursorCol, cursorRow;
   final int? selCol, selRow;
   final int comboCount;
   final bool showCursor;
-  // Swap animation: animProgress < 0 means no animation
   final double animProgress;
   final bool animForward;
   final int animC1, animR1, animC2, animR2;
@@ -749,14 +715,12 @@ class _CandyBoardPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final p = Paint()..isAntiAlias = false;
 
-    // Dark board background with subtle stone-tile grid
     p.color = const Color(0xFF2A1A0A);
     canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), p);
 
     final cellW = size.width / _kCols;
     final cellH = size.height / _kRows;
 
-    // Stone tiles — alternating dark squares like a game board
     for (int r = 0; r < _kRows; r++) {
       for (int c = 0; c < _kCols; c++) {
         final tileColor = (r + c).isEven
@@ -765,13 +729,11 @@ class _CandyBoardPainter extends CustomPainter {
         p.color = tileColor;
         canvas.drawRect(Rect.fromLTWH(c * cellW + 1, r * cellH + 1,
             cellW - 2, cellH - 2), p);
-        // Subtle inner bevel
         p.color = Colors.white.withOpacity(0.05);
         canvas.drawRect(Rect.fromLTWH(c * cellW + 1, r * cellH + 1, cellW - 2, 2), p);
       }
     }
 
-    // Grid separators
     p.color = const Color(0xFF1A0A00).withOpacity(0.80);
     p.style = PaintingStyle.stroke; p.strokeWidth = 2;
     for (int c = 0; c <= _kCols; c++) {
@@ -782,7 +744,6 @@ class _CandyBoardPainter extends CustomPainter {
     }
     p..style = PaintingStyle.fill..isAntiAlias = true;
 
-    // Candies (with optional swap animation)
     final bool hasAnim = animProgress >= 0 && animC1 >= 0;
     for (int r = 0; r < _kRows; r++) {
       for (int c = 0; c < _kCols; c++) {
@@ -793,7 +754,6 @@ class _CandyBoardPainter extends CustomPainter {
         double baseY = r * cellH;
 
         if (hasAnim) {
-          // t: 0→1 = moving toward target position (both forward and reverse phases)
           final t = animProgress;
           if (r == animR1 && c == animC1) {
             final tx = 4 + animC2 * cellW;
@@ -824,7 +784,6 @@ class _CandyBoardPainter extends CustomPainter {
       }
     }
 
-    // Cursor
     if (showCursor) {
       final cx = 4 + cursorCol * cellW;
       final cy = cursorRow * cellH;
@@ -834,7 +793,6 @@ class _CandyBoardPainter extends CustomPainter {
       p.style = PaintingStyle.fill;
     }
 
-    // Combo label
     if (comboCount >= 2) {
       final tp = TextPainter(
         text: TextSpan(text: '🍬 x$comboCount COMBO!',
@@ -855,7 +813,6 @@ class _CandyBoardPainter extends CustomPainter {
     final r = min(cellW, cellH) * 0.40;
     p.isAntiAlias = true;
 
-    // Selection glow ring
     if (isSelected) {
       p.color = color.withOpacity(0.45);
       p.style = PaintingStyle.stroke;
@@ -864,11 +821,9 @@ class _CandyBoardPainter extends CustomPainter {
       p.style = PaintingStyle.fill;
     }
 
-    // Shadow
     p.color = Colors.black.withOpacity(0.35);
     canvas.drawCircle(Offset(cx + 1.5, cy + 2), r, p);
 
-    // Dark base border
     p.color = Color.fromARGB(255,
       (color.red * 0.45).round(),
       (color.green * 0.45).round(),
@@ -876,21 +831,20 @@ class _CandyBoardPainter extends CustomPainter {
     canvas.drawCircle(Offset(cx, cy), r, p);
 
     switch (type) {
-      case 0: // Red — heart shape
+      case 0:
         _drawHeart(canvas, p, cx, cy, r, color);
-      case 1: // Orange — star
+      case 1:
         _drawStar(canvas, p, cx, cy, r, color, 5);
-      case 2: // Yellow — lemon drop (oval)
+      case 2:
         _drawLemon(canvas, p, cx, cy, r, color);
-      case 3: // Green — rounded diamond
+      case 3:
         _drawDiamond(canvas, p, cx, cy, r, color);
-      case 4: // Blue — rounded square
+      case 4:
         _drawSquare(canvas, p, cx, cy, r, color);
-      default: // Purple — star4
+      default:
         _drawStar(canvas, p, cx, cy, r, color, 4);
     }
 
-    // Top-left shine (glossy effect on all types)
     p.color = Colors.white.withOpacity(0.50);
     canvas.drawOval(Rect.fromLTWH(cx - r * 0.58, cy - r * 0.75, r * 0.52, r * 0.30), p);
     p.color = Colors.white.withOpacity(0.85);
@@ -924,7 +878,6 @@ class _CandyBoardPainter extends CustomPainter {
     }
     path.close();
     canvas.drawPath(path, p);
-    // Center glow
     p.color = color.withOpacity(0.6);
     canvas.drawCircle(Offset(cx, cy), r * 0.30, p);
   }
@@ -932,7 +885,6 @@ class _CandyBoardPainter extends CustomPainter {
   void _drawLemon(Canvas canvas, Paint p, double cx, double cy, double r, Color color) {
     p.color = color;
     canvas.drawOval(Rect.fromLTWH(cx - r * 0.75, cy - r, r * 1.5, r * 2.0), p);
-    // Stripe
     p.color = Colors.white.withOpacity(0.20);
     canvas.save();
     canvas.clipRect(Rect.fromLTWH(cx - r, cy - r, r * 2, r * 2));
@@ -965,7 +917,6 @@ class _CandyBoardPainter extends CustomPainter {
     canvas.drawRRect(RRect.fromRectAndRadius(
         Rect.fromLTWH(cx - rr, cy - rr, rr * 2, rr * 2),
         Radius.circular(rr * 0.28)), p);
-    // Bottom-right shadow for 3D effect
     p.color = Color.fromARGB(255,
       (color.red * 0.60).round(), (color.green * 0.60).round(), (color.blue * 0.60).round());
     canvas.drawRRect(RRect.fromRectAndRadius(
@@ -974,8 +925,6 @@ class _CandyBoardPainter extends CustomPainter {
   }
 }
 
-// ─── Candy Sky Background ─────────────────────────────────────────────────────
-
 class _CandySkyPainter extends CustomPainter {
   const _CandySkyPainter();
 
@@ -983,7 +932,6 @@ class _CandySkyPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    // Sky gradient — light blue
     canvas.drawRect(
       Rect.fromLTWH(0, 0, size.width, size.height),
       Paint()..shader = const LinearGradient(
@@ -993,14 +941,12 @@ class _CandySkyPainter extends CustomPainter {
 
     final p = Paint()..isAntiAlias = true;
 
-    // Fluffy clouds
     void cloud(double x, double y, double s) {
       p.color = Colors.white.withOpacity(0.88);
       canvas.drawCircle(Offset(x, y), s, p);
       canvas.drawCircle(Offset(x + s * 1.1, y + s * 0.1), s * 0.75, p);
       canvas.drawCircle(Offset(x - s * 0.8, y + s * 0.15), s * 0.65, p);
       canvas.drawCircle(Offset(x + s * 0.4, y - s * 0.4), s * 0.55, p);
-      // Bottom fill
       p.color = Colors.white;
       canvas.drawRect(Rect.fromLTWH(x - s * 0.9, y, s * 2.1, s * 0.5), p);
     }
@@ -1009,8 +955,6 @@ class _CandySkyPainter extends CustomPainter {
     cloud(size.width * 0.45, size.height * 0.13, 13);
   }
 }
-
-// ─── Candy Land Bottom Decoration ─────────────────────────────────────────────
 
 class _CandyLandPainter extends CustomPainter {
   const _CandyLandPainter();
@@ -1022,7 +966,6 @@ class _CandyLandPainter extends CustomPainter {
     final w = size.width, h = size.height;
     final p = Paint()..isAntiAlias = true;
 
-    // Green candy hills background
     p.color = const Color(0xFF44BB44);
     final hillPath = Path()
       ..moveTo(0, h * 0.6)
@@ -1033,7 +976,6 @@ class _CandyLandPainter extends CustomPainter {
       ..lineTo(w, h)..lineTo(0, h)..close();
     canvas.drawPath(hillPath, p);
 
-    // Pink hill accent
     p.color = const Color(0xFFFF88AA);
     final hillPath2 = Path()
       ..moveTo(0, h * 0.8)
@@ -1043,31 +985,25 @@ class _CandyLandPainter extends CustomPainter {
       ..lineTo(w, h)..lineTo(0, h)..close();
     canvas.drawPath(hillPath2, p);
 
-    // Ground strip
     p.color = const Color(0xFF55CC55);
     canvas.drawRect(Rect.fromLTWH(0, h * 0.82, w, h * 0.18), p);
 
-    // Candy cane poles (decorative)
     for (int i = 0; i < 3; i++) {
       final cx = w * (0.15 + i * 0.35);
-      // Pole
       p.color = Colors.white;
       canvas.drawRRect(RRect.fromRectAndRadius(
           Rect.fromLTWH(cx - 3, h * 0.15, 6, h * 0.68), const Radius.circular(3)), p);
-      // Red stripes
       p.color = const Color(0xFFDD2244);
       for (double sy = h * 0.15; sy < h * 0.83; sy += h * 0.10) {
         canvas.drawRRect(RRect.fromRectAndRadius(
             Rect.fromLTWH(cx - 3, sy, 6, h * 0.04), const Radius.circular(2)), p);
       }
-      // Ball on top
       p.color = const Color(0xFFDD2244);
       canvas.drawCircle(Offset(cx, h * 0.13), 7, p);
       p.color = Colors.white.withOpacity(0.6);
       canvas.drawCircle(Offset(cx - 2, h * 0.11), 2.5, p);
     }
 
-    // Candy dot decorations on hills
     final candyDots = [
       (w * 0.08, h * 0.70, const Color(0xFFFF2266)),
       (w * 0.25, h * 0.60, const Color(0xFFFFDD00)),
@@ -1084,10 +1020,8 @@ class _CandyLandPainter extends CustomPainter {
   }
 }
 
-// ─── Side Panel Painter (Chrome Vending Machine Pillars) ─────────────────────
-
 class _CandySidePainter extends CustomPainter {
-  final int side; // 0 = left pillar, 1 = right pillar
+  final int side;
   final double h;
   const _CandySidePainter({required this.side, required this.h});
 
@@ -1099,7 +1033,6 @@ class _CandySidePainter extends CustomPainter {
     final w = size.width;
     final p = Paint()..isAntiAlias = true;
 
-    // Chrome pillar gradient
     final chromeShader = LinearGradient(
       begin: Alignment.centerLeft,
       end: Alignment.centerRight,
@@ -1112,7 +1045,6 @@ class _CandySidePainter extends CustomPainter {
     canvas.drawRect(Rect.fromLTWH(0, 0, w, h), p);
     p.shader = null;
 
-    // Inner edge highlight (glass tube wall)
     p.style = PaintingStyle.stroke;
     p.strokeWidth = 1.5;
     p.color = Colors.white.withOpacity(0.25);
@@ -1120,7 +1052,6 @@ class _CandySidePainter extends CustomPainter {
     canvas.drawLine(Offset(edgeX, 0), Offset(edgeX, h), p);
     p.style = PaintingStyle.fill;
 
-    // Candy spheres floating in the tube
     final candyColors = [
       const Color(0xFFFF2266),
       const Color(0xFFFF7700),
@@ -1130,43 +1061,34 @@ class _CandySidePainter extends CustomPainter {
       const Color(0xFFCC44FF),
     ];
     final ballR = (w * 0.38).clamp(4.0, 10.0);
-    // Use actual canvas height so balls don't overlap in short panels
     final actualH = size.height;
-    // Fit as many balls as actually fit with no overlap
     final maxBalls = (actualH / (ballR * 2 + 2)).floor().clamp(1, 7);
     final step = actualH / (maxBalls + 0.5);
     for (int i = 0; i < maxBalls; i++) {
       final cy = step * 0.5 + i * step;
       final cx = w / 2 + (i.isEven ? 2.0 : -2.0);
       final col = candyColors[i % candyColors.length];
-      // Shadow
       p.color = Colors.black.withOpacity(0.30);
       canvas.drawCircle(Offset(cx + 1, cy + 1), ballR, p);
-      // Body
       p.color = col;
       canvas.drawCircle(Offset(cx, cy), ballR, p);
-      // Stripe
       p.color = Colors.white.withOpacity(0.18);
       canvas.save();
       canvas.clipRect(Rect.fromLTWH(cx - ballR, cy - ballR, ballR * 2, ballR * 2));
       canvas.rotate(0.5);
       canvas.drawRect(Rect.fromLTWH(cx - ballR * 0.8, cy - ballR * 0.2, ballR * 1.6, ballR * 0.4), p);
       canvas.restore();
-      // Shine
       p.color = Colors.white.withOpacity(0.50);
       canvas.drawOval(Rect.fromLTWH(cx - ballR * 0.45, cy - ballR * 0.65, ballR * 0.45, ballR * 0.28), p);
     }
 
     if (side == 1) {
-      // Coin slot at bottom right pillar
       final slotY = h - 28.0;
       final slotX = w * 0.2;
       final slotW = w * 0.6;
-      // Slot background
       p.color = const Color(0xFF0A0005);
       canvas.drawRRect(RRect.fromRectAndRadius(
         Rect.fromLTWH(slotX, slotY, slotW, 6), const Radius.circular(3)), p);
-      // Slot highlight
       p.color = Colors.white.withOpacity(0.15);
       p.style = PaintingStyle.stroke;
       p.strokeWidth = 1;

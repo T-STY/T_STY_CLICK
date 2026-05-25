@@ -6,26 +6,19 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'arcade_input_controller.dart';
 import 'high_score_service.dart';
 
-// ─── Constants ────────────────────────────────────────────────────────────────
-
 const _kPW = 120.0, _kPH = 80.0;
 const _kPaddleW = 2.5, _kPaddleH = 14.0;
 const _kPaddleSpd = 62.0;
 const _kBallR = 1.3;
 const _kBallSpdInit = 76.0;
 const _kBallSpdMax = 110.0;
-const _kBallSpdInc = 2.5; // speed added per paddle hit
+const _kBallSpdInc = 2.5;
 const _kWinScore = 7;
-// AI speed per round (gets faster each round)
 const _kAiSpeeds = [46.0, 60.0, 72.0, 82.0, 90.0, 96.0];
-// AI prediction error (± units at target y) — shrinks each round
 const _kAiErrors = [5.5, 3.2, 1.8, 0.8, 0.2, 0.0];
-// AI resamples target Y every this many ms (prevents jitter)
 const _kAiSampleMs = 180;
 
 enum _PongPhase { ready, playing, scored, gameOver }
-
-// ─── Widget ───────────────────────────────────────────────────────────────────
 
 class PongScreen extends StatefulWidget {
   final String userId;
@@ -48,15 +41,15 @@ class PongScreen extends StatefulWidget {
 }
 
 class _PongScreenState extends State<PongScreen> {
-  double _py = (_kPH - _kPaddleH) / 2; // player paddle top-y
-  double _ay = (_kPH - _kPaddleH) / 2; // AI paddle top-y
+  double _py = (_kPH - _kPaddleH) / 2;
+  double _ay = (_kPH - _kPaddleH) / 2;
   double _bx = _kPW / 2, _by = _kPH / 2;
   double _bvx = _kBallSpdInit, _bvy = 15.0;
   double _ballSpd = _kBallSpdInit;
 
   int _playerScore = 0, _aiScore = 0;
   int _playerRounds = 0, _aiRounds = 0;
-  int _round = 0; // increments each time a round ends
+  int _round = 0;
 
   int _hiScore = 0;
   late double _saldo;
@@ -67,14 +60,11 @@ class _PongScreenState extends State<PongScreen> {
   DateTime? _lastTick;
   final Random _rng = Random();
 
-  // AI smoothing — resample target every _kAiSampleMs ms
   double _aiTargetY = (_kPH - _kPaddleH) / 2;
   int _aiSampleAccMs = 0;
 
-  // Ball trail positions
   final List<Offset> _ballTrail = [];
 
-  // Pause
   bool _paused = false;
 
   @override
@@ -140,14 +130,12 @@ class _PongScreenState extends State<PongScreen> {
     _lastTick = now;
     if (_phase != _PongPhase.playing) return;
 
-    // Player paddle movement
     final c = widget.controller;
     if (c.isHeld(ArcadeButton.up))
       _py = (_py - _kPaddleSpd * dt).clamp(0, _kPH - _kPaddleH);
     if (c.isHeld(ArcadeButton.down))
       _py = (_py + _kPaddleSpd * dt).clamp(0, _kPH - _kPaddleH);
 
-    // AI paddle — resample target every _kAiSampleMs to prevent jitter
     _aiSampleAccMs += (dt * 1000).round();
     if (_aiSampleAccMs >= _kAiSampleMs) {
       _aiSampleAccMs = 0;
@@ -161,11 +149,9 @@ class _PongScreenState extends State<PongScreen> {
       _ay = (_ay + aiMove).clamp(0, _kPH - _kPaddleH);
     }
 
-    // Ball movement
     _bx += _bvx * dt;
     _by += _bvy * dt;
 
-    // Top/bottom wall bounce
     if (_by - _kBallR <= 0) {
       _by = _kBallR;
       _bvy = _bvy.abs();
@@ -175,7 +161,6 @@ class _PongScreenState extends State<PongScreen> {
       _bvy = -_bvy.abs();
     }
 
-    // Player paddle collision (left, x=5 to 5+kPaddleW)
     const plx = 5.0;
     if (_bvx < 0 &&
         _bx - _kBallR <= plx + _kPaddleW &&
@@ -191,7 +176,6 @@ class _PongScreenState extends State<PongScreen> {
       HapticFeedback.lightImpact();
     }
 
-    // AI paddle collision (right, x=kPW-5-kPaddleW to kPW-5)
     final aix = _kPW - 5 - _kPaddleW;
     if (_bvx > 0 &&
         _bx + _kBallR >= aix &&
@@ -206,7 +190,6 @@ class _PongScreenState extends State<PongScreen> {
       _bvy = _ballSpd * sin(angle);
     }
 
-    // Out of bounds — point scored
     if (_bx < -3) {
       _aiScore++;
       _onPoint(false);
@@ -215,7 +198,6 @@ class _PongScreenState extends State<PongScreen> {
       _onPoint(true);
     }
 
-    // Update ball trail
     _ballTrail.add(Offset(_bx, _by));
     if (_ballTrail.length > 7) _ballTrail.removeAt(0);
 
@@ -324,8 +306,6 @@ class _PongScreenState extends State<PongScreen> {
   }
 }
 
-// ─── Painter ──────────────────────────────────────────────────────────────────
-
 class _PongPainter extends CustomPainter {
   final double py, ay, bx, by;
   final int playerScore, aiScore, playerRounds, aiRounds, round;
@@ -347,11 +327,9 @@ class _PongPainter extends CustomPainter {
     final pw = size.width / _kPW, ph = size.height / _kPH;
     final p = Paint()..isAntiAlias = false;
 
-    // Background
     p.color = const Color(0xFF050510);
     canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), p);
 
-    // Centre dashed line
     p.color = Colors.white.withOpacity(0.12);
     final dashH = size.height / 22;
     for (int i = 0; i < 22; i++) {
@@ -361,7 +339,6 @@ class _PongPainter extends CustomPainter {
       }
     }
 
-    // Scores
     final tp = TextPainter(textDirection: TextDirection.ltr);
     void txt(String s, double x, double y, Color c, double fs) {
       tp.text = TextSpan(
@@ -375,14 +352,12 @@ class _PongPainter extends CustomPainter {
       tp.paint(canvas, Offset(x, y));
     }
 
-    // Scores — fixed pixel size so they don't dwarf the playfield
     final scoreFs = size.height / 14;
     txt('$playerScore', size.width * 0.30, size.height * 0.025,
         Colors.white, scoreFs);
     txt('$aiScore', size.width * 0.64, size.height * 0.025,
         Colors.white.withOpacity(0.55), scoreFs);
 
-    // Round indicators — fixed-size dots, positioned below the score
     const cyan = Color(0xFF00DDFF);
     const dotR = 4.0, dotStep = 13.0;
     final dotsY = size.height * 0.14;
@@ -395,7 +370,6 @@ class _PongPainter extends CustomPainter {
           Offset(size.width * 0.60 + i * dotStep, dotsY), dotR, p);
     }
 
-    // Player paddle
     p..color = cyan
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5);
     canvas.drawRect(
@@ -405,7 +379,6 @@ class _PongPainter extends CustomPainter {
     canvas.drawRect(
         Rect.fromLTWH(5 * pw, py * ph, _kPaddleW * pw, _kPaddleH * ph), p);
 
-    // AI paddle
     final aix = (_kPW - 5 - _kPaddleW) * pw;
     p..color = Colors.redAccent.withOpacity(0.5)
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5);
@@ -416,7 +389,6 @@ class _PongPainter extends CustomPainter {
     canvas.drawRect(
         Rect.fromLTWH(aix, ay * ph, _kPaddleW * pw, _kPaddleH * ph), p);
 
-    // Ball trail
     final br = _kBallR * min(pw, ph);
     for (int i = 0; i < trail.length; i++) {
       final t = (i + 1) / trail.length;
@@ -425,7 +397,6 @@ class _PongPainter extends CustomPainter {
           Offset(trail[i].dx * pw, trail[i].dy * ph), br * t * 0.85, p);
     }
 
-    // Ball glow + core
     final bscr = Offset(bx * pw, by * ph);
     p..color = Colors.white.withOpacity(0.3)
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6);
@@ -433,7 +404,6 @@ class _PongPainter extends CustomPainter {
     p..color = Colors.white..maskFilter = null;
     canvas.drawCircle(bscr, br, p);
 
-    // Round label (bottom-centre, only when past round 0)
     if (round > 0) {
       txt('RONDA $round', size.width * 0.42, size.height * 0.91,
           Colors.white38, size.height / 40);

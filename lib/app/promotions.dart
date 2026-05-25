@@ -5,6 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
+import '../components/bottom_fade.dart';
 import '../components/custom_loader.dart';
 import '../components/shimmer_placeholder.dart';
 import 'cart/cart_provider.dart';
@@ -122,39 +123,6 @@ class _PromotionDetailPageState extends State<PromotionDetailPage> {
     return '¡Aprovecha esta promoción especial! Agrega los productos indicados a tu carrito y el descuento se aplicará automáticamente. Las promociones están sujetas a disponibilidad de inventario.';
   }
 
-  List<String> _getInstructions() {
-    final type = promoData?['type'] ?? '';
-    switch (type) {
-      case 'combo_exact':
-        return [
-          'Presiona "Agregar combo al carrito" para añadir todos los productos.',
-          'El precio especial del combo se aplicará en tu carrito.',
-        ];
-      case 'combo_choice':
-        return [
-          'Selecciona una de las opciones disponibles de la lista.',
-          'Presiona "Agregar combo al carrito" para añadir ambos productos.',
-          'El precio especial se aplicará en tu carrito.',
-        ];
-      case 'combo_brand':
-        return [
-          'Elige un producto de la marca participante de la lista.',
-          'Presiona "Agregar combo al carrito" para añadir ambos productos.',
-          'El precio especial se aplicará en tu carrito.',
-        ];
-      case 'bxgy':
-        final buyQty = promoData?['buyQuantity'] ?? 3;
-        final payQty = promoData?['payQuantity'] ?? 2;
-        return [
-          'Solo pagas $payQty unidades.',
-          'Presiona "Agregar combo al carrito" para añadir las $buyQty unidades.',
-          'El descuento se reflejará en tu carrito.',
-        ];
-      default:
-        return ['Agrega los productos al carrito para disfrutar la promoción.'];
-    }
-  }
-
   double _getDisplayPrice() {
     final type = promoData?['type'] ?? '';
     if (type == 'bxgy') {
@@ -263,70 +231,132 @@ class _PromotionDetailPageState extends State<PromotionDetailPage> {
     );
   }
 
-  Widget _buildProductTile(Map<String, dynamic> product, {bool isMain = false}) {
-    final bool isGuest = FirebaseAuth.instance.currentUser == null;
-    final price = (product['price'] as num?)?.toDouble() ?? 0;
+  String _detailLine(Map<String, dynamic> p) {
+    final variante = (p['variante'] as String?)?.trim() ?? '';
+    final typeSpecific = (p['type_specific'] as String?)?.trim() ?? '';
+    return [variante, typeSpecific].where((s) => s.isNotEmpty).join(' · ');
+  }
 
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
+  Widget _includedRow(Map<String, dynamic> product, bool isDark,
+      {String? badge}) {
+    final name = (product['nombre'] as String?) ?? 'Producto';
+    final img = (product['image_url'] as String?) ?? '';
+    final sub = _detailLine(product);
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: isDark ? Colors.grey[850] : Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.grey.shade300),
+      ),
       child: Row(
         children: [
           ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: CachedNetworkImage(
-              imageUrl: product['image_url'] ?? '',
-              width: 50,
-              height: 50,
-              fit: BoxFit.contain,
-              placeholder: (context, url) =>
-              const ShimmerPlaceholder(width: 50, height: 50),
-              errorWidget: (context, url, error) =>
-              const Icon(Icons.broken_image),
+            borderRadius: BorderRadius.circular(12),
+            child: SizedBox(
+              width: 64,
+              height: 64,
+              child: img.isNotEmpty
+                  ? CachedNetworkImage(imageUrl: img, fit: BoxFit.contain)
+                  : const Icon(Icons.image, color: Colors.grey),
             ),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Text(
-                  product['nombre'] ?? 'Producto',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: isMain ? FontWeight.bold : FontWeight.normal,
-                  ),
-                ),
-                if (product['variante'] != null && (product['variante'] as String).isNotEmpty)
-                  Text(
-                    product['variante'],
-                    style: const TextStyle(fontSize: 13, color: Colors.grey),
-                  ),
-                ImageFiltered(
-                  imageFilter: ImageFilter.blur(
-                    sigmaX: isGuest ? 6.0 : 0.0,
-                    sigmaY: isGuest ? 6.0 : 0.0,
-                  ),
-                  child: Text(
-                    'Precio unitario: \$${price.toStringAsFixed(2)}',
-                    style: const TextStyle(fontSize: 14, color: Colors.grey),
-                  ),
-                ),
+                Text(name,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                        fontSize: 15, fontWeight: FontWeight.w600)),
+                if (sub.isNotEmpty) ...[
+                  const SizedBox(height: 3),
+                  Text(sub,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style:
+                          TextStyle(fontSize: 12.5, color: Colors.grey[600])),
+                ],
+                if (badge != null) ...[
+                  const SizedBox(height: 4),
+                  Text(badge,
+                      style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.deepOrange)),
+                ],
               ],
             ),
           ),
-          if (isMain)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: const Text(
-                'Principal',
-                style: TextStyle(fontSize: 12, color: Colors.black, fontWeight: FontWeight.bold),
+          const SizedBox(width: 8),
+          const Icon(Icons.check_circle, color: Color(0xFF2E7D32), size: 20),
+        ],
+      ),
+    );
+  }
+
+  Widget _optionTile(Map<String, dynamic> product, bool isDark) {
+    final id = product['id'] as String;
+    final name = (product['nombre'] as String?) ?? 'Producto';
+    final img = (product['image_url'] as String?) ?? '';
+    final sub = _detailLine(product);
+    final bool selected = selectedOptionProductId == id;
+    return GestureDetector(
+      onTap: () => setState(() => selectedOptionProductId = id),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: isDark ? Colors.grey[850] : Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: selected ? const Color(0xFF1A1A1A) : Colors.grey.shade300,
+            width: selected ? 2 : 1,
+          ),
+        ),
+        child: Row(
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: SizedBox(
+                width: 76,
+                height: 76,
+                child: img.isNotEmpty
+                    ? CachedNetworkImage(imageUrl: img, fit: BoxFit.contain)
+                    : const Icon(Icons.image, color: Colors.grey),
               ),
             ),
-        ],
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(name,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                          fontSize: 15, fontWeight: FontWeight.w600)),
+                  if (sub.isNotEmpty) ...[
+                    const SizedBox(height: 3),
+                    Text(sub,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                            fontSize: 12.5, color: Colors.grey[600])),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Icon(selected ? Icons.check_circle : Icons.circle_outlined,
+                color: selected ? const Color(0xFF1A1A1A) : Colors.grey[400]),
+          ],
+        ),
       ),
     );
   }
@@ -344,14 +374,16 @@ class _PromotionDetailPageState extends State<PromotionDetailPage> {
   @override
   Widget build(BuildContext context) {
     if (promoData == null) {
-      return const Scaffold(body: CustomLoader());
+      return const Center(child: CustomLoader());
     }
 
-    final textTheme = Theme.of(context).textTheme;
-    final neutralColor = Colors.grey[200];
-    const elevatedColor = Colors.white;
-    final bool isGuest = FirebaseAuth.instance.currentUser == null;
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    final Color bg = isDark ? const Color(0xFF1A1A1D) : Colors.white;
+    final Color titleColor = isDark ? Colors.white : const Color(0xFF1A1A1A);
     final type = promoData!['type'] as String? ?? '';
+    final image =
+        (promoData!['imageURL'] ?? promoData!['imageUrl'] ?? '').toString();
+    final name = (promoData!['name'] as String?) ?? 'Promoción';
 
     return PopScope(
       canPop: false,
@@ -359,317 +391,199 @@ class _PromotionDetailPageState extends State<PromotionDetailPage> {
         if (didPop) return;
         widget.onBackPressed();
       },
-      child: Scaffold(
-        body: SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Header image — promo banner
-              ClipRRect(
-                borderRadius: BorderRadius.circular(20),
-                child: (promoData!['imageURL'] != null && (promoData!['imageURL'] as String).isNotEmpty)
-                    ? CachedNetworkImage(
-                        imageUrl: promoData!['imageURL'],
+      child: Container(
+        color: bg,
+        child: Stack(
+          children: [
+            BottomFade(
+              clearHeight: 150,
+              fadeHeight: 90,
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 210),
+                children: [
+                  if (image.isNotEmpty)
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(20),
+                      child: CachedNetworkImage(
+                        imageUrl: image,
+                        height: 200,
                         width: double.infinity,
-                        height: 250,
-                        fit: BoxFit.fill,
-                        placeholder: (context, url) =>
-                        const ShimmerPlaceholder.rectangular(height: 250),
-                        errorWidget: (context, url, error) => Container(
-                          height: 250,
-                          color: Colors.grey[300],
-                          child: const Icon(Icons.broken_image),
-                        ),
-                      )
-                    : Container(
-                        width: double.infinity,
-                        height: 250,
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [Colors.deepOrange.shade400, Colors.orange.shade300],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          ),
-                        ),
-                        child: Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              const Icon(Icons.local_offer, size: 60, color: Colors.white),
-                              const SizedBox(height: 12),
-                              Text(
-                                _promoTypeLabel(type),
-                                style: const TextStyle(
-                                  fontSize: 16,
-                                  color: Colors.white70,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 24),
-                                child: Text(
-                                  promoData!['name'] ?? 'Promoción',
-                                  textAlign: TextAlign.center,
-                                  style: const TextStyle(
-                                    fontSize: 26,
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
+                        fit: BoxFit.cover,
+                        placeholder: (c, u) =>
+                            const ShimmerPlaceholder.rectangular(height: 200),
+                        errorWidget: (c, u, e) =>
+                            Container(height: 200, color: Colors.grey[200]),
                       ),
+                    )
+                  else
+                    _fallbackHeader(type),
+                  const SizedBox(height: 14),
+                  Text(name,
+                      style: TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -0.5,
+                          color: titleColor)),
+                  const SizedBox(height: 8),
+                  Text(_getPromoDescription(),
+                      style: TextStyle(
+                          fontSize: 14, height: 1.35, color: Colors.grey[600])),
+                  ..._buildSections(type, isDark),
+                ],
               ),
-              const SizedBox(height: 20),
-
-              // Title + price card (mirrors recipe title/precio)
-              SizedBox(
-                width: double.infinity,
-                child: Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: elevatedColor,
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.2),
-                      blurRadius: 8,
-                      offset: const Offset(2, 4),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      promoData!['name'] ?? 'Promoción',
-                      style: textTheme.headlineSmall?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    ImageFiltered(
-                      imageFilter: ImageFilter.blur(
-                        sigmaX: isGuest ? 6.0 : 0.0,
-                        sigmaY: isGuest ? 6.0 : 0.0,
-                      ),
-                      child: Text(
-                        'Precio: \$${_getDisplayPrice().toStringAsFixed(2)} MXN',
-                        style: textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              ),
-              const SizedBox(height: 20),
-
-              // Description (mirrors recipe body)
-              Text(
-                _getPromoDescription(),
-                textAlign: TextAlign.justify,
-                style: textTheme.bodyMedium,
-              ),
-              const SizedBox(height: 20),
-
-              // Instructions (mirrors recipe bullet_points)
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: neutralColor,
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.05),
-                      blurRadius: 8,
-                      offset: const Offset(2, 4),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Instrucciones:',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(height: 8),
-                    ..._buildInstructionSteps(),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 20),
-
-              // Products section (mirrors recipe ingredients)
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: elevatedColor,
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.2),
-                      blurRadius: 8,
-                      offset: const Offset(2, 4),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Trigger / main product
-                    if (triggerProductData != null && type != 'combo_exact') ...[
-                      Text(
-                        type == 'bxgy' ? 'Producto:' : 'Producto Principal:',
-                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                      ),
-                      const SizedBox(height: 8),
-                      _buildProductTile(triggerProductData!, isMain: true),
-                      if (type == 'bxgy') ...[
-                        const SizedBox(height: 4),
-                        Text(
-                          'Lleva ${promoData!['buyQuantity']}, Paga ${promoData!['payQuantity']}',
-                          style: const TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.deepOrange,
-                          ),
-                        ),
-                      ],
-                    ],
-
-                    // Required products (combo_exact)
-                    if (type == 'combo_exact') ...[
-                      const Text(
-                        'Productos Incluidos:',
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                      ),
-                      const SizedBox(height: 8),
-                      ...requiredProducts.map((p) => _buildProductTile(p)),
-                    ],
-
-                    // Option products (combo_choice / combo_brand)
-                    if ((type == 'combo_choice' || type == 'combo_brand') &&
-                        optionProducts.isNotEmpty) ...[
-                      const SizedBox(height: 16),
-                      const Divider(),
-                      const SizedBox(height: 8),
-                      const Text(
-                        'Elige una opción:',
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                      ),
-                      const SizedBox(height: 8),
-                      ...optionProducts.map((product) {
-                        final productId = product['id'] as String;
-                        final isSelected = selectedOptionProductId == productId;
-                        return InkWell(
-                          onTap: () {
-                            setState(() {
-                              selectedOptionProductId = productId;
-                            });
-                          },
-                          child: Container(
-                            margin: const EdgeInsets.only(bottom: 4),
-                            padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
-                            decoration: BoxDecoration(
-                              color: isSelected
-                                  ? Colors.black.withValues(alpha: 0.06)
-                                  : null,
-                              borderRadius: BorderRadius.circular(10),
-                              border: isSelected
-                                  ? Border.all(color: Colors.black, width: 1.5)
-                                  : null,
-                            ),
-                            child: Row(
-                              children: [
-                                Checkbox(
-                                  value: isSelected,
-                                  activeColor: Colors.black,
-                                  onChanged: (_) {
-                                    setState(() {
-                                      selectedOptionProductId = productId;
-                                    });
-                                  },
-                                  shape: const CircleBorder(),
-                                ),
-                                Expanded(child: _buildProductTile(product)),
-                              ],
-                            ),
-                          ),
-                        );
-                      }),
-                    ],
-                  ],
-                ),
-              ),
-              const SizedBox(height: 32),
-
-              // Add to cart button
-              ElevatedButton(
-                onPressed: () {
-                  if (FirebaseAuth.instance.currentUser == null) {
-                    Navigator.push(context, customPageRoute(const LoginPage()));
-                  } else if (_canAddToCart()) {
-                    _addPromoToCart();
-                  } else {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Selecciona una opción antes de agregar al carrito.'),
-                        backgroundColor: Colors.orange,
-                      ),
-                    );
-                  }
-                },
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  backgroundColor: _canAddToCart() ? Colors.black : Colors.grey,
-                  elevation: 5,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(30),
-                  ),
-                ),
-                child: const Center(
-                  child: Text(
-                    'Agregar combo al carrito',
-                    style: TextStyle(fontSize: 16, color: Colors.white),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 110),
-            ],
-          ),
+            ),
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: _buildBottomBar(context, isDark),
+            ),
+          ],
         ),
       ),
     );
   }
 
-  List<Widget> _buildInstructionSteps() {
-    final steps = _getInstructions();
-    return List<Widget>.generate(steps.length, (index) {
-      return Padding(
-        padding: const EdgeInsets.only(bottom: 4),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
+  List<Widget> _buildSections(String type, bool isDark) {
+    final widgets = <Widget>[];
+    if (type == 'combo_exact') {
+      widgets
+        ..add(const SizedBox(height: 20))
+        ..add(_sectionLabel('Incluye'))
+        ..add(const SizedBox(height: 8))
+        ..addAll(requiredProducts.map((p) => _includedRow(p, isDark)));
+    } else if (type == 'bxgy' && triggerProductData != null) {
+      widgets
+        ..add(const SizedBox(height: 20))
+        ..add(_sectionLabel('Producto'))
+        ..add(const SizedBox(height: 8))
+        ..add(_includedRow(triggerProductData!, isDark,
+            badge:
+                'Lleva ${promoData!['buyQuantity']}, Paga ${promoData!['payQuantity']}'));
+    } else if (type == 'combo_choice' || type == 'combo_brand') {
+      if (triggerProductData != null) {
+        widgets
+          ..add(const SizedBox(height: 20))
+          ..add(_sectionLabel('Incluye'))
+          ..add(const SizedBox(height: 8))
+          ..add(_includedRow(triggerProductData!, isDark));
+      }
+      if (optionProducts.isNotEmpty) {
+        widgets
+          ..add(const SizedBox(height: 20))
+          ..add(_sectionLabel('Elige una opción'))
+          ..add(const SizedBox(height: 8))
+          ..addAll(optionProducts.map((p) => _optionTile(p, isDark)));
+      }
+    }
+    return widgets;
+  }
+
+  Widget _sectionLabel(String text) => Text(text,
+      style: const TextStyle(
+          fontSize: 16, fontWeight: FontWeight.w800, letterSpacing: -0.2));
+
+  Widget _fallbackHeader(String type) {
+    return Container(
+      width: double.infinity,
+      height: 160,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(20),
+        gradient: LinearGradient(
+          colors: [Colors.deepOrange.shade400, Colors.orange.shade300],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      ),
+      child: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Text('${index + 1}. ',
-                style: const TextStyle(fontWeight: FontWeight.bold)),
-            Expanded(
-              child: Text(
-                steps[index],
-                textAlign: TextAlign.justify,
-                style: const TextStyle(fontSize: 16),
-              ),
+            const Icon(Icons.local_offer, size: 48, color: Colors.white),
+            const SizedBox(height: 8),
+            Text(_promoTypeLabel(type),
+                style: const TextStyle(
+                    color: Colors.white70, fontWeight: FontWeight.w600)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBottomBar(BuildContext context, bool isDark) {
+    final bool isGuest = FirebaseAuth.instance.currentUser == null;
+    final bool canAdd = _canAddToCart();
+    final price = _getDisplayPrice();
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 110),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+        decoration: BoxDecoration(
+          color: isDark ? Colors.grey[850] : Colors.white,
+          borderRadius: BorderRadius.circular(18),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.12),
+              blurRadius: 18,
+              offset: const Offset(0, 6),
             ),
           ],
         ),
-      );
-    });
+        child: Row(
+        children: [
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('Precio',
+                  style: TextStyle(fontSize: 11, color: Colors.grey[600])),
+              ImageFiltered(
+                imageFilter: ImageFilter.blur(
+                  sigmaX: isGuest ? 6.0 : 0.0,
+                  sigmaY: isGuest ? 6.0 : 0.0,
+                ),
+                child: Text('\$${price.toStringAsFixed(2)}',
+                    style: const TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF2E7D32))),
+              ),
+            ],
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: SizedBox(
+              height: 52,
+              child: ElevatedButton(
+                onPressed: (isGuest || canAdd)
+                    ? () {
+                        if (FirebaseAuth.instance.currentUser == null) {
+                          Navigator.push(
+                              context, customPageRoute(const LoginPage()));
+                        } else if (canAdd) {
+                          _addPromoToCart();
+                        }
+                      }
+                    : null,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor:
+                      (isGuest || canAdd) ? Colors.black : Colors.grey[300],
+                  foregroundColor: Colors.white,
+                  disabledBackgroundColor: Colors.grey[300],
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14)),
+                  elevation: 0,
+                ),
+                child: const Text('Agregar al carrito',
+                    style:
+                        TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+              ),
+            ),
+          ),
+        ],
+        ),
+      ),
+    );
   }
 
   String _promoTypeLabel(String type) {

@@ -4,9 +4,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'arcade_input_controller.dart';
+import 'game_saldo.dart';
 import 'high_score_service.dart';
-
-// ─── Game object models ──────────────────────────────────────────────────────
 
 class _Log {
   double x;
@@ -29,8 +28,6 @@ enum _Facing { up, down, left, right }
 
 enum _GamePhase { start, playing, dead, levelComplete }
 
-// ─── Widget ──────────────────────────────────────────────────────────────────
-
 class TrafficHopperScreen extends StatefulWidget {
   final String userId;
   final DocumentReference rewardsDocRef;
@@ -42,16 +39,12 @@ class TrafficHopperScreen extends StatefulWidget {
   @override State<TrafficHopperScreen> createState() => _TrafficHopperScreenState();
 }
 
-// ─── State ───────────────────────────────────────────────────────────────────
-
 class _TrafficHopperScreenState extends State<TrafficHopperScreen> {
-  // ── Grid constants ──────────────────────────────────────────────────────
   static const int kCols = 13;
   static const List<int> kLilyPadCols = [1, 3, 5, 7, 9];
   static const List<int> kRiverRows = [1, 2, 3, 4, 5];
   static const List<int> kRoadRows = [7, 8, 9, 10, 11];
 
-  // ── State ───────────────────────────────────────────────────────────────
   late double _saldo;
   int _score = 0;
   int _hiScore = 0;
@@ -60,30 +53,23 @@ class _TrafficHopperScreenState extends State<TrafficHopperScreen> {
   _GamePhase _phase = _GamePhase.start;
   bool _paused = false;
 
-  // Frog position (col is floating for river drift)
-  double _frogX = 6.0; // fractional column
+  double _frogX = 6.0;
   int _frogRow = 13;
   _Facing _frogFacing = _Facing.up;
   bool _deathFlash = false;
 
-  // Score tracking per crossing
   int _highestRowThisCrossing = 13;
 
-  // Lily pads filled this level
   final Set<int> _filledPads = {};
 
-  // Game objects
   List<_Log> _logs = [];
   List<_Car> _cars = [];
 
-  // Timers
   Timer? _tickTimer;
   Timer? _deathTimer;
   Timer? _levelCompleteTimer;
 
   final _rng = Random();
-
-  // ── Init ────────────────────────────────────────────────────────────────
 
   @override
   void initState() {
@@ -103,8 +89,6 @@ class _TrafficHopperScreenState extends State<TrafficHopperScreen> {
     super.dispose();
   }
 
-  // ── Object initialisation ───────────────────────────────────────────────
-
   void _initObjects() {
     _logs = _buildLogs();
     _cars = _buildCars();
@@ -112,10 +96,8 @@ class _TrafficHopperScreenState extends State<TrafficHopperScreen> {
 
   List<_Log> _buildLogs() {
     final logs = <_Log>[];
-    // Speed multiplier scales with level
     final sm = 1.0 + (_level - 1) * 0.15;
 
-    // Rows 1,3,5 → move right; rows 2,4 → move left
     final rowConfigs = {
       1: (speed: 2.0 * sm, dir: 1),
       2: (speed: 1.8 * sm, dir: -1),
@@ -127,10 +109,10 @@ class _TrafficHopperScreenState extends State<TrafficHopperScreen> {
     for (final entry in rowConfigs.entries) {
       final r = entry.key;
       final spd = entry.value.speed * entry.value.dir.toDouble();
-      final count = 2 + _rng.nextInt(2); // 2 or 3 logs
+      final count = 2 + _rng.nextInt(2);
       double xPos = _rng.nextDouble() * kCols;
       for (int i = 0; i < count; i++) {
-        final len = 2 + _rng.nextInt(2); // 2 or 3 cells
+        final len = 2 + _rng.nextInt(2);
         logs.add(_Log(r, xPos, spd, len));
         xPos += len + 2 + _rng.nextDouble() * 3;
         if (xPos >= kCols) xPos -= kCols;
@@ -158,7 +140,7 @@ class _TrafficHopperScreenState extends State<TrafficHopperScreen> {
       final count = 2 + _rng.nextInt(2);
       double xPos = _rng.nextDouble() * kCols;
       for (int i = 0; i < count; i++) {
-        final len = 1 + _rng.nextInt(2); // 1 or 2 cells
+        final len = 1 + _rng.nextInt(2);
         cars.add(_Car(r, xPos, spd, len, col));
         xPos += len + 2 + _rng.nextDouble() * 2;
         if (xPos >= kCols) xPos -= kCols;
@@ -166,8 +148,6 @@ class _TrafficHopperScreenState extends State<TrafficHopperScreen> {
     }
     return cars;
   }
-
-  // ── Game loop ───────────────────────────────────────────────────────────
 
   void _startTicker() {
     _tickTimer?.cancel();
@@ -178,9 +158,8 @@ class _TrafficHopperScreenState extends State<TrafficHopperScreen> {
     if (_phase != _GamePhase.playing || _paused) return;
     if (!mounted) return;
 
-    const dt = 16.0 / 1000.0; // seconds per tick
+    const dt = 16.0 / 1000.0;
 
-    // Update log positions
     for (final log in _logs) {
       log.x += log.speed * dt;
       final gridWidth = kCols.toDouble();
@@ -192,7 +171,6 @@ class _TrafficHopperScreenState extends State<TrafficHopperScreen> {
       }
     }
 
-    // Update car positions
     for (final car in _cars) {
       car.x += car.speed * dt;
       final gridWidth = kCols.toDouble();
@@ -204,24 +182,20 @@ class _TrafficHopperScreenState extends State<TrafficHopperScreen> {
       }
     }
 
-    // Drift frog if on river
     if (kRiverRows.contains(_frogRow)) {
       final log = _logUnderFrog();
       if (log != null) {
         _frogX += log.speed * dt;
-        // Kill if drifted off screen
         if (_frogX < -0.5 || _frogX > kCols - 0.5) {
           _triggerDeath();
           return;
         }
       } else {
-        // Not on a log → die
         _triggerDeath();
         return;
       }
     }
 
-    // Check road collision
     if (kRoadRows.contains(_frogRow)) {
       if (_carUnderFrog() != null) {
         _triggerDeath();
@@ -236,7 +210,6 @@ class _TrafficHopperScreenState extends State<TrafficHopperScreen> {
     final frogCol = _frogX;
     for (final log in _logs) {
       if (log.row != _frogRow) continue;
-      // log occupies cells [log.x .. log.x + log.len)
       if (frogCol + 0.4 > log.x && frogCol - 0.4 < log.x + log.len) {
         return log;
       }
@@ -254,8 +227,6 @@ class _TrafficHopperScreenState extends State<TrafficHopperScreen> {
     }
     return null;
   }
-
-  // ── Input ───────────────────────────────────────────────────────────────
 
   void _onControllerEvent() {
     final event = widget.controller.lastEvent;
@@ -280,14 +251,12 @@ class _TrafficHopperScreenState extends State<TrafficHopperScreen> {
 
     if (_phase == _GamePhase.levelComplete) return;
 
-    // pause toggle
     if (btn == ArcadeButton.start) {
       setState(() => _paused = !_paused);
       return;
     }
     if (_paused) return;
 
-    // playing
     switch (btn) {
       case ArcadeButton.up:
         _moveFrog(0, -1, _Facing.up);
@@ -314,13 +283,11 @@ class _TrafficHopperScreenState extends State<TrafficHopperScreen> {
       _frogFacing = facing;
     });
 
-    // Award row points only for new highest row reached
     if (_frogRow < _highestRowThisCrossing) {
       _score += 10;
       _highestRowThisCrossing = _frogRow;
     }
 
-    // Check home row arrival
     if (_frogRow == 0) {
       _checkHomeRow();
     }
@@ -329,9 +296,7 @@ class _TrafficHopperScreenState extends State<TrafficHopperScreen> {
   void _checkHomeRow() {
     final col = _frogX.round();
     if (kLilyPadCols.contains(col)) {
-      // Valid lily pad
       if (_filledPads.contains(col)) {
-        // Already filled — treat as death
         _triggerDeath();
         return;
       }
@@ -346,7 +311,6 @@ class _TrafficHopperScreenState extends State<TrafficHopperScreen> {
         _respawnFrog();
       }
     } else {
-      // Not a lily pad
       _triggerDeath();
     }
   }
@@ -359,8 +323,6 @@ class _TrafficHopperScreenState extends State<TrafficHopperScreen> {
       _highestRowThisCrossing = 13;
     });
   }
-
-  // ── Death ───────────────────────────────────────────────────────────────
 
   void _triggerDeath() {
     HapticFeedback.heavyImpact();
@@ -390,8 +352,6 @@ class _TrafficHopperScreenState extends State<TrafficHopperScreen> {
     });
   }
 
-  // ── Level complete ──────────────────────────────────────────────────────
-
   void _levelComplete() {
     _tickTimer?.cancel();
     setState(() {
@@ -399,7 +359,6 @@ class _TrafficHopperScreenState extends State<TrafficHopperScreen> {
       _phase = _GamePhase.levelComplete;
     });
 
-    // Award saldo
     final newSaldo = _saldo + 1.0;
     _updateFirestore(newSaldo);
     if (mounted) {
@@ -415,13 +374,11 @@ class _TrafficHopperScreenState extends State<TrafficHopperScreen> {
         _filledPads.clear();
         _phase = _GamePhase.playing;
       });
-      _initObjects(); // rebuild with faster speeds
+      _initObjects();
       _respawnFrog();
       _startTicker();
     });
   }
-
-  // ── Start / Restart ─────────────────────────────────────────────────────
 
   void _startGame() {
     setState(() {
@@ -437,12 +394,18 @@ class _TrafficHopperScreenState extends State<TrafficHopperScreen> {
     _startTicker();
   }
 
-  void _restart() {
+  Future<void> _restart() async {
+    final ns = await chargeForReplay(
+        userId: widget.userId,
+        rewardsDocRef: widget.rewardsDocRef,
+        currentSaldo: _saldo);
+    if (ns == null) return;
+    if (!mounted) return;
+    setState(() => _saldo = ns);
+    widget.onSaldoChanged(ns);
     _tickTimer?.cancel();
     _startGame();
   }
-
-  // ── Firestore ───────────────────────────────────────────────────────────
 
   Future<void> _updateFirestore(double newSaldo) async {
     try {
@@ -453,8 +416,6 @@ class _TrafficHopperScreenState extends State<TrafficHopperScreen> {
       await batch.commit();
     } catch (e) { debugPrint('Hopper Firestore: $e'); }
   }
-
-  // ── Build ────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
@@ -662,8 +623,6 @@ class _TrafficHopperScreenState extends State<TrafficHopperScreen> {
   );
 }
 
-// ─── Painter ─────────────────────────────────────────────────────────────────
-
 class _HopperPainter extends CustomPainter {
   final List<_Log> logs;
   final List<_Car> cars;
@@ -685,7 +644,6 @@ class _HopperPainter extends CustomPainter {
     required this.phase,
   });
 
-  // Cell size computed from canvas size
   double _cs(Size size) => min(size.width / 13, size.height / 14).floorToDouble();
   double _ox(Size size) => ((size.width - _cs(size) * 13) / 2).floorToDouble();
   double _oy(Size size) => ((size.height - _cs(size) * 14) / 2).floorToDouble();
@@ -697,28 +655,21 @@ class _HopperPainter extends CustomPainter {
     final oy = _oy(size);
     final p = Paint()..isAntiAlias = false;
 
-    // Outer frame / letterbox
     p.color = const Color(0xFF0A0A12);
     canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), p);
 
-    // Terrain rows
     for (int row = 0; row < 14; row++) {
       _drawTerrainRow(canvas, p, ox, oy, cs, row);
     }
 
-    // Road lane markings (on top of terrain)
     _drawRoadMarkings(canvas, p, ox, oy, cs);
 
-    // Lily pads
     _drawLilyPads(canvas, ox, oy, cs);
 
-    // Logs
     _drawLogs(canvas, ox, oy, cs);
 
-    // Cars
     _drawCars(canvas, ox, oy, cs);
 
-    // Frog
     if (phase == _GamePhase.playing || phase == _GamePhase.levelComplete) {
       _drawFrog(canvas, ox, oy, cs);
     } else if (phase == _GamePhase.dead && deathFlash) {
@@ -726,80 +677,62 @@ class _HopperPainter extends CustomPainter {
     }
   }
 
-  // ── Terrain ──────────────────────────────────────────────────────────────
-
   void _drawTerrainRow(Canvas canvas, Paint p, double ox, double oy, double cs, int row) {
     final x = ox;
     final y = oy + row * cs;
     final w = cs * 13;
 
     if (row == 0) {
-      // Goal / home row — rich forest green
       p.color = const Color(0xFF155A15);
       canvas.drawRect(Rect.fromLTWH(x, y, w, cs), p);
-      // Lighter grass crest
       p.color = const Color(0xFF1E7A1E);
       canvas.drawRect(Rect.fromLTWH(x, y, w, cs * 0.22), p);
-      // Dark divider at base
       p.color = const Color(0xFF0A2E0A);
       canvas.drawRect(Rect.fromLTWH(x, y + cs * 0.90, w, cs * 0.10), p);
-      // Grass blade spikes along top
       p.color = const Color(0xFF3AAA3A);
       for (double bx = x + 1; bx < x + w - 1; bx += 4) {
         canvas.drawRect(Rect.fromLTWH(bx, y + 1, 1.5, cs * 0.14), p);
       }
-      // Recessed water channels behind empty lily pad slots
       for (final emptyCol in [0, 2, 4, 6, 8, 10, 11, 12]) {
         p.color = const Color(0xFF0B3A0B);
         canvas.drawRect(Rect.fromLTWH(ox + emptyCol * cs + cs * 0.05, y + cs * 0.14,
             cs * 0.90, cs * 0.72), p);
       }
     } else if (row >= 1 && row <= 5) {
-      // River rows — deep water with shimmer
       final baseBlue = row.isOdd ? const Color(0xFF003880) : const Color(0xFF00408A);
       p.color = baseBlue;
       canvas.drawRect(Rect.fromLTWH(x, y, w, cs), p);
-      // Foam / glare band at top
       p.color = const Color(0xFF1A5DC4);
       canvas.drawRect(Rect.fromLTWH(x, y, w, cs * 0.09), p);
-      // Depth shadow at bottom
       p.color = const Color(0xFF001E55);
       canvas.drawRect(Rect.fromLTWH(x, y + cs * 0.88, w, cs * 0.12), p);
-      // Two shimmer bands
       p.color = const Color(0x304488DD);
       canvas.drawRect(Rect.fromLTWH(x, y + cs * 0.28, w, cs * 0.07), p);
       canvas.drawRect(Rect.fromLTWH(x, y + cs * 0.60, w, cs * 0.05), p);
-      // Ripple dashes — offset per row to avoid alignment
       p.color = const Color(0x3866AAEE);
       final rippleOffset = row * 13.0 % 9;
       for (double rx = x + rippleOffset; rx < x + w - cs * 0.3; rx += cs * 1.1) {
         canvas.drawRect(Rect.fromLTWH(rx, y + cs * 0.43, cs * 0.38, 1.5), p);
       }
     } else if (row == 6) {
-      // Safe island / median — bright grass strip
       p.color = const Color(0xFF2A5512);
       canvas.drawRect(Rect.fromLTWH(x, y, w, cs), p);
       p.color = const Color(0xFF3A7A1A);
       canvas.drawRect(Rect.fromLTWH(x, y + cs * 0.12, w, cs * 0.76), p);
-      // Yellow guardrail at top & bottom
       p.color = const Color(0xFFDDAA00);
       canvas.drawRect(Rect.fromLTWH(x, y, w, cs * 0.06), p);
       canvas.drawRect(Rect.fromLTWH(x, y + cs * 0.94, w, cs * 0.06), p);
-      // Grass blades
       p.color = const Color(0xFF55BB22);
       for (double bx = x + 2; bx < x + w - 1; bx += 4) {
         canvas.drawRect(Rect.fromLTWH(bx, y + cs * 0.16, 1.5, cs * 0.16), p);
       }
     } else if (row >= 7 && row <= 11) {
-      // Road rows — charcoal asphalt
       p.color = const Color(0xFF232323);
       canvas.drawRect(Rect.fromLTWH(x, y, w, cs), p);
-      // Subtle asphalt texture bands
       p.color = const Color(0xFF2B2B2B);
       for (double tx = x; tx < x + w; tx += cs * 0.85) {
         canvas.drawRect(Rect.fromLTWH(tx, y + cs * 0.10, cs * 0.42, cs * 0.80), p);
       }
-      // White edge lines (outer road border)
       if (row == 7) {
         p.color = const Color(0xFFDDDDDD);
         canvas.drawRect(Rect.fromLTWH(x, y, w, cs * 0.045), p);
@@ -809,22 +742,18 @@ class _HopperPainter extends CustomPainter {
         canvas.drawRect(Rect.fromLTWH(x, y + cs * 0.955, w, cs * 0.045), p);
       }
     } else {
-      // Rows 12-13 — start safe zone, lush grass
       p.color = const Color(0xFF1A5A1A);
       canvas.drawRect(Rect.fromLTWH(x, y, w, cs), p);
       p.color = const Color(0xFF237823);
       canvas.drawRect(Rect.fromLTWH(x, y, w, cs * 0.22), p);
       if (row == 12) {
-        // Sidewalk curb at bottom (top of start zone)
         p.color = const Color(0xFFB0B0B0);
         canvas.drawRect(Rect.fromLTWH(x, y + cs * 0.94, w, cs * 0.06), p);
       }
       if (row == 13) {
-        // Safe starting platform edge at very bottom
         p.color = const Color(0xFF0A300A);
         canvas.drawRect(Rect.fromLTWH(x, y + cs * 0.94, w, cs * 0.06), p);
       }
-      // Grass blades
       p.color = const Color(0xFF44BB33);
       final bOff = row == 12 ? 1.0 : 3.0;
       for (double bx = x + bOff; bx < x + w - 1; bx += 4) {
@@ -834,7 +763,6 @@ class _HopperPainter extends CustomPainter {
   }
 
   void _drawRoadMarkings(Canvas canvas, Paint p, double ox, double oy, double cs) {
-    // White dashed lane dividers between road rows
     for (int row = 7; row <= 10; row++) {
       final y = oy + (row + 1) * cs - 1.5;
       p.color = const Color(0xBBFFFFFF);
@@ -842,14 +770,11 @@ class _HopperPainter extends CustomPainter {
         canvas.drawRect(Rect.fromLTWH(dx, y, cs * 0.85, 2.5), p);
       }
     }
-    // Double yellow center divider between rows 9 and 10
     final yC = oy + 10 * cs - 1.5;
     p.color = const Color(0xFFDDAA00);
     canvas.drawRect(Rect.fromLTWH(ox, yC - 2.5, cs * 13, 2.0), p);
     canvas.drawRect(Rect.fromLTWH(ox, yC + 1.5, cs * 13, 2.0), p);
   }
-
-  // ── Lily pads ─────────────────────────────────────────────────────────────
 
   void _drawLilyPads(Canvas canvas, double ox, double oy, double cs) {
     final p = Paint()..isAntiAlias = false;
@@ -859,24 +784,20 @@ class _HopperPainter extends CustomPainter {
       final cy = oy + cs / 2;
       final r = cs * 0.42;
 
-      // Draw oval pad as stacked horizontal rects (9 bands)
       const bands = 9;
       for (int bi = 0; bi < bands; bi++) {
-        final t = (bi / (bands - 1)) * 2.0 - 1.0; // -1..1
+        final t = (bi / (bands - 1)) * 2.0 - 1.0;
         final halfW = r * sqrt(max(0, 1.0 - t * t * 0.55));
         final bandY = cy - r + bi * (r * 2.0 / (bands - 1));
         final bandH = (r * 2.0 / (bands - 1)) + 1;
 
-        // Notch cut on upper-right (classic lily pad shape) for top 3 bands
         final isNotchRow = bi < 3;
         if (isNotchRow && halfW > r * 0.3) {
-          // Draw only left portion
           p.color = bi < 2
               ? (filled ? const Color(0xFF50D050) : const Color(0xFF2A9A2A))
               : (filled ? const Color(0xFF38C038) : const Color(0xFF1E8A1E));
           canvas.drawRect(Rect.fromLTWH(cx - halfW, bandY, halfW * 0.65, bandH), p);
         } else {
-          // Full band
           p.color = bi < 2
               ? (filled ? const Color(0xFF50D050) : const Color(0xFF2A9A2A))
               : bi > bands - 3
@@ -886,7 +807,6 @@ class _HopperPainter extends CustomPainter {
         }
       }
 
-      // Pad vein lines (radial spokes)
       p.color = filled ? const Color(0xFF66EE66) : const Color(0xFF2AA82A);
       canvas.drawRect(Rect.fromLTWH(cx - 0.75, cy - r * 0.85, 1.5, r * 0.85), p);
       canvas.drawRect(Rect.fromLTWH(cx - r * 0.85, cy - 0.75, r * 0.85, 1.5), p);
@@ -894,21 +814,17 @@ class _HopperPainter extends CustomPainter {
       canvas.drawRect(Rect.fromLTWH(cx, cy - 0.75, r * 0.80, 1.5), p);
 
       if (filled) {
-        // Glowing star / crown marking
         p.color = const Color(0xFFFFEE00);
         canvas.drawRect(Rect.fromCenter(center: Offset(cx, cy), width: r * 0.55, height: r * 0.55), p);
         p.color = const Color(0xFFFF9900);
         canvas.drawRect(Rect.fromCenter(center: Offset(cx, cy), width: r * 0.22, height: r * 1.0), p);
         canvas.drawRect(Rect.fromCenter(center: Offset(cx, cy), width: r * 1.0, height: r * 0.22), p);
       } else {
-        // Water-lily bud
         p.color = const Color(0xFFEEEEAA);
         canvas.drawRect(Rect.fromCenter(center: Offset(cx, cy), width: r * 0.22, height: r * 0.22), p);
       }
     }
   }
-
-  // ── Logs (kept with existing quality, minor tweak) ────────────────────────
 
   void _drawLogs(Canvas canvas, double ox, double oy, double cs) {
     final p = Paint()..isAntiAlias = false;
@@ -919,34 +835,27 @@ class _HopperPainter extends CustomPainter {
       final logTop = y + cs * 0.10;
       final logH = cs * 0.80;
 
-      // Water shadow below log
       p.color = const Color(0x55000033);
       canvas.drawRect(Rect.fromLTWH(x + 2, logTop + logH, w - 2, cs * 0.06), p);
 
-      // Main bark body
       p.color = const Color(0xFF7A3A10);
       canvas.drawRect(Rect.fromLTWH(x, logTop, w, logH), p);
-      // Top highlight
       p.color = const Color(0xFFA05028);
       canvas.drawRect(Rect.fromLTWH(x, logTop, w, logH * 0.18), p);
-      // Bottom shadow
       p.color = const Color(0xFF4A2008);
       canvas.drawRect(Rect.fromLTWH(x, logTop + logH * 0.82, w, logH * 0.18), p);
 
-      // Bark grain lines
       p.color = const Color(0xFF5A2808);
       final grainCount = (logH / 5).floor().clamp(2, 6);
       for (int i = 1; i < grainCount; i++) {
         final lineY = logTop + (logH * i / grainCount);
         canvas.drawRect(Rect.fromLTWH(x + 2, lineY, w - 4, 1.5), p);
       }
-      // Vertical bark cracks
       p.color = const Color(0xFF4A2008);
       final crackSpacing = cs * 0.85;
       for (double cx2 = x + crackSpacing; cx2 < x + w - cs * 0.3; cx2 += crackSpacing) {
         canvas.drawRect(Rect.fromLTWH(cx2, logTop + logH * 0.2, 1.5, logH * 0.6), p);
       }
-      // End caps
       p.color = const Color(0xFF3A1A06);
       canvas.drawRect(Rect.fromLTWH(x, logTop, cs * 0.18, logH), p);
       canvas.drawRect(Rect.fromLTWH(x + w - cs * 0.18, logTop, cs * 0.18, logH), p);
@@ -956,8 +865,6 @@ class _HopperPainter extends CustomPainter {
     }
   }
 
-  // ── Cars ──────────────────────────────────────────────────────────────────
-
   void _drawCars(Canvas canvas, double ox, double oy, double cs) {
     final p = Paint()..isAntiAlias = false;
     for (final car in cars) {
@@ -966,49 +873,39 @@ class _HopperPainter extends CustomPainter {
       final w = car.len * cs;
       final goingRight = car.speed > 0;
 
-      // Ground shadow
       p.color = const Color(0x55000000);
       canvas.drawRect(Rect.fromLTWH(x + 2, y + cs * 0.83, w - 2, cs * 0.13), p);
 
-      // Main car body
       p.color = car.color;
       canvas.drawRect(Rect.fromLTWH(x + 1, y + cs * 0.21, w - 2, cs * 0.58), p);
 
-      // Body top highlight
       p.color = _lightenColor(car.color, 0.28);
       canvas.drawRect(Rect.fromLTWH(x + 1, y + cs * 0.21, w - 2, cs * 0.09), p);
 
-      // Body bottom shadow
       p.color = _darkenColor(car.color, 0.38);
       canvas.drawRect(Rect.fromLTWH(x + 1, y + cs * 0.68, w - 2, cs * 0.11), p);
 
-      // Roof / cab section
       if (w > cs * 1.1) {
         final cabX = x + w * 0.22;
         final cabW = w * 0.56;
         p.color = _darkenColor(car.color, 0.18);
         canvas.drawRect(Rect.fromLTWH(cabX, y + cs * 0.09, cabW, cs * 0.12), p);
-        // Windshield (front) and rear window (back)
         p.color = const Color(0xFF7ABFE0);
         canvas.drawRect(Rect.fromLTWH(cabX + 1, y + cs * 0.10, cabW * 0.43, cs * 0.10), p);
         canvas.drawRect(Rect.fromLTWH(cabX + cabW - cabW * 0.40, y + cs * 0.10, cabW * 0.38, cs * 0.10), p);
-        // Window glare streak
         p.color = const Color(0x99FFFFFF);
         canvas.drawRect(Rect.fromLTWH(cabX + 2, y + cs * 0.11, cabW * 0.10, cs * 0.04), p);
       }
 
-      // Headlights (front) — bright yellow
       final frontX = goingRight ? x + w - cs * 0.16 : x + cs * 0.04;
       final rearX  = goingRight ? x + cs * 0.04     : x + w - cs * 0.16;
       p.color = const Color(0xFFFFFF88);
       canvas.drawRect(Rect.fromLTWH(frontX, y + cs * 0.29, cs * 0.11, cs * 0.14), p);
       canvas.drawRect(Rect.fromLTWH(frontX, y + cs * 0.54, cs * 0.11, cs * 0.14), p);
-      // Taillights — red
       p.color = const Color(0xFFFF2233);
       canvas.drawRect(Rect.fromLTWH(rearX, y + cs * 0.29, cs * 0.11, cs * 0.14), p);
       canvas.drawRect(Rect.fromLTWH(rearX, y + cs * 0.54, cs * 0.11, cs * 0.14), p);
 
-      // Wheels — dark with hub dot
       p.color = const Color(0xFF111111);
       canvas.drawRect(Rect.fromLTWH(x + cs * 0.10, y + cs * 0.72, cs * 0.20, cs * 0.17), p);
       canvas.drawRect(Rect.fromLTWH(x + w - cs * 0.30, y + cs * 0.72, cs * 0.20, cs * 0.17), p);
@@ -1036,8 +933,6 @@ class _HopperPainter extends CustomPainter {
     );
   }
 
-  // ── Frog ──────────────────────────────────────────────────────────────────
-
   void _drawFrog(Canvas canvas, double ox, double oy, double cs) {
     final isDead = deathFlash;
     final bodyGreen  = isDead ? const Color(0xFFFF2200) : const Color(0xFF22CC22);
@@ -1061,88 +956,66 @@ class _HopperPainter extends CustomPainter {
       case _Facing.right: canvas.rotate(1.5708); break;
     }
 
-    // ── Outline shadow (drawn 1px larger in each direction) ─────────────────
     p.color = outlineCol;
-    canvas.drawRect(Rect.fromLTWH(-5*u,  1*u, 3*u, 4.5*u), p); // L back leg outline
-    canvas.drawRect(Rect.fromLTWH( 2*u,  1*u, 3*u, 4.5*u), p); // R back leg outline
-    canvas.drawRect(Rect.fromLTWH(-4.5*u, -2.5*u, 9*u, 6*u), p); // body outline
-    canvas.drawRect(Rect.fromLTWH(-4.5*u, -6*u, 9*u, 4.5*u), p); // head outline
-    canvas.drawRect(Rect.fromLTWH(-5.5*u, -3.5*u, 2.5*u, 3.5*u), p); // L front leg
-    canvas.drawRect(Rect.fromLTWH( 3*u,   -3.5*u, 2.5*u, 3.5*u), p); // R front leg
+    canvas.drawRect(Rect.fromLTWH(-5*u,  1*u, 3*u, 4.5*u), p);
+    canvas.drawRect(Rect.fromLTWH( 2*u,  1*u, 3*u, 4.5*u), p);
+    canvas.drawRect(Rect.fromLTWH(-4.5*u, -2.5*u, 9*u, 6*u), p);
+    canvas.drawRect(Rect.fromLTWH(-4.5*u, -6*u, 9*u, 4.5*u), p);
+    canvas.drawRect(Rect.fromLTWH(-5.5*u, -3.5*u, 2.5*u, 3.5*u), p);
+    canvas.drawRect(Rect.fromLTWH( 3*u,   -3.5*u, 2.5*u, 3.5*u), p);
 
-    // ── Back legs ───────────────────────────────────────────────────────────
     p.color = darkGreen;
-    // Left thigh
     canvas.drawRect(Rect.fromLTWH(-4.5*u, 1.5*u, 2.5*u, 3.5*u), p);
-    // Left foot webbing (3 toe stubs)
     canvas.drawRect(Rect.fromLTWH(-5.8*u, 3.8*u, 1.2*u, 1.2*u), p);
     canvas.drawRect(Rect.fromLTWH(-4.8*u, 4.2*u, 1.2*u, 1.0*u), p);
     canvas.drawRect(Rect.fromLTWH(-3.8*u, 3.8*u, 1.2*u, 1.2*u), p);
-    // Right thigh
     canvas.drawRect(Rect.fromLTWH( 2*u, 1.5*u, 2.5*u, 3.5*u), p);
-    // Right foot webbing
     canvas.drawRect(Rect.fromLTWH( 2.6*u, 3.8*u, 1.2*u, 1.2*u), p);
     canvas.drawRect(Rect.fromLTWH( 3.6*u, 4.2*u, 1.2*u, 1.0*u), p);
     canvas.drawRect(Rect.fromLTWH( 4.6*u, 3.8*u, 1.2*u, 1.2*u), p);
 
-    // ── Body ────────────────────────────────────────────────────────────────
     p.color = bodyGreen;
     canvas.drawRect(Rect.fromLTWH(-3.5*u, -2*u, 7*u, 5*u), p);
-    // Dorsal stripe (slightly darker)
     p.color = darkGreen;
     canvas.drawRect(Rect.fromLTWH(-0.6*u, -2*u, 1.2*u, 4*u), p);
 
-    // Belly
     p.color = bellyColor;
     canvas.drawRect(Rect.fromLTWH(-2*u, -0.5*u, 4*u, 3*u), p);
 
-    // Back spots
     p.color = darkGreen;
     canvas.drawRect(Rect.fromLTWH(-2.8*u, -1.5*u, 1.6*u, 1.6*u), p);
     canvas.drawRect(Rect.fromLTWH( 1.2*u, -1.5*u, 1.6*u, 1.6*u), p);
 
-    // ── Front legs ──────────────────────────────────────────────────────────
     p.color = darkGreen;
     canvas.drawRect(Rect.fromLTWH(-5*u, -3*u, 2*u, 2.5*u), p);
-    // Front left toes
     canvas.drawRect(Rect.fromLTWH(-5.8*u, -3.5*u, 0.9*u, 0.9*u), p);
     canvas.drawRect(Rect.fromLTWH(-5.0*u, -3.8*u, 0.9*u, 0.9*u), p);
     canvas.drawRect(Rect.fromLTWH(-4.2*u, -3.5*u, 0.9*u, 0.9*u), p);
     canvas.drawRect(Rect.fromLTWH( 3*u, -3*u, 2*u, 2.5*u), p);
-    // Front right toes
     canvas.drawRect(Rect.fromLTWH( 3.3*u, -3.5*u, 0.9*u, 0.9*u), p);
     canvas.drawRect(Rect.fromLTWH( 4.1*u, -3.8*u, 0.9*u, 0.9*u), p);
     canvas.drawRect(Rect.fromLTWH( 4.9*u, -3.5*u, 0.9*u, 0.9*u), p);
 
-    // ── Head ────────────────────────────────────────────────────────────────
     p.color = bodyGreen;
     canvas.drawRect(Rect.fromLTWH(-4*u, -5.5*u, 8*u, 4*u), p);
-    // Mouth crease
     p.color = darkGreen;
     canvas.drawRect(Rect.fromLTWH(-3*u, -2.5*u, 6*u, 1*u), p);
-    // Nostril dots
     p.color = outlineCol;
     canvas.drawRect(Rect.fromLTWH(-1.5*u, -4.2*u, 0.9*u, 0.9*u), p);
     canvas.drawRect(Rect.fromLTWH( 0.6*u, -4.2*u, 0.9*u, 0.9*u), p);
 
-    // ── Bulging eyes ────────────────────────────────────────────────────────
-    // Eye socket bump (outline)
     p.color = outlineCol;
     canvas.drawRect(Rect.fromLTWH(-5*u, -7.5*u, 3.2*u, 3.2*u), p);
     canvas.drawRect(Rect.fromLTWH( 1.8*u, -7.5*u, 3.2*u, 3.2*u), p);
-    // Eye whites
     p.color = Colors.white;
     canvas.drawRect(Rect.fromLTWH(-4.5*u, -7*u, 2.5*u, 2.5*u), p);
     canvas.drawRect(Rect.fromLTWH( 2*u,   -7*u, 2.5*u, 2.5*u), p);
-    // Gold iris ring
     p.color = irisColor;
     canvas.drawRect(Rect.fromLTWH(-4.2*u, -6.8*u, 1.9*u, 1.9*u), p);
     canvas.drawRect(Rect.fromLTWH( 2.3*u, -6.8*u, 1.9*u, 1.9*u), p);
-    // Pupils
     p.color = Colors.black;
     canvas.drawRect(Rect.fromLTWH(-3.8*u, -6.5*u, 1.2*u, 1.2*u), p);
     canvas.drawRect(Rect.fromLTWH( 2.6*u, -6.5*u, 1.2*u, 1.2*u), p);
-    // Pupil shine
     p.color = Colors.white;
     canvas.drawRect(Rect.fromLTWH(-3.6*u, -6.8*u, 0.55*u, 0.55*u), p);
     canvas.drawRect(Rect.fromLTWH( 2.8*u, -6.8*u, 0.55*u, 0.55*u), p);

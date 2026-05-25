@@ -6,13 +6,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'arcade_input_controller.dart';
+import 'game_saldo.dart';
 import 'high_score_service.dart';
 
-// ─── Direction ───────────────────────────────────────────────────────────────
-
 enum _Direction { up, down, left, right }
-
-// ─── Screen ──────────────────────────────────────────────────────────────────
 
 class SnakeGameScreen extends StatefulWidget {
   final String userId;
@@ -37,8 +34,8 @@ class SnakeGameScreen extends StatefulWidget {
 class _SnakeGameScreenState extends State<SnakeGameScreen> {
   static const int kGridW = 18;
   static const int kGridH = 26;
-  static const int kFoodForLevel = 3; // was 4 — harder
-  static const double kStartTickMs = 190.0; // faster start speed
+  static const int kFoodForLevel = 3;
+  static const double kStartTickMs = 190.0;
 
   final _rng = Random();
 
@@ -73,8 +70,6 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> {
     widget.controller.removeListener(_onControllerEvent);
     super.dispose();
   }
-
-  // ─── Controller input ────────────────────────────────────────────────────
 
   void _onControllerEvent() {
     final event = widget.controller.lastEvent;
@@ -111,8 +106,6 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> {
     if (!_isRunning && !_isDead) _beginGame(candidate);
   }
 
-  // ─── Game setup ──────────────────────────────────────────────────────────
-
   void _initGame() {
     final midY = kGridH ~/ 2;
     final midX = kGridW ~/ 2;
@@ -140,12 +133,9 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> {
 
   void _startTicker() {
     _ticker?.cancel();
-    // Gradual speed increase: ~217ms at lvl 1 down to ~100ms at lvl 12+
     final ms = (kStartTickMs / (1.0 + (_level - 1) * 0.12)).clamp(100.0, kStartTickMs).round();
     _ticker = Timer.periodic(Duration(milliseconds: ms), (_) => _tick());
   }
-
-  // ─── Game loop ───────────────────────────────────────────────────────────
 
   void _tick() {
     if (!_isRunning || _isDead || _paused) return;
@@ -215,7 +205,6 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> {
     _ticker?.cancel();
     _level++;
 
-    // Award 1 saldo point every 5 levels
     if (_level % 5 == 0 && !_awardingPoints) {
       _awardingPoints = true;
       final newSaldo = _saldo + 1.0;
@@ -231,12 +220,14 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> {
   }
 
   Future<void> _restart() async {
-    if (_saldo < 10) return;
-    final newSaldo = _saldo - 10.0;
-    await _updateFirestore(newSaldo);
+    final ns = await chargeForReplay(
+        userId: widget.userId,
+        rewardsDocRef: widget.rewardsDocRef,
+        currentSaldo: _saldo);
+    if (ns == null) return;
     if (!mounted) return;
     setState(() {
-      _saldo = newSaldo;
+      _saldo = ns;
       _initGame();
     });
     _isRunning = true;
@@ -265,8 +256,6 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> {
       debugPrint('Snake Firestore error: $e');
     }
   }
-
-  // ─── Build ───────────────────────────────────────────────────────────────
 
   void _onHorizontalDrag(DragUpdateDetails d) {
     if (d.delta.dx.abs() > 5) {
@@ -388,7 +377,7 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> {
 }
 
   Widget _buildGameOverOverlay() {
-  final canRestart = _saldo >= 10;
+  final canRestart = _saldo >= 5;
 
   return Positioned.fill(
     child: Container(
@@ -431,7 +420,7 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> {
                   shape: const StadiumBorder(),
                 ),
                 child: Text(
-                  canRestart ? 'Reintentar  (−10 pts)' : 'Sin puntos suficientes',
+                  canRestart ? 'Reintentar  (−5 pts)' : 'Sin puntos suficientes',
                   style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                 ),
               ),
@@ -462,8 +451,6 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> {
     ),
   );
 }
-
-// ─── Painter ─────────────────────────────────────────────────────────────────
 
 class _SnakePainter extends CustomPainter {
   final List<Point<int>> snake;

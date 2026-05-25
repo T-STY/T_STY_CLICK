@@ -4,9 +4,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'arcade_input_controller.dart';
+import 'game_saldo.dart';
 import 'high_score_service.dart';
-
-// ─── Maze constants ──────────────────────────────────────────────────────────
 
 const _kMazeRows = 15, _kMazeCols = 15;
 const _kMap = <List<int>>[
@@ -27,23 +26,18 @@ const _kMap = <List<int>>[
   [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
 ];
 
-// Direction indices: 0=up, 1=right, 2=down, 3=left
 const _kDR = [-1, 0, 1, 0];
 const _kDC = [0, 1, 0, -1];
 
-// ─── Ghost model ─────────────────────────────────────────────────────────────
-
 class _Ghost {
   int row, col;
-  int dir; // 0=up,1=right,2=down,3=left
+  int dir;
   bool scared;
   Color color;
   _Ghost(this.row, this.col, this.color)
       : dir = 2,
         scared = false;
 }
-
-// ─── Widget ──────────────────────────────────────────────────────────────────
 
 class MazeChasScreen extends StatefulWidget {
   final String userId;
@@ -66,11 +60,10 @@ class MazeChasScreen extends StatefulWidget {
 }
 
 class _MazeChasScreenState extends State<MazeChasScreen> {
-  // ── State ──────────────────────────────────────────────────────────────────
   late List<List<int>> _grid;
 
   int _playerRow = 11, _playerCol = 7;
-  int _queuedDir = 1; // default: right
+  int _queuedDir = 1;
   int _currentDir = 1;
 
   late List<_Ghost> _ghosts;
@@ -100,8 +93,6 @@ class _MazeChasScreenState extends State<MazeChasScreen> {
 
   final _rng = Random();
 
-  // ── Init ───────────────────────────────────────────────────────────────────
-
   @override
   void initState() {
     super.initState();
@@ -124,8 +115,6 @@ class _MazeChasScreenState extends State<MazeChasScreen> {
     widget.controller.removeListener(_onControllerEvent);
     super.dispose();
   }
-
-  // ── Grid helpers ───────────────────────────────────────────────────────────
 
   void _buildGrid() {
     _grid = List.generate(
@@ -151,18 +140,14 @@ class _MazeChasScreenState extends State<MazeChasScreen> {
     return count;
   }
 
-  // ── Ghost spawn ────────────────────────────────────────────────────────────
-
   void _spawnGhosts() {
     _ghosts = [
-      _Ghost(6, 7, const Color(0xFFFF0000)),  // red – chaser
-      _Ghost(7, 6, const Color(0xFFFF69B4)),  // pink – ahead
-      _Ghost(7, 8, const Color(0xFF00FFFF)),  // cyan – random
-      _Ghost(8, 7, const Color(0xFFFFB347)),  // orange – hybrid
+      _Ghost(6, 7, const Color(0xFFFF0000)),
+      _Ghost(7, 6, const Color(0xFFFF69B4)),
+      _Ghost(7, 8, const Color(0xFF00FFFF)),
+      _Ghost(8, 7, const Color(0xFFFFB347)),
     ];
   }
-
-  // ── Controller input ───────────────────────────────────────────────────────
 
   void _onControllerEvent() {
     final event = widget.controller.lastEvent;
@@ -203,8 +188,6 @@ class _MazeChasScreenState extends State<MazeChasScreen> {
     }
   }
 
-  // ── Game lifecycle ─────────────────────────────────────────────────────────
-
   void _startGame() {
     if (!mounted) return;
     setState(() => _isRunning = true);
@@ -237,11 +220,19 @@ class _MazeChasScreenState extends State<MazeChasScreen> {
     _blinkTimer = null;
   }
 
-  void _restart() {
+  Future<void> _restart() async {
+    final ns = await chargeForReplay(
+        userId: widget.userId,
+        rewardsDocRef: widget.rewardsDocRef,
+        currentSaldo: _saldo);
+    if (ns == null) return;
+    if (!mounted) return;
+    widget.onSaldoChanged(ns);
     _stopTimers();
     _scaredTimer?.cancel();
     _levelCompleteTimer?.cancel();
     setState(() {
+      _saldo = ns;
       _buildGrid();
       _spawnGhosts();
       _playerRow = 11;
@@ -259,8 +250,6 @@ class _MazeChasScreenState extends State<MazeChasScreen> {
     });
   }
 
-  // ── Player step ────────────────────────────────────────────────────────────
-
   void _playerStep(Timer _) {
     if (!_isRunning || _isDead) return;
 
@@ -275,7 +264,7 @@ class _MazeChasScreenState extends State<MazeChasScreen> {
     final nr = _playerRow + _kDR[nextDir];
     final nc = _playerCol + _kDC[nextDir];
 
-    if (_isWall(nr, nc)) return; // blocked, stay in place
+    if (_isWall(nr, nc)) return;
 
     if (!mounted) return;
     setState(() {
@@ -285,7 +274,7 @@ class _MazeChasScreenState extends State<MazeChasScreen> {
 
       final cell = _grid[_playerRow][_playerCol];
       if (cell == 0) {
-        _grid[_playerRow][_playerCol] = -1; // consumed
+        _grid[_playerRow][_playerCol] = -1;
         _score += 10;
       } else if (cell == 2) {
         _grid[_playerRow][_playerCol] = -1;
@@ -300,8 +289,6 @@ class _MazeChasScreenState extends State<MazeChasScreen> {
       _triggerLevelComplete();
     }
   }
-
-  // ── Power pellet ───────────────────────────────────────────────────────────
 
   void _activatePowerPellet() {
     _scaredTimer?.cancel();
@@ -321,12 +308,8 @@ class _MazeChasScreenState extends State<MazeChasScreen> {
   }
 
   Duration get _scaredTimeRemaining {
-    // We can't directly query timer, so use a rough approach:
-    // We track via the scared flag; blinking is handled separately.
     return Duration.zero;
   }
-
-  // ── Ghost step ─────────────────────────────────────────────────────────────
 
   void _ghostsStep(Timer _) {
     if (!_isRunning || _isDead) return;
@@ -345,7 +328,6 @@ class _MazeChasScreenState extends State<MazeChasScreen> {
     final g = _ghosts[idx];
     final oppositeDir = (g.dir + 2) % 4;
 
-    // Gather valid directions (walkable, not reverse)
     final validDirs = <int>[];
     for (int d = 0; d < 4; d++) {
       if (d == oppositeDir) continue;
@@ -354,7 +336,6 @@ class _MazeChasScreenState extends State<MazeChasScreen> {
       if (_isWalkable(nr, nc)) validDirs.add(d);
     }
 
-    // If no valid non-reverse direction, allow reverse
     if (validDirs.isEmpty) {
       final nr = g.row + _kDR[oppositeDir];
       final nc = g.col + _kDC[oppositeDir];
@@ -365,27 +346,25 @@ class _MazeChasScreenState extends State<MazeChasScreen> {
 
     int chosenDir;
     if (g.scared) {
-      // Random movement when scared
       chosenDir = validDirs[_rng.nextInt(validDirs.length)];
     } else {
-      // Determine target cell for each ghost personality
       int targetRow, targetCol;
       switch (idx) {
-        case 0: // Red: chase player directly
+        case 0:
           targetRow = _playerRow;
           targetCol = _playerCol;
-        case 1: // Pink: target 3 cells ahead of player
+        case 1:
           targetRow = _playerRow + _kDR[_currentDir] * 3;
           targetCol = _playerCol + _kDC[_currentDir] * 3;
           targetRow = targetRow.clamp(0, _kMazeRows - 1);
           targetCol = targetCol.clamp(0, _kMazeCols - 1);
-        case 2: // Cyan: random
+        case 2:
           chosenDir = validDirs[_rng.nextInt(validDirs.length)];
           g.dir = chosenDir;
           g.row += _kDR[chosenDir];
           g.col += _kDC[chosenDir];
           return;
-        case 3: // Orange: chase if far, random if close
+        case 3:
           final dist = (_playerRow - g.row).abs() + (_playerCol - g.col).abs();
           if (dist > 6) {
             targetRow = _playerRow;
@@ -402,7 +381,6 @@ class _MazeChasScreenState extends State<MazeChasScreen> {
           targetCol = _playerCol;
       }
 
-      // Pick direction minimizing Manhattan distance to target
       int bestDist = 999999;
       chosenDir = validDirs[0];
       for (final d in validDirs) {
@@ -421,14 +399,11 @@ class _MazeChasScreenState extends State<MazeChasScreen> {
     g.col += _kDC[chosenDir];
   }
 
-  // ── Collision ──────────────────────────────────────────────────────────────
-
   void _checkPlayerGhostCollision() {
     if (!mounted) return;
     for (final g in _ghosts) {
       if (g.row == _playerRow && g.col == _playerCol) {
         if (g.scared) {
-          // Player eats ghost
           setState(() {
             g.row = 7;
             g.col = 7;
@@ -437,7 +412,6 @@ class _MazeChasScreenState extends State<MazeChasScreen> {
             _score += 200;
           });
         } else {
-          // Ghost eats player
           _loseLife();
           return;
         }
@@ -462,7 +436,6 @@ class _MazeChasScreenState extends State<MazeChasScreen> {
     if (_lives <= 0) {
       _triggerGameOver();
     } else {
-      // Reset positions
       setState(() {
         _playerRow = 11;
         _playerCol = 7;
@@ -522,8 +495,6 @@ class _MazeChasScreenState extends State<MazeChasScreen> {
     });
   }
 
-  // ── Firestore ──────────────────────────────────────────────────────────────
-
   Future<void> _updateFirestore(double newSaldo) async {
     try {
       final userCardRef = FirebaseFirestore.instance
@@ -540,13 +511,10 @@ class _MazeChasScreenState extends State<MazeChasScreen> {
     }
   }
 
-  // ── Build ──────────────────────────────────────────────────────────────────
-
   @override
   Widget build(BuildContext context) {
     return Stack(
       children: [
-        // Deep midnight purple spooky background gradient
         Positioned.fill(
           child: Container(
             decoration: const BoxDecoration(
@@ -554,9 +522,9 @@ class _MazeChasScreenState extends State<MazeChasScreen> {
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
                 colors: [
-                  Color(0xFF0A0014), // near-black deep purple at top
-                  Color(0xFF110022), // midnight purple
-                  Color(0xFF0D001A), // dark indigo base
+                  Color(0xFF0A0014),
+                  Color(0xFF110022),
+                  Color(0xFF0D001A),
                 ],
               ),
             ),
@@ -575,7 +543,7 @@ class _MazeChasScreenState extends State<MazeChasScreen> {
                 lives: _lives,
                 level: _level,
                 pelletBlink: _pelletBlink,
-                scaredBlink: _pelletBlink, // reuse 300ms blink
+                scaredBlink: _pelletBlink,
               ),
               child: SizedBox(
                 width: constraints.maxWidth,
@@ -591,8 +559,6 @@ class _MazeChasScreenState extends State<MazeChasScreen> {
       ],
     );
   }
-
-  // ── Start overlay ──────────────────────────────────────────────────────────
 
   Widget _buildStartOverlay() {
     return Positioned.fill(
@@ -611,7 +577,6 @@ class _MazeChasScreenState extends State<MazeChasScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // Ghost row icons — colorful mascots
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
@@ -625,7 +590,6 @@ class _MazeChasScreenState extends State<MazeChasScreen> {
               ],
             ),
             const SizedBox(height: 10),
-            // Title — neon yellow with triple-layer glow
             Text(
               'COMECOCOS',
               style: TextStyle(
@@ -641,13 +605,12 @@ class _MazeChasScreenState extends State<MazeChasScreen> {
               ),
             ),
             const SizedBox(height: 8),
-            // Pellet trail row
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: List.generate(11, (i) => Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 2.5),
                 child: Container(
-                  width: i == 5 ? 11 : 7,  // centre is power pellet
+                  width: i == 5 ? 11 : 7,
                   height: i == 5 ? 11 : 7,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
@@ -665,7 +628,6 @@ class _MazeChasScreenState extends State<MazeChasScreen> {
               )),
             ),
             const SizedBox(height: 20),
-            // Instructions card with vivid cyan border + glow
             Container(
               margin: const EdgeInsets.symmetric(horizontal: 20),
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -685,7 +647,6 @@ class _MazeChasScreenState extends State<MazeChasScreen> {
                 const SizedBox(height: 8),
                 _instrRow('Pastilla', '¡Fantasmas comestibles!', const Color(0xFF00FF99)),
                 const SizedBox(height: 12),
-                // Reward pill
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
                   decoration: BoxDecoration(
@@ -711,7 +672,6 @@ class _MazeChasScreenState extends State<MazeChasScreen> {
               ]),
             ),
             const SizedBox(height: 20),
-            // Press to play — pill button style
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 10),
               decoration: BoxDecoration(
@@ -809,7 +769,6 @@ class _MazeChasScreenState extends State<MazeChasScreen> {
       ),
       child: Stack(
         children: [
-          // Googly eyes
           Positioned(
             left: 4, top: 8,
             child: Container(
@@ -853,8 +812,6 @@ class _MazeChasScreenState extends State<MazeChasScreen> {
     );
   }
 
-  // ── Game over overlay ──────────────────────────────────────────────────────
-
   Widget _buildGameOverOverlay() {
     return Positioned.fill(
       child: Container(
@@ -872,7 +829,6 @@ class _MazeChasScreenState extends State<MazeChasScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // Ghost quartet — all scared/red theme
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
@@ -882,7 +838,6 @@ class _MazeChasScreenState extends State<MazeChasScreen> {
               ],
             ),
             const SizedBox(height: 10),
-            // GAME OVER title — vivid red-pink neon
             Text(
               'ATRAPADO',
               style: TextStyle(
@@ -907,7 +862,6 @@ class _MazeChasScreenState extends State<MazeChasScreen> {
               ),
             ),
             const SizedBox(height: 20),
-            // Score card — glowing border
             Container(
               margin: const EdgeInsets.symmetric(horizontal: 28),
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
@@ -944,7 +898,6 @@ class _MazeChasScreenState extends State<MazeChasScreen> {
                   ),
                 ),
                 const SizedBox(height: 10),
-                // Divider line
                 Container(
                   height: 1,
                   color: const Color(0xFF660033),
@@ -973,7 +926,6 @@ class _MazeChasScreenState extends State<MazeChasScreen> {
               ]),
             ),
             const SizedBox(height: 24),
-            // Pill button — vivid blue gradient
             GestureDetector(
               onTap: _restart,
               child: Container(
@@ -1007,8 +959,6 @@ class _MazeChasScreenState extends State<MazeChasScreen> {
     );
   }
 
-  // ── Level complete overlay ─────────────────────────────────────────────────
-
   Widget _buildLevelCompleteOverlay() {
     return Positioned.fill(
       child: Container(
@@ -1025,7 +975,6 @@ class _MazeChasScreenState extends State<MazeChasScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // Level badge
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
               decoration: BoxDecoration(
@@ -1064,7 +1013,6 @@ class _MazeChasScreenState extends State<MazeChasScreen> {
               ),
             ),
             const SizedBox(height: 18),
-            // Reward pill — vivid green glow
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 9),
               decoration: BoxDecoration(
@@ -1099,7 +1047,6 @@ class _MazeChasScreenState extends State<MazeChasScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          // Pause icon with glow
           Container(
             width: 60,
             height: 60,
@@ -1152,8 +1099,6 @@ class _MazeChasScreenState extends State<MazeChasScreen> {
   );
 }
 
-// ─── CustomPainter ────────────────────────────────────────────────────────────
-
 class _MazePainter extends CustomPainter {
   final List<List<int>> grid;
   final int playerRow, playerCol, playerDir;
@@ -1182,21 +1127,18 @@ class _MazePainter extends CustomPainter {
     final offsetX = ((size.width - cs * _kMazeCols) / 2).floorToDouble();
     final offsetY = ((size.height - cs * _kMazeRows) / 2).floorToDouble();
 
-    // Background — deep midnight purple, radially deeper toward edges
     final bgPaint = Paint()
       ..shader = LinearGradient(
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
         colors: const [
-          Color(0xFF0C0020), // top-left: deep indigo-purple
-          Color(0xFF130028), // centre: rich midnight purple
-          Color(0xFF080018), // bottom-right: almost black purple
+          Color(0xFF0C0020),
+          Color(0xFF130028),
+          Color(0xFF080018),
         ],
       ).createShader(Rect.fromLTWH(0, 0, size.width, size.height));
     canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), bgPaint);
 
-
-    // Corner vignette for cinematic depth
     final vignettePaint = Paint()
       ..shader = RadialGradient(
         center: Alignment.center,
@@ -1208,12 +1150,10 @@ class _MazePainter extends CustomPainter {
       ).createShader(Rect.fromLTWH(0, 0, size.width, size.height));
     canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), vignettePaint);
 
-    // Outer bezel — purple outer glow + cyan crisp ring
     final bezelRect = Rect.fromLTWH(
       offsetX - 4, offsetY - 4,
       cs * _kMazeCols + 8, cs * _kMazeRows + 8,
     );
-    // Purple accent ring
     canvas.drawRRect(
       RRect.fromRectAndRadius(bezelRect, const Radius.circular(8)),
       Paint()
@@ -1221,7 +1161,6 @@ class _MazePainter extends CustomPainter {
         ..strokeWidth = 2.5
         ..color = const Color(0xFF8800FF).withOpacity(0.50),
     );
-    // Crisp bright cyan inner line
     final bezelPaint = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.5
@@ -1231,7 +1170,6 @@ class _MazePainter extends CustomPainter {
       bezelPaint,
     );
 
-    // Draw cells
     for (int r = 0; r < _kMazeRows; r++) {
       for (int c = 0; c < _kMazeCols; c++) {
         final x = offsetX + c * cs;
@@ -1239,13 +1177,13 @@ class _MazePainter extends CustomPainter {
         final cell = grid[r][c];
 
         switch (cell) {
-          case 1: // Wall — neon blue with glow
+          case 1:
             _drawWall(canvas, x, y, cs, r, c);
-          case 0: // Regular dot — glowing circle
+          case 0:
             _drawDot(canvas, x, y, cs);
-          case 2: // Power pellet — pulsing glow
+          case 2:
             _drawPowerPellet(canvas, x, y, cs);
-          case 3: // Ghost spawn area — deep magenta-tinted den
+          case 3:
             canvas.drawRect(Rect.fromLTWH(x, y, cs, cs), Paint()..color = const Color(0xFF120028));
             _drawFloorTile(canvas, x, y, cs, const Color(0xFF3A0066));
             canvas.drawRect(Rect.fromLTWH(x, y, cs, cs), Paint()
@@ -1253,29 +1191,22 @@ class _MazePainter extends CustomPainter {
               ..strokeWidth = 1.0
               ..color = const Color(0xFFEE00FF).withOpacity(0.35));
           default:
-            // Consumed cell (-1) — deep-indigo floor with tile texture
             canvas.drawRect(Rect.fromLTWH(x, y, cs, cs), Paint()..color = const Color(0xFF0C0018));
             _drawFloorTile(canvas, x, y, cs, const Color(0xFF1E0035));
         }
       }
     }
 
-    // Draw ghosts
     for (final g in ghosts) {
       _drawGhost(canvas, g, offsetX, offsetY, cs);
     }
 
-    // Draw player
     _drawPlayer(canvas, playerRow, playerCol, playerDir, offsetX, offsetY, cs);
 
-    // Draw HUD
     _drawHud(canvas, size, cs, offsetX, offsetY);
   }
 
-  // ─── Floor tile helper ────────────────────────────────────────────────────
-
   void _drawFloorTile(Canvas canvas, double x, double y, double cs, Color lineColor) {
-    // Grid lines at edges — subtle stone tile pattern
     final tilePaint = Paint()
       ..color = lineColor.withOpacity(0.35)
       ..style = PaintingStyle.stroke
@@ -1284,24 +1215,18 @@ class _MazePainter extends CustomPainter {
     canvas.drawLine(Offset(x, y + cs), Offset(x + cs, y + cs), tilePaint);
   }
 
-  // ─── Wall drawing ────────────────────────────────────────────────────────
-
   void _drawWall(Canvas canvas, double x, double y, double cs, int r, int c) {
     final rect = Rect.fromLTWH(x, y, cs, cs);
 
-    // Rich deep-indigo wall fill
     canvas.drawRect(rect, Paint()..color = const Color(0xFF100020));
 
-    // Determine which sides border a non-wall (open space)
     final hasTop    = r > 0 && _kMap[r - 1][c] != 1;
     final hasBottom = r < _kMazeRows - 1 && _kMap[r + 1][c] != 1;
     final hasLeft   = c > 0 && _kMap[r][c - 1] != 1;
     final hasRight  = c < _kMazeCols - 1 && _kMap[r][c + 1] != 1;
 
-    // All exposed edges — vivid cyan neon line
     const neonCoreColor = Color(0xFFAAFFFF);
 
-    // Crisp bright core line
     final borderPaint = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = max(0.9, cs * 0.08)
@@ -1317,32 +1242,24 @@ class _MazePainter extends CustomPainter {
     if (hasRight)  drawEdge(Offset(x + cs, y),   Offset(x + cs, y + cs));
   }
 
-  // ─── Dot drawing ─────────────────────────────────────────────────────────
-
   void _drawDot(Canvas canvas, double x, double y, double cs) {
     final cx = x + cs / 2;
     final cy = y + cs / 2;
     final r = max(1.8, cs * 0.13);
 
-    // Bright warm-yellow dot
     canvas.drawCircle(Offset(cx, cy), r, Paint()..color = const Color(0xFFFFEE55));
   }
-
-  // ─── Power pellet drawing ─────────────────────────────────────────────────
 
   void _drawPowerPellet(Canvas canvas, double x, double y, double cs) {
     final cx = x + cs / 2;
     final cy = y + cs / 2;
 
-    // Pulsing size: slightly larger every other blink cycle
     final baseR = cs * 0.25;
     final r = pelletBlink ? baseR * 1.22 : baseR * 0.85;
 
-    // Outer semi-transparent ring
     canvas.drawCircle(Offset(cx, cy), r * 1.8,
       Paint()..color = const Color(0xFFFFAA00).withOpacity(pelletBlink ? 0.40 : 0.20));
 
-    // Core: white → gold → orange radial
     final corePaint = Paint()
       ..shader = RadialGradient(
         colors: [
@@ -1355,15 +1272,12 @@ class _MazePainter extends CustomPainter {
       ).createShader(Rect.fromCircle(center: Offset(cx, cy), radius: r));
     canvas.drawCircle(Offset(cx, cy), r, corePaint);
 
-    // Tiny white specular highlight
     canvas.drawCircle(
       Offset(cx - r * 0.28, cy - r * 0.28),
       r * 0.28,
       Paint()..color = Colors.white.withOpacity(0.8),
     );
   }
-
-  // ─── Ghost drawing ────────────────────────────────────────────────────────
 
   void _drawGhost(
     Canvas canvas,
@@ -1380,12 +1294,10 @@ class _MazePainter extends CustomPainter {
     final bx = x + (cs - bodyW) / 2;
     final by = y + (cs - bodyH) / 2 - cs * 0.02;
 
-    // Ghost body color
     Color ghostColor;
     Color ghostHighlight;
     Color ghostDark;
     if (g.scared) {
-      // Deep blue/purple scared mode — flashes lighter when time is running out
       ghostColor = scaredBlink
           ? const Color(0xFF5555FF)
           : const Color(0xFF1A0FAA);
@@ -1407,13 +1319,11 @@ class _MazePainter extends CustomPainter {
       ghostDark = Color.fromARGB(255, dR, dG, dB);
     }
 
-    // Build ghost body path: dome top + rounded wavy skirt
     final path = Path();
     final domeRadius = bodyW / 2;
     final domeCenterX = bx + bodyW / 2;
     final domeCenterY = by + domeRadius;
 
-    // Dome (upper semicircle)
     path.addArc(
       Rect.fromCircle(center: Offset(domeCenterX, domeCenterY), radius: domeRadius),
       pi,
@@ -1424,7 +1334,6 @@ class _MazePainter extends CustomPainter {
     final skirtBottom = by + bodyH;
     path.lineTo(bx + bodyW, skirtTop);
 
-    // Rounded wavy skirt using quadratic curves — 3 bumps
     const waveCount = 3;
     final waveW = bodyW / waveCount;
     final waveAmp = bodyH * 0.16;
@@ -1442,7 +1351,6 @@ class _MazePainter extends CustomPainter {
     path.lineTo(bx, skirtTop);
     path.close();
 
-    // Body gradient: bright highlight top-left → vivid colour → dark bottom
     final bodyPaint = Paint()
       ..shader = LinearGradient(
         begin: Alignment.topLeft,
@@ -1452,7 +1360,6 @@ class _MazePainter extends CustomPainter {
       ).createShader(Rect.fromLTWH(bx, by, bodyW, bodyH));
     canvas.drawPath(path, bodyPaint);
 
-    // Specular gloss arc on the dome (top-left sheen)
     final glossPath = Path();
     final glossR = domeRadius * 0.58;
     final glossCX = domeCenterX - domeRadius * 0.22;
@@ -1470,20 +1377,16 @@ class _MazePainter extends CustomPainter {
         ..color = Colors.white.withOpacity(0.38),
     );
 
-    // ── Googly eyes ──────────────────────────────────────────────────────────
-    // Bigger, more cartoonish — large white sclera with vivid blue pupils
     final eyeScleraR = max(2.8, cs * 0.145);
     final leftEyeX = bx + bodyW * 0.30;
     final rightEyeX = bx + bodyW * 0.70;
     final eyeY = by + bodyH * 0.28;
 
     if (g.scared) {
-      // Scared eyes: smaller, X-shaped or dot with worried squint
       final eyePaint = Paint()..color = Colors.white.withOpacity(0.9);
       canvas.drawCircle(Offset(leftEyeX, eyeY), eyeScleraR * 0.7, eyePaint);
       canvas.drawCircle(Offset(rightEyeX, eyeY), eyeScleraR * 0.7, eyePaint);
 
-      // X marks on the eyes — panicked look
       final xPaint = Paint()
         ..color = ghostDark
         ..style = PaintingStyle.stroke
@@ -1497,7 +1400,6 @@ class _MazePainter extends CustomPainter {
           Offset(ex + xR, eyeY - xR), Offset(ex - xR, eyeY + xR), xPaint);
       }
 
-      // Scared jagged mouth
       final mouthPaint = Paint()
         ..color = Colors.white.withOpacity(0.75)
         ..style = PaintingStyle.stroke
@@ -1510,7 +1412,6 @@ class _MazePainter extends CustomPainter {
       final mx1 = bx + bodyW * 0.82;
       final mw = mx1 - mx0;
       mouthPath.moveTo(mx0, mouthY);
-      // Zigzag scared mouth
       mouthPath.lineTo(mx0 + mw * 0.17, mouthY + cs * 0.07);
       mouthPath.lineTo(mx0 + mw * 0.34, mouthY - cs * 0.04);
       mouthPath.lineTo(mx0 + mw * 0.50, mouthY + cs * 0.07);
@@ -1519,25 +1420,21 @@ class _MazePainter extends CustomPainter {
       mouthPath.lineTo(mx1, mouthY);
       canvas.drawPath(mouthPath, mouthPaint);
     } else {
-      // White sclera
       canvas.drawCircle(Offset(leftEyeX, eyeY), eyeScleraR,
           Paint()..color = Colors.white);
       canvas.drawCircle(Offset(rightEyeX, eyeY), eyeScleraR,
           Paint()..color = Colors.white);
 
-      // Blue iris
       final irisR = eyeScleraR * 0.68;
       final irisPaint = Paint()..color = const Color(0xFF2255FF);
       canvas.drawCircle(Offset(leftEyeX, eyeY), irisR, irisPaint);
       canvas.drawCircle(Offset(rightEyeX, eyeY), irisR, irisPaint);
 
-      // Black pupil
       final pupilR = eyeScleraR * 0.38;
       final pupilPaint = Paint()..color = Colors.black;
       canvas.drawCircle(Offset(leftEyeX, eyeY), pupilR, pupilPaint);
       canvas.drawCircle(Offset(rightEyeX, eyeY), pupilR, pupilPaint);
 
-      // Bright white glint (large) — classic cartoon googly eye
       final glintR = pupilR * 0.55;
       final glintPaint = Paint()..color = Colors.white;
       canvas.drawCircle(
@@ -1545,7 +1442,6 @@ class _MazePainter extends CustomPainter {
       canvas.drawCircle(
         Offset(rightEyeX - pupilR * 0.32, eyeY - pupilR * 0.32), glintR, glintPaint);
 
-      // Sclera rim highlight arc
       canvas.drawArc(
         Rect.fromCircle(center: Offset(leftEyeX, eyeY), radius: eyeScleraR * 0.85),
         pi * 1.1, pi * 0.55,
@@ -1567,8 +1463,6 @@ class _MazePainter extends CustomPainter {
     }
   }
 
-  // ─── Player (Pac-Man) drawing ─────────────────────────────────────────────
-
   void _drawPlayer(
     Canvas canvas,
     int row,
@@ -1585,34 +1479,30 @@ class _MazePainter extends CustomPainter {
     final cx = x + cs / 2;
     final cy = y + cs / 2;
 
-    // Animated mouth: toggles open/closed with pelletBlink
-    // Open = wide wedge, closed = very thin slice
-    final mouthHalf = pelletBlink ? 0.42 : 0.08; // radians
+    final mouthHalf = pelletBlink ? 0.42 : 0.08;
     final dirAngle = [
-      -pi / 2, // 0=up
-      0.0,     // 1=right
-      pi / 2,  // 2=down
-      pi,      // 3=left
+      -pi / 2,
+      0.0,
+      pi / 2,
+      pi,
     ][dir];
 
     final startAngle = dirAngle + mouthHalf;
     final sweepAngle = 2 * pi - 2 * mouthHalf;
 
-    // Vibrant gold radial gradient body: bright warm centre → deep gold rim
     final bodyPaint = Paint()
       ..shader = RadialGradient(
         center: const Alignment(-0.35, -0.35),
         radius: 1.05,
         colors: [
-          const Color(0xFFFFFFCC), // white-yellow highlight
-          const Color(0xFFFFEE00), // bright yellow
-          const Color(0xFFFFCC00), // rich gold
-          const Color(0xFFFF9900), // deep gold rim
+          const Color(0xFFFFFFCC),
+          const Color(0xFFFFEE00),
+          const Color(0xFFFFCC00),
+          const Color(0xFFFF9900),
         ],
         stops: const [0.0, 0.30, 0.65, 1.0],
       ).createShader(Rect.fromCircle(center: Offset(cx, cy), radius: radius));
 
-    // Pie-slice path (full circle minus mouth wedge)
     final path = Path()
       ..moveTo(cx, cy)
       ..arcTo(
@@ -1624,7 +1514,6 @@ class _MazePainter extends CustomPainter {
       ..close();
     canvas.drawPath(path, bodyPaint);
 
-    // Thin dark shadow for the mouth gap
     final mouthLinePaint = Paint()
       ..color = const Color(0xFF1A0800)
       ..style = PaintingStyle.stroke
@@ -1637,8 +1526,6 @@ class _MazePainter extends CustomPainter {
     final ly = cy + sin(dirAngle - mouthHalf) * radius;
     canvas.drawLine(Offset(cx, cy), Offset(lx, ly), mouthLinePaint);
 
-    // Gloss arc highlight — a bright curved sheen on the upper-left of the body
-    // Rotate sheen slightly toward the current direction's "top"
     final glossStartAngle = dirAngle - pi / 2 + pi * 0.8;
     canvas.drawArc(
       Rect.fromCircle(center: Offset(cx - radius * 0.18, cy - radius * 0.18), radius: radius * 0.68),
@@ -1651,8 +1538,6 @@ class _MazePainter extends CustomPainter {
         ..color = Colors.white.withOpacity(0.45),
     );
 
-    // Eye: dark circle with white pupil glint
-    // Positioned perpendicular to mouth direction, slightly offset toward centre
     final eyeAngle = dirAngle - pi / 2;
     final ex = cx + cos(eyeAngle) * radius * 0.52 - sin(eyeAngle) * radius * 0.22;
     final ey = cy + sin(eyeAngle) * radius * 0.52 + cos(eyeAngle) * radius * 0.22;
@@ -1664,19 +1549,14 @@ class _MazePainter extends CustomPainter {
     );
   }
 
-  // ─── HUD drawing ─────────────────────────────────────────────────────────
-
   void _drawHud(Canvas canvas, Size size, double cs, double offsetX, double offsetY) {
-    // HUD positioned above the maze
     final hudY = offsetY - cs * 1.35;
     final hudH = cs * 1.15;
     final hudRect = Rect.fromLTWH(offsetX, hudY, cs * _kMazeCols, hudH);
     final hudRRect = RRect.fromRectAndRadius(hudRect, const Radius.circular(6));
 
-    // HUD background — deep dark navy with slight purple tint
     canvas.drawRRect(hudRRect, Paint()..color = const Color(0xFF070616));
 
-    // Crisp cyan border
     final hudBorderPaint = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.2
@@ -1686,7 +1566,6 @@ class _MazePainter extends CustomPainter {
     final textY = hudY + hudH / 2;
     final fontSize = (cs * 0.54).clamp(8.0, 15.0);
 
-    // Score — left, vivid neon yellow with double glow
     _paintHudText(
       canvas,
       'SCORE  $score',
@@ -1698,7 +1577,6 @@ class _MazePainter extends CustomPainter {
       align: TextAlign.left,
     );
 
-    // Level — centre, vivid neon cyan
     _paintHudText(
       canvas,
       'NVL $level',
@@ -1710,7 +1588,6 @@ class _MazePainter extends CustomPainter {
       align: TextAlign.center,
     );
 
-    // Lives — right section as mini Pac-Man icons
     _drawLivesIcons(canvas, lives, offsetX + cs * (_kMazeCols - 0.4), textY, cs, fontSize);
   }
 
@@ -1724,7 +1601,6 @@ class _MazePainter extends CustomPainter {
     Color? glowColor,
     TextAlign align = TextAlign.left,
   }) {
-    // Glow pass
     if (glowColor != null) {
       final glowTp = TextPainter(
         text: TextSpan(
@@ -1751,7 +1627,6 @@ class _MazePainter extends CustomPainter {
       glowTp.paint(canvas, Offset(dx, position.dy - glowTp.height / 2));
     }
 
-    // Main text
     final tp = TextPainter(
       text: TextSpan(
         text: text,
@@ -1794,7 +1669,6 @@ class _MazePainter extends CustomPainter {
       _drawMiniPacman(canvas, ix, centerY, iconR);
     }
 
-    // Label
     final labelTp = TextPainter(
       text: TextSpan(
         text: 'VIDAS',

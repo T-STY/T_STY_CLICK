@@ -6,15 +6,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'arcade_input_controller.dart';
+import 'game_saldo.dart';
 import 'high_score_service.dart';
-
-// ─── Enums ────────────────────────────────────────────────────────────────────
 
 enum _AlienType { basic, burst, scatter, missile }
 
 enum _PickupType { shield, specialAmmo, heart }
-
-// ─── Data ─────────────────────────────────────────────────────────────────────
 
 class _Bullet {
   double x, y, vx, vy;
@@ -61,8 +58,6 @@ class _Pickup {
   _Pickup(this.x, this.y, {required this.type}) : alive = true, vy = 1.8;
 }
 
-// ─── Screen ──────────────────────────────────────────────────────────────────
-
 class SpaceShooterScreen extends StatefulWidget {
   final String userId;
   final DocumentReference rewardsDocRef;
@@ -96,12 +91,10 @@ class _SpaceShooterScreenState extends State<SpaceShooterScreen> {
   static const double kFireCooldown = 0.25;
   static const double kSpecialCooldown = 0.5;
   static const double kSpawnInterval = 0.50;
-  // Auto-advance to next wave after all aliens cleared
   static const double kBetweenWaveDuration = 2.5;
 
   final _rng = Random();
 
-  // Ship state
   double _sx = 4.4, _sy = 13.5;
   int _lives = 3;
   bool _invincible = false;
@@ -111,28 +104,22 @@ class _SpaceShooterScreenState extends State<SpaceShooterScreen> {
   double _fireCooldown = 0;
   double _specialCooldown = 0;
 
-  // Saldo
   late double _saldo;
   bool _awardingPoints = false;
 
-  // Entities
   List<_Bullet> _bullets = [];
   List<_Alien> _aliens = [];
   List<_Asteroid> _asteroids = [];
   List<_Pickup> _pickups = [];
 
-  // Spawn queue — aliens appear gradually, not all at once
   final List<_Alien> _spawnQueue = [];
   double _spawnTimer = 0;
 
-  // Between-wave auto-transition (no pause/button press needed)
   bool _betweenWaves = false;
   double _betweenWaveTimer = 0;
 
-  // Asteroid timer
   double _asteroidSpawnTimer = 3.0;
 
-  // Game state
   bool _isRunning = false;
   bool _isDead = false;
   bool _paused = false;
@@ -198,17 +185,15 @@ class _SpaceShooterScreenState extends State<SpaceShooterScreen> {
   }
 
   void _update(double dt) {
-    // ── Between-wave countdown (auto-transition, no player input needed) ──────
     if (_betweenWaves) {
       _betweenWaveTimer -= dt;
       if (_betweenWaveTimer <= 0) {
         _betweenWaves = false;
         _startNextWave();
       }
-      return; // pause gameplay during transition
+      return;
     }
 
-    // ── Ship movement ──────────────────────────────────────────────────────────
     if (widget.controller.isHeld(ArcadeButton.left)) _sx -= kShipSpeed * dt;
     if (widget.controller.isHeld(ArcadeButton.right)) _sx += kShipSpeed * dt;
     if (widget.controller.isHeld(ArcadeButton.up)) _sy -= kShipSpeed * dt;
@@ -216,7 +201,6 @@ class _SpaceShooterScreenState extends State<SpaceShooterScreen> {
     _sx = _sx.clamp(0, kW - kShipW);
     _sy = _sy.clamp(kShipMinY, kH - kShipH - 0.2);
 
-    // ── Firing ──────────────────────────────────────────────────────────────────
     _fireCooldown -= dt;
     _specialCooldown -= dt;
     if (_fireCooldown < 0) _fireCooldown = 0;
@@ -231,14 +215,12 @@ class _SpaceShooterScreenState extends State<SpaceShooterScreen> {
       _fireSpecial();
     }
 
-    // ── Spawn queue ─────────────────────────────────────────────────────────────
     _spawnTimer -= dt;
     if (_spawnTimer <= 0 && _spawnQueue.isNotEmpty) {
       _spawnTimer = kSpawnInterval;
       _aliens.add(_spawnQueue.removeAt(0));
     }
 
-    // ── Bullet movement ─────────────────────────────────────────────────────────
     for (final b in _bullets) {
       if (!b.alive) continue;
       if (b.isMissile) {
@@ -271,7 +253,6 @@ class _SpaceShooterScreenState extends State<SpaceShooterScreen> {
     }
     _bullets.removeWhere((b) => !b.alive);
 
-    // ── Alien movement (each alien moves independently) ─────────────────────────
     for (final a in _aliens) {
       if (!a.alive) continue;
 
@@ -295,16 +276,14 @@ class _SpaceShooterScreenState extends State<SpaceShooterScreen> {
       }
       if (a.y < 0.2) a.y = 0.2;
 
-      // Alien breaches the player zone → costs a life (not instant game-over)
       if (a.y > kShipMinY - 0.3) {
         a.alive = false;
         HapticFeedback.heavyImpact();
-        _hitShip(); // handles invincibility, life deduction, and game-over when lives = 0
+        _hitShip();
         if (_isDead) return;
         continue;
       }
 
-      // Burst sub-shots
       if (a.burstCount > 0) {
         a.burstTimer -= dt;
         if (a.burstTimer <= 0) {
@@ -322,7 +301,6 @@ class _SpaceShooterScreenState extends State<SpaceShooterScreen> {
       }
     }
 
-    // ── Asteroids ───────────────────────────────────────────────────────────────
     _asteroidSpawnTimer -= dt;
     if (_asteroidSpawnTimer <= 0) {
       _asteroidSpawnTimer = 2.0 + _rng.nextDouble() * 3.0;
@@ -341,20 +319,17 @@ class _SpaceShooterScreenState extends State<SpaceShooterScreen> {
     }
     _asteroids.removeWhere((a) => !a.alive);
 
-    // ── Pickups ─────────────────────────────────────────────────────────────────
     for (final p in _pickups) {
       if (!p.alive) continue;
       p.y += p.vy * dt;
       if (p.y > kH + 1) p.alive = false;
     }
 
-    // ── Invincibility ───────────────────────────────────────────────────────────
     if (_invincible) {
       _invTimer -= dt;
       if (_invTimer <= 0) _invincible = false;
     }
 
-    // ── Collisions: player bullets → aliens ─────────────────────────────────────
     for (final b in _bullets.where((b) => b.alive && b.isPlayer)) {
       for (final a in _aliens.where((a) => a.alive)) {
         if (b.x > a.x &&
@@ -374,7 +349,6 @@ class _SpaceShooterScreenState extends State<SpaceShooterScreen> {
       }
     }
 
-    // ── Collisions: player bullets → asteroids ───────────────────────────────────
     for (final b in _bullets.where((b) => b.alive && b.isPlayer)) {
       for (final ast in _asteroids.where((ast) => ast.alive)) {
         final dx = b.x - ast.x, dy = b.y - ast.y;
@@ -387,7 +361,6 @@ class _SpaceShooterScreenState extends State<SpaceShooterScreen> {
       }
     }
 
-    // ── Collisions: enemy projectiles → ship ────────────────────────────────────
     if (!_invincible) {
       for (final b in _bullets.where((b) => b.alive && !b.isPlayer)) {
         if (b.x > _sx &&
@@ -409,7 +382,6 @@ class _SpaceShooterScreenState extends State<SpaceShooterScreen> {
       }
     }
 
-    // ── Pickup collection ────────────────────────────────────────────────────────
     for (final p in _pickups.where((p) => p.alive)) {
       if (p.x + 0.6 > _sx &&
           p.x - 0.1 < _sx + kShipW &&
@@ -421,8 +393,6 @@ class _SpaceShooterScreenState extends State<SpaceShooterScreen> {
     }
     _pickups.removeWhere((p) => !p.alive);
 
-    // ── Wave complete? → auto-advance, no pause required ─────────────────────────
-    // Guard: _aliens must be non-empty (vacuous true for empty list would false-trigger)
     if (_spawnQueue.isEmpty &&
         _aliens.isNotEmpty &&
         _aliens.every((a) => !a.alive)) {
@@ -430,21 +400,16 @@ class _SpaceShooterScreenState extends State<SpaceShooterScreen> {
     }
   }
 
-  // ── Helpers ──────────────────────────────────────────────────────────────────
-
-  // All enemy types now fire a burst of 3 every ~1 s, decreasing with wave
   double _fireRateForWave() => (1.2 - _wave * 0.08).clamp(0.38, 1.2);
 
   void _alienFire(_Alien a) {
     switch (a.type) {
       case _AlienType.basic:
-        // Basic: 50% single shot, 50% burst of 3
         _bullets.add(_Bullet(a.x + 0.5, a.y + 0.8, isPlayer: false));
         a.burstCount = _rng.nextDouble() < 0.5 ? 0 : 2;
         a.burstTimer = 0.12;
         break;
       case _AlienType.burst:
-        // Burst: 30% single shot, 70% burst of 3
         _bullets.add(_Bullet(a.x + 0.5, a.y + 0.8, isPlayer: false));
         a.burstCount = _rng.nextDouble() < 0.3 ? 0 : 2;
         a.burstTimer = 0.10;
@@ -509,8 +474,6 @@ class _SpaceShooterScreenState extends State<SpaceShooterScreen> {
     if (mounted) setState(() { _isDead = true; _isRunning = false; });
   }
 
-  /// Called when all aliens in the current wave are defeated.
-  /// Awards saldo, then auto-starts the next wave after a short delay.
   void _waveComplete() {
     _score += 200;
     _betweenWaves = true;
@@ -597,7 +560,15 @@ class _SpaceShooterScreenState extends State<SpaceShooterScreen> {
     _spawnTimer = 0;
   }
 
-  void _restart() {
+  Future<void> _restart() async {
+    final ns = await chargeForReplay(
+        userId: widget.userId,
+        rewardsDocRef: widget.rewardsDocRef,
+        currentSaldo: _saldo);
+    if (ns == null) return;
+    if (!mounted) return;
+    setState(() => _saldo = ns);
+    widget.onSaldoChanged(ns);
     _wave = 1;
     _score = 0;
     _lives = 3;
@@ -630,8 +601,6 @@ class _SpaceShooterScreenState extends State<SpaceShooterScreen> {
     }
   }
 
-  // ─── Build ─────────────────────────────────────────────────────────────────
-
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(builder: (ctx, cons) {
@@ -650,7 +619,6 @@ class _SpaceShooterScreenState extends State<SpaceShooterScreen> {
           ),
           child: SizedBox(width: cons.maxWidth, height: cons.maxHeight),
         ),
-        // HUD
         Positioned(
           top: 6, left: 6, right: 6,
           child: Row(
@@ -664,7 +632,6 @@ class _SpaceShooterScreenState extends State<SpaceShooterScreen> {
             ],
           ),
         ),
-        // Between-wave banner
         if (_betweenWaves)
           Positioned(
             top: 0, left: 0, right: 0,
@@ -760,10 +727,8 @@ class _SpaceShooterScreenState extends State<SpaceShooterScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // Ship icon
             CustomPaint(size: const Size(60, 60), painter: _LargeShipPainter()),
             const SizedBox(height: 12),
-            // Title with glow
             const Text('CAZA ESTELAR',
                 style: TextStyle(
                     color: Color(0xFF00E5FF),
@@ -778,7 +743,6 @@ class _SpaceShooterScreenState extends State<SpaceShooterScreen> {
             const Text('S P A C E   S H O O T E R',
                 style: TextStyle(color: Color(0xFF224488), fontSize: 9, letterSpacing: 4)),
             const SizedBox(height: 20),
-            // Stat card
             Container(
               margin: const EdgeInsets.symmetric(horizontal: 24),
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -813,7 +777,6 @@ class _SpaceShooterScreenState extends State<SpaceShooterScreen> {
               ]),
             ),
             const SizedBox(height: 18),
-            // Pill button
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 9),
               decoration: BoxDecoration(
@@ -853,7 +816,6 @@ class _SpaceShooterScreenState extends State<SpaceShooterScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // Explosion burst visual
             CustomPaint(size: const Size(64, 64), painter: _ExplosionIconPainter()),
             const SizedBox(height: 10),
             const Text('NAVE DESTRUIDA',
@@ -870,7 +832,6 @@ class _SpaceShooterScreenState extends State<SpaceShooterScreen> {
             const Text('Los alienígenas han ganado esta ronda',
                 style: TextStyle(color: Color(0xFF663333), fontSize: 10)),
             const SizedBox(height: 18),
-            // Stat cards row
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
@@ -884,7 +845,6 @@ class _SpaceShooterScreenState extends State<SpaceShooterScreen> {
               ],
             ),
             const SizedBox(height: 22),
-            // Restart pill button
             GestureDetector(
               onTap: _restart,
               child: Container(
@@ -976,11 +936,9 @@ class _SpaceShooterScreenState extends State<SpaceShooterScreen> {
   }
 }
 
-// ─── Star helper ─────────────────────────────────────────────────────────────
-
 class _Star {
   final double x, y, r, opacity;
-  final bool isBright; // bright stars get a subtle cross-sparkle
+  final bool isBright;
   _Star(Random rng)
       : x = rng.nextDouble() * 10,
         y = rng.nextDouble() * 16,
@@ -989,13 +947,10 @@ class _Star {
         isBright = rng.nextDouble() < 0.15;
 }
 
-// ─── Mini ship HUD icon painter ───────────────────────────────────────────────
-
 class _MiniShipPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final w = size.width, h = size.height;
-    // Engine glow
     canvas.drawCircle(
       Offset(w * 0.5, h * 0.85),
       w * 0.22,
@@ -1003,7 +958,6 @@ class _MiniShipPainter extends CustomPainter {
         ..color = const Color(0xFFFF6600).withOpacity(0.7)
         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3),
     );
-    // Hull
     final hull = Path()
       ..moveTo(w * 0.5, 0)
       ..lineTo(w * 0.92, h * 0.72)
@@ -1017,7 +971,6 @@ class _MiniShipPainter extends CustomPainter {
         end: Alignment.bottomCenter,
         colors: [Color(0xFF00AAFF), Color(0xFF003388)],
       ).createShader(Rect.fromLTWH(0, 0, w, h)));
-    // Wing accents
     canvas.drawPath(
       Path()
         ..moveTo(w * 0.08, h * 0.72)
@@ -1034,7 +987,6 @@ class _MiniShipPainter extends CustomPainter {
         ..close(),
       Paint()..color = const Color(0xFF0055CC),
     );
-    // Cockpit
     canvas.drawOval(
       Rect.fromLTWH(w * 0.32, h * 0.14, w * 0.36, h * 0.35),
       Paint()..color = const Color(0xFF00E5FF).withOpacity(0.85),
@@ -1045,13 +997,10 @@ class _MiniShipPainter extends CustomPainter {
   bool shouldRepaint(_MiniShipPainter old) => false;
 }
 
-// ─── Large ship icon painter (start overlay) ─────────────────────────────────
-
 class _LargeShipPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final w = size.width, h = size.height;
-    // Engine trail glow
     for (int i = 0; i < 3; i++) {
       canvas.drawOval(
         Rect.fromLTWH(w * 0.35 + i * 2, h * 0.82, w * 0.30 - i * 4, h * 0.22),
@@ -1060,7 +1009,6 @@ class _LargeShipPainter extends CustomPainter {
           ..maskFilter = MaskFilter.blur(BlurStyle.normal, 4.0 + i * 3),
       );
     }
-    // Outer glow
     canvas.drawPath(
       Path()
         ..moveTo(w * 0.5, 0)
@@ -1073,7 +1021,6 @@ class _LargeShipPainter extends CustomPainter {
         ..color = const Color(0xFF00AAFF).withOpacity(0.25)
         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8),
     );
-    // Hull gradient
     final hull = Path()
       ..moveTo(w * 0.5, 0)
       ..lineTo(w * 0.94, h * 0.7)
@@ -1087,7 +1034,6 @@ class _LargeShipPainter extends CustomPainter {
         end: Alignment.bottomCenter,
         colors: [const Color(0xFF00CCFF), const Color(0xFF004499)],
       ).createShader(Rect.fromLTWH(0, 0, w, h)));
-    // Wing fins
     canvas.drawPath(
       Path()
         ..moveTo(w * 0.06, h * 0.7)
@@ -1104,7 +1050,6 @@ class _LargeShipPainter extends CustomPainter {
         ..close(),
       Paint()..color = const Color(0xFF0044BB),
     );
-    // Center stripe
     canvas.drawPath(
       Path()
         ..moveTo(w * 0.5, h * 0.04)
@@ -1113,7 +1058,6 @@ class _LargeShipPainter extends CustomPainter {
         ..close(),
       Paint()..color = const Color(0xFF80DDFF).withOpacity(0.5),
     );
-    // Cockpit glow
     canvas.drawOval(
       Rect.fromLTWH(w * 0.3, h * 0.12, w * 0.4, h * 0.38),
       Paint()
@@ -1124,7 +1068,6 @@ class _LargeShipPainter extends CustomPainter {
       Rect.fromLTWH(w * 0.33, h * 0.15, w * 0.34, h * 0.30),
       Paint()..color = const Color(0xFF00E5FF).withOpacity(0.85),
     );
-    // Engine nozzles
     for (final nx in [0.38, 0.62]) {
       canvas.drawRect(
         Rect.fromLTWH(w * nx - w * 0.05, h * 0.88, w * 0.10, h * 0.10),
@@ -1144,14 +1087,11 @@ class _LargeShipPainter extends CustomPainter {
   bool shouldRepaint(_LargeShipPainter old) => false;
 }
 
-// ─── Explosion icon painter (death overlay) ──────────────────────────────────
-
 class _ExplosionIconPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final cx = size.width / 2, cy = size.height / 2;
     final r = size.width * 0.5;
-    // Outer burst rays
     final rayColors = [
       const Color(0xFFFF6600), const Color(0xFFFFDD00), const Color(0xFFFF3300),
       const Color(0xFFFFAA00), const Color(0xFFFF0044),
@@ -1169,14 +1109,12 @@ class _ExplosionIconPainter extends CustomPainter {
           ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3),
       );
     }
-    // Core glow
     canvas.drawCircle(
       Offset(cx, cy), r * 0.45,
       Paint()
         ..color = const Color(0xFFFF6600).withOpacity(0.6)
         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10),
     );
-    // White hot core
     canvas.drawCircle(
       Offset(cx, cy), r * 0.22,
       Paint()..color = const Color(0xFFFFFFCC),
@@ -1186,8 +1124,6 @@ class _ExplosionIconPainter extends CustomPainter {
   @override
   bool shouldRepaint(_ExplosionIconPainter old) => false;
 }
-
-// ─── Main Painter ─────────────────────────────────────────────────────────────
 
 class _ShooterPainter extends CustomPainter {
   final List<_Star> stars;
@@ -1203,8 +1139,6 @@ class _ShooterPainter extends CustomPainter {
   static const double kShipW = 1.2;
   static const double kShipH = 1.0;
 
-  // Cached gradient definitions — createShader() is called per frame but the
-  // gradient object itself is only allocated once.
   static const _shipGradient = LinearGradient(
     begin: Alignment.topCenter,
     end: Alignment.bottomCenter,
@@ -1267,7 +1201,6 @@ class _ShooterPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final cs = size.width / kW;
 
-    // ── Deep space gradient background ────────────────────────────────────────
     canvas.drawRect(
       Rect.fromLTWH(0, 0, size.width, size.height),
       Paint()
@@ -1278,7 +1211,6 @@ class _ShooterPainter extends CustomPainter {
         ).createShader(Rect.fromLTWH(0, 0, size.width, size.height)),
     );
 
-    // Nebula clouds — large soft blobs of color
     _drawNebula(canvas, size.width * 0.15, size.height * 0.25, size.width * 0.55,
         const Color(0xFF1A0066), 0.18);
     _drawNebula(canvas, size.width * 0.65, size.height * 0.55, size.width * 0.50,
@@ -1286,14 +1218,12 @@ class _ShooterPainter extends CustomPainter {
     _drawNebula(canvas, size.width * 0.45, size.height * 0.12, size.width * 0.40,
         const Color(0xFF001133), 0.15);
 
-    // ── Animated starfield ────────────────────────────────────────────────────
     final starPaint = Paint();
     final sparkPaint = Paint()..strokeCap = StrokeCap.round;
     for (final s in stars) {
       final sx2 = wx(s.x, cs), sy2 = wy(s.y, cs);
       canvas.drawCircle(Offset(sx2, sy2), s.r * cs,
           starPaint..color = Colors.white.withOpacity(s.opacity));
-      // Bright stars get a subtle cross sparkle
       if (s.isBright) {
         sparkPaint
           ..color = Colors.white.withOpacity(s.opacity * 0.6)
@@ -1304,7 +1234,6 @@ class _ShooterPainter extends CustomPainter {
       }
     }
 
-    // ── Player zone separator (subtle horizon line) ───────────────────────────
     canvas.drawLine(
       Offset(0, wy(8.8, cs)),
       Offset(size.width, wy(8.8, cs)),
@@ -1313,15 +1242,12 @@ class _ShooterPainter extends CustomPainter {
         ..strokeWidth = 1,
     );
 
-    // ── Pickups ───────────────────────────────────────────────────────────────
     for (final p in pickups.where((p) => p.alive)) {
       _drawPickup(canvas, cs, p);
     }
 
-    // ── Player bullets — neon cyan beams with glow ────────────────────────────
     for (final b in bullets.where((b) => b.alive && b.isPlayer)) {
       final bx = wx(b.x, cs), by = wy(b.y, cs);
-      // Outer glow beam
       canvas.drawLine(
         Offset(bx, by + cs * 0.5),
         Offset(bx, by - cs * 0.15),
@@ -1331,7 +1257,6 @@ class _ShooterPainter extends CustomPainter {
           ..strokeCap = StrokeCap.round
           ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5),
       );
-      // Mid beam
       canvas.drawLine(
         Offset(bx, by + cs * 0.45),
         Offset(bx, by - cs * 0.1),
@@ -1340,7 +1265,6 @@ class _ShooterPainter extends CustomPainter {
           ..strokeWidth = cs * 0.10
           ..strokeCap = StrokeCap.round,
       );
-      // Bright core
       canvas.drawLine(
         Offset(bx, by + cs * 0.38),
         Offset(bx, by - cs * 0.05),
@@ -1349,18 +1273,15 @@ class _ShooterPainter extends CustomPainter {
           ..strokeWidth = cs * 0.04
           ..strokeCap = StrokeCap.round,
       );
-      // Leading tip flare
       canvas.drawCircle(
         Offset(bx, by - cs * 0.06), cs * 0.08,
         Paint()..color = Colors.white,
       );
     }
 
-    // ── Enemy bullets / missiles — hot red/orange beams ───────────────────────
     for (final b in bullets.where((b) => b.alive && !b.isPlayer)) {
       final bx = wx(b.x, cs), by = wy(b.y, cs);
       if (b.isMissile) {
-        // Missile: teardrop shape with trail glow
         canvas.drawOval(
           Rect.fromLTWH(bx - cs * 0.14, by - cs * 0.22, cs * 0.28, cs * 0.48),
           Paint()
@@ -1375,7 +1296,6 @@ class _ShooterPainter extends CustomPainter {
           Rect.fromLTWH(bx - cs * 0.05, by - cs * 0.12, cs * 0.10, cs * 0.22),
           Paint()..color = const Color(0xFFFFDD44),
         );
-        // Exhaust trail
         canvas.drawLine(
           Offset(bx, by + cs * 0.2),
           Offset(bx, by + cs * 0.55),
@@ -1386,7 +1306,6 @@ class _ShooterPainter extends CustomPainter {
             ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4),
         );
       } else {
-        // Standard enemy shot — magenta/red plasma bolt
         canvas.drawLine(
           Offset(bx, by - cs * 0.12),
           Offset(bx, by + cs * 0.35),
@@ -1411,7 +1330,6 @@ class _ShooterPainter extends CustomPainter {
       }
     }
 
-    // ── Asteroids ─────────────────────────────────────────────────────────────
     for (final ast in asteroids.where((a) => a.alive)) {
       canvas.save();
       canvas.translate(wx(ast.x, cs), wy(ast.y, cs));
@@ -1420,27 +1338,22 @@ class _ShooterPainter extends CustomPainter {
       canvas.restore();
     }
 
-    // ── Aliens ────────────────────────────────────────────────────────────────
     for (final a in aliens.where((a) => a.alive)) {
       _drawAlien(canvas, cs, a);
     }
 
-    // ── Player ship (blinks when invincible) ──────────────────────────────────
     if (!invincible || (DateTime.now().millisecondsSinceEpoch ~/ 100).isEven) {
       _drawShip(canvas, cs);
     }
 
-    // ── Shield ring ───────────────────────────────────────────────────────────
     if (shieldHits > 0) {
       final scx = wx(sx + kShipW / 2, cs), scy = wy(sy + kShipH / 2, cs);
-      // Outer blur ring
       canvas.drawCircle(
         Offset(scx, scy), cs * 0.9,
         Paint()
           ..color = const Color(0xFF00E5FF).withOpacity(0.15)
           ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10),
       );
-      // Solid ring
       canvas.drawCircle(
         Offset(scx, scy), cs * 0.88,
         Paint()
@@ -1448,7 +1361,6 @@ class _ShooterPainter extends CustomPainter {
           ..style = PaintingStyle.stroke
           ..strokeWidth = 2.5,
       );
-      // Inner thin ring
       canvas.drawCircle(
         Offset(scx, scy), cs * 0.82,
         Paint()
@@ -1488,7 +1400,6 @@ class _ShooterPainter extends CustomPainter {
         break;
     }
 
-    // Outer glow aura
     canvas.drawCircle(
       Offset(px, py), sz * 1.2,
       Paint()
@@ -1498,7 +1409,6 @@ class _ShooterPainter extends CustomPainter {
   }
 
   void _drawShieldPickup(Canvas canvas, double cx, double cy, double sz) {
-    // Hexagonal shield shape
     final path = Path();
     for (int i = 0; i < 6; i++) {
       final angle = i * pi / 3 - pi / 6;
@@ -1513,7 +1423,6 @@ class _ShooterPainter extends CustomPainter {
       ..color = const Color(0xFF00E5FF)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2);
-    // Inner cross
     canvas.drawLine(Offset(cx, cy - sz * 0.55), Offset(cx, cy + sz * 0.55),
         Paint()..color = const Color(0xFF80F0FF)..strokeWidth = 2);
     canvas.drawLine(Offset(cx - sz * 0.4, cy), Offset(cx + sz * 0.4, cy),
@@ -1521,7 +1430,6 @@ class _ShooterPainter extends CustomPainter {
   }
 
   void _drawAmmoPickup(Canvas canvas, double cx, double cy, double sz) {
-    // Star shape
     final path = Path();
     for (int i = 0; i < 5; i++) {
       final outerAngle = i * 2 * pi / 5 - pi / 2;
@@ -1544,7 +1452,6 @@ class _ShooterPainter extends CustomPainter {
   }
 
   void _drawHeartPickup(Canvas canvas, double cx, double cy, double sz) {
-    // Heart shape
     final path = Path();
     path.moveTo(cx, cy + sz * 0.4);
     path.cubicTo(cx - sz * 1.2, cy - sz * 0.3, cx - sz * 1.2, cy - sz * 1.1, cx, cy - sz * 0.4);
@@ -1565,7 +1472,6 @@ class _ShooterPainter extends CustomPainter {
     final sh = kShipH * cs;
     final cx = shipX + sw / 2;
 
-    // Engine exhaust trails
     for (int i = 0; i < 3; i++) {
       final fade = 1.0 - i * 0.3;
       canvas.drawOval(
@@ -1576,14 +1482,12 @@ class _ShooterPainter extends CustomPainter {
           ..maskFilter = MaskFilter.blur(BlurStyle.normal, 4.0 + i * 3),
       );
     }
-    // Left engine nozzle
     canvas.drawOval(
       Rect.fromLTWH(shipX + sw * 0.06, shipY + sh * 0.88, sw * 0.18, sh * 0.18),
       Paint()
         ..color = const Color(0xFFFF8800).withOpacity(0.8)
         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3),
     );
-    // Right engine nozzle
     canvas.drawOval(
       Rect.fromLTWH(shipX + sw * 0.76, shipY + sh * 0.88, sw * 0.18, sh * 0.18),
       Paint()
@@ -1591,7 +1495,6 @@ class _ShooterPainter extends CustomPainter {
         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3),
     );
 
-    // Outer hull glow
     canvas.drawPath(
       Path()
         ..moveTo(cx, shipY - sh * 0.05)
@@ -1605,7 +1508,6 @@ class _ShooterPainter extends CustomPainter {
         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6),
     );
 
-    // Main hull (gradient)
     final hull = Path()
       ..moveTo(cx, shipY)
       ..lineTo(shipX + sw * 0.96, shipY + sh * 0.70)
@@ -1616,7 +1518,6 @@ class _ShooterPainter extends CustomPainter {
     canvas.drawPath(hull, Paint()
       ..shader = _shipGradient.createShader(Rect.fromLTWH(shipX, shipY, sw, sh)));
 
-    // Wing insets (dark panels)
     canvas.drawPath(
       Path()
         ..moveTo(shipX + sw * 0.04, shipY + sh * 0.70)
@@ -1634,7 +1535,6 @@ class _ShooterPainter extends CustomPainter {
       Paint()..color = const Color(0xFF001155),
     );
 
-    // Center spine highlight
     canvas.drawPath(
       Path()
         ..moveTo(cx, shipY + sh * 0.02)
@@ -1644,12 +1544,10 @@ class _ShooterPainter extends CustomPainter {
       Paint()..color = const Color(0xFF80DDFF).withOpacity(0.45),
     );
 
-    // Cannon tip
     canvas.drawRect(
       Rect.fromLTWH(cx - cs * 0.07, shipY - sh * 0.12, cs * 0.14, sh * 0.15),
       Paint()..color = const Color(0xFFAAEEFF),
     );
-    // Cannon muzzle glow
     canvas.drawCircle(
       Offset(cx, shipY - sh * 0.1), cs * 0.1,
       Paint()
@@ -1657,7 +1555,6 @@ class _ShooterPainter extends CustomPainter {
         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4),
     );
 
-    // Cockpit
     canvas.drawOval(
       Rect.fromLTWH(cx - sw * 0.175, shipY + sh * 0.12, sw * 0.35, sh * 0.36),
       Paint()
@@ -1668,13 +1565,11 @@ class _ShooterPainter extends CustomPainter {
       Rect.fromLTWH(cx - sw * 0.14, shipY + sh * 0.14, sw * 0.28, sh * 0.30),
       Paint()..color = const Color(0xFF00E5FF).withOpacity(0.85),
     );
-    // Cockpit glare
     canvas.drawOval(
       Rect.fromLTWH(cx - sw * 0.08, shipY + sh * 0.16, sw * 0.10, sh * 0.10),
       Paint()..color = Colors.white.withOpacity(0.6),
     );
 
-    // Side thrusters
     for (final tx in [shipX, shipX + sw * 0.7]) {
       canvas.drawRect(
         Rect.fromLTWH(tx, shipY + sh * 0.56, sw * 0.30, sh * 0.15),
@@ -1705,23 +1600,19 @@ class _ShooterPainter extends CustomPainter {
     }
   }
 
-  // Basic alien — green saucer type
   void _drawAlienBasic(Canvas canvas, double ax, double ay, double aw, double ah, double cs, int hp) {
     const color = Color(0xFF00FF88);
-    // Hull glow
     canvas.drawOval(
       Rect.fromLTWH(ax - 2, ay + ah * 0.28 - 2, aw + 4, ah * 0.72 + 4),
       Paint()
         ..color = color.withOpacity(0.2)
         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6),
     );
-    // Body disc
     canvas.drawOval(
       Rect.fromLTWH(ax, ay + ah * 0.30, aw, ah * 0.70),
       Paint()
         ..shader = _alienBasicGradient.createShader(Rect.fromLTWH(ax, ay + ah * 0.30, aw, ah * 0.70)),
     );
-    // Dome
     canvas.drawOval(
       Rect.fromLTWH(ax + aw * 0.20, ay, aw * 0.60, ah * 0.65),
       Paint()..color = const Color(0xFF00CC66).withOpacity(0.7),
@@ -1730,14 +1621,12 @@ class _ShooterPainter extends CustomPainter {
       Rect.fromLTWH(ax + aw * 0.25, ay + ah * 0.04, aw * 0.50, ah * 0.50),
       Paint()..color = const Color(0xFF88FFCC).withOpacity(0.4),
     );
-    // Glowing eyes
     for (final eyeX in [ax + aw * 0.31, ax + aw * 0.61]) {
       canvas.drawCircle(Offset(eyeX, ay + ah * 0.52), cs * 0.09,
           Paint()..color = const Color(0xFFFFFF00)..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3));
       canvas.drawCircle(Offset(eyeX, ay + ah * 0.52), cs * 0.055,
           Paint()..color = Colors.white);
     }
-    // Rim lights
     canvas.drawOval(
       Rect.fromLTWH(ax, ay + ah * 0.30, aw, ah * 0.70),
       Paint()
@@ -1748,17 +1637,14 @@ class _ShooterPainter extends CustomPainter {
     _drawHpPips(canvas, ax, ay, aw, cs, hp, color);
   }
 
-  // Burst alien — purple angular fighter
   void _drawAlienBurst(Canvas canvas, double ax, double ay, double aw, double ah, double cs, int hp) {
     const color = Color(0xFFCC44FF);
-    // Glow
     canvas.drawOval(
       Rect.fromLTWH(ax - 3, ay - 2, aw + 6, ah + 4),
       Paint()
         ..color = color.withOpacity(0.18)
         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8),
     );
-    // Main body (diamond/angular)
     final body = Path()
       ..moveTo(ax + aw * 0.5, ay)
       ..lineTo(ax + aw, ay + ah * 0.45)
@@ -1768,7 +1654,6 @@ class _ShooterPainter extends CustomPainter {
       ..close();
     canvas.drawPath(body, Paint()
       ..shader = _alienBurstGradient.createShader(Rect.fromLTWH(ax, ay, aw, ah)));
-    // Wing spikes
     canvas.drawPath(
       Path()
         ..moveTo(ax, ay + ah * 0.45)
@@ -1783,14 +1668,12 @@ class _ShooterPainter extends CustomPainter {
         ..lineTo(ax + aw * 0.75, ay + ah * 0.60),
       Paint()..color = const Color(0xFF9900CC),
     );
-    // Glowing eyes
     for (final eyeX in [ax + aw * 0.33, ax + aw * 0.67]) {
       canvas.drawCircle(Offset(eyeX, ay + ah * 0.42), cs * 0.10,
           Paint()..color = const Color(0xFFFF44FF)..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4));
       canvas.drawCircle(Offset(eyeX, ay + ah * 0.42), cs * 0.06,
           Paint()..color = Colors.white);
     }
-    // Outline
     canvas.drawPath(body, Paint()
       ..color = color.withOpacity(0.6)
       ..style = PaintingStyle.stroke
@@ -1798,17 +1681,14 @@ class _ShooterPainter extends CustomPainter {
     _drawHpPips(canvas, ax, ay, aw, cs, hp, color);
   }
 
-  // Scatter alien — orange crab/spider type
   void _drawAlienScatter(Canvas canvas, double ax, double ay, double aw, double ah, double cs, int hp) {
     const color = Color(0xFFFF8800);
-    // Glow aura
     canvas.drawOval(
       Rect.fromLTWH(ax - 4, ay - 2, aw + 8, ah + 4),
       Paint()
         ..color = color.withOpacity(0.22)
         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8),
     );
-    // Side legs/pincers
     for (final side in [-1.0, 1.0]) {
       final lx = side < 0 ? ax - aw * 0.18 : ax + aw * 1.0;
       canvas.drawLine(
@@ -1827,18 +1707,15 @@ class _ShooterPainter extends CustomPainter {
         Paint()..color = const Color(0xFFCC5500)..strokeWidth = cs * 0.07..strokeCap = StrokeCap.round,
       );
     }
-    // Body
     canvas.drawOval(
       Rect.fromLTWH(ax + aw * 0.08, ay + ah * 0.15, aw * 0.84, ah * 0.80),
       Paint()
         ..shader = _alienScatterGradient.createShader(Rect.fromLTWH(ax, ay, aw, ah)),
     );
-    // Carapace stripe
     canvas.drawOval(
       Rect.fromLTWH(ax + aw * 0.25, ay + ah * 0.15, aw * 0.50, ah * 0.40),
       Paint()..color = const Color(0xFFFFCC44).withOpacity(0.4),
     );
-    // Eyes (3)
     for (int i = 0; i < 3; i++) {
       final ex = ax + aw * (0.25 + i * 0.25);
       canvas.drawCircle(Offset(ex, ay + ah * 0.42), cs * 0.085,
@@ -1856,17 +1733,14 @@ class _ShooterPainter extends CustomPainter {
     _drawHpPips(canvas, ax, ay, aw, cs, hp, color);
   }
 
-  // Missile alien — red angular warship
   void _drawAlienMissile(Canvas canvas, double ax, double ay, double aw, double ah, double cs, int hp) {
     const color = Color(0xFFFF2244);
-    // Red danger glow
     canvas.drawOval(
       Rect.fromLTWH(ax - 4, ay - 3, aw + 8, ah + 6),
       Paint()
         ..color = color.withOpacity(0.25)
         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10),
     );
-    // Main angular body
     final body = Path()
       ..moveTo(ax + aw * 0.50, ay)
       ..lineTo(ax + aw * 0.78, ay + ah * 0.35)
@@ -1878,12 +1752,10 @@ class _ShooterPainter extends CustomPainter {
       ..close();
     canvas.drawPath(body, Paint()
       ..shader = _alienMissileGradient.createShader(Rect.fromLTWH(ax, ay, aw, ah)));
-    // Dark center panel
     canvas.drawOval(
       Rect.fromLTWH(ax + aw * 0.27, ay + ah * 0.20, aw * 0.46, ah * 0.55),
       Paint()..color = const Color(0xFF330008),
     );
-    // Glowing eyes — menacing
     for (final eyeX in [ax + aw * 0.33, ax + aw * 0.67]) {
       canvas.drawCircle(Offset(eyeX, ay + ah * 0.40), cs * 0.12,
           Paint()..color = const Color(0xFFFF0000)..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5));
@@ -1892,7 +1764,6 @@ class _ShooterPainter extends CustomPainter {
       canvas.drawCircle(Offset(eyeX, ay + ah * 0.40), cs * 0.035,
           Paint()..color = Colors.white);
     }
-    // Intake vents at bottom
     canvas.drawRect(
       Rect.fromLTWH(ax + aw * 0.28, ay + ah * 0.78, aw * 0.44, ah * 0.10),
       Paint()..color = const Color(0xFF550011),
@@ -1929,7 +1800,6 @@ class _ShooterPainter extends CustomPainter {
 
   void _drawAsteroid(Canvas canvas, double cs, double radius) {
     final r = radius * cs;
-    // Base rock shape
     final path = Path();
     const sides = 9;
     for (int i = 0; i < sides; i++) {
@@ -1940,14 +1810,11 @@ class _ShooterPainter extends CustomPainter {
       if (i == 0) path.moveTo(x, y); else path.lineTo(x, y);
     }
     path.close();
-    // Glow
     canvas.drawPath(path, Paint()
       ..color = const Color(0xFF8888AA).withOpacity(0.2)
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4));
-    // Body gradient
     canvas.drawPath(path, Paint()
       ..shader = _asteroidGradient.createShader(Rect.fromCircle(center: Offset.zero, radius: r)));
-    // Crater details
     canvas.drawCircle(
       Offset(r * 0.25, -r * 0.3), r * 0.18,
       Paint()
@@ -1962,7 +1829,6 @@ class _ShooterPainter extends CustomPainter {
         ..style = PaintingStyle.stroke
         ..strokeWidth = 0.8,
     );
-    // Edge highlight
     canvas.drawPath(path, Paint()
       ..color = const Color(0xFF8888BB).withOpacity(0.5)
       ..style = PaintingStyle.stroke

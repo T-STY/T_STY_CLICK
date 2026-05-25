@@ -79,6 +79,7 @@ class CategoriesPageState extends State<CategoriesPage> {
 
     return Scaffold(
       appBar: AppBar(
+        automaticallyImplyLeading: false,
         scrolledUnderElevation: 0,
         backgroundColor: Colors.transparent,
         title: Padding(
@@ -103,7 +104,6 @@ class CategoriesPageState extends State<CategoriesPage> {
           itemCount: mainCategories.keys.length + 1,
           itemBuilder: (context, index) {
             if (index == mainCategories.keys.length) {
-              // Add SizedBox at the bottom
               return const SizedBox(
                 height: 100,
               );

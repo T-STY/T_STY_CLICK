@@ -1,6 +1,6 @@
 # click
 
-T_STY Click
+T_STY: Mi Supercito
 
 ## Getting Started
 

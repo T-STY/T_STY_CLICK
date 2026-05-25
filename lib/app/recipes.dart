@@ -5,6 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
+import '../components/bottom_fade.dart';
 import '../components/custom_loader.dart';
 import '../components/shimmer_placeholder.dart';
 import 'cart/cart_provider.dart';
@@ -243,6 +244,7 @@ class RecipeDetailPageState extends State<RecipeDetailPage> {
 
     for (var item in insufficientStockItems) {
       double availableStock = item['availableStock'];
+      if (availableStock <= 0) continue;
       double price = item['price'];
 
       cartProvider.addItem(
@@ -437,9 +439,14 @@ class RecipeDetailPageState extends State<RecipeDetailPage> {
     }
 
     final textTheme = Theme.of(context).textTheme;
-    final neutralColor = Colors.grey[200];
-    const elevatedColor = Colors.white;
     final bool isGuest = FirebaseAuth.instance.currentUser == null;
+    final String title = (recipeData!['title'] ?? 'Receta').toString();
+    final String precio = recipeData!['precio']?.toString() ?? 'N/A';
+    final int ingredientCount = (recipeData!['ingredients'] is List)
+        ? (recipeData!['ingredients'] as List).length
+        : 0;
+    final String body = (recipeData!['body'] ?? '').toString();
+    final String imageUrl = (recipeData!['imageURL'] ?? '').toString();
 
     return PopScope(
       canPop: false,
@@ -448,127 +455,167 @@ class RecipeDetailPageState extends State<RecipeDetailPage> {
         widget.onBackPressed();
       },
       child: Scaffold(
-        body: SingleChildScrollView(
+        body: BottomFade(
+          clearHeight: 100,
+          fadeHeight: 40,
+          child: SingleChildScrollView(
           padding: const EdgeInsets.all(16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               ClipRRect(
-                borderRadius: BorderRadius.circular(20),
-                child: CachedNetworkImage(
-                  imageUrl: recipeData!['imageURL'],
+                borderRadius: BorderRadius.circular(24),
+                child: SizedBox(
+                  height: 270,
                   width: double.infinity,
-                  height: 250,
-                  fit: BoxFit.fill,
-                  placeholder: (context, url) =>
-                  const ShimmerPlaceholder.rectangular(height: 250),
-                  errorWidget: (context, url, error) => const Icon(Icons.error),
-                ),
-              ),
-              const SizedBox(height: 20),
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: elevatedColor,
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.2),
-                      blurRadius: 8,
-                      offset: const Offset(2, 4),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      recipeData!['title'],
-                      style: textTheme.headlineSmall?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    ImageFiltered(
-                      imageFilter: ImageFilter.blur(
-                        sigmaX: isGuest ? 6.0 : 0.0,
-                        sigmaY: isGuest ? 6.0 : 0.0,
-                      ),
-                      child: Text(
-                        'Precio: ${recipeData!['precio']} MXN',
-                        style: textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w500,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      CachedNetworkImage(
+                        imageUrl: imageUrl,
+                        fit: BoxFit.cover,
+                        placeholder: (c, u) =>
+                            const ShimmerPlaceholder.rectangular(height: 270),
+                        errorWidget: (c, u, e) => Container(
+                          color: Colors.grey[300],
+                          child: const Center(
+                            child: Icon(Icons.restaurant_menu,
+                                size: 54, color: Colors.white70),
+                          ),
                         ),
                       ),
-                    ),
-                  ],
+                      const DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [
+                              Colors.transparent,
+                              Colors.transparent,
+                              Color(0xE0000000),
+                            ],
+                            stops: [0.0, 0.42, 1.0],
+                          ),
+                        ),
+                      ),
+                      Positioned(
+                        top: 14,
+                        left: 14,
+                        child: _detailTag(Icons.restaurant_menu, 'Receta'),
+                      ),
+                      Positioned(
+                        left: 18,
+                        right: 18,
+                        bottom: 16,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              title,
+                              maxLines: 3,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w800,
+                                fontSize: 24,
+                                height: 1.1,
+                                shadows: [
+                                  Shadow(color: Colors.black54, blurRadius: 8),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            Row(
+                              children: [
+                                Icon(Icons.local_grocery_store_outlined,
+                                    size: 15,
+                                    color:
+                                        Colors.white.withValues(alpha: 0.85)),
+                                const SizedBox(width: 5),
+                                Text(
+                                  '$ingredientCount ${ingredientCount == 1 ? 'ingrediente' : 'ingredientes'}',
+                                  style: TextStyle(
+                                      color:
+                                          Colors.white.withValues(alpha: 0.85),
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w500),
+                                ),
+                                const SizedBox(width: 10),
+                                Container(
+                                  width: 3,
+                                  height: 3,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color:
+                                        Colors.white.withValues(alpha: 0.55),
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                const Icon(Icons.sell_outlined,
+                                    size: 15, color: Color(0xFFB9F6CA)),
+                                const SizedBox(width: 5),
+                                ImageFiltered(
+                                  imageFilter: ImageFilter.blur(
+                                    sigmaX: isGuest ? 6.0 : 0.0,
+                                    sigmaY: isGuest ? 6.0 : 0.0,
+                                  ),
+                                  child: Text(
+                                    '≈ \$$precio',
+                                    style: const TextStyle(
+                                      color: Color(0xFFB9F6CA),
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-              const SizedBox(height: 20),
-              Text(
-                recipeData!['body'],
-                textAlign: TextAlign.justify,
-                style: textTheme.bodyMedium,
-              ),
-              const SizedBox(height: 20),
+              if (body.trim().isNotEmpty) ...[
+                const SizedBox(height: 22),
+                _sectionHeader(Icons.notes_rounded, 'Descripción'),
+                const SizedBox(height: 10),
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: _cardDecoration(),
+                  child: Text(
+                    body,
+                    textAlign: TextAlign.justify,
+                    style: textTheme.bodyMedium?.copyWith(height: 1.45),
+                  ),
+                ),
+              ],
+              const SizedBox(height: 22),
+              _sectionHeader(
+                  Icons.local_grocery_store_rounded, 'Ingredientes'),
+              const SizedBox(height: 10),
               Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: neutralColor,
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.05),
-                      blurRadius: 8,
-                      offset: const Offset(2, 4),
-                    ),
-                  ],
-                ),
+                padding: const EdgeInsets.fromLTRB(14, 14, 14, 6),
+                decoration: _cardDecoration(),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Instrucciones:',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    ..._buildBulletPoints(recipeData!['bullet_points']),
-                  ],
+                  children: _buildIngredients(recipeData!['ingredients']),
                 ),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 22),
+              _sectionHeader(Icons.menu_book_rounded, 'Preparación'),
+              const SizedBox(height: 10),
               Container(
                 padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: elevatedColor,
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.2),
-                      blurRadius: 8,
-                      offset: const Offset(2, 4),
-                    ),
-                  ],
-                ),
+                decoration: _cardDecoration(),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Ingredientes:',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    ..._buildIngredients(recipeData!['ingredients']),
-                  ],
+                  children: _buildBulletPoints(recipeData!['bullet_points']),
                 ),
               ),
-              const SizedBox(height: 32),
+              const SizedBox(height: 28),
               ElevatedButton(
                 onPressed: () {
                   if (FirebaseAuth.instance.currentUser == null) {
@@ -580,21 +627,34 @@ class RecipeDetailPageState extends State<RecipeDetailPage> {
                 style: ElevatedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   backgroundColor: Colors.black,
-                  elevation: 5,
+                  elevation: 4,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(30),
                   ),
                 ),
-                child: const Center(
-                  child: Text(
-                    'Agregar productos disponibles al carrito',
-                    style: TextStyle(fontSize: 16, color: Colors.white),
-                  ),
+                child: const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.add_shopping_cart,
+                        color: Colors.white, size: 20),
+                    SizedBox(width: 8),
+                    Flexible(
+                      child: Text(
+                        'Agregar productos disponibles al carrito',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                            fontSize: 16,
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(height: 110),
+              const SizedBox(height: 140),
             ],
           ),
+        ),
         ),
       ),
     );
@@ -602,23 +662,103 @@ class RecipeDetailPageState extends State<RecipeDetailPage> {
 
   List<Widget> _buildBulletPoints(List<dynamic> bulletPoints) {
     return List<Widget>.generate(bulletPoints.length, (index) {
+      final bool isLast = index == bulletPoints.length - 1;
       return Padding(
-        padding: const EdgeInsets.only(bottom: 4),
+        padding: EdgeInsets.only(bottom: isLast ? 0 : 14),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('${index + 1}. ',
-                style: const TextStyle(fontWeight: FontWeight.bold)),
-            Expanded(
+            Container(
+              width: 26,
+              height: 26,
+              alignment: Alignment.center,
+              decoration: const BoxDecoration(
+                color: Colors.black,
+                shape: BoxShape.circle,
+              ),
               child: Text(
-                bulletPoints[index],
-                textAlign: TextAlign.justify,
-                style: const TextStyle(fontSize: 16),
+                '${index + 1}',
+                style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.only(top: 3),
+                child: Text(
+                  bulletPoints[index],
+                  textAlign: TextAlign.justify,
+                  style: const TextStyle(fontSize: 15, height: 1.4),
+                ),
               ),
             ),
           ],
         ),
       );
     });
+  }
+
+  Widget _sectionHeader(IconData icon, String title) {
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(7),
+          decoration: BoxDecoration(
+            color: const Color(0x14000000),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(icon, size: 18, color: Colors.black),
+        ),
+        const SizedBox(width: 10),
+        Text(
+          title,
+          style: const TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 0.2,
+          ),
+        ),
+      ],
+    );
+  }
+
+  BoxDecoration _cardDecoration() {
+    return BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(16),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.black.withValues(alpha: 0.08),
+          blurRadius: 12,
+          offset: const Offset(0, 6),
+        ),
+      ],
+    );
+  }
+
+  Widget _detailTag(IconData icon, String label) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.95),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 13, color: Colors.black87),
+          const SizedBox(width: 5),
+          Text(label,
+              style: const TextStyle(
+                  color: Colors.black87,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 11.5,
+                  letterSpacing: 0.3)),
+        ],
+      ),
+    );
   }
 }

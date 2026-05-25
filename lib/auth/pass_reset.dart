@@ -166,9 +166,9 @@ class _PasswordResetDialogState extends State<PasswordResetDialog> {
                         });
                       } catch (e) {
                         if (!mounted) return;
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Error: $e')),
-                        );
+                        setState(() {
+                          _showErrorAnimation = true;
+                        });
                       }
                     }
                   },

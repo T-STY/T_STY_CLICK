@@ -8,6 +8,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
+import '../../components/bottom_fade.dart';
 import '../../components/shimmer_placeholder.dart';
 import '../../constants/app_images.dart';
 import '../cart/cart_provider.dart';
@@ -15,13 +16,27 @@ import '../../auth/login_page.dart';
 import '../../custom_page_route.dart';
 
 class ProductDisplayPage extends StatefulWidget {
-  final String selectedCategory;
-  final VoidCallback onBack;
+  final String? selectedCategory;
+  final String? brand;
+  final String? distributorName;
+  final List<String>? productIds;
+  final double? minPrice;
+  final double? maxPrice;
+  final String? title;
+  final String? imageUrl;
+  final VoidCallback? onBack;
 
   const ProductDisplayPage({
     super.key,
-    required this.selectedCategory,
-    required this.onBack,
+    this.selectedCategory,
+    this.brand,
+    this.distributorName,
+    this.productIds,
+    this.minPrice,
+    this.maxPrice,
+    this.title,
+    this.imageUrl,
+    this.onBack,
   });
 
   @override
@@ -52,289 +67,358 @@ class ProductDisplayPageState extends State<ProductDisplayPage> {
     super.dispose();
   }
 
+  Query<Map<String, dynamic>> _buildProductsQuery() {
+    Query<Map<String, dynamic>> q =
+        FirebaseFirestore.instance.collection('products');
+
+    final ids = widget.productIds;
+    if (ids != null && ids.isNotEmpty) {
+      return q.where(FieldPath.documentId, whereIn: ids.take(30).toList());
+    }
+
+    final category = widget.selectedCategory;
+    if (category != null && category.isNotEmpty) {
+      q = q.where('category', isEqualTo: category);
+    }
+    final brand = widget.brand;
+    if (brand != null && brand.isNotEmpty) {
+      q = q.where('brand', isEqualTo: brand);
+    }
+    final distributor = widget.distributorName;
+    if (distributor != null && distributor.isNotEmpty) {
+      q = q.where('distribuitor_name', isEqualTo: distributor);
+    }
+    if (widget.minPrice != null) {
+      q = q.where('price', isGreaterThanOrEqualTo: widget.minPrice);
+    }
+    if (widget.maxPrice != null) {
+      q = q.where('price', isLessThanOrEqualTo: widget.maxPrice);
+    }
+    return q;
+  }
+
   @override
   Widget build(BuildContext context) {
-    bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final Color bg = isDarkMode ? const Color(0xFF1A1A1D) : Colors.white;
+    final Widget content = _buildContent(context, isDarkMode);
 
-    return PopScope(
-      canPop: false,
-      onPopInvokedWithResult: (didPop, result) {
-        if (didPop) return;
-        widget.onBack();
-      },
-      child: Scaffold(
+    if (widget.onBack == null) {
+      return Scaffold(
+        backgroundColor: bg,
         appBar: AppBar(
           scrolledUnderElevation: 0,
-          title: Padding(
-            padding: const EdgeInsets.all(0),
-            child: SizedBox(
-              height: 180,
-              width: 300,
-              child: AspectRatio(
-                aspectRatio: 1 / 1,
-                child: Image.asset(
-                  isDarkMode ? AppImages.logowhite : AppImages.logo,
-                  fit: BoxFit.contain,
-                ),
+          backgroundColor: Colors.transparent,
+          automaticallyImplyLeading: false,
+          centerTitle: true,
+          title: SizedBox(
+            height: 44,
+            child: Image.asset(
+              isDarkMode ? AppImages.logowhite : AppImages.logo,
+              fit: BoxFit.contain,
+            ),
+          ),
+        ),
+        body: SafeArea(top: false, child: content),
+      );
+    }
+
+    return Container(color: bg, child: content);
+  }
+
+  Widget _buildContent(BuildContext context, bool isDarkMode) {
+    final Color titleColor =
+        isDarkMode ? Colors.white : const Color(0xFF1A1A1A);
+    final Color mutedColor =
+        isDarkMode ? Colors.grey[400]! : Colors.grey[600]!;
+
+    final String header = widget.imageUrl ?? '';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (header.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(20),
+              child: CachedNetworkImage(
+                imageUrl: header,
+                height: 170,
+                width: double.infinity,
+                fit: BoxFit.cover,
+                placeholder: (c, u) =>
+                    Container(height: 170, color: Colors.grey[200]),
+                errorWidget: (c, u, e) => const SizedBox.shrink(),
               ),
             ),
           ),
-          backgroundColor: Colors.transparent,
-          automaticallyImplyLeading:
-          true,
-        ),
-        body: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 70),
-          child: Column(
-            children: [
-              TextField(
-                controller: _searchController,
-                decoration: InputDecoration(
-                  hintText: 'Buscar productos...',
-                  prefixIcon: const Icon(Icons.search),
-                  suffixIcon: _searchController.text.isNotEmpty
-                      ? IconButton(
-                    icon: const Icon(Icons.clear),
-                    onPressed: () {
-                      _searchController.clear();
-                      _onSearchChanged();
-                    },
-                  )
-                      : null,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: BorderSide.none,
-                  ),
-                  filled: true,
-                  fillColor: isDarkMode ? Colors.grey[850] : Colors.grey[200],
-                ),
+        if (widget.title != null && widget.title!.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(18, 14, 16, 0),
+            child: Text(
+              widget.title!,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.w800,
+                letterSpacing: -0.5,
+                color: titleColor,
               ),
-              const SizedBox(height: 20),
-              Expanded(
-                child: StreamBuilder(
-                  stream: FirebaseFirestore.instance
-                      .collection('products')
-                      .where('category', isEqualTo: widget.selectedCategory)
-                      .snapshots(),
-                  builder: (context, AsyncSnapshot<QuerySnapshot> snapshot) {
-                    if (snapshot.connectionState == ConnectionState.waiting) {
-                      return GridView.builder(
-                        padding: const EdgeInsets.only(bottom: 20),
-                        gridDelegate:
-                        const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 2,
-                          crossAxisSpacing: 10,
-                          mainAxisSpacing: 20,
-                          childAspectRatio: 7 / 10,
-                        ),
-                        itemCount: 6,
-                        itemBuilder: (context, index) {
-                          return Container(
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(15),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.grey.withValues(alpha: 0.1),
-                                  spreadRadius: 5,
-                                  blurRadius: 10,
-                                  offset: const Offset(0, 4),
-                                ),
-                              ],
-                            ),
-                            child: const Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Expanded(
-                                  child: ShimmerPlaceholder(
-                                    shapeBorder: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.only(
-                                        topLeft: Radius.circular(15),
-                                        topRight: Radius.circular(15),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                                Padding(
-                                  padding: EdgeInsets.all(8.0),
-                                  child: Column(
-                                    crossAxisAlignment:
-                                    CrossAxisAlignment.start,
-                                    children: [
-                                      ShimmerPlaceholder(
-                                          width: 100, height: 16),
-                                      SizedBox(height: 8),
-                                      ShimmerPlaceholder(width: 60, height: 14),
-                                      SizedBox(height: 8),
-                                      ShimmerPlaceholder(
-                                          width: double.infinity,
-                                          height: 36),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          );
-                        },
-                      );
-                    }
-                    if (snapshot.hasError) {
-                      return Center(child: Text('Error: ${snapshot.error}'));
-                    }
-
-                    if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                      return const Center(child: Text('No products found'));
-                    }
-
-                    final products = snapshot.data!.docs.where((product) {
-                      final data = product.data() as Map<String, dynamic>;
-                      final productName =
-                          data['nombre']?.toString().toLowerCase() ?? '';
-                      return productName.contains(_searchQuery);
-                    }).toList();
-
-                    products.sort((a, b) {
-                      final dataA = a.data() as Map<String, dynamic>;
-                      final dataB = b.data() as Map<String, dynamic>;
-
-                      final nameA =
-                      (dataA['nombre'] as String? ?? '').toLowerCase();
-                      final nameB =
-                      (dataB['nombre'] as String? ?? '').toLowerCase();
-
-                      return nameA.compareTo(nameB);
-                    });
-
-                    return GridView.builder(
-
-                      padding: const EdgeInsets.only(bottom: 50),
-                      gridDelegate:
-                      const SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: 2,
-                        crossAxisSpacing: 10,
-                        mainAxisSpacing: 20,
-                        childAspectRatio: 7 / 10,
-                      ),
-                      itemCount: products.length,
-                      itemBuilder: (context, index) {
-                        final product = products[index];
-
-                        return GestureDetector(
-                          onTap: () {
-                          },
-                          child: _buildProductCard(context, product),
-                        );
+            ),
+          ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+          child: TextField(
+            controller: _searchController,
+            decoration: InputDecoration(
+              hintText: 'Buscar productos...',
+              prefixIcon: const Icon(Icons.search),
+              suffixIcon: _searchController.text.isNotEmpty
+                  ? IconButton(
+                      icon: const Icon(Icons.clear),
+                      onPressed: () {
+                        _searchController.clear();
+                        _onSearchChanged();
                       },
-                    );
-                  },
-                ),
+                    )
+                  : null,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: BorderSide.none,
               ),
-            ],
+              filled: true,
+              fillColor: isDarkMode ? Colors.grey[850] : Colors.grey[200],
+            ),
           ),
         ),
-        backgroundColor: isDarkMode
-            ? Colors.grey[850]
-            : Colors.white,
+        Expanded(
+          child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+            stream: _buildProductsQuery().snapshots(),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return _buildShimmerList();
+              }
+              if (snapshot.hasError) {
+                return Center(child: Text('Error: ${snapshot.error}'));
+              }
+
+              final docs = (snapshot.data?.docs ?? []).where((product) {
+                final data = product.data();
+                if ((data['hide_online'] as bool?) == true) return false;
+                final name = data['nombre']?.toString().toLowerCase() ?? '';
+                return name.contains(_searchQuery);
+              }).toList();
+
+              _sortProducts(docs);
+
+              if (docs.isEmpty) {
+                return Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.inventory_2_outlined,
+                          size: 48, color: mutedColor),
+                      const SizedBox(height: 12),
+                      Text('No hay productos',
+                          style: TextStyle(color: mutedColor, fontSize: 15)),
+                    ],
+                  ),
+                );
+              }
+
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(18, 6, 16, 8),
+                    child: Text(
+                      '${docs.length} ${docs.length == 1 ? 'producto' : 'productos'}',
+                      style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: mutedColor),
+                    ),
+                  ),
+                  Expanded(
+                    child: BottomFade(
+                      child: ListView.separated(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 120),
+                      itemCount: docs.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 10),
+                      itemBuilder: (context, index) =>
+                          _buildProductListItem(context, docs[index]),
+                    ),
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _sortProducts(List<QueryDocumentSnapshot<Map<String, dynamic>>> docs) {
+    final ids = widget.productIds;
+    if (ids != null && ids.isNotEmpty) {
+      final indexById = <String, int>{
+        for (int i = 0; i < ids.length; i++) ids[i]: i,
+      };
+      const last = 1 << 30;
+      docs.sort((a, b) =>
+          (indexById[a.id] ?? last).compareTo(indexById[b.id] ?? last));
+    } else {
+      docs.sort((a, b) {
+        final nameA = (a.data()['nombre'] as String? ?? '').toLowerCase();
+        final nameB = (b.data()['nombre'] as String? ?? '').toLowerCase();
+        return nameA.compareTo(nameB);
+      });
+    }
+  }
+
+  Widget _buildShimmerList() {
+    return ListView.separated(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 120),
+      itemCount: 6,
+      separatorBuilder: (_, __) => const SizedBox(height: 10),
+      itemBuilder: (context, index) => Container(
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: const Row(
+          children: [
+            ShimmerPlaceholder(width: 88, height: 88),
+            SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  ShimmerPlaceholder(width: 150, height: 14),
+                  SizedBox(height: 8),
+                  ShimmerPlaceholder(width: 80, height: 12),
+                  SizedBox(height: 10),
+                  ShimmerPlaceholder(width: 100, height: 32),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildProductCard(BuildContext context, DocumentSnapshot product) {
-    final data = product.data() as Map<String, dynamic>? ?? {};
-    final String name = data['nombre'] ?? 'Unknown Product';
+  Widget _buildProductListItem(BuildContext context,
+      QueryDocumentSnapshot<Map<String, dynamic>> product) {
+    final data = product.data();
+    final String name = data['nombre'] ?? 'Producto';
     final double price = (data['price'] as num?)?.toDouble() ?? 0.0;
     final String imageUrl = data['image_url'] ?? '';
     final bool isBulk = data['bulk'] as bool? ?? false;
     final double stock = (data['stock'] as num?)?.toDouble() ?? 0.0;
     final String? typeSpecific = data['type_specific'] as String?;
     final String? variante = data['variante'] as String?;
+    final String sub = [variante, typeSpecific]
+        .where((s) => (s ?? '').trim().isNotEmpty)
+        .map((s) => s!.trim())
+        .join(' · ');
     final bool isGuest = FirebaseAuth.instance.currentUser == null;
+    final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
     return Container(
+      padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(15),
+        color: isDarkMode ? Colors.grey[850] : Colors.white,
+        borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.grey.withValues(alpha: 0.1),
-            spreadRadius: 5,
-            blurRadius: 10,
-            offset: const Offset(0, 4),
+            color: Colors.black.withValues(alpha: 0.08),
+            blurRadius: 16,
+            offset: const Offset(0, 6),
           ),
         ],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         children: [
-          Expanded(
-            child: ClipRRect(
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(15),
-                topRight: Radius.circular(15),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: CachedNetworkImage(
-                  imageUrl: imageUrl,
-                  fit: BoxFit.contain,
-                  width: double.infinity,
-                  placeholder: (context, url) =>
-                  const ShimmerPlaceholder(width: double.infinity),
-                  errorWidget: (context, url, error) => const Icon(Icons.error),
-                ),
-              ),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: SizedBox(
+              width: 88,
+              height: 88,
+              child: imageUrl.isNotEmpty
+                  ? CachedNetworkImage(
+                      imageUrl: imageUrl,
+                      fit: BoxFit.contain,
+                      placeholder: (context, url) =>
+                          const ShimmerPlaceholder(width: 88, height: 88),
+                      errorWidget: (context, url, error) => Icon(
+                          Icons.image_not_supported, color: Colors.grey[300]),
+                    )
+                  : Icon(Icons.image, color: Colors.grey[300]),
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.all(8.0),
+          const SizedBox(width: 14),
+          Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
                   name,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                    color: Colors.grey[800],
+                    fontWeight: FontWeight.w700,
+                    fontSize: 15,
+                    color: isDarkMode ? Colors.white : const Color(0xFF1A1A1A),
                   ),
                 ),
-                const SizedBox(height: 4),
+                if (sub.isNotEmpty) ...[
+                  const SizedBox(height: 3),
+                  Text(
+                    sub,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 12.5, color: Colors.grey[600]),
+                  ),
+                ],
+                const SizedBox(height: 6),
                 ImageFiltered(
                   imageFilter: ImageFilter.blur(
                     sigmaX: isGuest ? 6.0 : 0.0,
                     sigmaY: isGuest ? 6.0 : 0.0,
                   ),
                   child: Text(
-                    '\$${price.toString()}',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.grey[600],
+                    '\$${price.toStringAsFixed(2)}',
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFF2E7D32),
                     ),
                   ),
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  data['variante'] ?? '',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey[500],
-                  ),
-                ),
-                const SizedBox(height: 4),
-                _AddToCartButton(
-                  data: {
-                    'docId': product.id,
-                    'nombre': name,
-                    'price': price,
-                    'image_url': imageUrl,
-                    'bulk': isBulk,
-                    'stock': stock,
-                    'type_specific': typeSpecific,
-                    'variante': variante,
-                  },
-                  textColor: Colors.black,
-                ),
               ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          SizedBox(
+            width: 104,
+            child: AddToCartButton(
+              data: {
+                'docId': product.id,
+                'nombre': name,
+                'price': price,
+                'image_url': imageUrl,
+                'bulk': isBulk,
+                'stock': stock,
+                'type_specific': typeSpecific,
+                'variante': variante,
+              },
+              textColor: isDarkMode ? Colors.white : Colors.black,
             ),
           ),
         ],
@@ -343,20 +427,21 @@ class ProductDisplayPageState extends State<ProductDisplayPage> {
   }
 }
 
-class _AddToCartButton extends StatefulWidget {
+class AddToCartButton extends StatefulWidget {
   final Map<String, dynamic> data;
   final Color textColor;
 
-  const _AddToCartButton(
-      {required this.data, required this.textColor});
+  const AddToCartButton(
+      {super.key, required this.data, required this.textColor});
 
   @override
-  __AddToCartButtonState createState() => __AddToCartButtonState();
+  State<AddToCartButton> createState() => _AddToCartButtonState();
 }
 
-class __AddToCartButtonState extends State<_AddToCartButton> {
+class _AddToCartButtonState extends State<AddToCartButton> {
   bool _showSwitchTile = false;
   bool _showAgregadoButton = false;
+  bool _pendingCommit = false;
   double _quantity = 1;
   Timer? _timer;
   late double stock;
@@ -390,7 +475,6 @@ class __AddToCartButtonState extends State<_AddToCartButton> {
     }
   }
 
-
   void _checkCartState() {
     if (!mounted) return;
 
@@ -403,13 +487,16 @@ class __AddToCartButtonState extends State<_AddToCartButton> {
       if (cartItem != null && cartItem.quantity > 0) {
         setState(() {
           _quantity = cartItem.quantity;
-          _showSwitchTile = true;
-          _showAgregadoButton = true;
+          if (!_pendingCommit) {
+            _showSwitchTile = true;
+            _showAgregadoButton = true;
+          }
         });
       } else {
         setState(() {
           _showSwitchTile = false;
           _showAgregadoButton = false;
+          _pendingCommit = false;
         });
       }
     }
@@ -443,15 +530,17 @@ class __AddToCartButtonState extends State<_AddToCartButton> {
           _showSwitchTile = true;
           _quantity = 1;
           _showAgregadoButton = false;
+          _pendingCommit = true;
         });
 
-        _resetAndStartTimer(docId, name, price, imageUrl, cartProvider, isBulk,
+        _commitToCart(docId, name, price, imageUrl, cartProvider, isBulk,
             typeSpecific, variante);
+        _resetAndStartTimer();
       }
     }
   }
 
-  void _resetAndStartTimer(
+  void _commitToCart(
       String docId,
       String name,
       double price,
@@ -460,31 +549,32 @@ class __AddToCartButtonState extends State<_AddToCartButton> {
       bool isBulk,
       String? typeSpecific,
       String? variante) {
+    if (_quantity > 0) {
+      cartProvider.setItem(
+        docId,
+        name,
+        price,
+        imageUrl,
+        _quantity,
+        isBulk: isBulk,
+        stock: stock,
+        typeSpecific: typeSpecific,
+        variante: variante,
+      );
+    } else {
+      cartProvider.removeItemCompletely(docId);
+    }
+  }
+
+  void _resetAndStartTimer() {
     _timer?.cancel();
 
     _timer = Timer(const Duration(seconds: 2), () {
       if (mounted) {
         setState(() {
-          if (_quantity > 0) {
-            cartProvider.setItem(
-              docId,
-              name,
-              price,
-              imageUrl,
-              _quantity,
-              isBulk: isBulk,
-              stock: stock,
-              typeSpecific: typeSpecific,
-              variante: variante,
-            );
-          } else {
-            cartProvider.removeItemCompletely(docId);
-          }
+          _pendingCommit = false;
           _showSwitchTile = false;
           _showAgregadoButton = true;
-          if (kDebugMode) {
-            print('Set quantity of $name to $_quantity in cart');
-          }
         });
       }
     });
@@ -501,6 +591,7 @@ class __AddToCartButtonState extends State<_AddToCartButton> {
     if (_quantity < stock) {
       setState(() {
         _quantity++;
+        _pendingCommit = true;
       });
 
       final String? docId = widget.data['docId'] as String?;
@@ -512,8 +603,9 @@ class __AddToCartButtonState extends State<_AddToCartButton> {
       final String? typeSpecific = widget.data['type_specific'] as String?;
       final String? variante = widget.data['variante'] as String?;
 
-      _resetAndStartTimer(docId!, name!, price!, imageUrl!, cartProvider,
-          isBulk, typeSpecific, variante);
+      _commitToCart(docId!, name!, price!, imageUrl!, cartProvider, isBulk,
+          typeSpecific, variante);
+      _resetAndStartTimer();
     }
   }
 
@@ -521,6 +613,7 @@ class __AddToCartButtonState extends State<_AddToCartButton> {
     if (_quantity > 1) {
       setState(() {
         _quantity--;
+        _pendingCommit = true;
       });
 
       final String? docId = widget.data['docId'] as String?;
@@ -532,8 +625,9 @@ class __AddToCartButtonState extends State<_AddToCartButton> {
       final String? typeSpecific = widget.data['type_specific'] as String?;
       final String? variante = widget.data['variante'] as String?;
 
-      _resetAndStartTimer(docId!, name!, price!, imageUrl!, cartProvider,
-          isBulk, typeSpecific, variante);
+      _commitToCart(docId!, name!, price!, imageUrl!, cartProvider, isBulk,
+          typeSpecific, variante);
+      _resetAndStartTimer();
     }
   }
 
@@ -581,18 +675,26 @@ class __AddToCartButtonState extends State<_AddToCartButton> {
       );
     } else if (_showSwitchTile) {
       return Column(
+        mainAxisSize: MainAxisSize.min,
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Row(
+            mainAxisSize: MainAxisSize.min,
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               IconButton(
-                icon: const Icon(Icons.remove),
+                icon: const Icon(Icons.remove, size: 18),
+                padding: EdgeInsets.zero,
+                visualDensity: VisualDensity.compact,
+                constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
                 onPressed: _quantity > 1 ? _decrementQuantity : null,
               ),
               Text('$_quantity', style: TextStyle(color: widget.textColor)),
               IconButton(
-                icon: const Icon(Icons.add),
+                icon: const Icon(Icons.add, size: 18),
+                padding: EdgeInsets.zero,
+                visualDensity: VisualDensity.compact,
+                constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
                 onPressed: _incrementQuantity,
               ),
             ],
@@ -801,11 +903,7 @@ class __AddToCartButtonState extends State<_AddToCartButton> {
                   onPressed: () {
                     final kilos = double.tryParse(kilosController.text) ?? 0.0;
                     if (kilos > stock) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('No hay suficiente stock disponible'),
-                        ),
-                      );
+                      return;
                     } else {
                       Navigator.of(context).pop();
                       if (widget.data['docId'] != null &&

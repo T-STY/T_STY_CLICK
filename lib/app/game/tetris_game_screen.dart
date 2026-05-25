@@ -6,54 +6,46 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'arcade_input_controller.dart';
+import 'game_saldo.dart';
 import 'high_score_service.dart';
 
-// ─── Piece data ───────────────────────────────────────────────────────────────
-
 const _kShapes = [
-  // I (4×4 box)
   [
     [[1, 0], [1, 1], [1, 2], [1, 3]],
     [[0, 2], [1, 2], [2, 2], [3, 2]],
     [[2, 0], [2, 1], [2, 2], [2, 3]],
     [[0, 1], [1, 1], [2, 1], [3, 1]]
   ],
-  // O (2×2)
   [
     [[0, 0], [0, 1], [1, 0], [1, 1]],
     [[0, 0], [0, 1], [1, 0], [1, 1]],
     [[0, 0], [0, 1], [1, 0], [1, 1]],
     [[0, 0], [0, 1], [1, 0], [1, 1]]
   ],
-  // T (3×3)
   [
     [[0, 1], [1, 0], [1, 1], [1, 2]],
     [[0, 0], [1, 0], [1, 1], [2, 0]],
     [[1, 0], [1, 1], [1, 2], [2, 1]],
     [[0, 2], [1, 1], [1, 2], [2, 2]]
   ],
-  // S
   [
     [[0, 1], [0, 2], [1, 0], [1, 1]],
     [[0, 0], [1, 0], [1, 1], [2, 1]],
     [[0, 1], [0, 2], [1, 0], [1, 1]],
     [[0, 0], [1, 0], [1, 1], [2, 1]]
   ],
-  // Z
   [
     [[0, 0], [0, 1], [1, 1], [1, 2]],
     [[0, 1], [1, 0], [1, 1], [2, 0]],
     [[0, 0], [0, 1], [1, 1], [1, 2]],
     [[0, 1], [1, 0], [1, 1], [2, 0]]
   ],
-  // J
   [
     [[0, 0], [1, 0], [1, 1], [1, 2]],
     [[0, 0], [0, 1], [1, 0], [2, 0]],
     [[1, 0], [1, 1], [1, 2], [2, 2]],
     [[0, 1], [1, 1], [2, 0], [2, 1]]
   ],
-  // L
   [
     [[0, 2], [1, 0], [1, 1], [1, 2]],
     [[0, 0], [1, 0], [2, 0], [2, 1]],
@@ -63,24 +55,20 @@ const _kShapes = [
 ];
 
 const _kColors = [
-  Color(0xFF00E5FF), // I – cyan
-  Color(0xFFFFD700), // O – gold
-  Color(0xFFCC00FF), // T – purple
-  Color(0xFF00E676), // S – green
-  Color(0xFFFF1744), // Z – red
-  Color(0xFF2979FF), // J – blue
-  Color(0xFFFF6D00), // L – orange
+  Color(0xFF00E5FF),
+  Color(0xFFFFD700),
+  Color(0xFFCC00FF),
+  Color(0xFF00E676),
+  Color(0xFFFF1744),
+  Color(0xFF2979FF),
+  Color(0xFFFF6D00),
 ];
 
 const _kScoreTable = [0, 100, 300, 500, 800];
 
-// ─── Game state enum ──────────────────────────────────────────────────────────
-
 enum _GameState { start, playing, paused, dead, complete }
 
-const int _kMaxLines = 400; // 40-point cap
-
-// ─── Widget ───────────────────────────────────────────────────────────────────
+const int _kMaxLines = 400;
 
 class TetrisScreen extends StatefulWidget {
   final String userId;
@@ -103,36 +91,28 @@ class TetrisScreen extends StatefulWidget {
 }
 
 class _TetrisScreenState extends State<TetrisScreen> {
-  // Grid: 0 = empty, 1-7 = locked piece color index+1
   late List<List<int>> _grid;
 
-  // Current piece
   int _pieceType = 0;
   int _rot = 0;
   int _pieceRow = 0;
   int _pieceCol = 3;
 
-  // Next piece
   int _nextType = 0;
 
-  // Scoring / progress
   int _score = 0;
   int _hiScore = 0;
   int _level = 1;
   int _totalLines = 0;
   late double _saldo;
 
-  // State
   _GameState _state = _GameState.start;
 
-  // Timers
   Timer? _gravTimer;
   Timer? _dasTimer;
   Timer? _dasRepeat;
 
   final _rng = Random();
-
-  // ─── Init / dispose ────────────────────────────────────────────────────────
 
   @override
   void initState() {
@@ -152,8 +132,6 @@ class _TetrisScreenState extends State<TetrisScreen> {
     super.dispose();
   }
 
-  // ─── Grid helpers ──────────────────────────────────────────────────────────
-
   void _initGrid() {
     _grid = List.generate(20, (_) => List.filled(10, 0));
   }
@@ -170,7 +148,6 @@ class _TetrisScreenState extends State<TetrisScreen> {
     return true;
   }
 
-  // Ghost piece: drop position
   int _ghostRow() {
     int r = _pieceRow;
     while (_isValid(r + 1, _pieceCol, _rot)) {
@@ -178,8 +155,6 @@ class _TetrisScreenState extends State<TetrisScreen> {
     }
     return r;
   }
-
-  // ─── Gravity ───────────────────────────────────────────────────────────────
 
   int get _gravInterval => (650 - (_level - 1) * 65).clamp(65, 650);
 
@@ -196,8 +171,6 @@ class _TetrisScreenState extends State<TetrisScreen> {
       _lockPiece();
     }
   }
-
-  // ─── Piece management ─────────────────────────────────────────────────────
 
   void _spawnPiece() {
     _pieceType = _nextType;
@@ -232,7 +205,6 @@ class _TetrisScreenState extends State<TetrisScreen> {
         _grid.removeAt(r);
         _grid.insert(0, List.filled(10, 0));
         cleared++;
-        // Do NOT decrement r — new row at same index must be checked
       } else {
         r--;
       }
@@ -243,7 +215,6 @@ class _TetrisScreenState extends State<TetrisScreen> {
     final prevLines = _totalLines;
     _totalLines += cleared;
 
-    // Cap at 400 lines (= 40 pts max)
     if (_totalLines >= _kMaxLines) {
       _totalLines = _kMaxLines;
       final lineScore = _level * _kScoreTable[cleared.clamp(0, 4)];
@@ -261,12 +232,10 @@ class _TetrisScreenState extends State<TetrisScreen> {
       _level = newLevel;
     });
 
-    // Restart gravity on every line clear (refreshes interval if level changed)
     if (levelChanged) {
       _startGravity();
     }
 
-    // Saldo: +1 per 10 lines (cumulative), capped at 40 pts total (400 lines)
     final prevSaldoThreshold = prevLines ~/ 10;
     final newSaldoThreshold = _totalLines ~/ 10;
     if (newSaldoThreshold > prevSaldoThreshold) {
@@ -278,11 +247,9 @@ class _TetrisScreenState extends State<TetrisScreen> {
           widget.onSaldoChanged(newSaldo);
         }
       });
-      _saldo = newSaldo; // optimistic local update
+      _saldo = newSaldo;
     }
   }
-
-  // ─── Game state transitions ────────────────────────────────────────────────
 
   void _startGame() {
     _initGrid();
@@ -295,7 +262,15 @@ class _TetrisScreenState extends State<TetrisScreen> {
     _startGravity();
   }
 
-  void _restart() {
+  Future<void> _restart() async {
+    final ns = await chargeForReplay(
+        userId: widget.userId,
+        rewardsDocRef: widget.rewardsDocRef,
+        currentSaldo: _saldo);
+    if (ns == null) return;
+    if (!mounted) return;
+    setState(() => _saldo = ns);
+    widget.onSaldoChanged(ns);
     _gravTimer?.cancel();
     _dasTimer?.cancel();
     _dasRepeat?.cancel();
@@ -333,8 +308,6 @@ class _TetrisScreenState extends State<TetrisScreen> {
       _startGravity();
     }
   }
-
-  // ─── Movement ─────────────────────────────────────────────────────────────
 
   void _moveLeft() {
     if (_state != _GameState.playing) return;
@@ -375,8 +348,6 @@ class _TetrisScreenState extends State<TetrisScreen> {
   }
 
   void _tryRotate(int newRot) {
-    // Try kicks: 0, -1, +1, -2, +2 col offsets only.
-    // No upward row kick — prevents exploiting infinite spin on the floor.
     const colKicks = [0, -1, 1, -2, 2];
     for (final dc in colKicks) {
       if (_isValid(_pieceRow, _pieceCol + dc, newRot)) {
@@ -400,11 +371,9 @@ class _TetrisScreenState extends State<TetrisScreen> {
     _lockPiece();
   }
 
-  // ─── DAS (Delayed Auto Shift) ──────────────────────────────────────────────
-
   void _startDas(void Function() action) {
     _cancelDas();
-    action(); // immediate move
+    action();
     _dasTimer = Timer(const Duration(milliseconds: 150), () {
       _dasRepeat = Timer.periodic(const Duration(milliseconds: 60), (_) => action());
     });
@@ -416,8 +385,6 @@ class _TetrisScreenState extends State<TetrisScreen> {
     _dasTimer = null;
     _dasRepeat = null;
   }
-
-  // ─── Controller input ─────────────────────────────────────────────────────
 
   void _onControllerEvent() {
     final event = widget.controller.lastEvent;
@@ -455,7 +422,6 @@ class _TetrisScreenState extends State<TetrisScreen> {
           break;
       }
     } else {
-      // Release: cancel DAS for directional buttons
       if (btn == ArcadeButton.left ||
           btn == ArcadeButton.right ||
           btn == ArcadeButton.down) {
@@ -463,8 +429,6 @@ class _TetrisScreenState extends State<TetrisScreen> {
       }
     }
   }
-
-  // ─── Firestore ────────────────────────────────────────────────────────────
 
   Future<void> _updateFirestore(double newSaldo) async {
     try {
@@ -482,13 +446,10 @@ class _TetrisScreenState extends State<TetrisScreen> {
     }
   }
 
-  // ─── Build ────────────────────────────────────────────────────────────────
-
   @override
   Widget build(BuildContext context) {
     return Stack(
       children: [
-        // Game canvas (always present)
         Positioned.fill(
           child: LayoutBuilder(
             builder: (context, constraints) {
@@ -515,7 +476,6 @@ class _TetrisScreenState extends State<TetrisScreen> {
           ),
         ),
 
-        // Overlays
         if (_state == _GameState.start) _buildStartOverlay(),
         if (_state == _GameState.dead) _buildDeathOverlay(),
         if (_state == _GameState.paused) _buildPauseOverlay(),
@@ -523,8 +483,6 @@ class _TetrisScreenState extends State<TetrisScreen> {
       ],
     );
   }
-
-  // ─── Shared overlay decoration helpers ────────────────────────────────────
 
   Widget _buildOverlayBackground({required Color tint, required Widget child}) {
     return Positioned.fill(
@@ -769,11 +727,9 @@ class _TetrisScreenState extends State<TetrisScreen> {
   }
 }
 
-// ─── Painter ──────────────────────────────────────────────────────────────────
-
 class _TetrisPainter extends CustomPainter {
   final List<List<int>> grid;
-  final int pieceType; // -1 = no active piece
+  final int pieceType;
   final int rot;
   final int pieceRow;
   final int pieceCol;
@@ -798,7 +754,6 @@ class _TetrisPainter extends CustomPainter {
     required this.totalLines,
   });
 
-  // Deterministic starfield — same dots every frame (no animation needed)
   static final List<Offset> _stars = List.generate(60, (i) {
     final rng = Random(i * 1337 + 42);
     return Offset(rng.nextDouble(), rng.nextDouble());
@@ -806,7 +761,6 @@ class _TetrisPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    // ── Layout calculations ──────────────────────────────────────────────────
     final cellSizeW = (size.width * 0.60 / 10).floor().toDouble();
     final cellSizeH = (size.height * 0.92 / 20).floor().toDouble();
     final cellSize = min(cellSizeW, cellSizeH);
@@ -815,21 +769,19 @@ class _TetrisPainter extends CustomPainter {
     const boardX = 0.0;
     final boardY = ((size.height - boardH) / 2).floorToDouble();
 
-    // ── Deep space / neon-city background gradient ───────────────────────────
     final bgPaint = Paint()
       ..shader = const LinearGradient(
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
         colors: [
-          Color(0xFF0B0020), // deep violet
-          Color(0xFF060618), // midnight blue
-          Color(0xFF020208), // near black
+          Color(0xFF0B0020),
+          Color(0xFF060618),
+          Color(0xFF020208),
         ],
         stops: [0.0, 0.55, 1.0],
       ).createShader(Rect.fromLTWH(0, 0, size.width, size.height));
     canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), bgPaint);
 
-    // ── Starfield dots ───────────────────────────────────────────────────────
     final starPaint = Paint()..isAntiAlias = true;
     for (int i = 0; i < _stars.length; i++) {
       final s = _stars[i];
@@ -839,11 +791,9 @@ class _TetrisPainter extends CustomPainter {
       canvas.drawCircle(Offset(s.dx * size.width, s.dy * size.height), radius, starPaint);
     }
 
-    // ── Board area – dark slate background ───────────────────────────────────
     final boardBgPaint = Paint()..color = const Color(0xFF0D0D1A);
     canvas.drawRect(Rect.fromLTWH(boardX, boardY, boardW, boardH), boardBgPaint);
 
-    // ── Neon border glow around the board ────────────────────────────────────
     final accentColor = pieceType >= 0 ? _kColors[pieceType] : const Color(0xFF00E5FF);
     final glowPaint = Paint()
       ..color = accentColor.withOpacity(0.22)
@@ -863,7 +813,6 @@ class _TetrisPainter extends CustomPainter {
       borderPaint,
     );
 
-    // ── Subtle grid lines (white 5% opacity) ─────────────────────────────────
     final gridPaint = Paint()
       ..color = const Color(0x0DFFFFFF)
       ..isAntiAlias = false;
@@ -880,7 +829,6 @@ class _TetrisPainter extends CustomPainter {
       );
     }
 
-    // ── Locked cells ────────────────────────────────────────────────────────
     for (int r = 0; r < 20; r++) {
       for (int c = 0; c < 10; c++) {
         final colorIndex = grid[r][c];
@@ -889,7 +837,6 @@ class _TetrisPainter extends CustomPainter {
       }
     }
 
-    // ── Ghost piece — dashed/opaque outline ──────────────────────────────────
     if (pieceType >= 0 && ghostRow != pieceRow) {
       final ghostColor = _kColors[pieceType];
       final ghostFill = Paint()
@@ -919,7 +866,6 @@ class _TetrisPainter extends CustomPainter {
       }
     }
 
-    // ── Active piece ────────────────────────────────────────────────────────
     if (pieceType >= 0) {
       for (final cell in _kShapes[pieceType][rot] as List<List<int>>) {
         final pr = pieceRow + cell[0];
@@ -930,7 +876,6 @@ class _TetrisPainter extends CustomPainter {
       }
     }
 
-    // ── Right panel ─────────────────────────────────────────────────────────
     final panelX = boardX + boardW + 6;
     final panelW = size.width - panelX - 4;
     _drawRightPanel(canvas, panelX, boardY, panelW, boardH, cellSize);
@@ -941,20 +886,17 @@ class _TetrisPainter extends CustomPainter {
     final rect = Rect.fromLTWH(x + 1, y + 1, cs - 2, cs - 2);
     final rrect = RRect.fromRectAndRadius(rect, Radius.circular(radius));
 
-    // Inner glow (same hue, low opacity blur)
     final glowPaint = Paint()
       ..color = color.withOpacity(0.20)
       ..maskFilter = MaskFilter.blur(BlurStyle.inner, cs * 0.25)
       ..isAntiAlias = true;
     canvas.drawRRect(rrect, glowPaint);
 
-    // Main fill
     final mainPaint = Paint()
       ..color = color
       ..isAntiAlias = true;
     canvas.drawRRect(rrect, mainPaint);
 
-    // Glossy top-left bevel highlight (white 40% opacity)
     final highlightRect = Rect.fromLTWH(x + 1, y + 1, cs - 2, (cs - 2) * 0.45);
     final highlightRRect = RRect.fromRectAndCorners(
       highlightRect,
@@ -973,7 +915,6 @@ class _TetrisPainter extends CustomPainter {
       ..isAntiAlias = true;
     canvas.drawRRect(highlightRRect, highlightPaint);
 
-    // Dark bottom-right shadow edge (black 30% opacity)
     final shadowRect = Rect.fromLTWH(x + 1, y + 1 + (cs - 2) * 0.6, cs - 2, (cs - 2) * 0.4);
     final shadowRRect = RRect.fromRectAndCorners(
       shadowRect,
@@ -986,7 +927,6 @@ class _TetrisPainter extends CustomPainter {
     canvas.drawRRect(shadowRRect, shadowPaint);
 
     if (locked) {
-      // Thin bright top highlight line
       final edgePaint = Paint()
         ..color = Colors.white.withOpacity(0.55)
         ..strokeWidth = 1.2
@@ -1003,7 +943,6 @@ class _TetrisPainter extends CustomPainter {
   void _drawRightPanel(Canvas canvas, double x, double y, double w, double h, double cellSize) {
     double cy = y + 6;
 
-    // ── NEXT preview box ─────────────────────────────────────────────────────
     _paintLabel(canvas, 'NEXT', x, cy, w, const Color(0xFF00E5FF), 9.5, neonGlow: true);
     cy += 15;
 
@@ -1024,7 +963,6 @@ class _TetrisPainter extends CustomPainter {
     final previewBoxX = x + (w - previewBoxW) / 2;
     final previewBoxY = cy;
 
-    // Glowing border box for next piece
     final nextBgPaint = Paint()..color = const Color(0xFF0D0D1A);
     final nextBoxRect = Rect.fromLTWH(previewBoxX - 2, previewBoxY - 2, previewBoxW + 4, previewBoxH + 4);
     final nextBoxRRect = RRect.fromRectAndRadius(nextBoxRect, const Radius.circular(6));
@@ -1059,17 +997,14 @@ class _TetrisPainter extends CustomPainter {
     }
     cy += previewBoxH + 8 + 4;
 
-    // ── Divider ──────────────────────────────────────────────────────────────
     _drawDivider(canvas, x, cy, w);
     cy += 9;
 
-    // ── SCORE card ───────────────────────────────────────────────────────────
     _paintLabel(canvas, 'SCORE', x, cy, w, const Color(0xFF00E5FF), 9, neonGlow: true);
     cy += 13;
     _paintLabel(canvas, '$score', x, cy, w, Colors.white, 14, bold: true);
     cy += 19;
 
-    // ── BEST card ────────────────────────────────────────────────────────────
     _paintLabel(canvas, 'BEST', x, cy, w, const Color(0xFFFFD700), 9, neonGlow: true);
     cy += 13;
     _paintLabel(canvas, '$hiScore', x, cy, w, const Color(0xFFFFD700), 13, bold: true);
@@ -1078,13 +1013,11 @@ class _TetrisPainter extends CustomPainter {
     _drawDivider(canvas, x, cy, w);
     cy += 9;
 
-    // ── LVL card ─────────────────────────────────────────────────────────────
     _paintLabel(canvas, 'LVL', x, cy, w, const Color(0xFFCC00FF), 9, neonGlow: true);
     cy += 13;
     _paintLabel(canvas, '$level', x, cy, w, const Color(0xFFE040FB), 14, bold: true);
     cy += 19;
 
-    // ── LINES card ───────────────────────────────────────────────────────────
     _paintLabel(canvas, 'LINES', x, cy, w, const Color(0xFF00E676), 9, neonGlow: true);
     cy += 13;
     _paintLabel(canvas, '$totalLines', x, cy, w, const Color(0xFF00E676), 13, bold: true);

@@ -6,8 +6,10 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geocoding/geocoding.dart';
 
+import '../../components/bottom_fade.dart';
 import '../../components/shimmer_placeholder.dart';
 import '../../constants/app_images.dart';
+import '../../constants/colima_colonias.dart';
 
 class AddressesSection extends StatefulWidget {
   final VoidCallback onBack;
@@ -25,48 +27,24 @@ class _AddressesSectionState extends State<AddressesSection> {
 
   final _streetController = TextEditingController();
   final _streetNumberController = TextEditingController();
-  String? _selectedColonia;
   final _zipCodeController = TextEditingController();
+  String? _selectedColonia;
+  final _customColoniaController = TextEditingController();
 
-  List<String> _colonias = [];
   final _city = 'Colima';
   final _state = 'Colima';
   LatLng? _selectedLocation;
 
-  @override
-  void initState() {
-    super.initState();
-    _fetchColonias();
-  }
-
-  Future<void> _fetchColonias() async {
-    try {
-      final doc = await FirebaseFirestore.instance
-          .collection('settings')
-          .doc('store')
-          .get();
-
-      if (doc.exists) {
-        final data = doc.data();
-        if (data != null && data['colonias'] != null) {
-          if (mounted) {
-            setState(() {
-              _colonias = List<String>.from(data['colonias']);
-              _colonias.sort();
-            });
-          }
-        }
-      }
-    } catch (e) {
-      debugPrint('Error loading colonias: $e');
-    }
-  }
+  String? _resolvedColonia() => _selectedColonia == kOtraColonia
+      ? _customColoniaController.text.trim()
+      : _selectedColonia;
 
   @override
   void dispose() {
     _streetController.dispose();
     _streetNumberController.dispose();
     _zipCodeController.dispose();
+    _customColoniaController.dispose();
     super.dispose();
   }
 
@@ -98,6 +76,7 @@ class _AddressesSectionState extends State<AddressesSection> {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return Scaffold(
               appBar: AppBar(
+                automaticallyImplyLeading: false,
                 backgroundColor: isDarkMode ? Colors.grey[900] : Colors.white,
                 elevation: 0,
               ),
@@ -131,6 +110,7 @@ class _AddressesSectionState extends State<AddressesSection> {
           if (snapshot.hasError) {
             return Scaffold(
               appBar: AppBar(
+                automaticallyImplyLeading: false,
                 backgroundColor: isDarkMode ? Colors.grey[900] : Colors.white,
                 elevation: 0,
               ),
@@ -148,6 +128,7 @@ class _AddressesSectionState extends State<AddressesSection> {
 
           return Scaffold(
             appBar: AppBar(
+              automaticallyImplyLeading: false,
               title: SizedBox(
                 height: 180,
                 width: 300,
@@ -208,8 +189,9 @@ class _AddressesSectionState extends State<AddressesSection> {
                 ),
               ),
             )
-                : ListView.builder(
-              padding: const EdgeInsets.all(16.0),
+                : BottomFade(
+              child: ListView.builder(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
               itemCount: snapshot.data!.docs.length,
               itemBuilder: (context, index) {
                 final addressDoc = snapshot.data!.docs[index];
@@ -226,6 +208,7 @@ class _AddressesSectionState extends State<AddressesSection> {
                   },
                 );
               },
+            ),
             ),
           );
         },
@@ -253,16 +236,25 @@ class _AddressesSectionState extends State<AddressesSection> {
   void _clearFormFields() {
     _streetController.clear();
     _streetNumberController.clear();
-    _selectedColonia = null;
     _zipCodeController.clear();
+    _selectedColonia = null;
+    _customColoniaController.clear();
     _selectedLocation = null;
   }
 
   void _populateFormFields(Map<String, dynamic> addressData) {
     _streetController.text = addressData['street'] ?? '';
     _streetNumberController.text = addressData['streetNumber'] ?? '';
-    _selectedColonia = addressData['colonia'];
     _zipCodeController.text = addressData['zipCode'] ?? '';
+    final colonia = (addressData['colonia'] ?? '').toString();
+    final items = coloniasForZip(_zipCodeController.text);
+    if (colonia.isNotEmpty && !items.contains(colonia)) {
+      _selectedColonia = kOtraColonia;
+      _customColoniaController.text = colonia;
+    } else {
+      _selectedColonia = colonia.isEmpty ? null : colonia;
+      _customColoniaController.clear();
+    }
     if (addressData['latitude'] != null && addressData['longitude'] != null) {
       _selectedLocation = LatLng(
         addressData['latitude'],
@@ -274,8 +266,11 @@ class _AddressesSectionState extends State<AddressesSection> {
   Widget _buildAddressForm() {
     final isEditing = _editingAddressId != null;
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16.0),
+    return BottomFade(
+      clearHeight: 100,
+      fadeHeight: 30,
+      child: SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 140),
       child: Card(
         elevation: 4.0,
         shape: RoundedRectangleBorder(
@@ -293,33 +288,21 @@ class _AddressesSectionState extends State<AddressesSection> {
                     const SizedBox(height: 10),
                     _buildTextField(_streetNumberController, 'Número'),
                     const SizedBox(height: 10),
-                    StatefulBuilder(
-                      builder: (BuildContext context, StateSetter setState) {
-                        List<String> dropdownItems = List.from(_colonias);
-                        if (_selectedColonia != null &&
-                            !dropdownItems.contains(_selectedColonia)) {
-                          dropdownItems.add(_selectedColonia!);
-                          dropdownItems.sort();
-                        }
-
-                        return _buildDropdownField(
-                          value: _selectedColonia,
-                          label: 'Colonia',
-                          items: dropdownItems,
-                          onChanged: (value) {
-                            this.setState(() {
-                              _selectedColonia = value;
-                            });
-                          },
-                        );
-                      },
+                    _buildZipField(),
+                    const SizedBox(height: 10),
+                    ValueListenableBuilder<TextEditingValue>(
+                      valueListenable: _zipCodeController,
+                      builder: (context, _, __) => _buildColoniaField(),
                     ),
+                    if (_selectedColonia == kOtraColonia) ...[
+                      const SizedBox(height: 10),
+                      _buildTextField(
+                          _customColoniaController, 'Escribe tu colonia'),
+                    ],
                     const SizedBox(height: 10),
                     _buildDisabledField('Ciudad', _city),
                     const SizedBox(height: 10),
                     _buildDisabledField('Estado', _state),
-                    const SizedBox(height: 10),
-                    _buildTextField(_zipCodeController, 'Código Postal'),
                   ],
                 ),
               ),
@@ -348,6 +331,7 @@ class _AddressesSectionState extends State<AddressesSection> {
             ],
           ),
         ),
+      ),
       ),
     );
   }
@@ -407,15 +391,67 @@ class _AddressesSectionState extends State<AddressesSection> {
     );
   }
 
+  Widget _buildZipField() {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    return TextFormField(
+      controller: _zipCodeController,
+      keyboardType: TextInputType.number,
+      maxLength: 5,
+      decoration: InputDecoration(
+        labelText: 'Código Postal',
+        counterText: '',
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12.0),
+          borderSide: BorderSide.none,
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12.0),
+          borderSide: BorderSide(color: Colors.grey.shade300),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12.0),
+          borderSide: BorderSide(color: Theme.of(context).primaryColor),
+        ),
+        filled: true,
+        fillColor: isDarkMode ? Colors.grey[800] : Colors.grey[100],
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+      ),
+      validator: (value) {
+        if (value == null || value.trim().isEmpty) {
+          return 'Por favor, ingresa el código postal';
+        }
+        return null;
+      },
+    );
+  }
+
+  Widget _buildColoniaField() {
+    final hasZip = _zipCodeController.text.trim().isNotEmpty;
+    final items = coloniasForZip(_zipCodeController.text);
+    final value = items.contains(_selectedColonia) ? _selectedColonia : null;
+    return _buildDropdownField(
+      value: value,
+      label: hasZip ? 'Colonia' : 'Colonia (ingresa primero el C.P.)',
+      items: items,
+      onChanged: hasZip
+          ? (v) => setState(() {
+                _selectedColonia = v;
+                if (v != kOtraColonia) _customColoniaController.clear();
+              })
+          : null,
+    );
+  }
+
   Widget _buildDropdownField({
     required String? value,
     required String label,
     required List<String> items,
-    required void Function(String?) onChanged,
+    required void Function(String?)? onChanged,
   }) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     return DropdownButtonFormField<String>(
-      // UPDATED: 'value' replaced with 'initialValue' for Flutter 3.33+
+      key: ValueKey('dd_${label}_$value'),
       initialValue: value,
       decoration: InputDecoration(
         labelText: label,
@@ -442,7 +478,7 @@ class _AddressesSectionState extends State<AddressesSection> {
       onChanged: onChanged,
       validator: (value) {
         if (value == null || value.isEmpty) {
-          return 'Por favor, selecciona $label';
+          return 'Selecciona la colonia (ingresa primero el C.P.)';
         }
         return null;
       },
@@ -471,13 +507,14 @@ class _AddressesSectionState extends State<AddressesSection> {
 
   void _confirmAddress() async {
     if (_formKey.currentState!.validate()) {
-      if (_selectedColonia == null) {
-        _showAlertDialog('Error', 'Por favor, selecciona una colonia');
+      final colonia = _resolvedColonia();
+      if (colonia == null || colonia.isEmpty) {
+        _showAlertDialog('Error', 'Por favor, selecciona o escribe una colonia');
         return;
       }
 
       final addressString =
-          '${_streetController.text} ${_streetNumberController.text}, $_selectedColonia, $_city, $_state, ${_zipCodeController.text}, México';
+          '${_streetController.text} ${_streetNumberController.text}, $colonia, $_city, $_state, ${_zipCodeController.text}, México';
 
       try {
         List<Location> locations = await locationFromAddress(addressString);
@@ -530,7 +567,7 @@ class _AddressesSectionState extends State<AddressesSection> {
       final data = {
         'street': _streetController.text,
         'streetNumber': _streetNumberController.text,
-        'colonia': _selectedColonia,
+        'colonia': _resolvedColonia(),
         'city': _city,
         'state': _state,
         'zipCode': _zipCodeController.text,

@@ -18,8 +18,9 @@ rules_version = '2';
 //    by the processWorkerAction Cloud Function with admin credentials.
 // 4. Wallets (`rewards`) are Cloud-Function-only — clients get NO direct
 //    access so PINs/PII can't be read and balances can't be tampered with.
-// 5. Storefront content (products, coupons, promotions, home_sections, ads)
+// 5. Storefront content (products, recipes, promotions, home_sections, ads)
 //    is publicly readable so the customer app renders for guests too.
+//    Coupons are NOT public — admin-only, claimed via the claimCoupon CF.
 // Keep the [AdminGuard] Dart lists in the admin app in lock-step with the
 // isAdmin()/isStockEditor() UID lists below.
 // ─────────────────────────────────────────────────────────────────────────
@@ -66,25 +67,32 @@ service cloud.firestore {
           && request.resource.data.stock >= 0;
     }
 
-    // Only 'remaining_uses' changed, decremented by exactly 1, was > 0.
-    function isValidCouponClaim() {
-      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['remaining_uses'])
-          && request.resource.data.remaining_uses == resource.data.remaining_uses - 1
-          && resource.data.remaining_uses > 0;
-    }
-
     // ─── 1. MASTER COUPONS ────────────────────────────────────
+    // Admin-only — clients never touch the master pool directly. Claiming a
+    // coupon (validating the code, copying percentage/max_discount onto the
+    // user, decrementing remaining_uses) happens exclusively in the claimCoupon
+    // Cloud Function (admin SDK), so a client can never read the master pool,
+    // mint coupons, or tamper with usage counts.
     match /coupons/{couponId} {
-      allow read:           if true;
-      allow update:         if isAdmin() || isValidCouponClaim();
-      allow create, delete: if isAdmin();
+      allow read, create, update, delete: if isAdmin();
     }
 
     // ─── 2. ORDERS ────────────────────────────────────────────
+    // Orders are CREATED server-side by the placeOrder Cloud Function (admin
+    // SDK), which recomputes prices/discounts/saldo — clients never create or
+    // delete. A customer may READ their own order and may only UPDATE it to
+    // cancel: the order must still be 'En Revision', the diff may touch nothing
+    // but `state` (→ 'Cancelado') and `cancellationTimestamp`, so a client
+    // can't flip an order to 'Entregado' or rewrite items/totals. Saldo + coupon
+    // are reinstated server-side by reinstateOnCancel. Admin via catch-all.
     match /orders/{orderId} {
-      allow create: if isAuth() && request.resource.data.userId == request.auth.uid;
-      allow read, update, delete: if isAuth() && resource.data.userId == request.auth.uid;
-      // Admin covered by catch-all.
+      allow read: if isAuth() && resource.data.userId == request.auth.uid;
+      allow update: if isAuth()
+        && resource.data.userId == request.auth.uid
+        && resource.data.state == 'En Revision'
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['state', 'cancellationTimestamp'])
+        && request.resource.data.state == 'Cancelado';
     }
 
     // ─── 3. PRODUCTS, RECIPES & PROMOTIONS ────────────────────
@@ -95,8 +103,9 @@ service cloud.firestore {
       allow update: if isAdmin() || (isStockEditor() && isStockOnlyUpdate());
     }
 
+    // Public read: recipes are storefront content shown to guests too.
     match /recipes/{docId} {
-      allow read:  if isAuth();
+      allow read:  if true;
       allow write: if isAdmin();
     }
 
@@ -163,8 +172,25 @@ service cloud.firestore {
         allow update, delete: if isAdmin();
       }
 
-      match /{sub=**} {
-        allow read, write: if isOwner(userId);
+      // Coupons are granted ONLY by the claimCoupon Cloud Function (admin SDK).
+      // Clients may read them (to list/apply) and delete them (account cleanup),
+      // but never create or modify — otherwise a user could fabricate a coupon
+      // with an arbitrary discount that placeOrder would honor.
+      match /coupons/{couponId} {
+        allow read, delete: if isOwner(userId);
+      }
+
+      // Everything else under the user's tree stays fully owner-managed. The
+      // `col` guards keep client writes OUT of coupons and workerActions (rules
+      // are OR-ed, so a broad write here would otherwise re-open them): coupons
+      // are CF-granted only, and workerActions is governed by its own
+      // constrained create rule above (type/status validated) — without this
+      // guard a worker could enqueue an action with an arbitrary type/status.
+      match /{col}/{docId=**} {
+        allow read:  if isOwner(userId);
+        allow write: if isOwner(userId)
+          && col != 'coupons'
+          && col != 'workerActions';
       }
     }
 
@@ -240,8 +266,12 @@ service cloud.firestore {
       }
     }
 
+    // Admin-only listing. Workers never list the whole collection; their
+    // self-lookup is a `where('uuid','==', request.auth.uid)` query, which is
+    // authorized by the per-document read rule above (resource.data.uuid ==
+    // request.auth.uid) — so tightening list to admins doesn't break it.
     match /employee {
-      allow list: if isAuth();
+      allow list: if isAdmin();
     }
 
     // ─── 8b. STOREFRONT CONTENT (customer-facing) ─────────────

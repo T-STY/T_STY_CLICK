@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_credit_card/flutter_credit_card.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 import 'package:lottie/lottie.dart';
 import '../../constants/app_images.dart';
-
 
 class CreateNewCard extends StatefulWidget {
   final VoidCallback onBack;
@@ -108,26 +107,12 @@ class _CreateNewCardState extends State<CreateNewCard> {
       }
 
       try {
-        String upperCaseName = cardHolderName.toUpperCase();
-
-        await FirebaseFirestore.instance
-            .collection('users')
-            .doc(userId)
-            .collection('rewardsCard')
-            .doc('cardInfo')
-            .set({
-          'cardNumber': 'T_STY$cardNumber',
-          'customerSince': customerSince,
-          'cardHolderName': upperCaseName,
-          'cvvCode': cvvCode,
-        });
-
-        await FirebaseFirestore.instance.collection('rewards').doc(userId).set({
-          'cardNumber': 'T_STY$cardNumber',
-          'customerSince': customerSince,
-          'cardHolderName': upperCaseName,
-          'cvvCode': cvvCode,
-          'saldo': 0,
+        await FirebaseFunctions.instance
+            .httpsCallable('createRewardsWallet')
+            .call(<String, dynamic>{
+          'phone': cardNumber,
+          'pin': cvvCode,
+          'holderName': cardHolderName,
         });
 
         if (!mounted) return;
@@ -135,6 +120,10 @@ class _CreateNewCardState extends State<CreateNewCard> {
         Future.delayed(const Duration(seconds: 1), () {
           if (mounted) Navigator.of(context).pop();
         });
+      } on FirebaseFunctionsException catch (e) {
+        if (!mounted) return;
+        _showAlertDialog('Error',
+            e.message ?? 'No se pudo crear el monedero. Intenta de nuevo.');
       } catch (e) {
         if (!mounted) return;
         debugPrint('Error creating card: $e');

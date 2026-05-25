@@ -3,6 +3,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../components/bottom_fade.dart';
 import '../../components/shimmer_placeholder.dart';
 import '../../constants/app_colors.dart';
 import '../../constants/app_defaults.dart';
@@ -17,13 +18,50 @@ class CartPage extends StatefulWidget {
   const CartPage({super.key});
 
   @override
-  State<CartPage> createState() => _CartPageState();
+  State<CartPage> createState() => CartPageState();
 }
 
-class _CartPageState extends State<CartPage> {
+class CartPageState extends State<CartPage> {
   int _index = 0;
   int _openHour = 9;
   int _closeHour = 18;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _revalidateStock());
+  }
+
+  Future<void> _revalidateStock() async {
+    final cart = Provider.of<CartProvider>(context, listen: false);
+    for (final item in cart.items.values.toList()) {
+      try {
+        final doc = await FirebaseFirestore.instance
+            .collection('products')
+            .doc(item.objectID)
+            .get();
+        final double stock = doc.exists
+            ? ((doc.data()?['stock'] as num?)?.toDouble() ?? 0.0)
+            : 0.0;
+        if (stock <= 0) {
+          cart.removeItemCompletely(item.objectID);
+        } else if (item.quantity > stock) {
+          cart.setItem(
+            item.objectID,
+            item.nombre,
+            item.price,
+            item.imageUrl,
+            stock,
+            isBulk: item.isBulk,
+            stock: stock,
+            typeSpecific: item.typeSpecific,
+            variante: item.variante,
+          );
+        }
+      } catch (_) {
+      }
+    }
+  }
 
   bool _checkOrderTime() {
     final now = DateTime.now();
@@ -42,6 +80,16 @@ class _CartPageState extends State<CartPage> {
     if (hour == 0 || hour == 24) return '12 AM';
     if (hour > 12) return '${hour - 12} PM';
     return '$hour AM';
+  }
+
+  bool handleBack() {
+    if (_index != 0) {
+      setState(() {
+        _index = 0;
+      });
+      return true;
+    }
+    return false;
   }
 
   @override
@@ -81,7 +129,7 @@ class _CartPageState extends State<CartPage> {
           onBackToHome: () {
             Navigator.of(context).pushAndRemoveUntil(
               MaterialPageRoute(builder: (context) => const MainMenuScreen()),
-                  (Route<dynamic> route) => false,
+              (Route<dynamic> route) => false,
             );
           },
         ),
@@ -95,12 +143,11 @@ class _CartPageState extends State<CartPage> {
         'Los pedidos solo pueden realizarse entre ${_formatHour(_openHour)} y ${_formatHour(_closeHour)}.';
 
     return Container(
-      color: Theme.of(context).brightness == Brightness.dark
-          ? Colors.grey[900]
-          : Colors.white,
+      color: Colors.transparent,
       child: Column(
         children: [
           AppBar(
+            automaticallyImplyLeading: false,
             backgroundColor: Colors.white,
             scrolledUnderElevation: 0,
             title: SizedBox(
@@ -115,63 +162,54 @@ class _CartPageState extends State<CartPage> {
               ),
             ),
             centerTitle: true,
+            actions: [
+              Consumer<CartProvider>(
+                builder: (context, cart, _) {
+                  if (cart.items.isEmpty) return const SizedBox.shrink();
+                  return IconButton(
+                    tooltip: 'Vaciar carrito',
+                    icon: const Icon(Icons.delete_sweep_outlined,
+                        color: Colors.black),
+                    onPressed: () => _confirmClear(
+                      context,
+                      'Vaciar carrito',
+                      '¿Eliminar todos los productos de tu carrito?',
+                      cart.clearCart,
+                    ),
+                  );
+                },
+              ),
+            ],
           ),
           Expanded(
-            child: Consumer<CartProvider>(
-              builder: (context, cartProvider, child) {
-                if (cartProvider.items.isEmpty) {
-                  return const Center(
-                    child: Text('No hay productos en tu carrito'),
-                  );
-                }
-                return ListView.builder(
-                  padding: EdgeInsets.zero,
-                  itemCount: cartProvider.items.length,
-                  itemBuilder: (context, index) {
-                    final item = cartProvider.items.values.toList()[index];
-                    return ProductTileCart(
-                      key: ValueKey(item.objectID),
-                      objectId: item.objectID,
-                      name: item.nombre,
-                      price: item.price,
-                      imageUrl: item.imageUrl,
-                      quantity: item.quantity,
-                      isBulk: item.isBulk,
-                      typeSpecific: item.typeSpecific,
-                      variante: item.variante,
-                      increaseQuantity: () {
-                        if (item.isBulk) {
-                          _showBulkOrderDialog(context, cartProvider, item);
-                        } else {
-                          cartProvider.addItem(
-                            item.objectID,
-                            item.nombre,
-                            item.price,
-                            item.imageUrl,
-                            quantity: 1,
-                            isBulk: item.isBulk,
-                            stock: item.stock,
-                            typeSpecific: item.typeSpecific,
-                            variante: item.variante,
-                          );
-                        }
-                      },
-                      decreaseQuantity: () {
-                        cartProvider.removeItem(
-                          item.objectID,
-                          isBulk: item.isBulk,
+            child: Stack(
+              children: [
+                BottomFade(
+                  clearHeight: 310,
+                  fadeHeight: 150,
+                  child: Consumer<CartProvider>(
+                    builder: (context, cartProvider, child) {
+                      if (cartProvider.items.isEmpty) {
+                        return const Center(
+                          child: Text('No hay productos en tu carrito'),
                         );
-                      },
-                    );
-                  },
-                );
-              },
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 5, 16, 16),
-            child: Card(
+                      }
+                      return ListView(
+                        padding: const EdgeInsets.only(bottom: 390),
+                        children: _buildCartChildren(context, cartProvider),
+                      );
+                    },
+                  ),
+                ),
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 5, 16, 112),
+                    child: Card(
               elevation: 4,
+              margin: EdgeInsets.zero,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(16),
               ),
@@ -189,26 +227,6 @@ class _CartPageState extends State<CartPage> {
                     return Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        // Applied promotions
-                        if (cartProvider.appliedPromosList.isNotEmpty) ...[
-                          ...cartProvider.appliedPromosList.map((promoName) => Padding(
-                            padding: const EdgeInsets.only(bottom: 4.0),
-                            child: Row(
-                              children: [
-                                const Icon(Icons.local_offer, size: 14, color: Colors.orange),
-                                const SizedBox(width: 4),
-                                Expanded(
-                                  child: Text(
-                                    promoName,
-                                    style: TextStyle(fontSize: 12, color: Colors.orange[700], fontWeight: FontWeight.bold),
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          )),
-                          const SizedBox(height: 6),
-                        ],
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
@@ -308,10 +326,13 @@ class _CartPageState extends State<CartPage> {
                                 !isOrderTimeValid ||
                                 isLoading)
                                 ? null
-                                : () {
-                              setState(() {
-                                _index = 1;
-                              });
+                                : () async {
+                              await _revalidateStock();
+                              if (mounted && cartProvider.items.isNotEmpty) {
+                                setState(() {
+                                  _index = 1;
+                                });
+                              }
                             },
                             style: ElevatedButton.styleFrom(
                               padding: const EdgeInsets.symmetric(vertical: 16),
@@ -342,8 +363,174 @@ class _CartPageState extends State<CartPage> {
                 ),
               ),
             ),
+                  ),
+                ),
+              ],
+            ),
           ),
-          const SizedBox(height: 100),
+        ],
+      ),
+    );
+  }
+
+  List<Widget> _buildCartChildren(
+      BuildContext context, CartProvider cart) {
+    final children = <Widget>[];
+
+    for (final g in cart.groups) {
+      children.add(_groupHeader(g.name));
+      g.claimed.forEach((pid, qty) {
+        final item = cart.getItem(pid);
+        if (item == null || qty <= 0) return;
+        children.add(ProductTileCart(
+          key: ValueKey('grp_${g.comboInstanceId ?? g.name}_$pid'),
+          objectId: pid,
+          name: item.nombre,
+          price: item.price,
+          imageUrl: item.imageUrl,
+          quantity: qty,
+          isBulk: item.isBulk,
+          typeSpecific: item.typeSpecific,
+          variante: item.variante,
+          onRemove: () => _confirmClear(
+            context,
+            'Quitar ${g.name}',
+            'Se eliminarán todos los productos de "${g.name}" de tu carrito.',
+            () => cart.clearGroup(g),
+          ),
+        ));
+      });
+    }
+
+    final ungrouped = cart.items.values
+        .where((it) => cart.ungroupedQuantity(it.objectID) > 0)
+        .toList();
+
+    if (children.isNotEmpty && ungrouped.isNotEmpty) {
+      children.add(_sectionDivider(
+        'Otros productos',
+        onClear: () => _confirmClear(
+          context,
+          'Vaciar otros productos',
+          'Se quitarán los productos que no forman parte de un combo o promoción.',
+          cart.clearUngrouped,
+        ),
+      ));
+    }
+
+    for (final item in ungrouped) {
+      final q = cart.ungroupedQuantity(item.objectID);
+      children.add(ProductTileCart(
+        key: ValueKey('std_${item.objectID}'),
+        objectId: item.objectID,
+        name: item.nombre,
+        price: item.price,
+        imageUrl: item.imageUrl,
+        quantity: q,
+        isBulk: item.isBulk,
+        typeSpecific: item.typeSpecific,
+        variante: item.variante,
+        increaseQuantity: () {
+          if (item.isBulk) {
+            _showBulkOrderDialog(context, cart, item);
+          } else {
+            cart.addItem(
+              item.objectID,
+              item.nombre,
+              item.price,
+              item.imageUrl,
+              quantity: 1,
+              isBulk: item.isBulk,
+              stock: item.stock,
+              typeSpecific: item.typeSpecific,
+              variante: item.variante,
+            );
+          }
+        },
+        decreaseQuantity: () =>
+            cart.removeItem(item.objectID, isBulk: item.isBulk),
+      ));
+    }
+
+    return children;
+  }
+
+  Widget _groupHeader(String name) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 14, 20, 2),
+      child: Row(
+        children: [
+          const Icon(Icons.local_offer, size: 16, color: Colors.orange),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              name,
+              style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                  color: Colors.orange[800]),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _sectionDivider(String label, {VoidCallback? onClear}) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 18, 8, 2),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: TextStyle(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 13,
+                  letterSpacing: 0.2,
+                  color: Colors.grey[600]),
+            ),
+          ),
+          if (onClear != null)
+            IconButton(
+              visualDensity: VisualDensity.compact,
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 34, minHeight: 34),
+              tooltip: 'Vaciar sección',
+              icon: Icon(Icons.close, size: 18, color: Colors.grey[500]),
+              onPressed: onClear,
+            ),
+        ],
+      ),
+    );
+  }
+
+  void _confirmClear(
+    BuildContext context,
+    String title,
+    String message,
+    VoidCallback onConfirm,
+  ) {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(title),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              onConfirm();
+            },
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Eliminar'),
+          ),
         ],
       ),
     );

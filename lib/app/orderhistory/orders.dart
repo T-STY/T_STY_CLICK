@@ -14,6 +14,7 @@ class UserOrder {
   final AppliedCoupon? appliedCoupon;
   final List<OrderItem> items;
   final bool useRewardsBalance;
+  final double appliedRewards;
   final String userId;
 
   UserOrder({
@@ -29,6 +30,7 @@ class UserOrder {
     this.appliedCoupon,
     required this.items,
     required this.useRewardsBalance,
+    this.appliedRewards = 0.0,
     required this.userId,
   });
 
@@ -82,6 +84,7 @@ class UserOrder {
       appliedCoupon: parseCoupon(data['appliedCoupon']),
       items: (data['items'] as List<dynamic>?)?.map((item) => OrderItem.fromMap(item)).toList() ?? [],
       useRewardsBalance: parseBool(data['useRewardsBalance']),
+      appliedRewards: parseDouble(data['appliedRewards']),
       userId: parseString(data['userId']),
     );
   }

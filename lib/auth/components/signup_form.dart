@@ -92,15 +92,6 @@ class _SignUpFormState extends State<SignUpForm> {
       await userCredential.user!.sendEmailVerification();
 
       if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('El correo de verificación ha sido enviado. Por favor verifique su correo electrónico.')),
-      );
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('¡Éxito! Usuario registrado.')),
-      );
-
     } on FirebaseAuthException catch (e) {
       if (!mounted) return;
       String message;
@@ -117,13 +108,31 @@ class _SignUpFormState extends State<SignUpForm> {
         default:
           message = 'Error al crear la cuenta. Intenta de nuevo.';
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message)),
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          content: Text(message),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Aceptar'),
+            ),
+          ],
+        ),
       );
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Error al crear la cuenta. Intenta de nuevo.')),
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          content: const Text('Error al crear la cuenta. Intenta de nuevo.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Aceptar'),
+            ),
+          ],
+        ),
       );
     }
   }

@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:click/theme.dart';
 import 'package:firebase_app_check/firebase_app_check.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
@@ -8,12 +10,16 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_remote_config/firebase_remote_config.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'app/cart/cart_provider.dart';
 import 'app/main.dart';
 import 'components/custom_loader.dart';
+import 'firebase_emulators.dart';
 import 'firebase_options.dart';
 import 'package:provider/provider.dart';
+import 'services/local_notifications_service.dart';
+import 'services/push_notifications_service.dart';
 
 class ThemeNotifier with ChangeNotifier {
   final ThemeData lightTheme;
@@ -36,6 +42,7 @@ Future<void> main() async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+  await connectToFirebaseEmulatorsIfNeeded();
 
   SystemChrome.setEnabledSystemUIMode(
     SystemUiMode.manual,
@@ -43,14 +50,34 @@ Future<void> main() async {
   );
   SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
 
-  try {
-    await FirebaseAppCheck.instance.activate(
-      androidProvider: AndroidProvider.playIntegrity,
-      appleProvider: AppleProvider.appAttest,
-    );
-  } catch (e) {
-    debugPrint('App Check activation failed (non-fatal): $e');
+  // App Check interferes with the emulator suite, so skip it in that mode.
+  if (!useFirebaseEmulator) {
+    try {
+      await FirebaseAppCheck.instance.activate(
+        androidProvider:
+            kDebugMode ? AndroidProvider.debug : AndroidProvider.playIntegrity,
+        appleProvider:
+            kDebugMode ? AppleProvider.debug : AppleProvider.appAttest,
+      );
+    } catch (e) {
+      debugPrint('App Check activation failed (non-fatal): $e');
+    }
   }
+
+  unawaited(PushNotificationsService.instance.init());
+  unawaited(LocalNotificationsService.instance.init());
+
+  String? lastFcmUid;
+  FirebaseAuth.instance.authStateChanges().listen((user) {
+    if (user != null) {
+      lastFcmUid = user.uid;
+      PushNotificationsService.instance.registerForCurrentUser();
+    } else if (lastFcmUid != null) {
+      final prev = lastFcmUid!;
+      lastFcmUid = null;
+      PushNotificationsService.instance.clearForUser(prev);
+    }
+  });
 
   runApp(
     MultiProvider(
@@ -100,7 +127,8 @@ class NetworkAwareAppState extends State<NetworkAwareApp> {
 
         return MaterialApp(
           debugShowCheckedModeBanner: false,
-          title: 'T_STY: Beyond',
+          navigatorKey: PushNotificationsService.navigatorKey,
+          title: 'T_STY: Mi Supercito',
           theme: themeNotifier.currentTheme,
           home: _isOnline
               ? const CheckUserScreen()
@@ -138,7 +166,6 @@ class NetworkAwareAppState extends State<NetworkAwareApp> {
   }
 }
 
-
 PageRouteBuilder<T> customPageRouteBuilder<T>(Widget page) {
   return PageRouteBuilder<T>(
     transitionDuration: const Duration(milliseconds: 500),
@@ -167,25 +194,53 @@ class CheckUserScreenState extends State<CheckUserScreen> {
     });
   }
 
+  static const String _flexibleDismissKey = 'flexible_update_dismissed_at';
+  static const Duration _flexibleCooldown = Duration(hours: 24);
+
   Future<void> _runStartupChecks() async {
     _UpdateType updateStatus = await _checkForUpdate();
 
     if (updateStatus == _UpdateType.forced) {
       if (mounted) _showUpdateDialog(forced: true);
-    } else if (updateStatus == _UpdateType.flexible) {
+    } else if (updateStatus == _UpdateType.flexible &&
+        await _shouldShowFlexiblePrompt()) {
       if (mounted) _showUpdateDialog(forced: false);
     } else {
       await _checkUser();
     }
   }
 
+  Future<bool> _shouldShowFlexiblePrompt() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final dismissedAt = prefs.getInt(_flexibleDismissKey) ?? 0;
+      final elapsed = DateTime.now().millisecondsSinceEpoch - dismissedAt;
+      return elapsed > _flexibleCooldown.inMilliseconds;
+    } catch (_) {
+      return true;
+    }
+  }
+
+  Future<void> _dismissFlexiblePrompt() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt(
+          _flexibleDismissKey, DateTime.now().millisecondsSinceEpoch);
+    } catch (_) {}
+  }
+
   Future<_UpdateType> _checkForUpdate() async {
     try {
       final remoteConfig = FirebaseRemoteConfig.instance;
 
+      await remoteConfig.setDefaults(const {
+        'min_required_version': '0.0.0',
+        'latest_recommended_version': '0.0.0',
+      });
+
       await remoteConfig.setConfigSettings(RemoteConfigSettings(
-        fetchTimeout: const Duration(seconds: 10),
-        minimumFetchInterval: const Duration(hours: 1), // Set back to 1 hour
+        fetchTimeout: const Duration(seconds: 5),
+        minimumFetchInterval: const Duration(hours: 1),
       ));
 
       await remoteConfig.fetchAndActivate();
@@ -242,13 +297,15 @@ class CheckUserScreenState extends State<CheckUserScreen> {
           child: AlertDialog(
             title: Text(forced ? "Actualización Requerida" : "Actualización Disponible"),
             content: Text(forced
-                ? "Debes actualizar la aplicación para continuar usando T_STY: Beyond."
-                : "¡Hay una nueva versión de T_STY: Beyond disponible con nuevas funciones!"),
+                ? "Debes actualizar la aplicación para continuar usando T_STY: Mi Supercito."
+                : "¡Hay una nueva versión de T_STY: Mi Supercito disponible con nuevas funciones!"),
             actions: [
               if (!forced)
                 TextButton(
-                  onPressed: () {
-                    Navigator.of(context).pop();
+                  onPressed: () async {
+                    final nav = Navigator.of(context);
+                    await _dismissFlexiblePrompt();
+                    nav.pop();
                     _checkUser();
                   },
                   child: const Text("Más tarde"),
@@ -293,21 +350,8 @@ class CheckUserScreenState extends State<CheckUserScreen> {
   }
 
   Future<void> _checkUser() async {
-    // By this point, Firebase.initializeApp() ran in main() AND
-    // _checkForUpdate() just finished a Remote Config network call,
-    // so the native auth SDK has had several seconds to restore the
-    // persisted token from EncryptedSharedPreferences / Keychain.
-    //
-    // IMPORTANT: We intentionally do NOT call user.reload() here.
-    // reload() makes a network request that can fail (App Check,
-    // bad network, expired refresh token), and on some SDK versions
-    // a failed reload() clears currentUser as a side effect — which
-    // would silently log the user out.  Individual Firestore/API
-    // calls will fail gracefully if the account is truly invalid.
     User? user = FirebaseAuth.instance.currentUser;
 
-    // If null, give the auth SDK one more moment — on very slow
-    // devices the keystore read may still be in flight.
     if (user == null) {
       user = await FirebaseAuth.instance
           .authStateChanges()
@@ -317,9 +361,6 @@ class CheckUserScreenState extends State<CheckUserScreen> {
       user ??= FirebaseAuth.instance.currentUser;
     }
 
-    // Always go to MainMenuScreen — guest browsing is supported.
-    // Individual screens check FirebaseAuth.instance.currentUser to gate
-    // authenticated features (cart, checkout, orders, settings, etc.).
     if (mounted) {
       Navigator.of(context).pushReplacement(
           customPageRouteBuilder(const MainMenuScreen()));

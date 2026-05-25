@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../constants/app_colors.dart';
+import '../../components/bottom_fade.dart';
 import '../../components/shimmer_placeholder.dart';
 import '../../constants/app_images.dart';
 import 'order_detail_page.dart';
@@ -102,7 +103,7 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
           centerTitle: true,
         ),
         body: _currentIndex == 0
-            ? _buildOrderList()
+            ? BottomFade(child: _buildOrderList())
             : _selectedOrder != null && _selectedOrderIndex != null
             ? OrderDetailPage(
           order: _selectedOrder!,
@@ -308,6 +309,23 @@ class OrderCard extends StatelessWidget {
                         ),
                       ],
                     ),
+                    if (order.appliedRewards > 0) ...[
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          const Icon(Icons.account_balance_wallet,
+                              size: 16, color: Colors.grey),
+                          const SizedBox(width: 4),
+                          Text(
+                            'Saldo usado: \$${order.appliedRewards.toStringAsFixed(2)}',
+                            style: const TextStyle(
+                              fontSize: 14,
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ],
                 ),
               ),

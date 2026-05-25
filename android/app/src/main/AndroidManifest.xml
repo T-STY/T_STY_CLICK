@@ -1,6 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application
-        android:label="T_STY: Beyond"
+        android:label="T_STY"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
         android:usesCleartextTraffic="false"
@@ -34,6 +34,12 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+        <!-- FCM uses this channel for notifications that don't specify one.
+             The 'orders' channel is created at high importance in
+             LocalNotificationsService so notifications show as heads-up. -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="orders" />
         <meta-data
             android:name="com.google.android.geo.API_KEY"
             android:value="AIzaSyBHIP391u2W_3lOpOT3znjIzD6L3Fhm2Fw" />
