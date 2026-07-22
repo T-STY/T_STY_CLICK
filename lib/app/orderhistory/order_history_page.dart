@@ -2,6 +2,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:intl/intl.dart';
 import '../../../constants/app_colors.dart';
 import '../../components/bottom_fade.dart';
 import '../../components/shimmer_placeholder.dart';
@@ -20,14 +21,17 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
   int _currentIndex = 0;
   UserOrder? _selectedOrder;
   int? _selectedOrderIndex;
+  // When false, the visible list is filtered to orders from the last 30
+  // days. Tapping "Ver más antiguos" lifts the filter and shows the full
+  // history. Older orders ARE NOT deleted any more — the destructive
+  // cleanup that used to nuke anything past 30 days is gone, replaced by
+  // an admin-side CF archive trigger (functions/index.js) that mirrors
+  // every order delete to `users/{uid}/order_archive/{id}` for support.
+  bool _showAllOrders = false;
 
   Stream<List<UserOrder>> _fetchOrderHistory() {
     final user = FirebaseAuth.instance.currentUser;
-    if (user == null) {
-      return Stream.value([]);
-    }
-
-    final cutoffDate = DateTime.now().subtract(const Duration(days: 30));
+    if (user == null) return Stream.value([]);
 
     return FirebaseFirestore.instance
         .collection('users')
@@ -35,24 +39,9 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
         .collection('orderHistory')
         .orderBy('timestamp', descending: true)
         .snapshots()
-        .map((snapshot) {
-      final orders = snapshot.docs.map((doc) {
-        final order = UserOrder.fromDocument(doc);
-        if (order.timestamp.isBefore(cutoffDate)) {
-          FirebaseFirestore.instance
-              .collection('users')
-              .doc(user.uid)
-              .collection('orderHistory')
-              .doc(doc.id)
-              .delete();
-        }
-        return order;
-      }).toList();
-
-      return orders
-          .where((order) => order.timestamp.isAfter(cutoffDate))
-          .toList();
-    });
+        .map((snapshot) => snapshot.docs
+            .map((doc) => UserOrder.fromDocument(doc))
+            .toList());
   }
 
   void _navigateToOrderDetail(UserOrder order, int index) {
@@ -163,20 +152,46 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
             child: Text('No tienes pedidos en tu historial.'),
           );
         } else {
-          final orders = snapshot.data!;
+          final allOrders = snapshot.data!;
+          // Default view = last 30 days. Anything older sits behind the
+          // "Ver más antiguos" expander so the most recent orders stay
+          // glanceable but the user can still self-serve their history.
+          final cutoff = DateTime.now().subtract(const Duration(days: 30));
+          final recent = allOrders
+              .where((o) => o.timestamp.isAfter(cutoff))
+              .toList();
+          final older = allOrders
+              .where((o) => !o.timestamp.isAfter(cutoff))
+              .toList();
+
+          final visible = _showAllOrders ? allOrders : recent;
+          final hasOlder = older.isNotEmpty;
+          // Total cells = visible orders + (optional expander row) + bottom
+          // padding so nothing sits behind the nav bar.
+          final extras = (hasOlder ? 1 : 0) + 1;
+
           return ListView.builder(
-            itemCount: orders.length + 1,
+            itemCount: visible.length + extras,
             itemBuilder: (context, index) {
-              if (index < orders.length) {
-                final order = orders[index];
+              if (index < visible.length) {
+                final order = visible[index];
                 return OrderCard(
                   order: order,
                   index: index + 1,
                   onTap: () => _navigateToOrderDetail(order, index + 1),
                 );
-              } else {
-                return const SizedBox(height: 120);
               }
+              // Expander row, only when there are actually older orders.
+              if (hasOlder && index == visible.length) {
+                return _OlderHistoryToggle(
+                  expanded: _showAllOrders,
+                  olderCount: older.length,
+                  onTap: () => setState(
+                      () => _showAllOrders = !_showAllOrders),
+                );
+              }
+              // Bottom spacer for the nav bar.
+              return const SizedBox(height: 120);
             },
           );
         }
@@ -197,18 +212,46 @@ class OrderCard extends StatelessWidget {
     required this.onTap,
   });
 
+  /// Friendly Spanish date that adapts to recency:
+  ///   - same calendar day  → "Hoy · 14:30"
+  ///   - calendar day before → "Ayer · 14:30"
+  ///   - same year          → "2 Jun · 14:30"
+  ///   - older year         → "2 Jun 2025 · 14:30"
+  /// Same-row footprint as the old `02/06/2026 14:30` but scans faster
+  /// because recent orders skip the date entirely.
   String _formatDate(DateTime date) {
-    return "${date.day.toString().padLeft(2, '0')}/"
-        "${date.month.toString().padLeft(2, '0')}/"
-        "${date.year} "
-        "${date.hour.toString().padLeft(2, '0')}:"
-        "${date.minute.toString().padLeft(2, '0')}";
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final dateDay = DateTime(date.year, date.month, date.day);
+    final diffDays = today.difference(dateDay).inDays;
+    final time = DateFormat('HH:mm').format(date);
+
+    if (diffDays == 0) return 'Hoy · $time';
+    if (diffDays == 1) return 'Ayer · $time';
+    final pattern = date.year == now.year ? 'd MMM' : 'd MMM yyyy';
+    // intl renders Spanish months lowercase ("2 jun"). Cap the first
+    // letter of the month name so it matches the rest of the labels
+    // on the row ("Hoy"/"Ayer" both start uppercase too).
+    final formatted = DateFormat(pattern, 'es').format(date);
+    final capped = formatted.replaceFirstMapped(
+      RegExp(r'[a-záéíóúñ]'),
+      (m) => m[0]!.toUpperCase(),
+    );
+    return '$capped · $time';
+  }
+
+  static String _shortId(String id) {
+    final clean = id.trim();
+    if (clean.length <= 6) return clean.toUpperCase();
+    return clean.substring(clean.length - 6).toUpperCase();
   }
 
   Color _getStatusColor(String status) {
     switch (status.toLowerCase()) {
       case 'en revision':
         return Colors.orange.shade400;
+      case 'preparando':
+        return Colors.purple.shade400;
       case 'enviado':
         return Colors.blue.shade400;
       case 'entregado':
@@ -230,7 +273,9 @@ class OrderCard extends StatelessWidget {
         margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
         child: Padding(
           padding: const EdgeInsets.all(16.0),
-          child: Row(
+          child: Stack(
+            children: [
+              Row(
             children: [
               ClipRRect(
                 borderRadius: BorderRadius.circular(12),
@@ -256,12 +301,19 @@ class OrderCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Pedido #${order.id}',
+                      // Show the last 6 chars uppercased — Firestore doc
+                      // ids are 20-char gibberish, full id makes the row
+                      // unreadable. Last 6 stays collision-free across a
+                      // user's own history (which is what we render here)
+                      // and reads more like a real order number.
+                      'Pedido #${_shortId(order.id)}',
                       style: const TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
                         color: AppColors.textPrimary,
                       ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                     const SizedBox(height: 8),
                     Row(
@@ -300,7 +352,11 @@ class OrderCard extends StatelessWidget {
                             size: 16, color: Colors.grey),
                         const SizedBox(width: 4),
                         Text(
-                          order.status,
+                          // Show the user-facing label — pickup orders in
+                          // "Enviado" read as "Listo para recoger". The
+                          // underlying status keyword still drives the
+                          // colour so the visual state stays consistent.
+                          order.displayStatus,
                           style: TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.w600,
@@ -336,6 +392,109 @@ class OrderCard extends StatelessWidget {
               ),
             ],
           ),
+              // Small fulfillment marker pinned to the top-right corner —
+              // replaces the big chip that used to sit under the order id.
+              Positioned(
+                top: 0,
+                right: 0,
+                child: _FulfillmentMark(isPickup: order.isInstorePickup),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Row that sits at the end of the recent-orders list. When the user has
+/// any orders older than 30 days, this acts as a toggle:
+///   - collapsed → "Ver pedidos anteriores (N)"
+///   - expanded  → "Mostrar solo los últimos 30 días"
+/// Older orders are NEVER deleted any more (the destructive cleanup the
+/// page used to do is gone) — the expander just lifts the visible filter
+/// against the same live stream.
+class _OlderHistoryToggle extends StatelessWidget {
+  final bool expanded;
+  final int olderCount;
+  final VoidCallback onTap;
+
+  const _OlderHistoryToggle({
+    required this.expanded,
+    required this.olderCount,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(14),
+          child: Ink(
+            decoration: BoxDecoration(
+              color: const Color(0xFFF6F7F9),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: const Color(0xFFE3E5EC)),
+            ),
+            padding: const EdgeInsets.symmetric(
+                horizontal: 14, vertical: 14),
+            child: Row(
+              children: [
+                Icon(
+                  expanded ? Icons.unfold_less : Icons.unfold_more,
+                  size: 18,
+                  color: const Color(0xFF141414),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    expanded
+                        ? 'Mostrar solo los últimos 30 días'
+                        : 'Ver pedidos anteriores ($olderCount)',
+                    style: const TextStyle(
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFF141414),
+                      letterSpacing: 0.1,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Tiny fulfillment marker pinned to the top-right corner of an OrderCard —
+/// storefront for in-store pickup, delivery-moto for home delivery. Replaces
+/// the old full-width pill; a Tooltip keeps the meaning discoverable.
+class _FulfillmentMark extends StatelessWidget {
+  final bool isPickup;
+  const _FulfillmentMark({required this.isPickup});
+
+  @override
+  Widget build(BuildContext context) {
+    final color = isPickup ? AppColors.primary : Colors.orange.shade800;
+    return Tooltip(
+      message: isPickup ? 'Recoger en tienda' : 'Entrega a domicilio',
+      child: Container(
+        padding: const EdgeInsets.all(6),
+        decoration: BoxDecoration(
+          color: (isPickup ? AppColors.primary : Colors.orange)
+              .withValues(alpha: 0.10),
+          shape: BoxShape.circle,
+        ),
+        child: Icon(
+          isPickup ? Icons.storefront : Icons.delivery_dining,
+          size: 16,
+          color: color,
         ),
       ),
     );

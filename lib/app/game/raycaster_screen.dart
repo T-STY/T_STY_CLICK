@@ -358,6 +358,7 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
   double _damageCooldown = 0;
 
   late double _saldo;
+  late double _lastCommitted;
   int _hiScore = 0;
 
   _GameState _state = _GameState.start;
@@ -399,6 +400,9 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
   int _modSeqIdx = 0;
   bool _modMenuOpen = false;
   int _modCursor = 0;
+  // Dev tool: the mod menu makes the payout unlimited, so only the admin
+  // allow-list can reach it. Resolved once — the uid can't change mid-game.
+  bool _isAdmin = false;
 
   bool _modUnlimitedAmmo = false;
   bool _modAimbot       = false;
@@ -412,6 +416,8 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
   void initState() {
     super.initState();
     _saldo = widget.currentSaldo;
+    _lastCommitted = widget.currentSaldo;
+    _isAdmin = isArcadeAdmin();
     widget.controller.addListener(_onControllerEvent);
     HighScoreService.load('raycaster').then((v) => setState(() => _hiScore = v));
   }
@@ -439,7 +445,8 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
       }
       return;
     }
-    if (event.isDown && _state == _GameState.playing) {
+    // Non-admins: sequence isn't even tracked, so the menu can't be opened.
+    if (_isAdmin && event.isDown && _state == _GameState.playing) {
       if (event.button == _kModSequence[_modSeqIdx]) {
         _modSeqIdx++;
         if (_modSeqIdx >= _kModSequence.length) {
@@ -545,6 +552,10 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
         currentSaldo: _saldo);
     if (ns == null) return;
     if (!mounted) return;
+    // Resync the ledger: the replay charge already moved the server saldo, so
+    // without this _lastCommitted stays one play-cost above _saldo and the
+    // next credit computes a negative delta — debiting the player.
+    _lastCommitted = ns;
     setState(() => _saldo = ns);
     widget.onSaldoChanged(ns);
     _startGame();
@@ -1198,15 +1209,24 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
   }
 
   Future<void> _updateFirestore(double newSaldo) async {
-    try {
-      final userCardRef = FirebaseFirestore.instance
-          .collection('users').doc(widget.userId)
-          .collection('rewardsCard').doc('cardInfo');
-      final batch = FirebaseFirestore.instance.batch();
-      batch.update(userCardRef, {'saldo': newSaldo});
-      batch.update(widget.rewardsDocRef, {'saldo': newSaldo});
-      await batch.commit();
-    } catch (e) { debugPrint('MazmorraInfernal Firestore: $e'); }
+    // Routes through the server-side `updateRewardsSaldo`
+    // callable instead of writing rewards/{docId} directly
+    // (admin-only collection — direct writes failed silently
+    // for every non-admin user). The CF resolves the wallet,
+    // applies the delta in a transaction, and mirrors the
+    // result to the owner-readable card cache.
+    final delta = newSaldo - _lastCommitted;
+    if (delta == 0) return;
+    final result = await applyArcadeDelta(
+      delta: delta,
+      reason: 'raycaster',
+    );
+    if (result != null) {
+      _lastCommitted = result;
+      if (mounted && _saldo != result) {
+        setState(() => _saldo = result);
+      }
+    }
   }
 
   @override
@@ -1252,7 +1272,7 @@ class _RaycasterScreenState extends State<RaycasterScreen> {
         if (_state == _GameState.start)  _buildStartOverlay(),
         if (_state == _GameState.dead)   _buildDeathOverlay(),
         if (_paused && _state == _GameState.playing) _buildPauseOverlay(),
-        if (_modMenuOpen) _buildModMenu(),
+        if (_isAdmin && _modMenuOpen) _buildModMenu(),
       ]),
     );
   }

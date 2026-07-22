@@ -11,6 +11,7 @@ import 'flappy_bird_screen.dart';
 import 'game_saldo.dart';
 import 'high_score_service.dart';
 import 'logic_grid_screen.dart';
+import 'mario_game_screen.dart';
 import 'match3_screen.dart';
 import 'maze_chase_screen.dart';
 import 'pong_screen.dart';
@@ -82,6 +83,10 @@ typedef ArcadeGameBuilder = Widget Function({
   required double currentSaldo,
   required ArcadeInputController controller,
   required void Function(double) onSaldoChanged,
+  // Cabinet language setting. Without this the cartridges couldn't see it and
+  // every in-game string was hardcoded — Spanish players read "GAME OVER" and
+  // English players read "Nueva Partida".
+  required AppLanguage language,
 });
 
 class ArcadeGameDef {
@@ -101,66 +106,84 @@ class ArcadeGameDef {
 final List<ArcadeGameDef> kArcadeGames = [
   ArcadeGameDef(id: 'tetris',   emoji: '🟦', title: 'Block Drop',   titleEs: 'Bloques Caídos',
     builder: ({required userId, required rewardsDocRef, required currentSaldo,
-        required controller, required onSaldoChanged}) =>
+        required controller, required onSaldoChanged, required language}) =>
       TetrisScreen(userId: userId, rewardsDocRef: rewardsDocRef,
-        currentSaldo: currentSaldo, controller: controller, onSaldoChanged: onSaldoChanged)),
+        currentSaldo: currentSaldo, controller: controller,
+        onSaldoChanged: onSaldoChanged, language: language)),
   ArcadeGameDef(id: 'logic',    emoji: '💣', title: 'Minefield',    titleEs: 'Campo Minado',
     builder: ({required userId, required rewardsDocRef, required currentSaldo,
-        required controller, required onSaldoChanged}) =>
+        required controller, required onSaldoChanged, required language}) =>
       LogicGridScreen(userId: userId, rewardsDocRef: rewardsDocRef,
-        currentSaldo: currentSaldo, controller: controller, onSaldoChanged: onSaldoChanged)),
+        currentSaldo: currentSaldo, controller: controller,
+        onSaldoChanged: onSaldoChanged, language: language)),
   ArcadeGameDef(id: 'match3',   emoji: '🍬', title: 'Candy Swap',   titleEs: 'Cascada Dulce',
     builder: ({required userId, required rewardsDocRef, required currentSaldo,
-        required controller, required onSaldoChanged}) =>
+        required controller, required onSaldoChanged, required language}) =>
       Match3Screen(userId: userId, rewardsDocRef: rewardsDocRef,
-        currentSaldo: currentSaldo, controller: controller, onSaldoChanged: onSaldoChanged)),
+        currentSaldo: currentSaldo, controller: controller,
+        onSaldoChanged: onSaldoChanged, language: language)),
   ArcadeGameDef(id: 'shooter',  emoji: '🚀', title: 'Star Blaster', titleEs: 'Caza Estelar',
     supportsDiagonal: true,
     builder: ({required userId, required rewardsDocRef, required currentSaldo,
-        required controller, required onSaldoChanged}) =>
+        required controller, required onSaldoChanged, required language}) =>
       SpaceShooterScreen(userId: userId, rewardsDocRef: rewardsDocRef,
-        currentSaldo: currentSaldo, controller: controller, onSaldoChanged: onSaldoChanged)),
+        currentSaldo: currentSaldo, controller: controller,
+        onSaldoChanged: onSaldoChanged, language: language)),
   ArcadeGameDef(id: 'maze',     emoji: '👻', title: 'Ghost Maze',   titleEs: 'Comecocos',
     builder: ({required userId, required rewardsDocRef, required currentSaldo,
-        required controller, required onSaldoChanged}) =>
+        required controller, required onSaldoChanged, required language}) =>
       MazeChasScreen(userId: userId, rewardsDocRef: rewardsDocRef,
-        currentSaldo: currentSaldo, controller: controller, onSaldoChanged: onSaldoChanged)),
+        currentSaldo: currentSaldo, controller: controller,
+        onSaldoChanged: onSaldoChanged, language: language)),
   ArcadeGameDef(id: 'raycaster',emoji: '🔥', title: 'Crypt Doom',   titleEs: 'Cripta Maldita',
     supportsDiagonal: true,
     builder: ({required userId, required rewardsDocRef, required currentSaldo,
-        required controller, required onSaldoChanged}) =>
+        required controller, required onSaldoChanged, required language}) =>
       RaycasterScreen(userId: userId, rewardsDocRef: rewardsDocRef,
-        currentSaldo: currentSaldo, controller: controller, onSaldoChanged: onSaldoChanged)),
+        currentSaldo: currentSaldo, controller: controller,
+        onSaldoChanged: onSaldoChanged, language: language)),
   ArcadeGameDef(id: 'hopper',   emoji: '🐸', title: 'Frog Dash',    titleEs: 'Rana Saltarina',
     builder: ({required userId, required rewardsDocRef, required currentSaldo,
-        required controller, required onSaldoChanged}) =>
+        required controller, required onSaldoChanged, required language}) =>
       TrafficHopperScreen(userId: userId, rewardsDocRef: rewardsDocRef,
-        currentSaldo: currentSaldo, controller: controller, onSaldoChanged: onSaldoChanged)),
+        currentSaldo: currentSaldo, controller: controller,
+        onSaldoChanged: onSaldoChanged, language: language)),
   ArcadeGameDef(id: 'snake',    emoji: '🐍', title: 'Neon Snake',   titleEs: 'Víbora Veloz',
     builder: ({required userId, required rewardsDocRef, required currentSaldo,
-        required controller, required onSaldoChanged}) =>
+        required controller, required onSaldoChanged, required language}) =>
       SnakeGameScreen(userId: userId, rewardsDocRef: rewardsDocRef,
-        currentSaldo: currentSaldo, controller: controller, onSaldoChanged: onSaldoChanged)),
+        currentSaldo: currentSaldo, controller: controller,
+        onSaldoChanged: onSaldoChanged, language: language)),
   ArcadeGameDef(id: 'flappy',   emoji: '✈️', title: 'Kamikaze Flight', titleEs: 'Vuelo Kamikaze',
     builder: ({required userId, required rewardsDocRef, required currentSaldo,
-        required controller, required onSaldoChanged}) =>
+        required controller, required onSaldoChanged, required language}) =>
       FlappyBirdScreen(userId: userId, rewardsDocRef: rewardsDocRef,
-        currentSaldo: currentSaldo, controller: controller, onSaldoChanged: onSaldoChanged)),
+        currentSaldo: currentSaldo, controller: controller,
+        onSaldoChanged: onSaldoChanged, language: language)),
   ArcadeGameDef(id: 'runner', emoji: '🦕', title: 'Dino Dash',      titleEs: 'Dino Escape',
     builder: ({required userId, required rewardsDocRef, required currentSaldo,
-        required controller, required onSaldoChanged}) =>
+        required controller, required onSaldoChanged, required language}) =>
       EndlessRunnerScreen(userId: userId, rewardsDocRef: rewardsDocRef,
-        currentSaldo: currentSaldo, controller: controller, onSaldoChanged: onSaldoChanged)),
+        currentSaldo: currentSaldo, controller: controller,
+        onSaldoChanged: onSaldoChanged, language: language)),
   ArcadeGameDef(id: 'breakout', emoji: '🧱', title: 'Neon Break',   titleEs: 'Muro de Neón',
     builder: ({required userId, required rewardsDocRef, required currentSaldo,
-        required controller, required onSaldoChanged}) =>
+        required controller, required onSaldoChanged, required language}) =>
       BreakoutScreen(userId: userId, rewardsDocRef: rewardsDocRef,
-        currentSaldo: currentSaldo, controller: controller, onSaldoChanged: onSaldoChanged)),
+        currentSaldo: currentSaldo, controller: controller,
+        onSaldoChanged: onSaldoChanged, language: language)),
   ArcadeGameDef(id: 'pong', emoji: '🏓', title: 'Volt Pong',        titleEs: 'Contragolpe',
     builder: ({required userId, required rewardsDocRef, required currentSaldo,
-        required controller, required onSaldoChanged}) =>
+        required controller, required onSaldoChanged, required language}) =>
       PongScreen(userId: userId, rewardsDocRef: rewardsDocRef,
-        currentSaldo: currentSaldo, controller: controller, onSaldoChanged: onSaldoChanged)),
+        currentSaldo: currentSaldo, controller: controller,
+        onSaldoChanged: onSaldoChanged, language: language)),
+  ArcadeGameDef(id: 'mario', emoji: '🍄', title: 'Castle Plumber',  titleEs: 'Plomero del Castillo',
+    builder: ({required userId, required rewardsDocRef, required currentSaldo,
+        required controller, required onSaldoChanged, required language}) =>
+      MarioGameScreen(userId: userId, rewardsDocRef: rewardsDocRef,
+        currentSaldo: currentSaldo, controller: controller,
+        onSaldoChanged: onSaldoChanged, language: language)),
 ];
 
 class ArcadeCenterScreen extends StatefulWidget {
@@ -188,7 +211,39 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen>
   final List<GlobalKey> _settingKeys = List.generate(22, (_) => GlobalKey());
   int? _lastPlayedIndex;
   ArcadeGameDef? _activeGame;
-  final List<int> _highScores = List.filled(12, 0);
+
+  /// True while the launch-cost confirmation is on screen. Rendered inside the
+  /// console bezel (under the CRT overlay) rather than as a Material dialog so
+  /// it reads as part of the machine.
+  bool _confirmPlay = false;
+
+  /// Set when a game screen asks (via [arcadeReplayConfirm]) to charge for a
+  /// restart. The shell owns the prompt so both spend points look identical.
+  Completer<bool>? _pendingReplay;
+
+  void _onReplayConfirmRequest() {
+    final c = arcadeReplayConfirm.value;
+    if (c == null || c.isCompleted) return;
+    setState(() => _pendingReplay = c);
+  }
+
+  /// Single exit for both prompts: A/Start confirms, B/Select cancels.
+  void _resolveConfirm(bool ok) {
+    final pending = _pendingReplay;
+    if (pending != null) {
+      arcadeReplayConfirm.value = null;
+      if (!pending.isCompleted) pending.complete(ok);
+      setState(() => _pendingReplay = null);
+      return;
+    }
+    setState(() => _confirmPlay = false);
+    if (ok) _startSelectedGame();
+  }
+  // Sized to the registry — any game added to `kArcadeGames` gets
+  // a slot automatically. Hardcoded 12 here previously meant mario
+  // (index 12) crashed `_highScores[idx]` with RangeError, blocking
+  // navigation to the last game.
+  final List<int> _highScores = List.filled(kArcadeGames.length, 0);
   int? _newRecordIndex;
   Timer? _recordTimer;
 
@@ -324,6 +379,7 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen>
     WidgetsBinding.instance.addObserver(this);
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     arcadeInsufficientSaldoTick.addListener(_flashInsufficient);
+    arcadeReplayConfirm.addListener(_onReplayConfirmRequest);
     _ctrl = ArcadeInputController();
     _saldo = widget.currentSaldo;
     _ctrl.addListener(_handleShellEvent);
@@ -370,6 +426,11 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     arcadeInsufficientSaldoTick.removeListener(_flashInsufficient);
+    arcadeReplayConfirm.removeListener(_onReplayConfirmRequest);
+    // Never leave a game screen awaiting an answer that can no longer come.
+    final pending = _pendingReplay;
+    if (pending != null && !pending.isCompleted) pending.complete(false);
+    arcadeReplayConfirm.value = null;
     _insufficientTimer?.cancel();
     _splashTimer?.cancel();
     _recordTimer?.cancel();
@@ -552,6 +613,18 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen>
       return;
     }
 
+    // The cost prompt is modal: it swallows every button so the D-pad can't
+    // shuffle the selection out from under the game the player is confirming,
+    // and so Select can't quit the game while a replay charge is pending.
+    if (_confirmPlay || _pendingReplay != null) {
+      if (btn == ArcadeButton.a || btn == ArcadeButton.start) {
+        _resolveConfirm(true);
+      } else if (btn == ArcadeButton.b || btn == ArcadeButton.select) {
+        _resolveConfirm(false);
+      }
+      return;
+    }
+
     if (_activeGame == null) {
       const totalOpts = 22;
 
@@ -633,25 +706,39 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen>
     }
   }
 
-  Future<void> _launchSelected() async {
+  /// Every entry point into a game funnels through here, so the cost
+  /// confirmation can't be bypassed by the carousel, the hero card or the
+  /// "recently played" tile. It only asks — the charge happens in
+  /// [_startSelectedGame] once the player confirms.
+  void _launchSelected() {
     final game = kArcadeGames[_selectedIndex];
     if (game.locked || game.builder == null) return;
+    // Don't bother asking for a coin they don't have.
     if (_saldo < kArcadePlayCost) {
       _flashInsufficient();
       return;
     }
-    final newSaldo = _saldo - kArcadePlayCost;
-    try {
-      final userCardRef = FirebaseFirestore.instance
-          .collection('users').doc(widget.userId)
-          .collection('rewardsCard').doc('cardInfo');
-      final batch = FirebaseFirestore.instance.batch();
-      batch.update(userCardRef, {'saldo': newSaldo});
-      batch.update(widget.rewardsDocRef, {'saldo': newSaldo});
-      await batch.commit();
-    } catch (_) {}
+    setState(() => _confirmPlay = true);
+  }
+
+  Future<void> _startSelectedGame() async {
+    final game = kArcadeGames[_selectedIndex];
+    if (game.locked || game.builder == null) return;
+    // Re-checked at spend time: the balance can move while the prompt is up.
+    if (_saldo < kArcadePlayCost) {
+      _flashInsufficient();
+      return;
+    }
+    final ns = await applyArcadeDelta(
+      delta: -kArcadePlayCost,
+      reason: 'arcade_center_play',
+    );
+    if (ns == null) {
+      debugPrint('arcade_center_play: updateRewardsSaldo failed; aborting launch');
+      return;
+    }
     if (!mounted) return;
-    setState(() { _saldo = newSaldo; _activeGame = game; _lastPlayedIndex = _selectedIndex; });
+    setState(() { _saldo = ns; _activeGame = game; _lastPlayedIndex = _selectedIndex; });
   }
 
   @override
@@ -699,8 +786,8 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen>
                 Flexible(
                   child: Text(
                     _t(
-                      'Saldo insuficiente · necesitas \$${kArcadePlayCost.toStringAsFixed(0)} para jugar',
-                      'Not enough balance · you need \$${kArcadePlayCost.toStringAsFixed(0)} to play',
+                      'Saldo insuficiente · necesitas ${kArcadePlayCost.toStringAsFixed(0)} puntos para jugar',
+                      'Not enough balance · you need ${kArcadePlayCost.toStringAsFixed(0)} points to play',
                     ),
                     style: const TextStyle(
                         color: Colors.white,
@@ -928,6 +1015,12 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen>
             },
             child: (_activeGame == null || _poweringOff) ? _buildNeonGrid() : _buildActiveGame(),
           ),
+          // Drawn at bezel level (over the hub AND over a running game, since
+          // the replay prompt fires mid-game) but still UNDER the CRT pass, so
+          // the scanlines fall across it and it reads as part of the machine
+          // instead of an OS dialog floating over the cabinet.
+          if (_confirmPlay || _pendingReplay != null)
+            Positioned.fill(child: _buildPlayConfirm()),
           Positioned.fill(
             child: IgnorePointer(
               child: CustomPaint(painter: _CrtOverlayPainter(phosphor: _accent)),
@@ -949,6 +1042,153 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen>
         _buildHubHintBar(),
       ]),
     ]);
+  }
+
+  /// "Insert coin" prompt: states the cost before any points are spent.
+  /// A/Start confirms, B/Select cancels, and both are also tappable.
+  Widget _buildPlayConfirm() {
+    final idx = _selectedIndex.clamp(0, kArcadeGames.length - 1);
+    final game = kArcadeGames[idx];
+    final neon = _kNeonColors[idx % _kNeonColors.length];
+    final cost = kArcadePlayCost.toStringAsFixed(0);
+    final bool isReplay = _pendingReplay != null;
+
+    return GestureDetector(
+      // Absorbs taps on the scrim so the grid behind stays inert.
+      onTap: () {},
+      child: Container(
+        color: Colors.black.withOpacity(0.82),
+        alignment: Alignment.center,
+        padding: const EdgeInsets.symmetric(horizontal: 18),
+        child: Container(
+          constraints: const BoxConstraints(maxWidth: 320),
+          padding: const EdgeInsets.fromLTRB(18, 16, 18, 14),
+          decoration: BoxDecoration(
+            color: const Color(0xFF07070F),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: neon, width: 1.6),
+            boxShadow: [
+              BoxShadow(color: neon.withOpacity(0.45), blurRadius: 18),
+              BoxShadow(color: Colors.black.withOpacity(0.6), blurRadius: 22),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                isReplay
+                    ? _t('¿OTRA PARTIDA?', 'PLAY AGAIN?')
+                    : _t('¿INSERTAR MONEDA?', 'INSERT COIN?'),
+                style: TextStyle(
+                  color: neon,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 3.0,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                '${game.emoji}  ${_t(game.titleEs, game.title).toUpperCase()}',
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 1.2,
+                ),
+              ),
+              const SizedBox(height: 14),
+              Container(height: 1, color: neon.withOpacity(0.35)),
+              const SizedBox(height: 14),
+              Text(
+                _t('COSTO DE PARTIDA', 'COST TO PLAY'),
+                style: TextStyle(
+                  color: Colors.white.withOpacity(0.55),
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 2.0,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                _t('-$cost PUNTOS', '-$cost POINTS'),
+                style: const TextStyle(
+                  color: Color(0xFFFFC83D),
+                  fontSize: 26,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 2.0,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                _t('Saldo actual: ${_saldo.toStringAsFixed(0)}',
+                    'Current balance: ${_saldo.toStringAsFixed(0)}'),
+                style: TextStyle(
+                  color: Colors.white.withOpacity(0.6),
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0.8,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: _confirmKey(
+                      label: _t('B · CANCELAR', 'B · CANCEL'),
+                      color: Colors.white.withOpacity(0.45),
+                      filled: false,
+                      onTap: () => _resolveConfirm(false),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _confirmKey(
+                      label: isReplay
+                          ? _t('A · JUGAR OTRA', 'A · PLAY AGAIN')
+                          : _t('A · JUGAR', 'A · PLAY'),
+                      color: neon,
+                      filled: true,
+                      onTap: () => _resolveConfirm(true),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _confirmKey({
+    required String label,
+    required Color color,
+    required bool filled,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 11),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: filled ? color.withOpacity(0.18) : Colors.transparent,
+          borderRadius: BorderRadius.circular(9),
+          border: Border.all(color: color, width: 1.3),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: filled ? Colors.white : color,
+            fontSize: 11,
+            fontWeight: FontWeight.w900,
+            letterSpacing: 1.4,
+          ),
+        ),
+      ),
+    );
   }
 
   Widget _buildHubBackground() {
@@ -1193,6 +1433,7 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen>
                         game: game,
                         userId: widget.userId,
                         rewardsDocRef: widget.rewardsDocRef,
+                        language: _language,
                       ),
                     ),
                   ),
@@ -1292,6 +1533,7 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen>
               game: game,
               userId: widget.userId,
               rewardsDocRef: widget.rewardsDocRef,
+              language: _language,
             )),
             Positioned(bottom: 0, left: 0, right: 0,
               child: Container(
@@ -1898,6 +2140,7 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen>
       currentSaldo: _saldo,
       controller: _ctrl,
       onSaldoChanged: (newSaldo) => setState(() => _saldo = newSaldo),
+      language: _language,
     );
   }
 
@@ -1987,8 +2230,12 @@ class _HeroDemoGame extends StatefulWidget {
   final ArcadeGameDef game;
   final String userId;
   final DocumentReference rewardsDocRef;
+  // The attract-mode demo renders a real cartridge, so it needs the cabinet
+  // language too — otherwise the preview would sit in Spanish while the rest
+  // of the machine is in English.
+  final AppLanguage language;
   const _HeroDemoGame({super.key, required this.game, required this.userId,
-      required this.rewardsDocRef});
+      required this.rewardsDocRef, this.language = AppLanguage.spanish});
   @override State<_HeroDemoGame> createState() => _HeroDemoGameState();
 }
 
@@ -2101,6 +2348,7 @@ class _HeroDemoGameState extends State<_HeroDemoGame> {
               currentSaldo: 99999,
               controller: _bot,
               onSaldoChanged: (_) {},
+              language: widget.language,
             ),
           ),
         ),
@@ -2611,6 +2859,73 @@ class _CartridgePainter extends CustomPainter {
         canvas.drawCircle(Offset(w*0.55, h*0.46), 7, p);
         p.isAntiAlias = false;
         break;
+
+      case 12:
+        // Pixel mushroom power-up + brick ground.
+        const cap = Color(0xFFE03A2A);
+        const capShade = Color(0xFFA01E14);
+        const spot = Color(0xFFFFF4E0);
+        const body = Color(0xFFF6D9A8);
+        const bodyShade = Color(0xFFB8895A);
+        const eye = Color(0xFF1A1A1A);
+        const brick = Color(0xFFB46A2A);
+        const brickDark = Color(0xFF7A4218);
+        // Cloud puffs in the sky.
+        p.color = Colors.white.withOpacity(0.55);
+        canvas.drawRect(Rect.fromLTWH(w*0.08, h*0.13, w*0.22, h*0.05), p);
+        canvas.drawRect(Rect.fromLTWH(w*0.06, h*0.15, w*0.05, h*0.03), p);
+        canvas.drawRect(Rect.fromLTWH(w*0.70, h*0.22, w*0.22, h*0.05), p);
+        canvas.drawRect(Rect.fromLTWH(w*0.90, h*0.24, w*0.05, h*0.03), p);
+        // 12-wide x 12-tall pixel mushroom.
+        const cols = 12, rows = 12;
+        final pw = w * 0.62 / cols;
+        final ph = h * 0.58 / rows;
+        final ox = (w - pw * cols) / 2;
+        final oy = h * 0.20;
+        const mushroom = <List<int>>[
+          [0,0,0,1,1,1,1,1,1,0,0,0],
+          [0,0,1,1,3,3,1,1,1,1,0,0],
+          [0,1,1,3,3,3,3,1,1,1,1,0],
+          [0,1,3,3,3,1,1,1,3,3,1,0],
+          [1,1,3,3,1,1,1,1,3,3,1,1],
+          [1,1,1,1,1,1,1,1,1,1,1,2],
+          [1,1,3,3,1,1,1,1,3,3,2,2],
+          [0,2,2,2,2,2,2,2,2,2,2,0],
+          [0,0,4,4,6,4,4,6,4,4,0,0],
+          [0,0,4,4,6,4,4,6,4,4,0,0],
+          [0,0,4,4,4,4,4,4,4,5,0,0],
+          [0,0,0,4,4,4,4,4,5,0,0,0],
+        ];
+        for (int r = 0; r < rows; r++) {
+          for (int c = 0; c < cols; c++) {
+            final v = mushroom[r][c];
+            if (v == 0) continue;
+            switch (v) {
+              case 1: p.color = cap; break;
+              case 2: p.color = capShade; break;
+              case 3: p.color = spot; break;
+              case 4: p.color = body; break;
+              case 5: p.color = bodyShade; break;
+              case 6: p.color = eye; break;
+            }
+            canvas.drawRect(
+              Rect.fromLTWH(ox + c * pw, oy + r * ph, pw + 0.5, ph + 0.5),
+              p,
+            );
+          }
+        }
+        // Brick ground strip at the bottom.
+        final brickY = h * 0.84;
+        final brickH = h * 0.12;
+        const bcols = 6;
+        final bw = w / bcols;
+        for (int i = 0; i < bcols; i++) {
+          p.color = (i.isEven) ? brick : brickDark;
+          canvas.drawRect(Rect.fromLTWH(i * bw, brickY, bw - 1, brickH), p);
+          p.color = Colors.white.withOpacity(0.18);
+          canvas.drawRect(Rect.fromLTWH(i * bw, brickY, bw - 1, 2), p);
+        }
+        break;
     }
   }
 }
@@ -2660,11 +2975,26 @@ class _ConsoleDPadState extends State<_ConsoleDPad> {
       widget.controller.press(b);
       HapticFeedback.lightImpact();
     }
+    if (!mounted) {
+      _active = newSet;
+      return;
+    }
     setState(() { _active = newSet; });
   }
 
   void _release() {
     for (final b in _active) widget.controller.release(b);
+    // The pointer-up event can arrive AFTER this widget has been
+    // disposed — common case: user taps a game tile, the arcade
+    // unmounts the d-pad while spinning up the game route, then
+    // the pending pointerUp fires here and would `setState` on a
+    // defunct State. Skip the rebuild but still release the
+    // controller so input state stays consistent for the next
+    // widget that picks it up.
+    if (!mounted) {
+      _active = const {};
+      return;
+    }
     setState(() { _active = const {}; });
   }
 

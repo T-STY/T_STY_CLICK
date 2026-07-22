@@ -5,6 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'arcade_center_screen.dart' show AppLanguage;
 import 'arcade_input_controller.dart';
 import 'game_saldo.dart';
 import 'high_score_service.dart';
@@ -22,6 +23,7 @@ class FlappyBirdScreen extends StatefulWidget {
   final double currentSaldo;
   final ArcadeInputController controller;
   final void Function(double) onSaldoChanged;
+  final AppLanguage language;
 
   const FlappyBirdScreen({
     super.key,
@@ -30,6 +32,7 @@ class FlappyBirdScreen extends StatefulWidget {
     required this.currentSaldo,
     required this.controller,
     required this.onSaldoChanged,
+    this.language = AppLanguage.spanish,
   });
 
   @override
@@ -77,6 +80,9 @@ class _FlappyBirdScreenState extends State<FlappyBirdScreen> {
 
   Timer? _ticker;
   DateTime? _lastTick;
+
+  String _t(String es, String en) =>
+      widget.language == AppLanguage.spanish ? es : en;
 
   @override
   void initState() {
@@ -251,23 +257,19 @@ class _FlappyBirdScreenState extends State<FlappyBirdScreen> {
   Future<void> _awardSaldo() async {
     if (_awardingPoints) return;
     _awardingPoints = true;
-    final newSaldo = _saldo + 1.0;
-    try {
-      final userCardRef = FirebaseFirestore.instance
-          .collection('users')
-          .doc(widget.userId)
-          .collection('rewardsCard')
-          .doc('cardInfo');
-      final batch = FirebaseFirestore.instance.batch();
-      batch.update(userCardRef, {'saldo': newSaldo});
-      batch.update(widget.rewardsDocRef, {'saldo': newSaldo});
-      await batch.commit();
-      if (mounted) {
-        setState(() => _saldo = newSaldo);
-        widget.onSaldoChanged(newSaldo);
-      }
-    } catch (e) {
-      debugPrint('Flappy Firestore error: $e');
+    // Routes through the server-side `updateRewardsSaldo`
+    // callable instead of writing rewards/{docId} directly
+    // (admin-only collection — direct writes failed silently
+    // for every non-admin user). The CF resolves the wallet,
+    // applies the delta in a transaction, and mirrors the
+    // result to the owner-readable card cache.
+    final result = await applyArcadeDelta(
+      delta: 1.0,
+      reason: 'flappy',
+    );
+    if (result != null && mounted) {
+      setState(() => _saldo = result);
+      widget.onSaldoChanged(result);
     }
     _awardingPoints = false;
   }
@@ -331,16 +333,16 @@ class _FlappyBirdScreenState extends State<FlappyBirdScreen> {
           children: [
             const Text('✈️', style: TextStyle(fontSize: 64)),
             const SizedBox(height: 8),
-            const Text('KAMIKAZE FLIGHT',
-                style: TextStyle(
+            Text(_t('VUELO KAMIKAZE', 'KAMIKAZE FLIGHT'),
+                style: const TextStyle(
                     color: Colors.white,
                     fontSize: 26,
                     fontWeight: FontWeight.bold,
                     letterSpacing: 4,
                     shadows: [Shadow(color: Color(0xFF008822), blurRadius: 8)])),
             const SizedBox(height: 4),
-            const Text('Chrome Wings',
-                style: TextStyle(color: Colors.white70, fontSize: 12, letterSpacing: 2)),
+            Text(_t('Alas de Cromo', 'Chrome Wings'),
+                style: const TextStyle(color: Colors.white70, fontSize: 12, letterSpacing: 2)),
             const SizedBox(height: 22),
             Container(
               margin: const EdgeInsets.symmetric(horizontal: 32),
@@ -349,23 +351,26 @@ class _FlappyBirdScreenState extends State<FlappyBirdScreen> {
                 color: Colors.black.withOpacity(0.35),
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: const Column(children: [
-                Text('Press A, B or ↑ to boost',
-                    style: TextStyle(color: Colors.white, fontSize: 13)),
-                SizedBox(height: 4),
-                Text('Fly between the pipes without crashing',
-                    style: TextStyle(color: Colors.white70, fontSize: 11)),
-                SizedBox(height: 4),
-                Text('+1 real point every 10 pipes',
-                    style: TextStyle(
+              child: Column(children: [
+                Text(_t('Pulsa A, B o ↑ para impulsar',
+                        'Press A, B or ↑ to boost'),
+                    style: const TextStyle(color: Colors.white, fontSize: 13)),
+                const SizedBox(height: 4),
+                Text(_t('Vuela entre las torres sin chocar',
+                        'Fly between the pipes without crashing'),
+                    style: const TextStyle(color: Colors.white70, fontSize: 11)),
+                const SizedBox(height: 4),
+                Text(_t('+1 punto real cada 10 torres',
+                        '+1 real point every 10 pipes'),
+                    style: const TextStyle(
                         color: Color(0xFFFFEE44),
                         fontSize: 11,
                         fontWeight: FontWeight.bold)),
               ]),
             ),
             const SizedBox(height: 8),
-            const Text('SELECT to return to menu',
-                style: TextStyle(color: Colors.white38, fontSize: 10)),
+            Text(_t('SELECT para volver al menú', 'SELECT to return to menu'),
+                style: const TextStyle(color: Colors.white38, fontSize: 10)),
           ],
         ),
       ),
@@ -384,26 +389,28 @@ class _FlappyBirdScreenState extends State<FlappyBirdScreen> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             const Text('💥', style: TextStyle(fontSize: 56)),
-            const Text('CRASHED!',
-                style: TextStyle(
+            Text(_t('¡ESTRELLADO!', 'CRASHED!'),
+                style: const TextStyle(
                     color: Color(0xFFFF8800),
                     fontSize: 26,
                     fontWeight: FontWeight.bold,
                     letterSpacing: 2)),
             const SizedBox(height: 4),
-            const Text("The jet couldn't dodge",
-                style: TextStyle(color: Color(0xFF886644), fontSize: 11)),
+            Text(_t('El caza no pudo esquivar', "The jet couldn't dodge"),
+                style: const TextStyle(color: Color(0xFF886644), fontSize: 11)),
             const SizedBox(height: 16),
-            Text('Pipes passed: $_pipesPassed',
+            Text(_t('Torres pasadas: $_pipesPassed',
+                    'Pipes passed: $_pipesPassed'),
                 style: const TextStyle(
                     color: Colors.white,
                     fontSize: 16,
                     fontWeight: FontWeight.bold)),
-            Text('Real points: $_displayScore',
+            Text(_t('Puntos reales: $_displayScore',
+                    'Real points: $_displayScore'),
                 style:
                     const TextStyle(color: Colors.white70, fontSize: 13)),
             if (_bestPipes > 0)
-              Text('Best: $_bestPipes pipes',
+              Text(_t('Récord: $_bestPipes torres', 'Best: $_bestPipes pipes'),
                   style: const TextStyle(
                       color: Color(0xFFFFD700),
                       fontSize: 13,
@@ -414,22 +421,20 @@ class _FlappyBirdScreenState extends State<FlappyBirdScreen> {
               child: SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: () {
-                    _resetGame();
-                    _startGame();
-                  },
+                  // Same paid path as the D-pad restart — no free replays.
+                  onPressed: _payAndReplay,
                   style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF5EC8E8),
                       foregroundColor: Colors.white,
                       shape: const StadiumBorder()),
-                  child: const Text('Fly Again',
-                      style: TextStyle(fontWeight: FontWeight.bold)),
+                  child: Text(_t('Volar de Nuevo', 'Fly Again'),
+                      style: const TextStyle(fontWeight: FontWeight.bold)),
                 ),
               ),
             ),
             const SizedBox(height: 8),
-            const Text('SELECT to return to menu',
-                style: TextStyle(color: Colors.white38, fontSize: 10)),
+            Text(_t('SELECT para volver al menú', 'SELECT to return to menu'),
+                style: const TextStyle(color: Colors.white38, fontSize: 10)),
           ],
         ),
       ),
@@ -438,14 +443,14 @@ class _FlappyBirdScreenState extends State<FlappyBirdScreen> {
   Widget _buildPauseOverlay() => Positioned.fill(
     child: Container(
       color: const Color(0xCC000000),
-      child: const Column(
+      child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Text('⏸', style: TextStyle(fontSize: 48)),
-          SizedBox(height: 8),
-          Text('PAUSE', style: TextStyle(color: Color(0xFF5EC8E8), fontSize: 28, fontWeight: FontWeight.bold, letterSpacing: 6)),
-          SizedBox(height: 16),
-          Text('START to continue', style: TextStyle(color: Color(0xFF3A8899), fontSize: 12)),
+          const Text('⏸', style: TextStyle(fontSize: 48)),
+          const SizedBox(height: 8),
+          Text(_t('PAUSA', 'PAUSE'), style: const TextStyle(color: Color(0xFF5EC8E8), fontSize: 28, fontWeight: FontWeight.bold, letterSpacing: 6)),
+          const SizedBox(height: 16),
+          Text(_t('START para continuar', 'START to continue'), style: const TextStyle(color: Color(0xFF3A8899), fontSize: 12)),
         ],
       ),
     ),

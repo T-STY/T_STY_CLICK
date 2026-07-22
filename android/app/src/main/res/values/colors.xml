@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Tint applied by the OS to the small notification icon in the
+         status bar / notification drawer. Black matches the T_STY
+         brand mark; if you switch to a colored brand swap this for
+         the brand hex. Referenced from AndroidManifest.xml via
+         `com.google.firebase.messaging.default_notification_color`. -->
+    <color name="notification_color">#000000</color>
+</resources>

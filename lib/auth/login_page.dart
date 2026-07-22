@@ -9,7 +9,18 @@ import 'components/login_form.dart';
 import 'sign_up_page.dart';
 
 class LoginPage extends StatelessWidget {
-  const LoginPage({super.key});
+  /// Set when the user arrives straight from a successful registration:
+  /// seeds the form and explains why they must verify before signing in.
+  final String? prefillEmail;
+  final String? prefillPassword;
+  final bool justRegistered;
+
+  const LoginPage({
+    super.key,
+    this.prefillEmail,
+    this.prefillPassword,
+    this.justRegistered = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -59,7 +70,49 @@ class LoginPage extends StatelessWidget {
               ),
             ),
             const SizedBox(height: AppDefaults.margin * 2),
-            const LoginForm(),
+            if (justRegistered)
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: AppDefaults.padding),
+                child: Container(
+                  padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+                  decoration: BoxDecoration(
+                    color: isDarkMode
+                        ? Colors.green.withValues(alpha: 0.15)
+                        : const Color(0xFFEFF8F1),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                        color: Colors.green.withValues(alpha: 0.35)),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Icon(Icons.mark_email_unread_outlined,
+                          size: 20, color: Colors.green),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          '¡Cuenta creada! Te enviamos un correo de '
+                          'verificación. Confírmalo y luego inicia sesión.',
+                          style: TextStyle(
+                            fontSize: 13,
+                            height: 1.35,
+                            fontWeight: FontWeight.w600,
+                            color: isDarkMode
+                                ? AppColors.defaultWhite
+                                : AppColors.defaultBlack,
+                            fontFamily: 'Gordita',
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            LoginForm(
+              prefillEmail: prefillEmail,
+              prefillPassword: prefillPassword,
+            ),
             const Spacer(),
             Row(
               mainAxisAlignment: MainAxisAlignment.center,

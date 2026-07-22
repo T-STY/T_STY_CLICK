@@ -5,6 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'arcade_center_screen.dart' show AppLanguage;
 import 'arcade_input_controller.dart';
 import 'game_saldo.dart';
 import 'high_score_service.dart';
@@ -17,6 +18,7 @@ class SnakeGameScreen extends StatefulWidget {
   final double currentSaldo;
   final ArcadeInputController controller;
   final void Function(double) onSaldoChanged;
+  final AppLanguage language;
 
   const SnakeGameScreen({
     super.key,
@@ -25,6 +27,7 @@ class SnakeGameScreen extends StatefulWidget {
     required this.currentSaldo,
     required this.controller,
     required this.onSaldoChanged,
+    this.language = AppLanguage.spanish,
   });
 
   @override
@@ -51,14 +54,19 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> {
 
   Timer? _ticker;
   late double _saldo;
+  late double _lastCommitted;
   bool _awardingPoints = false;
   bool _paused = false;
   int _bestScore = 0;
+
+  String _t(String es, String en) =>
+      widget.language == AppLanguage.spanish ? es : en;
 
   @override
   void initState() {
     super.initState();
     _saldo = widget.currentSaldo;
+    _lastCommitted = widget.currentSaldo;
     _initGame();
     widget.controller.addListener(_onControllerEvent);
     HighScoreService.load('snake').then((v) { if (mounted) setState(() => _bestScore = v); });
@@ -228,6 +236,11 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> {
     if (!mounted) return;
     setState(() {
       _saldo = ns;
+      // Resync the ledger: the replay charge already committed on the
+      // server, so _lastCommitted must follow _saldo. Otherwise the next
+      // credit's delta (newSaldo - _lastCommitted) comes out negative and
+      // debits the player instead of paying them.
+      _lastCommitted = ns;
       _initGame();
     });
     _isRunning = true;
@@ -242,18 +255,23 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> {
   }
 
   Future<void> _updateFirestore(double newSaldo) async {
-    try {
-      final userCardRef = FirebaseFirestore.instance
-          .collection('users')
-          .doc(widget.userId)
-          .collection('rewardsCard')
-          .doc('cardInfo');
-      final batch = FirebaseFirestore.instance.batch();
-      batch.update(userCardRef, {'saldo': newSaldo});
-      batch.update(widget.rewardsDocRef, {'saldo': newSaldo});
-      await batch.commit();
-    } catch (e) {
-      debugPrint('Snake Firestore error: $e');
+    // Routes through the server-side `updateRewardsSaldo`
+    // callable instead of writing rewards/{docId} directly
+    // (admin-only collection — direct writes failed silently
+    // for every non-admin user). The CF resolves the wallet,
+    // applies the delta in a transaction, and mirrors the
+    // result to the owner-readable card cache.
+    final delta = newSaldo - _lastCommitted;
+    if (delta == 0) return;
+    final result = await applyArcadeDelta(
+      delta: delta,
+      reason: 'snake',
+    );
+    if (result != null) {
+      _lastCommitted = result;
+      if (mounted && _saldo != result) {
+        setState(() => _saldo = result);
+      }
     }
   }
 
@@ -296,7 +314,10 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> {
         color: Colors.black.withOpacity(0.6),
         padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
         child: Text(
-          'Lvl $_level  ·  ⭐ $_score  ·  💰 ${_saldo.toStringAsFixed(0)} pts',
+          _t(
+            'Niv $_level  ·  ⭐ $_score  ·  💰 ${_saldo.toStringAsFixed(0)} pts',
+            'Lvl $_level  ·  ⭐ $_score  ·  💰 ${_saldo.toStringAsFixed(0)} pts',
+          ),
           style: const TextStyle(
             color: Colors.white,
             fontSize: 11,
@@ -336,9 +357,9 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> {
         children: [
           const Text('🐍', style: TextStyle(fontSize: 56)),
           const SizedBox(height: 10),
-          const Text(
-            'VÍBORA VELOZ',
-            style: TextStyle(
+          Text(
+            _t('VÍBORA VELOZ', 'NEON SNAKE'),
+            style: const TextStyle(
               color: Color(0xFF00FF44),
               fontSize: 28,
               fontWeight: FontWeight.bold,
@@ -346,14 +367,17 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> {
             ),
           ),
           const SizedBox(height: 4),
-          const Text('La serpiente más rápida del oeste',
-            style: TextStyle(color: Color(0xFF44AA44), fontSize: 10, letterSpacing: 2)),
+          Text(_t('La serpiente más rápida del oeste',
+                  'The fastest snake in the west'),
+            style: const TextStyle(color: Color(0xFF44AA44), fontSize: 10, letterSpacing: 2)),
           const SizedBox(height: 28),
-          const Text('D-pad para dirigir la serpiente',
-            style: TextStyle(color: Color(0xFF88CC88), fontSize: 12)),
+          Text(_t('D-pad para dirigir la serpiente',
+                  'D-pad to steer the snake'),
+            style: const TextStyle(color: Color(0xFF88CC88), fontSize: 12)),
           const SizedBox(height: 4),
-          const Text('Desliza en pantalla para jugar sin control',
-            style: TextStyle(color: Color(0xFF557755), fontSize: 11)),
+          Text(_t('Desliza en pantalla para jugar sin control',
+                  'Swipe on screen to play without the pad'),
+            style: const TextStyle(color: Color(0xFF557755), fontSize: 11)),
           const SizedBox(height: 16),
           Container(
             margin: const EdgeInsets.symmetric(horizontal: 40),
@@ -362,14 +386,16 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> {
               border: Border.all(color: const Color(0x6600FF44), width: 1),
               borderRadius: BorderRadius.circular(8),
             ),
-            child: const Column(children: [
-              Text('+1 pto cada 5 niveles', style: TextStyle(color: Color(0xFFFFD700), fontSize: 11, fontWeight: FontWeight.bold)),
-              Text('Sube de nivel cada 4 frutas', style: TextStyle(color: Color(0xFF88AA88), fontSize: 10)),
+            child: Column(children: [
+              Text(_t('+1 pto cada 5 niveles', '+1 pt every 5 levels'),
+                style: const TextStyle(color: Color(0xFFFFD700), fontSize: 11, fontWeight: FontWeight.bold)),
+              Text(_t('Sube de nivel cada 4 frutas', 'Level up every 4 fruits'),
+                style: const TextStyle(color: Color(0xFF88AA88), fontSize: 10)),
             ]),
           ),
           const SizedBox(height: 28),
-          const Text('Desliza o pulsa A / START',
-            style: TextStyle(color: Color(0xFF336633), fontSize: 12)),
+          Text(_t('Desliza o pulsa A / START', 'Swipe or press A / START'),
+            style: const TextStyle(color: Color(0xFF336633), fontSize: 12)),
         ],
       ),
     ),
@@ -387,9 +413,11 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> {
         children: [
           const Text('☠', style: TextStyle(fontSize: 48, color: Color(0xFF880000))),
           const SizedBox(height: 8),
-          const Text(
+          Text(
+            // Left untranslated: idiomatic in Spanish arcades, and keeps the
+            // title on a single line.
             'GAME OVER',
-            style: TextStyle(
+            style: const TextStyle(
               color: Color(0xFFFF3300),
               fontSize: 34,
               fontWeight: FontWeight.bold,
@@ -397,13 +425,14 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> {
             ),
           ),
           const SizedBox(height: 4),
-          const Text('La serpiente ha mordido algo duro',
-            style: TextStyle(color: Color(0xFF884444), fontSize: 11)),
+          Text(_t('La serpiente ha mordido algo duro',
+                  'The snake bit something hard'),
+            style: const TextStyle(color: Color(0xFF884444), fontSize: 11)),
           const SizedBox(height: 20),
-          Text('Puntuación: $_score',
+          Text('${_t('Puntuación', 'Score')}: $_score',
             style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
           if (_bestScore > 0)
-            Text('Récord: $_bestScore',
+            Text('${_t('Récord', 'Record')}: $_bestScore',
               style: const TextStyle(color: Color(0xFFFFD700), fontSize: 14, fontWeight: FontWeight.bold)),
           const SizedBox(height: 28),
           Padding(
@@ -420,15 +449,17 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> {
                   shape: const StadiumBorder(),
                 ),
                 child: Text(
-                  canRestart ? 'Reintentar  (−5 pts)' : 'Sin puntos suficientes',
+                  canRestart
+                      ? _t('Reintentar  (−5 pts)', 'Retry  (−5 pts)')
+                      : _t('Sin puntos suficientes', 'Not enough points'),
                   style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                 ),
               ),
             ),
           ),
           const SizedBox(height: 8),
-          const Text('SELECT para volver',
-            style: TextStyle(color: Color(0xFF334433), fontSize: 10)),
+          Text(_t('SELECT para volver', 'Press SELECT to go back'),
+            style: const TextStyle(color: Color(0xFF334433), fontSize: 10)),
         ],
       ),
     ),
@@ -438,14 +469,14 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> {
   Widget _buildPauseOverlay() => Positioned.fill(
     child: Container(
       color: const Color(0xCC000000),
-      child: const Column(
+      child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Text('⏸', style: TextStyle(fontSize: 48)),
-          SizedBox(height: 8),
-          Text('PAUSA', style: TextStyle(color: Color(0xFF00FF44), fontSize: 28, fontWeight: FontWeight.bold, letterSpacing: 6)),
-          SizedBox(height: 16),
-          Text('START para continuar', style: TextStyle(color: Color(0xFF44AA44), fontSize: 12)),
+          const Text('⏸', style: TextStyle(fontSize: 48)),
+          const SizedBox(height: 8),
+          Text(_t('PAUSA', 'PAUSE'), style: const TextStyle(color: Color(0xFF00FF44), fontSize: 28, fontWeight: FontWeight.bold, letterSpacing: 6)),
+          const SizedBox(height: 16),
+          Text(_t('START para continuar', 'Press START to continue'), style: const TextStyle(color: Color(0xFF44AA44), fontSize: 12)),
         ],
       ),
     ),

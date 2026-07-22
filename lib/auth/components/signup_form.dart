@@ -6,6 +6,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../../../components/icon_with_background.dart';
 import '../../../constants/constants.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../custom_page_route.dart';
+import '../login_page.dart';
 
 class SignUpForm extends StatefulWidget {
   const SignUpForm({super.key});
@@ -21,6 +23,12 @@ class _SignUpFormState extends State<SignUpForm> {
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   bool _acceptTerms = false;
+
+  /// Latches on the first tap so the account can only ever be created once.
+  /// Without it the button stayed live during the network round-trip, and a
+  /// second tap raced in as 'email-already-in-use' — which read to the
+  /// customer as "registration failed" even though it had just succeeded.
+  bool _submitting = false;
 
   static final _emailRegex = RegExp(
     r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$',
@@ -63,37 +71,31 @@ class _SignUpFormState extends State<SignUpForm> {
   }
 
   Future<void> _signUpUser() async {
+    if (_submitting) return;
     if (!(_formKey.currentState?.validate() ?? false)) return;
+
+    setState(() => _submitting = true);
 
     final name = _nameController.text.trim();
     final email = _emailController.text.trim();
+    final password = _passwordController.text;
 
+    // Resolved before the first await. The form can be disposed mid-flight
+    // (back button), but we still owe the customer the hand-off to the login
+    // screen — driving it off `context` would silently swallow a successful
+    // registration and leave them thinking it failed.
+    final NavigatorState navigator = Navigator.of(context);
+
+    // ── Phase 1: create the account. This is the only fatal step. ──
     try {
-      UserCredential userCredential = await _auth.createUserWithEmailAndPassword(
+      await _auth.createUserWithEmailAndPassword(
         email: email,
-        password: _passwordController.text,
+        password: password,
       );
-
-      await userCredential.user!.updateDisplayName(name);
-
-      final userDocRef = FirebaseFirestore.instance.collection('users').doc(userCredential.user!.uid);
-
-      await userDocRef.set({
-        'userInfo': {
-          'name': name,
-          'email': email,
-        }
-      });
-
-      await userDocRef.collection('userInfo').doc('userInfo').set({
-        'phoneNumber': '0000000000',
-      });
-
-      await userCredential.user!.sendEmailVerification();
-
-      if (!mounted) return;
     } on FirebaseAuthException catch (e) {
       if (!mounted) return;
+      // Nothing was created — release the latch so they can fix and retry.
+      setState(() => _submitting = false);
       String message;
       switch (e.code) {
         case 'email-already-in-use':
@@ -105,36 +107,96 @@ class _SignUpFormState extends State<SignUpForm> {
         case 'weak-password':
           message = 'La contraseña es muy débil.';
           break;
+        case 'network-request-failed':
+          message = 'Sin conexión. Revisa tu Internet e intenta de nuevo.';
+          break;
         default:
           message = 'Error al crear la cuenta. Intenta de nuevo.';
       }
-      showDialog(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          content: Text(message),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(),
-              child: const Text('Aceptar'),
-            ),
-          ],
-        ),
-      );
-    } catch (error) {
+      _showSignUpError(message);
+      return;
+    } catch (_) {
       if (!mounted) return;
-      showDialog(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          content: const Text('Error al crear la cuenta. Intenta de nuevo.'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(),
-              child: const Text('Aceptar'),
-            ),
-          ],
-        ),
-      );
+      setState(() => _submitting = false);
+      _showSignUpError('Error al crear la cuenta. Intenta de nuevo.');
+      return;
     }
+
+    // ── Phase 2: the account now EXISTS. Everything below is best-effort. ──
+    // A failure here must never be reported as "signup failed": the customer
+    // would retry, hit 'email-already-in-use', and land right back in the
+    // confusion this change removes. Each call is also bounded — a Firestore
+    // set() resolves only on server ack, so an offline write would otherwise
+    // hang forever with the button latched and the spinner turning.
+    const Duration limit = Duration(seconds: 15);
+    final User? user = _auth.currentUser;
+
+    if (user != null) {
+      final userDocRef =
+          FirebaseFirestore.instance.collection('users').doc(user.uid);
+
+      try {
+        await user.updateDisplayName(name).timeout(limit);
+      } catch (_) {/* cosmetic only */}
+
+      try {
+        await userDocRef.set({
+          'userInfo': {
+            'name': name,
+            'email': email,
+          }
+        }, SetOptions(merge: true)).timeout(limit);
+      } catch (_) {/* profile doc is recoverable later */}
+
+      try {
+        await userDocRef.collection('userInfo').doc('userInfo').set({
+          'phoneNumber': '0000000000',
+        }, SetOptions(merge: true)).timeout(limit);
+      } catch (_) {/* profile doc is recoverable later */}
+
+      try {
+        await user.sendEmailVerification().timeout(limit);
+      } catch (_) {/* they can retry from the login screen */}
+    }
+
+    // Unconditional teardown. createUserWithEmailAndPassword leaves the
+    // brand-new (still unverified) user SIGNED IN, and main.dart's
+    // _checkUser() admits any live session without testing emailVerified —
+    // so keeping it would let an unverified account into the app on the next
+    // cold launch. The login screen's gate becomes the only way in.
+    try {
+      await _auth.signOut().timeout(limit);
+    } catch (_) {/* fall through — the login gate still guards entry */}
+
+    // Hand off with the credentials pre-filled. We deliberately do NOT sign
+    // them in: they must confirm the email first, then press "Ingresar".
+    // `route.isFirst` drops the signup page (so there's no backing into a
+    // stale, already-submitted form) while KEEPING the app root beneath —
+    // registration is usually entered from inside the app, and clearing the
+    // whole stack would leave no way back to browsing.
+    navigator.pushAndRemoveUntil(
+      customPageRoute(LoginPage(
+        prefillEmail: email,
+        prefillPassword: password,
+        justRegistered: true,
+      )),
+      (route) => route.isFirst,
+    );
+  }
+
+  void _showSignUpError(String message) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Aceptar'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -324,7 +386,9 @@ class _SignUpFormState extends State<SignUpForm> {
             SizedBox(
               width: MediaQuery.of(context).size.width * 0.5,
               child: ElevatedButton(
-                onPressed: () {
+                onPressed: _submitting
+                    ? null
+                    : () {
                   if (_acceptTerms) {
                     _signUpUser();
                   } else {
@@ -386,13 +450,26 @@ class _SignUpFormState extends State<SignUpForm> {
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.black,
+                  disabledBackgroundColor: Colors.black54,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(25.0),
                   ),
                   padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 16.0),
                   elevation: 2,
                 ),
-                child: const Text(
+                child: _submitting
+                    // Immediate acknowledgement of the tap — the absence of
+                    // any feedback here is what drove the repeat taps.
+                    ? const SizedBox(
+                        height: 18,
+                        width: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                              AppColors.defaultWhite),
+                        ),
+                      )
+                    : const Text(
                   'Crear Cuenta',
                   style: TextStyle(
                     fontSize: 15.0,

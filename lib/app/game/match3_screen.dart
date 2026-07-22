@@ -5,6 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'arcade_center_screen.dart' show AppLanguage;
 import 'arcade_input_controller.dart';
 import 'game_saldo.dart';
 import 'high_score_service.dart';
@@ -30,6 +31,7 @@ class Match3Screen extends StatefulWidget {
   final double currentSaldo;
   final ArcadeInputController controller;
   final void Function(double) onSaldoChanged;
+  final AppLanguage language;
 
   const Match3Screen({
     super.key,
@@ -38,6 +40,7 @@ class Match3Screen extends StatefulWidget {
     required this.currentSaldo,
     required this.controller,
     required this.onSaldoChanged,
+    this.language = AppLanguage.spanish,
   });
 
   @override
@@ -74,6 +77,9 @@ class _Match3ScreenState extends State<Match3Screen> with SingleTickerProviderSt
 
   Timer? _secondTicker;
   final Random _rng = Random();
+
+  String _t(String es, String en) =>
+      widget.language == AppLanguage.spanish ? es : en;
 
   @override
   void initState() {
@@ -374,18 +380,19 @@ class _Match3ScreenState extends State<Match3Screen> with SingleTickerProviderSt
   }
 
   Future<void> _awardRoundSaldo() async {
+    // Routes through the server-side `updateRewardsSaldo` callable instead of
+    // writing rewards/{docId} directly (admin-only collection — the old batch
+    // failed silently for every non-admin user, so the credit never persisted).
+    // The CF applies the delta in a transaction and returns the authoritative
+    // saldo, which we adopt over the optimistic +1.
     final newSaldo = _saldo + 1.0;
     setState(() => _saldo = newSaldo);
     widget.onSaldoChanged(newSaldo);
-    try {
-      final ref = FirebaseFirestore.instance
-          .collection('users').doc(widget.userId)
-          .collection('rewardsCard').doc('cardInfo');
-      final batch = FirebaseFirestore.instance.batch();
-      batch.update(ref, {'saldo': newSaldo});
-      batch.update(widget.rewardsDocRef, {'saldo': newSaldo});
-      await batch.commit();
-    } catch (e) { debugPrint('DulceRacha Firestore: $e'); }
+    final result = await applyArcadeDelta(delta: 1.0, reason: 'match3');
+    if (result != null && mounted) {
+      setState(() => _saldo = result);
+      widget.onSaldoChanged(result);
+    }
   }
 
   @override
@@ -434,6 +441,7 @@ class _Match3ScreenState extends State<Match3Screen> with SingleTickerProviderSt
                         cursorCol: _cursorCol, cursorRow: _cursorRow,
                         selCol: _selCol, selRow: _selRow,
                         comboCount: _comboCount,
+                        comboLabel: _t('¡COMBO!', 'COMBO!'),
                         showCursor: _isPlaying && !_paused,
                         animProgress: _isAnimating ? _swapAnimCtrl.value : -1.0,
                         animForward: _swapForward,
@@ -467,12 +475,12 @@ class _Match3ScreenState extends State<Match3Screen> with SingleTickerProviderSt
                 boxShadow: [BoxShadow(color: Colors.amber.withOpacity(0.4), blurRadius: 16)],
               ),
               child: Column(mainAxisSize: MainAxisSize.min, children: [
-                const Text('🍬 ¡CASCADA DULCE!',
-                  style: TextStyle(color: Colors.amberAccent, fontSize: 20,
+                Text(_t('🍬 ¡CASCADA DULCE!', '🍬 CANDY SWAP!'),
+                  style: const TextStyle(color: Colors.amberAccent, fontSize: 20,
                       fontWeight: FontWeight.bold, fontFamily: 'monospace')),
                 const SizedBox(height: 4),
-                const Text('+1 pto real 🌟',
-                  style: TextStyle(color: Colors.white70, fontSize: 12)),
+                Text(_t('+1 pto real 🌟', '+1 real point 🌟'),
+                  style: const TextStyle(color: Colors.white70, fontSize: 12)),
               ]),
             ),
           ),
@@ -489,10 +497,10 @@ class _Match3ScreenState extends State<Match3Screen> with SingleTickerProviderSt
                   border: Border.all(color: Colors.amberAccent, width: 2),
                 ),
                 child: Column(mainAxisSize: MainAxisSize.min, children: [
-                  const Text('⏸ PAUSA', style: TextStyle(color: Colors.amberAccent, fontSize: 22,
+                  Text(_t('⏸ PAUSA', '⏸ PAUSED'), style: const TextStyle(color: Colors.amberAccent, fontSize: 22,
                       fontWeight: FontWeight.bold, fontFamily: 'monospace')),
                   const SizedBox(height: 8),
-                  const Text('Start para continuar', style: TextStyle(color: Colors.white60, fontSize: 12)),
+                  Text(_t('Start para continuar', 'Press Start to resume'), style: const TextStyle(color: Colors.white60, fontSize: 12)),
                 ]),
               ),
             ),
@@ -539,8 +547,16 @@ class _Match3ScreenState extends State<Match3Screen> with SingleTickerProviderSt
             ),
             const SizedBox(width: 8),
 
+            // FittedBox scales the inner score HUD down to fit when
+            // the parent row is narrow / short — the inner content
+            // sums to ~55px tall while the row constraint can be as
+            // tight as 41px on smaller phones, which used to overflow
+            // by 14px and break the whole frame.
             Expanded(
-              child: Column(
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Column(
+                mainAxisSize: MainAxisSize.min,
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Row(mainAxisAlignment: MainAxisAlignment.center,
@@ -568,9 +584,11 @@ class _Match3ScreenState extends State<Match3Screen> with SingleTickerProviderSt
                     style: const TextStyle(color: Colors.white, fontSize: 18,
                         fontWeight: FontWeight.bold, fontFamily: 'monospace',
                         shadows: [Shadow(color: Colors.black45, blurRadius: 3, offset: Offset(1, 1))])),
-                  Text('Ronda $_round  •  Meta $_roundTarget',
+                  Text(_t('Ronda $_round  •  Meta $_roundTarget',
+                          'Round $_round  •  Goal $_roundTarget'),
                     style: const TextStyle(color: Colors.white70, fontSize: 8, fontFamily: 'monospace')),
                 ],
+              ),
               ),
             ),
             const SizedBox(width: 8),
@@ -609,18 +627,19 @@ class _Match3ScreenState extends State<Match3Screen> with SingleTickerProviderSt
           child: Column(mainAxisSize: MainAxisSize.min, children: [
             const Text('🍬', style: TextStyle(fontSize: 52)),
             const SizedBox(height: 8),
-            const Text('CASCADA DULCE',
-              style: TextStyle(color: Colors.amberAccent, fontSize: 22,
+            Text(_t('CASCADA DULCE', 'CANDY SWAP'),
+              style: const TextStyle(color: Colors.amberAccent, fontSize: 22,
                   fontWeight: FontWeight.bold, letterSpacing: 2,
                   fontFamily: 'monospace')),
             const SizedBox(height: 6),
-            const Text('Combina 3 o más dulces',
-              style: TextStyle(color: Colors.white70, fontSize: 11)),
+            Text(_t('Combina 3 o más dulces', 'Match 3 or more candies'),
+              style: const TextStyle(color: Colors.white70, fontSize: 11)),
             const SizedBox(height: 2),
-            const Text('Desliza o usa D-pad + A',
-              style: TextStyle(color: Colors.white38, fontSize: 10)),
+            Text(_t('Desliza o usa D-pad + A', 'Swipe or use D-pad + A'),
+              style: const TextStyle(color: Colors.white38, fontSize: 10)),
             const SizedBox(height: 16),
-            Text('Meta: $_roundTarget pts en $_kRoundTime s',
+            Text(_t('Meta: $_roundTarget pts en $_kRoundTime s',
+                    'Goal: $_roundTarget pts in $_kRoundTime s'),
               style: const TextStyle(color: Colors.orange, fontSize: 11,
                   fontFamily: 'monospace')),
             const SizedBox(height: 20),
@@ -632,7 +651,7 @@ class _Match3ScreenState extends State<Match3Screen> with SingleTickerProviderSt
                   backgroundColor: const Color(0xFF22AA44),
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-                child: const Text('¡Jugar!', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                child: Text(_t('¡Jugar!', 'Play!'), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
               ),
             ),
           ]),
@@ -654,18 +673,18 @@ class _Match3ScreenState extends State<Match3Screen> with SingleTickerProviderSt
             border: Border.all(color: Colors.redAccent, width: 2),
           ),
           child: Column(mainAxisSize: MainAxisSize.min, children: [
-            const Text('⏰ TIEMPO AGOTADO',
-              style: TextStyle(color: Color(0xFFFF2200), fontSize: 20,
+            Text(_t('⏰ TIEMPO AGOTADO', '⏰ TIME UP'),
+              style: const TextStyle(color: Color(0xFFFF2200), fontSize: 20,
                   fontWeight: FontWeight.bold, fontFamily: 'monospace',
                   letterSpacing: 1)),
             const SizedBox(height: 14),
-            Text('Puntuación: $_score',
+            Text(_t('Puntuación: $_score', 'Score: $_score'),
               style: const TextStyle(color: Colors.white, fontSize: 20,
                   fontFamily: 'monospace', fontWeight: FontWeight.bold)),
-            Text('Ronda: $_round',
+            Text(_t('Ronda: $_round', 'Round: $_round'),
               style: const TextStyle(color: Colors.white70, fontSize: 13,
                   fontFamily: 'monospace')),
-            Text('Récord: $_hiScore',
+            Text(_t('Récord: $_hiScore', 'Best: $_hiScore'),
               style: const TextStyle(color: Colors.amberAccent, fontSize: 12,
                   fontFamily: 'monospace')),
             const SizedBox(height: 22),
@@ -677,7 +696,7 @@ class _Match3ScreenState extends State<Match3Screen> with SingleTickerProviderSt
                   backgroundColor: const Color(0xFF22AA44),
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-                child: const Text('Nueva Partida', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+                child: Text(_t('Nueva Partida', 'New Game'), style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
               ),
             ),
           ]),
@@ -692,6 +711,7 @@ class _CandyBoardPainter extends CustomPainter {
   final int cursorCol, cursorRow;
   final int? selCol, selRow;
   final int comboCount;
+  final String comboLabel;
   final bool showCursor;
   final double animProgress;
   final bool animForward;
@@ -701,7 +721,8 @@ class _CandyBoardPainter extends CustomPainter {
     required this.board,
     required this.cursorCol, required this.cursorRow,
     required this.selCol, required this.selRow,
-    required this.comboCount, required this.showCursor,
+    required this.comboCount, required this.comboLabel,
+    required this.showCursor,
     this.animProgress = -1.0,
     this.animForward = true,
     this.animC1 = -1, this.animR1 = -1,
@@ -795,7 +816,7 @@ class _CandyBoardPainter extends CustomPainter {
 
     if (comboCount >= 2) {
       final tp = TextPainter(
-        text: TextSpan(text: '🍬 x$comboCount COMBO!',
+        text: TextSpan(text: '🍬 x$comboCount $comboLabel',
           style: const TextStyle(color: Colors.amberAccent, fontSize: 13,
               fontWeight: FontWeight.bold, fontFamily: 'monospace')),
         textDirection: TextDirection.ltr,

@@ -2,8 +2,6 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 
-/// Opens the filter as a bottom panel (~72% height) that slides up over a
-/// blurred backdrop. Tapping the blurred area dismisses it.
 Future<Map<String, dynamic>?> showFilterSheet(
   BuildContext context,
   Map<String, dynamic> initialFilters,

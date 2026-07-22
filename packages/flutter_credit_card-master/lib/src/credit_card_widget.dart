@@ -650,10 +650,13 @@ class _CreditCardWidgetState extends State<CreditCardWidget>
                       child: Padding(
                         padding: const EdgeInsets.all(5),
                         child: Text(
+                          // Always show the 4-digit placeholder on the back
+                          // of the card. The original logic switched on
+                          // Amex (4) vs everyone else (3) but T_STY only
+                          // issues 4-digit NIPs, so the 3-X variant just
+                          // misled customers into thinking they needed 3.
                           widget.cvvCode.isEmpty
-                              ? isAmex
-                                  ? AppConstants.fourX
-                                  : AppConstants.threeX
+                              ? AppConstants.fourX
                               : cvv,
                           maxLines: 1,
                           style: widget.textStyle ?? defaultTextStyle,

@@ -133,9 +133,39 @@ class _PromotionDetailPageState extends State<PromotionDetailPage> {
     return (promoData?['comboPrice'] as num?)?.toDouble() ?? 0;
   }
 
+  String? _firstVariantProductName() {
+    final type = promoData?['type'] ?? '';
+    final List<Map<String, dynamic>> involved = [];
+    if (type == 'combo_exact') {
+      involved.addAll(requiredProducts.cast<Map<String, dynamic>>());
+    } else if (type == 'combo_choice' || type == 'combo_brand') {
+      if (triggerProductData != null) involved.add(triggerProductData!);
+      if (selectedOptionProductId != null) {
+        try {
+          involved.add(optionProducts
+              .firstWhere((p) => p['id'] == selectedOptionProductId));
+        } catch (_) {}
+      }
+    } else if (type == 'bxgy') {
+      if (triggerProductData != null) involved.add(triggerProductData!);
+    }
+    for (final p in involved) {
+      if (p['has_variants'] == true) {
+        return (p['nombre'] as String?) ?? 'Producto';
+      }
+    }
+    return null;
+  }
+
   Future<void> _addPromoToCart() async {
     final cartProvider = Provider.of<CartProvider>(context, listen: false);
     final type = promoData?['type'] ?? '';
+
+    final variantBlocker = _firstVariantProductName();
+    if (variantBlocker != null) {
+      await _showVariantBlockedDialog(variantBlocker);
+      return;
+    }
 
     if (type == 'combo_exact') {
       for (var product in requiredProducts) {
@@ -204,6 +234,29 @@ class _PromotionDetailPageState extends State<PromotionDetailPage> {
 
     if (!mounted) return;
     _showSuccessDialog();
+  }
+
+  Future<void> _showVariantBlockedDialog(String productName) async {
+    return showDialog<void>(
+      context: context,
+      builder: (BuildContext context) {
+        return BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+          child: AlertDialog(
+            title: const Text('Esta promoción no se puede aplicar'),
+            content: Text(
+                '"$productName" tiene variantes (sabores, presentaciones, etc.). '
+                'Por ahora, agrega esa variante directamente desde el catálogo y la promoción se aplicará automáticamente.'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('Entendido'),
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   Future<void> _showSuccessDialog() async {

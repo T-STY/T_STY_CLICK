@@ -69,3 +69,7 @@ packages/flutter_credit_card-master/example/macos/Podfile.lock
 
 # Misc local
 T_STY.html
+
+# Maps SDK + other secret resource values — see
+# android/app/src/main/res/values/secrets.xml for context.
+android/app/src/main/res/values/secrets.xml

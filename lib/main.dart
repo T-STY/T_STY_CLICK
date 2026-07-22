@@ -9,6 +9,7 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_remote_config/firebase_remote_config.dart';
+import 'package:intl/date_symbol_data_local.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -42,6 +43,11 @@ Future<void> main() async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+  // Loads the Spanish date-symbol tables that `DateFormat(<pattern>, 'es')`
+  // depends on. Without this, any `DateFormat(..., 'es')` call throws
+  // LocaleDataException at first build — e.g. the order history's
+  // "2 jun · 14:30" formatter. Cheap one-time tree shake.
+  await initializeDateFormatting('es', null);
   await connectToFirebaseEmulatorsIfNeeded();
 
   SystemChrome.setEnabledSystemUIMode(
@@ -50,7 +56,6 @@ Future<void> main() async {
   );
   SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
 
-  // App Check interferes with the emulator suite, so skip it in that mode.
   if (!useFirebaseEmulator) {
     try {
       await FirebaseAppCheck.instance.activate(
@@ -66,18 +71,6 @@ Future<void> main() async {
 
   unawaited(PushNotificationsService.instance.init());
   unawaited(LocalNotificationsService.instance.init());
-
-  String? lastFcmUid;
-  FirebaseAuth.instance.authStateChanges().listen((user) {
-    if (user != null) {
-      lastFcmUid = user.uid;
-      PushNotificationsService.instance.registerForCurrentUser();
-    } else if (lastFcmUid != null) {
-      final prev = lastFcmUid!;
-      lastFcmUid = null;
-      PushNotificationsService.instance.clearForUser(prev);
-    }
-  });
 
   runApp(
     MultiProvider(
@@ -102,11 +95,38 @@ class NetworkAwareApp extends StatefulWidget {
 
 class NetworkAwareAppState extends State<NetworkAwareApp> {
   bool _isOnline = true;
+  StreamSubscription<List<ConnectivityResult>>? _connSub;
+  StreamSubscription<User?>? _authSub;
+  String? _lastFcmUid;
 
   @override
   void initState() {
     super.initState();
     _checkConnectivity();
+    _connSub = Connectivity().onConnectivityChanged.listen((result) {
+      final newValue = !result.contains(ConnectivityResult.none);
+      if (!mounted) return;
+      if (_isOnline != newValue) {
+        setState(() => _isOnline = newValue);
+      }
+    });
+    _authSub = FirebaseAuth.instance.authStateChanges().listen((user) {
+      if (user != null) {
+        _lastFcmUid = user.uid;
+        PushNotificationsService.instance.registerForCurrentUser();
+      } else if (_lastFcmUid != null) {
+        final prev = _lastFcmUid!;
+        _lastFcmUid = null;
+        PushNotificationsService.instance.clearForUser(prev);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _connSub?.cancel();
+    _authSub?.cancel();
+    super.dispose();
   }
 
   Future<void> _checkConnectivity() async {

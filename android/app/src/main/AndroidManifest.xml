@@ -1,4 +1,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Precise location for the "use my location" button on the address map. -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <application
         android:label="T_STY"
         android:name="${applicationName}"
@@ -40,9 +43,25 @@
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_channel_id"
             android:value="orders" />
+        <!-- Status-bar icon. Without this, FCM falls back to the launcher
+             icon which Android 5+ renders as a white blob. The drawable
+             is a transparent + white monochrome bell; tint comes from
+             default_notification_color below. -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/ic_notification" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_color"
+            android:resource="@color/notification_color" />
+        <!-- Maps SDK key moved to res/values/secrets.xml so it isn't
+             in clear in the source tree. Add secrets.xml to .gitignore
+             and provision per-build via CI. CRITICALLY: also restrict
+             the key in Google Cloud Console (package + SHA-1) — the
+             APK still contains the value, so server-side restriction
+             is what actually prevents misuse. -->
         <meta-data
             android:name="com.google.android.geo.API_KEY"
-            android:value="AIzaSyBHIP391u2W_3lOpOT3znjIzD6L3Fhm2Fw" />
+            android:value="@string/google_maps_api_key" />
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and

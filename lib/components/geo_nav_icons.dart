@@ -11,11 +11,6 @@ const Map<GeoIconKind, String> _assetByKind = {
   GeoIconKind.settings: 'assets/icons/settings.svg',
 };
 
-/// Brand nav icon backed by an SVG asset in `assets/icons/`.
-///
-/// The SVG is tinted to [color] via a srcIn colour filter, so the source
-/// artwork can be a single solid colour and still pick up the selected /
-/// unselected nav colours. Swap the files in `assets/icons/` to rebrand.
 class GeoNavIcon extends StatelessWidget {
   const GeoNavIcon({
     super.key,

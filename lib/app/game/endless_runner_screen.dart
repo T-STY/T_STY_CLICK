@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'arcade_center_screen.dart' show AppLanguage;
 import 'arcade_input_controller.dart';
 import 'game_saldo.dart';
 import 'high_score_service.dart';
@@ -52,6 +53,7 @@ class EndlessRunnerScreen extends StatefulWidget {
   final double currentSaldo;
   final ArcadeInputController controller;
   final void Function(double) onSaldoChanged;
+  final AppLanguage language;
 
   const EndlessRunnerScreen({
     super.key,
@@ -60,6 +62,7 @@ class EndlessRunnerScreen extends StatefulWidget {
     required this.currentSaldo,
     required this.controller,
     required this.onSaldoChanged,
+    this.language = AppLanguage.spanish,
   });
 
   @override
@@ -84,6 +87,7 @@ class _EndlessRunnerScreenState extends State<EndlessRunnerScreen> {
   int _score = 0, _hiScore = 0;
   int _nextSaldoAt = _kSaldoEvery;
   late double _saldo;
+  late double _lastCommitted;
   bool _playing = false, _dead = false;
   bool _showDeathOverlay = false;
   Timer? _gameTimer;
@@ -107,10 +111,14 @@ class _EndlessRunnerScreenState extends State<EndlessRunnerScreen> {
 
   bool _paused = false;
 
+  String _t(String es, String en) =>
+      widget.language == AppLanguage.spanish ? es : en;
+
   @override
   void initState() {
     super.initState();
     _saldo = widget.currentSaldo;
+    _lastCommitted = widget.currentSaldo;
     widget.controller.addListener(_onInput);
     HighScoreService.load('runner').then((v) {
       if (mounted) setState(() => _hiScore = v);
@@ -201,6 +209,11 @@ class _EndlessRunnerScreenState extends State<EndlessRunnerScreen> {
         currentSaldo: _saldo);
     if (ns == null) return;
     if (!mounted) return;
+    // The replay charge already went through the CF, so `ns` is the
+    // authoritative committed saldo. Resync the ledger too — otherwise
+    // it stays behind by kArcadePlayCost and the next credit computes
+    // a negative delta and debits the player instead.
+    _lastCommitted = ns;
     setState(() => _saldo = ns);
     widget.onSaldoChanged(ns);
     _startGame();
@@ -398,15 +411,24 @@ class _EndlessRunnerScreenState extends State<EndlessRunnerScreen> {
   }
 
   Future<void> _updateFirestore(double newSaldo) async {
-    try {
-      final ref = FirebaseFirestore.instance
-          .collection('users').doc(widget.userId)
-          .collection('rewardsCard').doc('cardInfo');
-      final batch = FirebaseFirestore.instance.batch();
-      batch.update(ref, {'saldo': newSaldo});
-      batch.update(widget.rewardsDocRef, {'saldo': newSaldo});
-      await batch.commit();
-    } catch (e) { debugPrint('Runner Firestore: $e'); }
+    // Routes through the server-side `updateRewardsSaldo`
+    // callable instead of writing rewards/{docId} directly
+    // (admin-only collection — direct writes failed silently
+    // for every non-admin user). The CF resolves the wallet,
+    // applies the delta in a transaction, and mirrors the
+    // result to the owner-readable card cache.
+    final delta = newSaldo - _lastCommitted;
+    if (delta == 0) return;
+    final result = await applyArcadeDelta(
+      delta: delta,
+      reason: 'endless_runner',
+    );
+    if (result != null) {
+      _lastCommitted = result;
+      if (mounted && _saldo != result) {
+        setState(() => _saldo = result);
+      }
+    }
   }
 
   @override
@@ -436,17 +458,21 @@ class _EndlessRunnerScreenState extends State<EndlessRunnerScreen> {
               maulPhase: _maulPhase,
               playerMauled: _playerMauled,
               bloodParticles: List.unmodifiable(_bloodParticles),
+              hiLabel: _t('RÉC', 'BEST'),
             ),
           ),
         ),
         if (!_playing && !_dead)
-          _buildOverlay('🦕 DINO ESCAPE',
-              'Arriba / A = Saltar\nAbajo = Agacharse\nStart = Pausa'),
+          _buildOverlay(_t('🦕 DINO ESCAPE', '🦕 DINO DASH'),
+              _t('Arriba / A = Saltar\nAbajo = Agacharse\nStart = Pausa',
+                 'Up / A = Jump\nDown = Duck\nStart = Pause')),
         if (_dead && _showDeathOverlay)
-          _buildOverlay('😱 ¡DEVORADO!',
-              'Distancia: ${_score}m\nPulsa A para reintentar'),
+          _buildOverlay(_t('😱 ¡DEVORADO!', '😱 DEVOURED!'),
+              _t('Distancia: ${_score}m\nPulsa A para reintentar',
+                 'Distance: ${_score}m\nPress A to retry')),
         if (_playing && _paused)
-          _buildOverlay('⏸ PAUSA', 'Start para continuar'),
+          _buildOverlay(_t('⏸ PAUSA', '⏸ PAUSED'),
+              _t('Start para continuar', 'Start to continue')),
       ]),
     );
   }
@@ -476,7 +502,7 @@ class _EndlessRunnerScreenState extends State<EndlessRunnerScreen> {
           if (_hiScore > 0)
             Padding(
               padding: const EdgeInsets.only(top: 8),
-              child: Text('RÉCORD: ${_hiScore}m',
+              child: Text(_t('RÉCORD: ${_hiScore}m', 'BEST: ${_hiScore}m'),
                   style: const TextStyle(
                       color: Colors.white38,
                       fontSize: 10,
@@ -514,6 +540,7 @@ class _RunnerPainter extends CustomPainter {
   final List<_BgElement> bgFar, bgMid;
   final List<_BloodParticle> bloodParticles;
   final int score, hiScore;
+  final String hiLabel;
 
   const _RunnerPainter({
     required this.py, required this.isDucking, required this.onGround,
@@ -527,6 +554,7 @@ class _RunnerPainter extends CustomPainter {
     required this.maulPhase,
     required this.playerMauled,
     required this.bloodParticles,
+    required this.hiLabel,
   });
 
   @override bool shouldRepaint(_RunnerPainter o) => true;
@@ -770,7 +798,7 @@ class _RunnerPainter extends CustomPainter {
     txt('${score}m', size.width * 0.04, size.height * 0.02,
         const Color(0xFFFFDD44), hfs);
     if (hiScore > 0) {
-      txt('RÉC: ${hiScore}m', size.width * 0.58, size.height * 0.02,
+      txt('$hiLabel: ${hiScore}m', size.width * 0.58, size.height * 0.02,
           Colors.white54, hfs * 0.82);
     }
   }

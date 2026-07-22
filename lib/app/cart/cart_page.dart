@@ -8,6 +8,7 @@ import '../../components/shimmer_placeholder.dart';
 import '../../constants/app_colors.dart';
 import '../../constants/app_defaults.dart';
 import '../../constants/app_images.dart';
+import '../../utils/order_window.dart';
 import '../main.dart';
 import '../payment/checkout_page.dart';
 import '../payment/payment_done_page.dart';
@@ -23,8 +24,12 @@ class CartPage extends StatefulWidget {
 
 class CartPageState extends State<CartPage> {
   int _index = 0;
-  int _openHour = 9;
-  int _closeHour = 18;
+
+  /// Resolved ordering window for "right now" — `open`, `pickupOnly`, or
+  /// `closed`. Defaults to a permissive `open` so the cart works even
+  /// before settings/store has loaded; the StreamBuilder rebuild fixes
+  /// the state in the next frame.
+  OrderWindow _window = OrderWindow.openPlaceholder;
 
   @override
   void initState() {
@@ -36,18 +41,33 @@ class CartPageState extends State<CartPage> {
     final cart = Provider.of<CartProvider>(context, listen: false);
     for (final item in cart.items.values.toList()) {
       try {
+
         final doc = await FirebaseFirestore.instance
             .collection('products')
-            .doc(item.objectID)
+            .doc(item.productId)
             .get();
-        final double stock = doc.exists
-            ? ((doc.data()?['stock'] as num?)?.toDouble() ?? 0.0)
-            : 0.0;
+        if (!doc.exists) {
+          cart.removeItemCompletely(item.objectID);
+          continue;
+        }
+        final data = doc.data() ?? const <String, dynamic>{};
+        double stock = 0.0;
+        if (item.variantKey != null && item.variantKey!.isNotEmpty) {
+          final variants = data['variants'];
+          if (variants is Map) {
+            final v = variants[item.variantKey];
+            if (v is Map) {
+              stock = (v['stock'] as num?)?.toDouble() ?? 0.0;
+            }
+          }
+        } else {
+          stock = (data['stock'] as num?)?.toDouble() ?? 0.0;
+        }
         if (stock <= 0) {
           cart.removeItemCompletely(item.objectID);
         } else if (item.quantity > stock) {
           cart.setItem(
-            item.objectID,
+            item.productId,
             item.nombre,
             item.price,
             item.imageUrl,
@@ -56,6 +76,8 @@ class CartPageState extends State<CartPage> {
             stock: stock,
             typeSpecific: item.typeSpecific,
             variante: item.variante,
+            variantKey: item.variantKey,
+            variantName: item.variantName,
           );
         }
       } catch (_) {
@@ -63,23 +85,12 @@ class CartPageState extends State<CartPage> {
     }
   }
 
-  bool _checkOrderTime() {
-    final now = DateTime.now();
-    final timeZoneAdjusted = now.toLocal();
-    final startTime = DateTime(timeZoneAdjusted.year, timeZoneAdjusted.month,
-        timeZoneAdjusted.day, _openHour);
-    final endTime = DateTime(timeZoneAdjusted.year, timeZoneAdjusted.month,
-        timeZoneAdjusted.day, _closeHour);
-
-    return timeZoneAdjusted.isAfter(startTime) &&
-        timeZoneAdjusted.isBefore(endTime);
-  }
-
-  String _formatHour(int hour) {
-    if (hour == 12) return '12 PM';
-    if (hour == 0 || hour == 24) return '12 AM';
-    if (hour > 12) return '${hour - 12} PM';
-    return '$hour AM';
+  // Evaluates the live `settings/store` snapshot via the shared helper.
+  // Returns the OrderWindow but does NOT call setState — used inside the
+  // StreamBuilder so we re-evaluate on every doc change without nested
+  // setState calls during build.
+  OrderWindow _windowFromSnapshot(Map<String, dynamic> data) {
+    return OrderWindow.evaluate(doc: data, now: DateTime.now());
   }
 
   bool handleBack() {
@@ -105,8 +116,7 @@ class CartPageState extends State<CartPage> {
           builder: (context, snapshot) {
             if (snapshot.hasData && snapshot.data!.exists) {
               final data = snapshot.data!.data() as Map<String, dynamic>;
-              _openHour = data['open_hour'] ?? 9;
-              _closeHour = data['close_hour'] ?? 18;
+              _window = _windowFromSnapshot(data);
             }
 
             return _buildCartContent(context,
@@ -138,9 +148,31 @@ class CartPageState extends State<CartPage> {
   }
 
   Widget _buildCartContent(BuildContext context, {bool isLoading = false}) {
-    final bool isOrderTimeValid = _checkOrderTime();
-    final String timeNotice =
-        'Los pedidos solo pueden realizarse entre ${_formatHour(_openHour)} y ${_formatHour(_closeHour)}.';
+    // Three-state ordering window:
+    //   - open       → deliver and pickup both available, CTA enabled
+    //   - pickupOnly → CTA enabled but a banner says "pickup only"
+    //   - closed     → CTA disabled, banner says we're physically closed
+    //                  (quiet hours, default 10 PM → 8 AM)
+    final OrderingStatus status = _window.status;
+    final bool ctaEnabled = status != OrderingStatus.closed;
+
+    String? bannerText;
+    Color? bannerColor;
+    if (status == OrderingStatus.closed) {
+      bannerText = 'Estamos cerrados de '
+          '${formatHourMinute(_window.quietStart)} a '
+          '${formatHourMinute(_window.quietEnd)}. '
+          'Vuelve a hacer tu pedido más tarde.';
+      bannerColor = Colors.red[700];
+    } else if (status == OrderingStatus.pickupOnly) {
+      bannerText = _window.deliveryRestToday
+          ? 'Hoy solo aceptamos pedidos para recoger en tienda.'
+          : 'Las entregas a domicilio están disponibles entre '
+              '${formatHourMinute(_window.todayOpen!)} y '
+              '${formatHourMinute(_window.todayClose!)}. '
+              'Fuera de ese horario puedes recoger en tienda.';
+      bannerColor = Colors.orange[800];
+    }
 
     return Container(
       color: Colors.transparent,
@@ -182,32 +214,36 @@ class CartPageState extends State<CartPage> {
             ],
           ),
           Expanded(
-            child: Stack(
+            child: Column(
               children: [
-                BottomFade(
-                  clearHeight: 310,
-                  fadeHeight: 150,
-                  child: Consumer<CartProvider>(
-                    builder: (context, cartProvider, child) {
-                      if (cartProvider.items.isEmpty) {
-                        return const Center(
-                          child: Text('No hay productos en tu carrito'),
+                Expanded(
+                  child: BottomFade(
+                    // Small fade clear/height — the ListView's viewport now
+                    // ends naturally above the totals card, so the fade is
+                    // just a visual softener as items scroll out of view.
+                    clearHeight: 0,
+                    fadeHeight: 65,
+                    child: Consumer<CartProvider>(
+                      builder: (context, cartProvider, child) {
+                        if (cartProvider.items.isEmpty) {
+                          return const Center(
+                            child: Text('No hay productos en tu carrito'),
+                          );
+                        }
+                        return ListView(
+                          padding: const EdgeInsets.only(bottom: 16),
+                          children: _buildCartChildren(context, cartProvider),
                         );
-                      }
-                      return ListView(
-                        padding: const EdgeInsets.only(bottom: 390),
-                        children: _buildCartChildren(context, cartProvider),
-                      );
-                    },
+                      },
+                    ),
                   ),
                 ),
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 5, 16, 112),
-                    child: Card(
+                // Totals card sits BELOW the list in its own row of the
+                // Column — items can no longer hide behind it regardless of
+                // how many extra rows (Descuento, banner, etc.) it grows.
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 5, 16, 112),
+                  child: Card(
               elevation: 4,
               margin: EdgeInsets.zero,
               shape: RoundedRectangleBorder(
@@ -307,13 +343,13 @@ class CartPageState extends State<CartPage> {
                           ],
                         ),
                         const SizedBox(height: 10),
-                        if (!isOrderTimeValid && !isLoading)
+                        if (bannerText != null && !isLoading)
                           Padding(
                             padding: const EdgeInsets.symmetric(vertical: 8.0),
                             child: Text(
-                              timeNotice,
+                              bannerText,
                               style: TextStyle(
-                                color: Colors.red[700],
+                                color: bannerColor,
                                 fontWeight: FontWeight.bold,
                               ),
                               textAlign: TextAlign.center,
@@ -323,7 +359,7 @@ class CartPageState extends State<CartPage> {
                           width: double.infinity,
                           child: ElevatedButton(
                             onPressed: (cartProvider.items.isEmpty ||
-                                !isOrderTimeValid ||
+                                !ctaEnabled ||
                                 isLoading)
                                 ? null
                                 : () async {
@@ -364,7 +400,6 @@ class CartPageState extends State<CartPage> {
               ),
             ),
                   ),
-                ),
               ],
             ),
           ),
@@ -538,188 +573,236 @@ class CartPageState extends State<CartPage> {
 
   void _showBulkOrderDialog(
       BuildContext context, CartProvider cartProvider, CartItem item) {
-    final pesosController = TextEditingController();
-    final kilosController = TextEditingController();
-    final FocusNode pesosFocusNode = FocusNode();
-    final FocusNode kilosFocusNode = FocusNode();
-    final pricePerKilo = item.price;
-
-    kilosController.text = item.quantity.toStringAsFixed(3);
-    pesosController.text =
-    '\$${(item.quantity * pricePerKilo).toStringAsFixed(2)}';
-
-    pesosFocusNode.addListener(() {
-      if (!pesosFocusNode.hasFocus) {
-        final pesos =
-            double.tryParse(pesosController.text.replaceAll('\$', '')) ?? 0.0;
-        if (pricePerKilo != 0.0) {
-          final kilos = pesos / pricePerKilo;
-          kilosController.text = kilos.toStringAsFixed(3);
-          pesosController.text = '\$${pesos.toStringAsFixed(2)}';
-        }
-      }
-    });
-
-    kilosFocusNode.addListener(() {
-      if (!kilosFocusNode.hasFocus) {
-        final kilos = double.tryParse(kilosController.text) ?? 0.0;
-        if (pricePerKilo != 0.0) {
-          final pesos = kilos * pricePerKilo;
-          pesosController.text = '\$${pesos.toStringAsFixed(2)}';
-        }
-      }
-    });
-
     showDialog(
       context: context,
       builder: (context) {
         return BackdropFilter(
           filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
-          child: AlertDialog(
-            title: const Center(child: Text("Producto a Granel")),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Row(
-                  children: [
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(8.0),
-                      child: CachedNetworkImage(
-                        imageUrl: item.imageUrl,
-                        fit: BoxFit.contain,
-                        width: 50,
-                        height: 50,
-                        placeholder: (context, url) =>
-                        const ShimmerPlaceholder(width: 50, height: 50),
-                        errorWidget: (context, url, error) =>
-                        const Icon(Icons.error),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          item.nombre,
-                          style: const TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Precio por Kilo: ${pricePerKilo.toStringAsFixed(2)}',
-                          style: const TextStyle(color: Colors.green),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                const Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    'Valor en pesos',
-                    style: TextStyle(color: Colors.black),
-                  ),
-                ),
-                Row(
-                  children: [
-                    Expanded(
-                      flex: 2,
-                      child: TextField(
-                        controller: pesosController,
-                        keyboardType: TextInputType.number,
-                        focusNode: pesosFocusNode,
-                        textAlign: TextAlign.center,
-                        decoration: InputDecoration(
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    const Expanded(
-                      flex: 1,
-                      child: Text(
-                        'MXN',
-                        style: TextStyle(color: Colors.black),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                const Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    'Peso en kilo',
-                    style: TextStyle(color: Colors.black),
-                  ),
-                ),
-                Row(
-                  children: [
-                    Expanded(
-                      flex: 2,
-                      child: TextField(
-                        controller: kilosController,
-                        keyboardType: TextInputType.number,
-                        focusNode: kilosFocusNode,
-                        textAlign: TextAlign.center,
-                        decoration: InputDecoration(
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    const Expanded(
-                      flex: 1,
-                      child: Text(
-                        'kg',
-                        style: TextStyle(color: Colors.black),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                RichText(
-                  textAlign: TextAlign.justify,
-                  text: const TextSpan(
-                    style: TextStyle(color: Colors.black),
-                    children: [
-                      TextSpan(
-                        text:
-                        "\n*Tenga en cuenta que la cantidad recibida puede variar ligeramente.",
-                        style: TextStyle(fontStyle: FontStyle.italic),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            actions: [
-              TextButton(
-                onPressed: () {
-                  Navigator.of(context).pop();
-                  final kilos = double.tryParse(kilosController.text) ?? 0.0;
-
-                  if (item.objectID.isNotEmpty) {
-                    cartProvider.setItem(
-                      item.objectID,
-                      item.nombre,
-                      item.price,
-                      item.imageUrl,
-                      kilos,
-                      isBulk: item.isBulk,
-                      stock: item.stock,
-                    );
-                  }
-                },
-                child: const Text('Agregar'),
-              ),
-            ],
+          child: _BulkOrderDialog(
+            item: item,
+            onConfirm: (kilos) {
+              Navigator.of(context).pop();
+              if (item.objectID.isNotEmpty) {
+                cartProvider.setItem(
+                  item.objectID,
+                  item.nombre,
+                  item.price,
+                  item.imageUrl,
+                  kilos,
+                  isBulk: item.isBulk,
+                  stock: item.stock,
+                );
+              }
+            },
           ),
         );
       },
+    );
+  }
+}
+
+/// Bulk-order dialog body. Owns its own FocusNode + TextEditingController
+/// instances so they get disposed when the dialog closes (the previous
+/// inline implementation leaked both nodes and their listeners every time
+/// the dialog opened).
+class _BulkOrderDialog extends StatefulWidget {
+  final CartItem item;
+  final ValueChanged<double> onConfirm;
+
+  const _BulkOrderDialog({
+    required this.item,
+    required this.onConfirm,
+  });
+
+  @override
+  State<_BulkOrderDialog> createState() => _BulkOrderDialogState();
+}
+
+class _BulkOrderDialogState extends State<_BulkOrderDialog> {
+  final TextEditingController pesosController = TextEditingController();
+  final TextEditingController kilosController = TextEditingController();
+  final FocusNode pesosFocusNode = FocusNode();
+  final FocusNode kilosFocusNode = FocusNode();
+
+  double get _pricePerKilo => widget.item.price;
+
+  @override
+  void initState() {
+    super.initState();
+    kilosController.text = widget.item.quantity.toStringAsFixed(3);
+    pesosController.text =
+    '\$${(widget.item.quantity * _pricePerKilo).toStringAsFixed(2)}';
+
+    pesosFocusNode.addListener(_handlePesosFocus);
+    kilosFocusNode.addListener(_handleKilosFocus);
+  }
+
+  void _handlePesosFocus() {
+    if (!pesosFocusNode.hasFocus) {
+      final pesos =
+          double.tryParse(pesosController.text.replaceAll('\$', '')) ?? 0.0;
+      if (_pricePerKilo != 0.0) {
+        final kilos = pesos / _pricePerKilo;
+        kilosController.text = kilos.toStringAsFixed(3);
+        pesosController.text = '\$${pesos.toStringAsFixed(2)}';
+      }
+    }
+  }
+
+  void _handleKilosFocus() {
+    if (!kilosFocusNode.hasFocus) {
+      final kilos = double.tryParse(kilosController.text) ?? 0.0;
+      if (_pricePerKilo != 0.0) {
+        final pesos = kilos * _pricePerKilo;
+        pesosController.text = '\$${pesos.toStringAsFixed(2)}';
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    pesosFocusNode.removeListener(_handlePesosFocus);
+    kilosFocusNode.removeListener(_handleKilosFocus);
+    pesosFocusNode.dispose();
+    kilosFocusNode.dispose();
+    pesosController.dispose();
+    kilosController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final item = widget.item;
+    return AlertDialog(
+      title: const Center(child: Text("Producto a Granel")),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(8.0),
+                child: CachedNetworkImage(
+                  imageUrl: item.imageUrl,
+                  fit: BoxFit.contain,
+                  width: 50,
+                  height: 50,
+                  placeholder: (context, url) =>
+                  const ShimmerPlaceholder(width: 50, height: 50),
+                  errorWidget: (context, url, error) =>
+                  const Icon(Icons.error),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    item.nombre,
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Precio por Kilo: ${_pricePerKilo.toStringAsFixed(2)}',
+                    style: const TextStyle(color: Colors.green),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          const Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              'Valor en pesos',
+              style: TextStyle(color: Colors.black),
+            ),
+          ),
+          Row(
+            children: [
+              Expanded(
+                flex: 2,
+                child: TextField(
+                  controller: pesosController,
+                  keyboardType: TextInputType.number,
+                  focusNode: pesosFocusNode,
+                  textAlign: TextAlign.center,
+                  decoration: InputDecoration(
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              const Expanded(
+                flex: 1,
+                child: Text(
+                  'MXN',
+                  style: TextStyle(color: Colors.black),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          const Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              'Peso en kilo',
+              style: TextStyle(color: Colors.black),
+            ),
+          ),
+          Row(
+            children: [
+              Expanded(
+                flex: 2,
+                child: TextField(
+                  controller: kilosController,
+                  keyboardType: TextInputType.number,
+                  focusNode: kilosFocusNode,
+                  textAlign: TextAlign.center,
+                  decoration: InputDecoration(
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              const Expanded(
+                flex: 1,
+                child: Text(
+                  'kg',
+                  style: TextStyle(color: Colors.black),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          RichText(
+            textAlign: TextAlign.justify,
+            text: const TextSpan(
+              style: TextStyle(color: Colors.black),
+              children: [
+                TextSpan(
+                  text:
+                  "\n*Tenga en cuenta que la cantidad recibida puede variar ligeramente.",
+                  style: TextStyle(fontStyle: FontStyle.italic),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () {
+            final kilos = double.tryParse(kilosController.text) ?? 0.0;
+            widget.onConfirm(kilos);
+          },
+          child: const Text('Agregar'),
+        ),
+      ],
     );
   }
 }

@@ -203,6 +203,30 @@ class _ComboDetailPageState extends State<ComboDetailPage> {
     setState(() => _slotSelections[slotIndex] = sel);
   }
 
+  String? _firstVariantComponentName() {
+    String? check(String id) {
+      final p = _products[id];
+      if (p != null && p['has_variants'] == true) {
+        return (p['nombre'] as String?) ?? 'Producto';
+      }
+      return null;
+    }
+
+    for (final f in _fixedItems) {
+      if (f is Map && f['productId'] != null) {
+        final hit = check(f['productId'].toString());
+        if (hit != null) return hit;
+      }
+    }
+    for (final sel in _slotSelections.values) {
+      for (final id in sel.keys) {
+        final hit = check(id);
+        if (hit != null) return hit;
+      }
+    }
+    return null;
+  }
+
   Future<void> _showInfo(String title, String msg) => showDialog<void>(
         context: context,
         builder: (ctx) => AlertDialog(
@@ -225,6 +249,15 @@ class _ComboDetailPageState extends State<ComboDetailPage> {
     }
     if (!_allSlotsChosen) {
       _showInfo('Completa tu combo', 'Elige las opciones de cada apartado.');
+      return;
+    }
+
+    final variantBlocker = _firstVariantComponentName();
+    if (variantBlocker != null) {
+      _showInfo(
+          'Combo no compatible',
+          '"$variantBlocker" tiene variantes y aún no se puede incluir en combos. '
+              'Pide la variante directamente desde el catálogo.');
       return;
     }
     final maxQty = _maxQty();
@@ -518,14 +551,20 @@ class _ComboDetailPageState extends State<ComboDetailPage> {
     final bool multi = pick > 1;
     final int qty = _slotSelections[slotIndex]?[id] ?? 0;
     final bool selected = qty > 0;
-    final bool outOfStock = stock <= 0;
+    final bool hasVariants = p['has_variants'] == true;
+
+    final bool outOfStock = !hasVariants && stock <= 0;
     final bool slotFull = _slotCount(slotIndex) >= pick;
-    final bool canInc = !outOfStock && !slotFull && qty < _optionStockCap(id);
+    final bool canInc = !hasVariants &&
+        !outOfStock &&
+        !slotFull &&
+        qty < _optionStockCap(id);
+    final bool tappable = !hasVariants && !outOfStock && !multi;
 
     return Opacity(
-      opacity: outOfStock ? 0.45 : 1,
+      opacity: (hasVariants || outOfStock) ? 0.45 : 1,
       child: GestureDetector(
-        onTap: (outOfStock || multi) ? null : () => _selectSingle(slotIndex, id),
+        onTap: tappable ? () => _selectSingle(slotIndex, id) : null,
         child: Container(
           margin: const EdgeInsets.only(bottom: 10),
           padding: const EdgeInsets.all(10),
@@ -555,12 +594,22 @@ class _ComboDetailPageState extends State<ComboDetailPage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(outOfStock ? '$name (agotado)' : name,
+                    Text(
+                        hasVariants
+                            ? name
+                            : (outOfStock ? '$name (agotado)' : name),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                             fontSize: 15, fontWeight: FontWeight.w600)),
-                    if (sub.isNotEmpty) ...[
+                    if (hasVariants) ...[
+                      const SizedBox(height: 3),
+                      Text('No disponible en combos por ahora',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                              fontSize: 12, color: Colors.orange.shade800)),
+                    ] else if (sub.isNotEmpty) ...[
                       const SizedBox(height: 3),
                       Text(sub,
                           maxLines: 1,

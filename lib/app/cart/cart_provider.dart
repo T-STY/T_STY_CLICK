@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 import 'package:flutter/foundation.dart';
@@ -61,18 +62,55 @@ class CartProvider extends ChangeNotifier {
   double _totalDiscount = 0.0;
   List<CartGroup> _groups = [];
 
+  // Lazy cache of product metadata (category + distribuitor_name) keyed by
+  // productId. Populated by fire-and-forget Firestore reads from `addItem`,
+  // `setItem`, and `_loadCartFromStorage`. Read by `eligibleSubtotalFor` to
+  // evaluate coupon product-filter restrictions without async work in the
+  // build path. NOTE: products store the typo'd field `distribuitor_name`.
+  final Map<String, _ProductMeta> _productMeta = {};
+  final Set<String> _productMetaInFlight = {};
+
+  /// Bumped each time a `_ensureProductMeta` fetch resolves. Checkout's
+  /// coupon row listens to this directly so it can re-evaluate
+  /// `eligibleSubtotalFor` without forcing every Consumer<CartProvider>
+  /// in the app to rebuild. Important on the search/home screen, where
+  /// each visible search hit registers an `_AddToCartButton` listener on
+  /// CartProvider — fanning out a full `notifyListeners` per meta read
+  /// stutters the search results during typing.
+  final ValueNotifier<int> productMetaVersion = ValueNotifier<int>(0);
+
   List<String> get appliedPromosList => _groups.map((g) => g.name).toList();
   double get promoDiscount => _totalDiscount;
 
   List<CartGroup> get groups => List.unmodifiable(_groups);
+
+  final Completer<void> _readyCompleter = Completer<void>();
+
+  /// Resolves once the initial async setup (`fetchActivePromotions` +
+  /// `_loadCartFromStorage`) has completed. Callers can optionally await this
+  /// before reading [items], [groups], or combo data to avoid the race where
+  /// they observe empty state before the constructor's fire-and-forget `_init`
+  /// resolves. Awaiting is optional — existing fire-and-forget behavior is
+  /// unchanged.
+  Future<void> get ready => _readyCompleter.future;
 
   CartProvider() {
     _init();
   }
 
   Future<void> _init() async {
-    await fetchActivePromotions();
-    await _loadCartFromStorage();
+    try {
+      await fetchActivePromotions();
+      await _loadCartFromStorage();
+    } catch (e, st) {
+      if (!_readyCompleter.isCompleted) {
+        _readyCompleter.completeError(e, st);
+      }
+    } finally {
+      if (!_readyCompleter.isCompleted) {
+        _readyCompleter.complete();
+      }
+    }
   }
 
   Map<String, CartItem> get items => {..._items};
@@ -103,6 +141,87 @@ class CartProvider extends ChangeNotifier {
     }
     final remaining = item.quantity - claimed;
     return remaining < 0 ? 0 : remaining;
+  }
+
+  /// Sum of (price × quantity) over the cart items that satisfy a coupon's
+  /// `productFilter`. Mirrors the server-side math in
+  /// click-main/functions/index.js `_computeEligibleSubtotal` so the on-screen
+  /// preview matches the order's recomputed discount.
+  ///
+  /// Pass `null` (or a filter map with `mode != 'include'/'exclude'`) to get
+  /// the raw subtotal — legacy "no filter" behavior. The caller (checkout)
+  /// is responsible for clamping the result to `totalPriceAfterDiscount` so
+  /// combos and the coupon discount don't compound past the cart's value.
+  ///
+  /// Returns `null` IFF an active filter needs category/provedor data and at
+  /// least one in-cart item's metadata hasn't loaded yet — the UI should
+  /// render a neutral "verifying eligibility" state in that case instead of
+  /// the misleading "No aplica" badge that would result from treating
+  /// missing meta as "no match".
+  double? eligibleSubtotalFor(Map<String, dynamic>? filterMap) {
+    if (filterMap == null) return totalPrice;
+    final mode = (filterMap['mode'] ?? 'all').toString();
+    if (mode != 'include' && mode != 'exclude') return totalPrice;
+
+    List<String> readList(dynamic v) =>
+        (v is List) ? v.map((e) => e.toString()).toList() : const <String>[];
+    final subs = readList(filterMap['subcategories']).toSet();
+    final provs = readList(filterMap['provedores']).toSet();
+    final ids = readList(filterMap['productIds']).toSet();
+    // If the filter only matches by productId (no category/provedor lists),
+    // we don't need product metadata at all — productId is already on the
+    // cart line. Skip the loading-state check in that case.
+    final needsMeta = subs.isNotEmpty || provs.isNotEmpty;
+
+    double eligible = 0.0;
+    for (final item in _items.values) {
+      final meta = _productMeta[item.productId];
+      if (needsMeta && meta == null) {
+        // Metadata still loading for at least one in-cart item; refuse to
+        // give a partial answer.
+        return null;
+      }
+      final cat = meta?.category ?? '';
+      final prov = meta?.distribuitorName ?? '';
+      final matchedCategory = cat.isNotEmpty && subs.contains(cat);
+      final matchedProvedor = prov.isNotEmpty && provs.contains(prov);
+      final matchedId =
+          item.productId.isNotEmpty && ids.contains(item.productId);
+      final matched = matchedCategory || matchedProvedor || matchedId;
+      final pass = mode == 'include' ? matched : !matched;
+      if (pass) eligible += item.price * item.quantity;
+    }
+    return eligible;
+  }
+
+  /// Fire-and-forget product metadata fetch — populates `_productMeta` so a
+  /// subsequent synchronous `eligibleSubtotalFor` call has the data it needs.
+  /// Called from `addItem` / `setItem` and from cart-storage reload.
+  void _ensureProductMeta(String productId) {
+    if (productId.isEmpty) return;
+    if (_productMeta.containsKey(productId)) return;
+    if (_productMetaInFlight.contains(productId)) return;
+    _productMetaInFlight.add(productId);
+    FirebaseFirestore.instance
+        .collection('products')
+        .doc(productId)
+        .get()
+        .then((snap) {
+      _productMetaInFlight.remove(productId);
+      if (!snap.exists) return;
+      final d = snap.data() ?? {};
+      _productMeta[productId] = _ProductMeta(
+        category: (d['category'] ?? '').toString(),
+        distribuitorName: (d['distribuitor_name'] ?? '').toString(),
+      );
+      // SCOPED notification — checkout's coupon row listens via
+      // `productMetaVersion` so it can refresh eligibility without
+      // waking every CartProvider listener (e.g. every search-result
+      // row's `_AddToCartButton`).
+      productMetaVersion.value++;
+    }).catchError((_) {
+      _productMetaInFlight.remove(productId);
+    });
   }
 
   Future<void> fetchActivePromotions() async {
@@ -302,6 +421,18 @@ class CartProvider extends ChangeNotifier {
 
     _groups = groups;
     _totalDiscount = totalDiscount;
+    _pruneProductMeta();
+  }
+
+  /// Drop cached product metadata for any productId that is no longer in
+  /// the cart. Keeps the cache from leaking, and — more importantly —
+  /// guarantees that the next time the user re-adds the product, a fresh
+  /// Firestore read picks up any admin re-categorization that happened
+  /// since the last time the item was in cart.
+  void _pruneProductMeta() {
+    if (_productMeta.isEmpty) return;
+    final live = _items.values.map((i) => i.productId).toSet();
+    _productMeta.removeWhere((pid, _) => !live.contains(pid));
   }
 
   Future<void> _saveCartToStorage() async {
@@ -337,6 +468,12 @@ class CartProvider extends ChangeNotifier {
             .map((e) => ComboInstance.fromJson(Map<String, dynamic>.from(e as Map)))
             .toList();
       }
+      // Backfill product metadata for everything in the restored cart so a
+      // freshly opened checkout has eligibility data ready without waiting
+      // for the user to interact with the cart.
+      for (final item in _items.values) {
+        _ensureProductMeta(item.productId);
+      }
       _evaluatePromotions();
       notifyListeners();
     } catch (e) {
@@ -350,26 +487,33 @@ class CartProvider extends ChangeNotifier {
       required double stock,
       String? typeSpecific,
       String? variante,
-      String brand = ''}) {
-    final existing = _items[productId];
+      String brand = '',
+      String? variantKey,
+      String? variantName}) {
+    final lineId = buildCartLineId(productId, variantKey);
+    final existing = _items[lineId];
     double newQty = (existing?.quantity ?? 0) + quantity;
     if (stock > 0 && newQty > stock) newQty = stock;
     if (newQty <= 0) {
-      _items.remove(productId);
+      _items.remove(lineId);
       return;
     }
-    _items[productId] = CartItem(
+    _items[lineId] = CartItem(
       nombre: name,
       price: price,
       quantity: newQty,
       imageUrl: imageUrl,
-      objectID: productId,
+      objectID: lineId,
       isBulk: isBulk,
       stock: stock,
       typeSpecific: typeSpecific ?? existing?.typeSpecific ?? '',
       variante: variante ?? existing?.variante ?? '',
       brand: brand.isNotEmpty ? brand : (existing?.brand ?? ''),
+      productId: productId,
+      variantKey: variantKey ?? existing?.variantKey,
+      variantName: variantName ?? existing?.variantName,
     );
+    _ensureProductMeta(productId);
   }
 
   void addItem(String productId, String name, double price, String imageUrl,
@@ -378,10 +522,13 @@ class CartProvider extends ChangeNotifier {
       required double stock,
       String? typeSpecific,
       String? variante,
-      String brand = ''}) {
-    if (_items.containsKey(productId)) {
+      String brand = '',
+      String? variantKey,
+      String? variantName}) {
+    final lineId = buildCartLineId(productId, variantKey);
+    if (_items.containsKey(lineId)) {
       _items.update(
-        productId,
+        lineId,
         (existingCartItem) {
           double newQuantity = existingCartItem.quantity + quantity;
           if (newQuantity > stock) {
@@ -399,6 +546,9 @@ class CartProvider extends ChangeNotifier {
             typeSpecific: existingCartItem.typeSpecific,
             variante: existingCartItem.variante,
             brand: existingCartItem.brand,
+            productId: existingCartItem.productId,
+            variantKey: existingCartItem.variantKey,
+            variantName: existingCartItem.variantName,
           );
         },
       );
@@ -409,21 +559,25 @@ class CartProvider extends ChangeNotifier {
         _showStockExceededDialog(name);
       }
       _items.putIfAbsent(
-        productId,
+        lineId,
         () => CartItem(
           nombre: name,
           price: price,
           quantity: initialQuantity,
           imageUrl: imageUrl,
-          objectID: productId,
+          objectID: lineId,
           isBulk: isBulk,
           stock: stock,
           typeSpecific: typeSpecific ?? '',
           variante: variante ?? '',
           brand: brand,
+          productId: productId,
+          variantKey: variantKey,
+          variantName: variantName,
         ),
       );
     }
+    _ensureProductMeta(productId);
     _evaluatePromotions();
     notifyListeners();
     _saveCartToStorage();
@@ -436,42 +590,53 @@ class CartProvider extends ChangeNotifier {
       required double stock,
       String? typeSpecific,
       String? variante,
-      String brand = ''}) {
+      String brand = '',
+      String? variantKey,
+      String? variantName}) {
     if (quantity > stock) {
       quantity = stock;
       _showStockExceededDialog(name);
     }
 
+    final lineId = buildCartLineId(productId, variantKey);
+
     if (quantity > 0) {
       _items.update(
-        productId,
+        lineId,
         (existingCartItem) => CartItem(
           nombre: name,
           price: price,
           quantity: quantity,
           imageUrl: imageUrl,
-          objectID: productId,
+          objectID: lineId,
           isBulk: isBulk,
           stock: stock,
           typeSpecific: typeSpecific ?? existingCartItem.typeSpecific,
           variante: variante ?? existingCartItem.variante,
           brand: brand.isNotEmpty ? brand : existingCartItem.brand,
+          productId: productId,
+          variantKey: variantKey ?? existingCartItem.variantKey,
+          variantName: variantName ?? existingCartItem.variantName,
         ),
         ifAbsent: () => CartItem(
           nombre: name,
           price: price,
           quantity: quantity,
           imageUrl: imageUrl,
-          objectID: productId,
+          objectID: lineId,
           isBulk: isBulk,
           stock: stock,
           typeSpecific: typeSpecific ?? '',
           variante: variante ?? '',
           brand: brand,
+          productId: productId,
+          variantKey: variantKey,
+          variantName: variantName,
         ),
       );
+      _ensureProductMeta(productId);
     } else {
-      _items.remove(productId);
+      _items.remove(lineId);
     }
     _evaluatePromotions();
     notifyListeners();
@@ -613,6 +778,8 @@ class CartProvider extends ChangeNotifier {
     _comboInstances.clear();
     _groups = [];
     _totalDiscount = 0.0;
+    _productMeta.clear();
+    _productMetaInFlight.clear();
     notifyListeners();
     _saveCartToStorage();
   }
@@ -629,12 +796,17 @@ class CartItem {
   final double price;
   final double quantity;
   final String imageUrl;
+
   final String objectID;
   final bool isBulk;
   final double stock;
   final String typeSpecific;
   final String variante;
   final String brand;
+
+  final String productId;
+  final String? variantKey;
+  final String? variantName;
 
   CartItem({
     required this.nombre,
@@ -647,7 +819,10 @@ class CartItem {
     this.typeSpecific = '',
     this.variante = '',
     this.brand = '',
-  });
+    String? productId,
+    this.variantKey,
+    this.variantName,
+  }) : productId = productId ?? objectID;
 
   Map<String, dynamic> toMap() {
     return {
@@ -661,6 +836,10 @@ class CartItem {
       'type_specific': typeSpecific,
       'variante': variante,
       'brand': brand,
+
+      'productId': productId,
+      if (variantKey != null) 'variantKey': variantKey,
+      if (variantName != null) 'variantName': variantName,
     };
   }
 
@@ -676,6 +855,20 @@ class CartItem {
       typeSpecific: json['type_specific'] as String? ?? '',
       variante: json['variante'] as String? ?? '',
       brand: json['brand'] as String? ?? '',
+      productId: json['productId'] as String?,
+      variantKey: json['variantKey'] as String?,
+      variantName: json['variantName'] as String?,
     );
   }
+}
+
+String buildCartLineId(String productId, String? variantKey) =>
+    variantKey == null || variantKey.isEmpty
+        ? productId
+        : '$productId#$variantKey';
+
+class _ProductMeta {
+  final String category;
+  final String distribuitorName;
+  const _ProductMeta({required this.category, required this.distribuitorName});
 }

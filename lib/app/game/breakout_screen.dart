@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'arcade_center_screen.dart' show AppLanguage;
 import 'arcade_input_controller.dart';
 import 'game_saldo.dart';
 import 'high_score_service.dart';
@@ -48,6 +49,7 @@ class BreakoutScreen extends StatefulWidget {
   final double currentSaldo;
   final ArcadeInputController controller;
   final void Function(double) onSaldoChanged;
+  final AppLanguage language;
 
   const BreakoutScreen({
     super.key,
@@ -56,6 +58,7 @@ class BreakoutScreen extends StatefulWidget {
     required this.currentSaldo,
     required this.controller,
     required this.onSaldoChanged,
+    this.language = AppLanguage.spanish,
   });
 
   @override
@@ -73,14 +76,19 @@ class _BreakoutScreenState extends State<BreakoutScreen> {
   int _score = 0, _hiScore = 0, _lives = 3, _level = 0;
   bool _paused = false;
   late double _saldo;
+  late double _lastCommitted;
   _BKState _state = _BKState.start;
   Timer? _gameTimer;
   DateTime? _lastTick;
+
+  String _t(String es, String en) =>
+      widget.language == AppLanguage.spanish ? es : en;
 
   @override
   void initState() {
     super.initState();
     _saldo = widget.currentSaldo;
+    _lastCommitted = widget.currentSaldo;
     widget.controller.addListener(_onInput);
     HighScoreService.load('breakout').then((v) {
       if (mounted) setState(() => _hiScore = v);
@@ -148,6 +156,10 @@ class _BreakoutScreenState extends State<BreakoutScreen> {
     if (ns == null) return;
     if (!mounted) return;
     _saldo = ns;
+    // The replay charge already landed on the server, so the committed
+    // ledger has to follow it. Without this the next credit computes its
+    // delta against the pre-charge value and debits the player instead.
+    _lastCommitted = ns;
     widget.onSaldoChanged(ns);
     _startLevel();
   }
@@ -297,15 +309,24 @@ class _BreakoutScreenState extends State<BreakoutScreen> {
   }
 
   Future<void> _updateFirestore(double newSaldo) async {
-    try {
-      final ref = FirebaseFirestore.instance
-          .collection('users').doc(widget.userId)
-          .collection('rewardsCard').doc('cardInfo');
-      final batch = FirebaseFirestore.instance.batch();
-      batch.update(ref, {'saldo': newSaldo});
-      batch.update(widget.rewardsDocRef, {'saldo': newSaldo});
-      await batch.commit();
-    } catch (e) { debugPrint('Breakout Firestore: $e'); }
+    // Routes through the server-side `updateRewardsSaldo`
+    // callable instead of writing rewards/{docId} directly
+    // (admin-only collection — direct writes failed silently
+    // for every non-admin user). The CF resolves the wallet,
+    // applies the delta in a transaction, and mirrors the
+    // result to the owner-readable card cache.
+    final delta = newSaldo - _lastCommitted;
+    if (delta == 0) return;
+    final result = await applyArcadeDelta(
+      delta: delta,
+      reason: 'breakout',
+    );
+    if (result != null) {
+      _lastCommitted = result;
+      if (mounted && _saldo != result) {
+        setState(() => _saldo = result);
+      }
+    }
   }
 
   @override
@@ -323,46 +344,50 @@ class _BreakoutScreenState extends State<BreakoutScreen> {
               lives: _lives, level: _level,
               combo: _combo,
               trail: List.unmodifiable(_trail),
+              language: widget.language,
             ),
           ),
         ),
         if (_state == _BKState.start)
           _buildOverlay(
-            title: 'NEON BREAK',
-            subtitle: 'Izq/Der para mover',
-            actionLabel: 'PULSA A PARA LANZAR',
+            title: _t('MURO DE NEÓN', 'NEON BREAK'),
+            subtitle: _t('Izq/Der para mover', 'Left/Right to move'),
+            actionLabel: _t('PULSA A PARA LANZAR', 'PRESS A TO LAUNCH'),
             accentColor: const Color(0xFF00EEFF),
             titleColor: const Color(0xFF00EEFF),
           ),
         if (_state == _BKState.levelClear)
           _buildOverlay(
-            title: '¡NIVEL ${_level}!',
-            subtitle: 'Siguiente nivel desbloqueado',
-            actionLabel: 'SIGUIENTE NIVEL',
+            title: _t('¡NIVEL $_level!', 'LEVEL $_level!'),
+            subtitle: _t('Siguiente nivel desbloqueado', 'Next level unlocked'),
+            actionLabel: _t('SIGUIENTE NIVEL', 'NEXT LEVEL'),
             accentColor: const Color(0xFF00FF66),
             titleColor: const Color(0xFFFFEE00),
           ),
         if (_state == _BKState.dead)
           _buildOverlay(
-            title: '${_lives} ${_lives == 1 ? "VIDA" : "VIDAS"}',
-            subtitle: 'Sigue intentándolo',
-            actionLabel: 'CONTINUAR',
+            title: _t('$_lives ${_lives == 1 ? "VIDA" : "VIDAS"}',
+                '$_lives ${_lives == 1 ? "LIFE" : "LIVES"}'),
+            subtitle: _t('Sigue intentándolo', 'Keep trying'),
+            actionLabel: _t('CONTINUAR', 'CONTINUE'),
             accentColor: const Color(0xFFFF6600),
             titleColor: const Color(0xFFFF6600),
           ),
         if (_state == _BKState.gameOver)
           _buildOverlay(
+            // "Game Over" is idiomatic in Spanish arcades and stays one line
+            // at the title size — left untranslated on purpose.
             title: 'GAME OVER',
-            subtitle: 'Puntuación: $_score',
-            actionLabel: 'NUEVA PARTIDA',
+            subtitle: _t('Puntuación: $_score', 'Score: $_score'),
+            actionLabel: _t('NUEVA PARTIDA', 'NEW GAME'),
             accentColor: const Color(0xFFFF1155),
             titleColor: const Color(0xFFFF1155),
           ),
         if (_paused && _state == _BKState.playing)
           _buildOverlay(
-            title: 'PAUSA',
-            subtitle: 'El juego está pausado',
-            actionLabel: 'START PARA CONTINUAR',
+            title: _t('PAUSA', 'PAUSED'),
+            subtitle: _t('El juego está pausado', 'The game is paused'),
+            actionLabel: _t('START PARA CONTINUAR', 'START TO CONTINUE'),
             accentColor: Colors.white54,
             titleColor: Colors.white,
           ),
@@ -495,6 +520,7 @@ class _BreakoutPainter extends CustomPainter {
   final List<List<int>> bricks;
   final int score, hiScore, lives, level, combo;
   final List<Offset> trail;
+  final AppLanguage language;
 
   const _BreakoutPainter({
     required this.padX, required this.bx, required this.by,
@@ -503,9 +529,13 @@ class _BreakoutPainter extends CustomPainter {
     required this.lives, required this.level,
     required this.combo,
     required this.trail,
+    this.language = AppLanguage.spanish,
   });
 
   @override bool shouldRepaint(_BreakoutPainter o) => true;
+
+  String _pt(String es, String en) =>
+      language == AppLanguage.spanish ? es : en;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -806,7 +836,7 @@ class _BreakoutPainter extends CustomPainter {
     );
 
     glowText(
-      'NIV ${level + 1}',
+      _pt('NIV ${level + 1}', 'LVL ${level + 1}'),
       size.width * 0.42,
       size.height * 0.012,
       const Color(0xFFFFEE00),
@@ -815,7 +845,7 @@ class _BreakoutPainter extends CustomPainter {
     );
 
     glowText(
-      'REC $hiScore',
+      _pt('REC $hiScore', 'BEST $hiScore'),
       size.width * 0.66,
       size.height * 0.012,
       const Color(0xFFAA66FF),
@@ -829,7 +859,7 @@ class _BreakoutPainter extends CustomPainter {
           : const Color(0xFFFF6600);
       final comboFs = hfs * (combo >= 5 ? 1.1 : 0.95);
       glowText(
-        'x$combo COMBO!',
+        _pt('x$combo ¡COMBO!', 'x$combo COMBO!'),
         size.width * 0.34,
         size.height * 0.89,
         comboColor,

@@ -29,6 +29,14 @@ class RecipeDetailPage extends StatefulWidget {
 class RecipeDetailPageState extends State<RecipeDetailPage> {
   Map<String, dynamic>? recipeData;
 
+  // Re-entrancy + visible-progress guard for `_addItemsToCart`. The
+  // ingredient lookup fans out to many Firestore reads; without this
+  // flag a quick double-tap of the "agregar al carrito" button would
+  // race two passes and double-add. Flipped true on entry, restored
+  // in a finally block so the button can render a spinner and be
+  // disabled while the work is in flight.
+  bool _isAddingToCart = false;
+
   @override
   void initState() {
     super.initState();
@@ -49,87 +57,99 @@ class RecipeDetailPageState extends State<RecipeDetailPage> {
   }
 
   Future<void> _addItemsToCart() async {
+    if (_isAddingToCart) return;
     if (recipeData == null || recipeData!['ingredients'] == null) return;
 
-    final ingredients = recipeData!['ingredients'] as List<dynamic>;
-    final cartProvider = Provider.of<CartProvider>(context, listen: false);
-    List<Map<String, dynamic>> availableItems = [];
-    List<Map<String, dynamic>> insufficientStockItems = [];
-    List<Map<String, dynamic>> missingItems = [];
+    setState(() {
+      _isAddingToCart = true;
+    });
+    try {
+      final ingredients = recipeData!['ingredients'] as List<dynamic>;
+      final cartProvider = Provider.of<CartProvider>(context, listen: false);
+      List<Map<String, dynamic>> availableItems = [];
+      List<Map<String, dynamic>> insufficientStockItems = [];
+      List<Map<String, dynamic>> missingItems = [];
 
-    for (var ingredient in ingredients) {
-      final String productId = ingredient['productId'];
-      final double requestedQuantity =
-          (ingredient['quantity'] as num?)?.toDouble() ?? 0;
+      for (var ingredient in ingredients) {
+        final String productId = ingredient['productId'];
+        final double requestedQuantity =
+            (ingredient['quantity'] as num?)?.toDouble() ?? 0;
 
-      final productDoc = await FirebaseFirestore.instance
-          .collection('products')
-          .doc(productId)
-          .get();
+        final productDoc = await FirebaseFirestore.instance
+            .collection('products')
+            .doc(productId)
+            .get();
 
-      if (!productDoc.exists) {
-        missingItems.add(ingredient);
-      } else {
-        final productData = productDoc.data();
-        if (productData != null) {
-          final double? productPrice =
-          (productData['price'] as num?)?.toDouble();
-          final double? availableStock =
-          (productData['stock'] as num?)?.toDouble();
-          final String productName =
-              productData['nombre'] ?? 'Producto desconocido';
-          final String imageUrl = productData['image_url'] ?? '';
+        if (!productDoc.exists) {
+          missingItems.add(ingredient);
+        } else {
+          final productData = productDoc.data();
+          if (productData != null) {
+            final double? productPrice =
+            (productData['price'] as num?)?.toDouble();
+            final double? availableStock =
+            (productData['stock'] as num?)?.toDouble();
+            final String productName =
+                productData['nombre'] ?? 'Producto desconocido';
+            final String imageUrl = productData['image_url'] ?? '';
 
-          final String typeSpecific =
-              productData['type_specific'] as String? ?? '';
-          final String variante = productData['variante'] as String? ?? '';
+            final String typeSpecific =
+                productData['type_specific'] as String? ?? '';
+            final String variante = productData['variante'] as String? ?? '';
 
-          if (productPrice == null || availableStock == null) {
-            continue;
-          }
+            if (productPrice == null || availableStock == null) {
+              continue;
+            }
 
-          if (requestedQuantity > availableStock) {
-            insufficientStockItems.add({
-              'productId': productId,
-              'name': productName,
-              'imageUrl': imageUrl,
-              'availableStock': availableStock,
-              'requestedQuantity': requestedQuantity,
-              'price': productPrice,
-              'isBulk': ingredient['isBulk'] ?? false,
-              'stock': availableStock,
-              'typeSpecific': typeSpecific,
-              'variante': variante,
-            });
-          } else {
-            availableItems.add({
-              'productId': productId,
-              'name': productName,
-              'imageUrl': imageUrl,
-              'quantity': requestedQuantity,
-              'price': productPrice,
-              'isBulk': ingredient['isBulk'] ?? false,
-              'stock': availableStock,
-              'typeSpecific': typeSpecific,
-              'variante': variante,
-            });
+            if (requestedQuantity > availableStock) {
+              insufficientStockItems.add({
+                'productId': productId,
+                'name': productName,
+                'imageUrl': imageUrl,
+                'availableStock': availableStock,
+                'requestedQuantity': requestedQuantity,
+                'price': productPrice,
+                'isBulk': ingredient['isBulk'] ?? false,
+                'stock': availableStock,
+                'typeSpecific': typeSpecific,
+                'variante': variante,
+              });
+            } else {
+              availableItems.add({
+                'productId': productId,
+                'name': productName,
+                'imageUrl': imageUrl,
+                'quantity': requestedQuantity,
+                'price': productPrice,
+                'isBulk': ingredient['isBulk'] ?? false,
+                'stock': availableStock,
+                'typeSpecific': typeSpecific,
+                'variante': variante,
+              });
+            }
           }
         }
       }
-    }
 
-    if (missingItems.isNotEmpty || insufficientStockItems.isNotEmpty) {
-      if (!mounted) return;
-      _showStockAndMissingDialog(
-        availableItems,
-        insufficientStockItems,
-        missingItems,
-        cartProvider,
-      );
-    } else {
-      await _addAvailableItemsToCart(availableItems, cartProvider);
-      if (!mounted) return;
-      _showSuccessDialog();
+      if (missingItems.isNotEmpty || insufficientStockItems.isNotEmpty) {
+        if (!mounted) return;
+        _showStockAndMissingDialog(
+          availableItems,
+          insufficientStockItems,
+          missingItems,
+          cartProvider,
+        );
+      } else {
+        await _addAvailableItemsToCart(availableItems, cartProvider);
+        if (!mounted) return;
+        _showSuccessDialog();
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isAddingToCart = false;
+        });
+      }
     }
   }
 
@@ -617,13 +637,16 @@ class RecipeDetailPageState extends State<RecipeDetailPage> {
               ),
               const SizedBox(height: 28),
               ElevatedButton(
-                onPressed: () {
-                  if (FirebaseAuth.instance.currentUser == null) {
-                    Navigator.push(context, customPageRoute(const LoginPage()));
-                  } else {
-                    _addItemsToCart();
-                  }
-                },
+                onPressed: _isAddingToCart
+                    ? null
+                    : () {
+                        if (FirebaseAuth.instance.currentUser == null) {
+                          Navigator.push(
+                              context, customPageRoute(const LoginPage()));
+                        } else {
+                          _addItemsToCart();
+                        }
+                      },
                 style: ElevatedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   backgroundColor: Colors.black,
@@ -632,24 +655,50 @@ class RecipeDetailPageState extends State<RecipeDetailPage> {
                     borderRadius: BorderRadius.circular(30),
                   ),
                 ),
-                child: const Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.add_shopping_cart,
-                        color: Colors.white, size: 20),
-                    SizedBox(width: 8),
-                    Flexible(
-                      child: Text(
-                        'Agregar productos disponibles al carrito',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                            fontSize: 16,
-                            color: Colors.white,
-                            fontWeight: FontWeight.w600),
+                child: _isAddingToCart
+                    ? const Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          SizedBox(
+                            height: 18,
+                            width: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor:
+                                  AlwaysStoppedAnimation<Color>(Colors.white),
+                            ),
+                          ),
+                          SizedBox(width: 12),
+                          Flexible(
+                            child: Text(
+                              'Agregando...',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                  fontSize: 16,
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w600),
+                            ),
+                          ),
+                        ],
+                      )
+                    : const Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.add_shopping_cart,
+                              color: Colors.white, size: 20),
+                          SizedBox(width: 8),
+                          Flexible(
+                            child: Text(
+                              'Agregar productos disponibles al carrito',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                  fontSize: 16,
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w600),
+                            ),
+                          ),
+                        ],
                       ),
-                    ),
-                  ],
-                ),
               ),
               const SizedBox(height: 140),
             ],

@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'category/product_display.dart';
+import 'category/variant_expansion.dart';
 
 typedef ProductTargetTap = void Function({
   String? category,
@@ -251,10 +252,12 @@ class _SpotlightBlockState extends State<SpotlightBlock> {
         final indexById = {for (int i = 0; i < _ids.length; i++) _ids[i]: i};
         docs.sort((a, b) =>
             (indexById[a.id] ?? 1 << 30).compareTo(indexById[b.id] ?? 1 << 30));
-        if (docs.isEmpty) return const SizedBox.shrink();
+
+        final entries = expandVariantEntries(docs);
+        if (entries.isEmpty) return const SizedBox.shrink();
 
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) _ensureAutoSlide(docs.length);
+          if (mounted) _ensureAutoSlide(entries.length);
         });
 
         return Column(
@@ -278,7 +281,7 @@ class _SpotlightBlockState extends State<SpotlightBlock> {
               child: PageView.builder(
                 controller: _controller,
                 itemBuilder: (context, i) =>
-                    _card(docs[(i - _loopBase) % docs.length], isDark),
+                    _card(entries[(i - _loopBase) % entries.length], isDark),
               ),
             ),
           ],
@@ -287,14 +290,25 @@ class _SpotlightBlockState extends State<SpotlightBlock> {
     );
   }
 
-  Widget _card(
-      QueryDocumentSnapshot<Map<String, dynamic>> doc, bool isDark) {
-    final p = doc.data();
-    final name = (p['nombre'] as String?) ?? 'Producto';
-    final image = (p['image_url'] as String?) ?? '';
-    final price = (p['price'] as num?)?.toDouble() ?? 0.0;
-    final variante = (p['variante'] as String?)?.trim() ?? '';
-    final typeSpecific = (p['type_specific'] as String?)?.trim() ?? '';
+  Widget _card(VariantEntry entry, bool isDark) {
+    final doc = entry.doc;
+    final Map<String, dynamic> p = entry.parentData;
+    final String parentName = (p['nombre'] as String?) ?? 'Producto';
+    final String parentImage = (p['image_url'] as String?) ?? '';
+    final double parentPrice = (p['price'] as num?)?.toDouble() ?? 0.0;
+    final double parentStock = (p['stock'] as num?)?.toDouble() ?? 0.0;
+    final String parentTypeSpecific =
+        (p['type_specific'] as String?)?.trim() ?? '';
+
+    final String name = parentName;
+    final String image = entry.effectiveImageUrl(parentImage);
+    final double price = entry.effectivePrice(parentPrice);
+    final double stock = entry.effectiveStock(parentStock);
+
+    final String variante = entry.isVariant
+        ? (entry.variantName ?? '')
+        : ((p['variante'] as String?)?.trim() ?? '');
+    final String typeSpecific = parentTypeSpecific;
     final sub = [variante, typeSpecific].where((s) => s.isNotEmpty).join(' · ');
     final bool isGuest = FirebaseAuth.instance.currentUser == null;
 
@@ -384,15 +398,20 @@ class _SpotlightBlockState extends State<SpotlightBlock> {
                       ),
                       const SizedBox(height: 8),
                       AddToCartButton(
+                        key: ValueKey('spotlight-${entry.lineKey}'),
                         data: {
                           'docId': doc.id,
                           'nombre': name,
                           'price': price,
                           'image_url': image,
                           'bulk': p['bulk'] as bool? ?? false,
-                          'stock': (p['stock'] as num?)?.toDouble() ?? 0.0,
+                          'stock': stock,
                           'type_specific': p['type_specific'] as String?,
-                          'variante': p['variante'] as String?,
+                          'variante': entry.isVariant
+                              ? variante
+                              : p['variante'] as String?,
+                          if (entry.isVariant) 'variantKey': entry.variantKey,
+                          if (entry.isVariant) 'variantName': entry.variantName,
                         },
                         textColor: isDark ? Colors.white : Colors.black,
                       ),

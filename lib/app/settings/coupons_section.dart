@@ -8,6 +8,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 
 import '../../components/bottom_fade.dart';
 import '../../constants/app_images.dart';
+import '../../utils/coupon_filter.dart' as cf;
 
 class CouponsSection extends StatefulWidget {
   final VoidCallback onBack;
@@ -63,12 +64,40 @@ class _CouponsSectionState extends State<CouponsSection> {
           .call(<String, dynamic>{'code': code});
       if (!mounted) return;
       _onSuccess();
+    } on FirebaseFunctionsException catch (e) {
+      // The CF returns a human-readable Spanish reason for every reject
+      // path (eligibility, expired, already-claimed, sold-out, bad code).
+      // Surfacing it so a user blocked by the audience filter sees WHY
+      // instead of a generic "Error" — otherwise they'll keep retrying.
+      if (!mounted) return;
+      _onError();
+      _showRejectionDialog(e.message ?? 'No se pudo aplicar el cupón.');
     } catch (_) {
       if (!mounted) return;
       _onError();
+      _showRejectionDialog('No se pudo aplicar el cupón. Intenta de nuevo.');
     } finally {
       if (mounted) setState(() => _applying = false);
     }
+  }
+
+  void _showRejectionDialog(String message) {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        title: const Text('Cupón no aplicado'),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Entendido'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -276,6 +305,13 @@ class _CouponsSectionState extends State<CouponsSection> {
         c['expiry_date'] is Timestamp ? (c['expiry_date'] as Timestamp) : null;
     final expired =
         expiry != null && expiry.toDate().isBefore(DateTime.now());
+    // Surface the coupon's scope on the card so users know *before* checkout
+    // that "SAVE50" only applies to certain products. Without this they only
+    // learn at the cashier moment via the checkout's "No aplica" badge.
+    final filter = c['productFilter'];
+    final filterLabel = cf.productFilterSummary(filter is Map ? filter : null);
+    final hasFilter = filterLabel.isNotEmpty;
+    final filterMode = filter is Map ? (filter['mode'] ?? '').toString() : '';
 
     final String statusLabel = used
         ? 'Usado'
@@ -302,7 +338,8 @@ class _CouponsSectionState extends State<CouponsSection> {
         elevation: 2.5,
         shadowColor: Colors.black.withValues(alpha: 0.22),
         child: SizedBox(
-          height: 112,
+          // Filter line needs ~24px more height than the unfiltered case.
+          height: hasFilter ? 136 : 112,
           child: Stack(
             children: [
               Row(
@@ -423,6 +460,37 @@ class _CouponsSectionState extends State<CouponsSection> {
                               ),
                             ],
                           ),
+                          if (hasFilter) ...[
+                            const SizedBox(height: 6),
+                            Row(
+                              children: [
+                                Icon(
+                                  filterMode == 'exclude'
+                                      ? Icons.do_not_disturb_alt_outlined
+                                      : Icons.check_circle_outline,
+                                  size: 14,
+                                  color: inactive
+                                      ? Colors.grey[500]
+                                      : const Color(0xFF1B5E20),
+                                ),
+                                const SizedBox(width: 5),
+                                Expanded(
+                                  child: Text(
+                                    filterLabel,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w700,
+                                      color: inactive
+                                          ? Colors.grey[600]
+                                          : const Color(0xFF1B5E20),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
                         ],
                       ),
                     ),

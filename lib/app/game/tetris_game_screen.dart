@@ -5,6 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'arcade_center_screen.dart' show AppLanguage;
 import 'arcade_input_controller.dart';
 import 'game_saldo.dart';
 import 'high_score_service.dart';
@@ -76,6 +77,7 @@ class TetrisScreen extends StatefulWidget {
   final double currentSaldo;
   final ArcadeInputController controller;
   final void Function(double) onSaldoChanged;
+  final AppLanguage language;
 
   const TetrisScreen({
     super.key,
@@ -84,6 +86,7 @@ class TetrisScreen extends StatefulWidget {
     required this.currentSaldo,
     required this.controller,
     required this.onSaldoChanged,
+    this.language = AppLanguage.spanish,
   });
 
   @override
@@ -105,8 +108,14 @@ class _TetrisScreenState extends State<TetrisScreen> {
   int _level = 1;
   int _totalLines = 0;
   late double _saldo;
+  late double _lastCommitted;
 
   _GameState _state = _GameState.start;
+
+  // The arcade shell already charged kArcadePlayCost to launch this
+  // cartridge, so the first start of a fresh run is free. Every restart
+  // after it pays again.
+  bool _entryPaid = true;
 
   Timer? _gravTimer;
   Timer? _dasTimer;
@@ -114,12 +123,19 @@ class _TetrisScreenState extends State<TetrisScreen> {
 
   final _rng = Random();
 
+  String _t(String es, String en) =>
+      widget.language == AppLanguage.spanish ? es : en;
+
   @override
   void initState() {
     super.initState();
     _saldo = widget.currentSaldo;
+    _lastCommitted = widget.currentSaldo;
     _initGrid();
-    HighScoreService.load('tetris').then((v) => setState(() => _hiScore = v));
+    HighScoreService.load('tetris').then((v) {
+      if (!mounted) return;
+      setState(() => _hiScore = v);
+    });
     widget.controller.addListener(_onControllerEvent);
   }
 
@@ -263,12 +279,26 @@ class _TetrisScreenState extends State<TetrisScreen> {
   }
 
   Future<void> _restart() async {
+    // First start of a freshly-launched run: the shell already paid for it.
+    if (_entryPaid) {
+      _entryPaid = false;
+      _gravTimer?.cancel();
+      _dasTimer?.cancel();
+      _dasRepeat?.cancel();
+      _startGame();
+      return;
+    }
     final ns = await chargeForReplay(
         userId: widget.userId,
         rewardsDocRef: widget.rewardsDocRef,
         currentSaldo: _saldo);
     if (ns == null) return;
     if (!mounted) return;
+    // The charge moved the server saldo without going through
+    // _updateFirestore, so the ledger has to be resynced here — otherwise
+    // the next credit's delta is measured against the pre-charge base and
+    // comes out negative, debiting the player instead of paying them.
+    _lastCommitted = ns;
     setState(() => _saldo = ns);
     widget.onSaldoChanged(ns);
     _gravTimer?.cancel();
@@ -431,18 +461,23 @@ class _TetrisScreenState extends State<TetrisScreen> {
   }
 
   Future<void> _updateFirestore(double newSaldo) async {
-    try {
-      final userCardRef = FirebaseFirestore.instance
-          .collection('users')
-          .doc(widget.userId)
-          .collection('rewardsCard')
-          .doc('cardInfo');
-      final batch = FirebaseFirestore.instance.batch();
-      batch.update(userCardRef, {'saldo': newSaldo});
-      batch.update(widget.rewardsDocRef, {'saldo': newSaldo});
-      await batch.commit();
-    } catch (e) {
-      debugPrint('Tetris Firestore: $e');
+    // Routes through the server-side `updateRewardsSaldo`
+    // callable instead of writing rewards/{docId} directly
+    // (admin-only collection — direct writes failed silently
+    // for every non-admin user). The CF resolves the wallet,
+    // applies the delta in a transaction, and mirrors the
+    // result to the owner-readable card cache.
+    final delta = newSaldo - _lastCommitted;
+    if (delta == 0) return;
+    final result = await applyArcadeDelta(
+      delta: delta,
+      reason: 'tetris',
+    );
+    if (result != null) {
+      _lastCommitted = result;
+      if (mounted && _saldo != result) {
+        setState(() => _saldo = result);
+      }
     }
   }
 
@@ -466,6 +501,7 @@ class _TetrisScreenState extends State<TetrisScreen> {
                   hiScore: _hiScore,
                   level: _level,
                   totalLines: _totalLines,
+                  language: widget.language,
                 ),
                 child: SizedBox(
                   width: constraints.maxWidth,
@@ -606,7 +642,7 @@ class _TetrisScreenState extends State<TetrisScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          _buildNeonTitle('BLOQUES\nCAÍDOS', const Color(0xFF00E5FF), 36),
+          _buildNeonTitle(_t('BLOQUES\nCAÍDOS', 'BLOCK\nDROP'), const Color(0xFF00E5FF), 36),
           const SizedBox(height: 28),
           Container(
             margin: const EdgeInsets.symmetric(horizontal: 24),
@@ -616,16 +652,22 @@ class _TetrisScreenState extends State<TetrisScreen> {
               borderRadius: BorderRadius.circular(12),
               border: Border.all(color: const Color(0x4400E5FF), width: 1),
             ),
-            child: const Text(
-              'A / UP  →  Rotar\nLEFT / RIGHT  →  Mover\nDOWN  →  Bajar\nY  →  Caída rápida\nSTART  →  Pausa',
-              style: TextStyle(color: Colors.white70, fontSize: 13, height: 1.9),
+            child: Text(
+              _t(
+                'A / UP  →  Rotar\nLEFT / RIGHT  →  Mover\nDOWN  →  Bajar\nY  →  Caída rápida\nSTART  →  Pausa',
+                'A / UP  →  Rotate\nLEFT / RIGHT  →  Move\nDOWN  →  Soft drop\nY  →  Hard drop\nSTART  →  Pause',
+              ),
+              style: const TextStyle(color: Colors.white70, fontSize: 13, height: 1.9),
               textAlign: TextAlign.center,
             ),
           ),
           const SizedBox(height: 16),
-          const Text(
-            '1L=100  2L=300  3L=500  4L=800  ×nivel\n+1 pto cada 10 líneas',
-            style: TextStyle(
+          Text(
+            _t(
+              '1L=100  2L=300  3L=500  4L=800  ×nivel\n+1 pto cada 10 líneas',
+              '1L=100  2L=300  3L=500  4L=800  ×level\n+1 pt every 10 lines',
+            ),
+            style: const TextStyle(
               color: Color(0xFFFFD700),
               fontSize: 11,
               fontWeight: FontWeight.bold,
@@ -635,7 +677,8 @@ class _TetrisScreenState extends State<TetrisScreen> {
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 28),
-          _buildNeonButton('Pulsa A o START para empezar', _restart, accent: const Color(0xFF00E5FF)),
+          _buildNeonButton(_t('Pulsa A o START para empezar', 'Press A or START to begin'),
+              _restart, accent: const Color(0xFF00E5FF)),
         ],
       ),
     );
@@ -647,12 +690,14 @@ class _TetrisScreenState extends State<TetrisScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
+          // Left untranslated: idiomatic in Spanish arcades, and "FIN DEL
+          // JUEGO" wrapped to two lines at fontSize 38.
           _buildNeonTitle('GAME OVER', const Color(0xFFFF1744), 38),
           const SizedBox(height: 22),
-          _buildHudCard(label: 'PUNTUACIÓN', value: '$_score', accent: const Color(0xFF00E5FF)),
-          _buildHudCard(label: 'RÉCORD', value: '$_hiScore', accent: const Color(0xFFFFD700)),
+          _buildHudCard(label: _t('PUNTUACIÓN', 'SCORE'), value: '$_score', accent: const Color(0xFF00E5FF)),
+          _buildHudCard(label: _t('RÉCORD', 'BEST'), value: '$_hiScore', accent: const Color(0xFFFFD700)),
           const SizedBox(height: 22),
-          _buildNeonButton('Nueva Partida', _restart, accent: const Color(0xFFFF1744)),
+          _buildNeonButton(_t('Nueva Partida', 'New Game'), _restart, accent: const Color(0xFFFF1744)),
         ],
       ),
     );
@@ -661,12 +706,12 @@ class _TetrisScreenState extends State<TetrisScreen> {
   Widget _buildPauseOverlay() {
     return _buildOverlayBackground(
       tint: const Color(0xFF8800FF),
-      child: const Column(
+      child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Text(
-            'PAUSA',
-            style: TextStyle(
+            _t('PAUSA', 'PAUSED'),
+            style: const TextStyle(
               color: Colors.white,
               fontSize: 42,
               fontWeight: FontWeight.w900,
@@ -677,10 +722,10 @@ class _TetrisScreenState extends State<TetrisScreen> {
               ],
             ),
           ),
-          SizedBox(height: 16),
+          const SizedBox(height: 16),
           Text(
-            'Pulsa START para continuar',
-            style: TextStyle(color: Colors.white54, fontSize: 13, letterSpacing: 1),
+            _t('Pulsa START para continuar', 'Press START to continue'),
+            style: const TextStyle(color: Colors.white54, fontSize: 13, letterSpacing: 1),
           ),
         ],
       ),
@@ -695,11 +740,11 @@ class _TetrisScreenState extends State<TetrisScreen> {
         children: [
           const Text('🏆', style: TextStyle(fontSize: 56)),
           const SizedBox(height: 10),
-          _buildNeonTitle('¡COMPLETO!', const Color(0xFFFFD700), 34),
+          _buildNeonTitle(_t('¡COMPLETO!', 'COMPLETE!'), const Color(0xFFFFD700), 34),
           const SizedBox(height: 6),
-          const Text(
-            '400 LÍNEAS ALCANZADAS',
-            style: TextStyle(
+          Text(
+            _t('400 LÍNEAS ALCANZADAS', '400 LINES CLEARED'),
+            style: const TextStyle(
               color: Color(0xFF00E5FF),
               fontSize: 12,
               letterSpacing: 3,
@@ -707,12 +752,12 @@ class _TetrisScreenState extends State<TetrisScreen> {
             ),
           ),
           const SizedBox(height: 18),
-          _buildHudCard(label: 'PUNTUACIÓN', value: '$_score', accent: const Color(0xFF00E5FF)),
-          _buildHudCard(label: 'RÉCORD', value: '$_hiScore', accent: const Color(0xFFFFD700)),
+          _buildHudCard(label: _t('PUNTUACIÓN', 'SCORE'), value: '$_score', accent: const Color(0xFF00E5FF)),
+          _buildHudCard(label: _t('RÉCORD', 'BEST'), value: '$_hiScore', accent: const Color(0xFFFFD700)),
           const SizedBox(height: 6),
-          const Text(
-            '+40 pts ganados',
-            style: TextStyle(
+          Text(
+            _t('+40 pts ganados', '+40 pts earned'),
+            style: const TextStyle(
               color: Color(0xFF00E676),
               fontSize: 14,
               fontWeight: FontWeight.bold,
@@ -720,7 +765,7 @@ class _TetrisScreenState extends State<TetrisScreen> {
             ),
           ),
           const SizedBox(height: 24),
-          _buildNeonButton('Nueva Partida', _restart, accent: const Color(0xFFFFD700)),
+          _buildNeonButton(_t('Nueva Partida', 'New Game'), _restart, accent: const Color(0xFFFFD700)),
         ],
       ),
     );
@@ -739,6 +784,7 @@ class _TetrisPainter extends CustomPainter {
   final int hiScore;
   final int level;
   final int totalLines;
+  final AppLanguage language;
 
   const _TetrisPainter({
     required this.grid,
@@ -752,7 +798,11 @@ class _TetrisPainter extends CustomPainter {
     required this.hiScore,
     required this.level,
     required this.totalLines,
+    this.language = AppLanguage.spanish,
   });
+
+  String _pt(String es, String en) =>
+      language == AppLanguage.spanish ? es : en;
 
   static final List<Offset> _stars = List.generate(60, (i) {
     final rng = Random(i * 1337 + 42);
@@ -943,7 +993,7 @@ class _TetrisPainter extends CustomPainter {
   void _drawRightPanel(Canvas canvas, double x, double y, double w, double h, double cellSize) {
     double cy = y + 6;
 
-    _paintLabel(canvas, 'NEXT', x, cy, w, const Color(0xFF00E5FF), 9.5, neonGlow: true);
+    _paintLabel(canvas, _pt('SIGUIENTE', 'NEXT'), x, cy, w, const Color(0xFF00E5FF), 9.5, neonGlow: true);
     cy += 15;
 
     final previewCs = (cellSize * 0.75).floorToDouble();
@@ -1000,12 +1050,12 @@ class _TetrisPainter extends CustomPainter {
     _drawDivider(canvas, x, cy, w);
     cy += 9;
 
-    _paintLabel(canvas, 'SCORE', x, cy, w, const Color(0xFF00E5FF), 9, neonGlow: true);
+    _paintLabel(canvas, _pt('PUNTOS', 'SCORE'), x, cy, w, const Color(0xFF00E5FF), 9, neonGlow: true);
     cy += 13;
     _paintLabel(canvas, '$score', x, cy, w, Colors.white, 14, bold: true);
     cy += 19;
 
-    _paintLabel(canvas, 'BEST', x, cy, w, const Color(0xFFFFD700), 9, neonGlow: true);
+    _paintLabel(canvas, _pt('RÉCORD', 'BEST'), x, cy, w, const Color(0xFFFFD700), 9, neonGlow: true);
     cy += 13;
     _paintLabel(canvas, '$hiScore', x, cy, w, const Color(0xFFFFD700), 13, bold: true);
     cy += 18;
@@ -1013,12 +1063,12 @@ class _TetrisPainter extends CustomPainter {
     _drawDivider(canvas, x, cy, w);
     cy += 9;
 
-    _paintLabel(canvas, 'LVL', x, cy, w, const Color(0xFFCC00FF), 9, neonGlow: true);
+    _paintLabel(canvas, _pt('NIV', 'LVL'), x, cy, w, const Color(0xFFCC00FF), 9, neonGlow: true);
     cy += 13;
     _paintLabel(canvas, '$level', x, cy, w, const Color(0xFFE040FB), 14, bold: true);
     cy += 19;
 
-    _paintLabel(canvas, 'LINES', x, cy, w, const Color(0xFF00E676), 9, neonGlow: true);
+    _paintLabel(canvas, _pt('LÍNEAS', 'LINES'), x, cy, w, const Color(0xFF00E676), 9, neonGlow: true);
     cy += 13;
     _paintLabel(canvas, '$totalLines', x, cy, w, const Color(0xFF00E676), 13, bold: true);
   }

@@ -2,6 +2,16 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<!-- Maps SDK key. Mirrors the Android `secrets.xml` pattern —
+	     the key still ships inside the IPA, so source-control
+	     visibility is what this hides. The actual security boundary
+	     is RESTRICTING the key in Google Cloud Console by iOS
+	     bundle identifier (Maps SDK for iOS only, bundle ID
+	     `mx.t_sty.click` or whatever your release ID is). Without
+	     that console restriction, the key can be scraped from any
+	     downloaded IPA. -->
+	<key>GoogleMapsApiKey</key>
+	<string>AIzaSyBHIP391u2W_3lOpOT3znjIzD6L3Fhm2Fw</string>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 	<key>FirebaseMessagingAutoInitEnabled</key>
@@ -33,9 +43,9 @@
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>This app needs your location to show local stores.</string>
-	<key>NSPhotoLibraryUsageDescription</key>
-	<string>We need access to your photo library to allow you to upload profile pictures.</string>
+	<string>Usamos tu ubicación para colocar el pin de tu dirección de entrega en el mapa y sugerir tu dirección automáticamente. La app no rastrea tu ubicación en segundo plano.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Usamos tu ubicación para colocar el pin de tu dirección de entrega en el mapa y sugerir tu dirección automáticamente. La app no rastrea tu ubicación en segundo plano.</string>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>UILaunchStoryboardName</key>

@@ -296,8 +296,14 @@ class _SettingsPageState extends State<SettingsPage> {
     return [
       _buildSettingsContent(),
       AddressesSection(onBack: _navigateToSettings),
-      RewardsCardPage(onBack: _navigateToSettings),
-      CreateNewCard(onBack: _navigateToSettings),
+      RewardsCardPage(
+        onBack: _navigateToSettings,
+        onCreateCard: () => setState(() => _currentIndex = 3),
+      ),
+      // Back from create lands on the rewards page (index 2), not the
+      // settings home — the user came from rewards and expects to see
+      // their new monedero immediately after creating it.
+      CreateNewCard(onBack: () => setState(() => _currentIndex = 2)),
       CouponsSection(onBack: _navigateToSettings),
     ];
   }

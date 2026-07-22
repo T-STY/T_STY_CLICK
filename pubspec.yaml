@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyRefeflutter pub getrence/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 1.1.13+28
+version: 1.2.3+33
 
 environment:
   sdk: ^3.5.4
@@ -37,8 +37,6 @@ dependencies:
   intl: ^0.20.2
   flutter_iconly: ^1.0.2
   cached_network_image: ^3.3.1
-  firebase_storage: ^12.4.10
-  image_picker: ^1.2.1
   algolia: ^1.1.2
   iconly: ^1.0.1
   vibration: ^3.1.5
@@ -67,6 +65,22 @@ dependencies:
   flutter_local_notifications: ^18.0.1
   timezone: ^0.9.4
   flutter_svg: ^2.0.9
+  qr_flutter: ^4.1.0
+  permission_handler: ^11.3.1
+  geolocator: ^12.0.0
+
+# A buildable (v2-embedding) geolocator_android needs uuid ^4, but the
+# abandoned algolia 1.1.2 pins uuid ^3 — only the broken v1-embedding
+# geolocator_android 4.3.1 stays on uuid ^3, so the two can't both be honored.
+# algolia's ONLY uuid use is `Uuid().v4()` (lib/src/index_reference.dart),
+# which is byte-for-byte compatible with uuid 4.x — so we force uuid 4 for the
+# whole app. That lets geolocator_android resolve to a modern 4.6.x (no v1
+# embedding) and leaves algolia working.
+dependency_overrides:
+  uuid: ^4.1.0
+  # Force the v2-embedding geolocator_android (uuid override above frees it
+  # from the algolia uuid-3 conflict). Stays < 5.0.0 to satisfy geolocator 12.
+  geolocator_android: ^4.6.0
 
 dev_dependencies:
   flutter_test:

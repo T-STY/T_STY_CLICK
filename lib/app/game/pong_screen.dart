@@ -3,7 +3,9 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'arcade_center_screen.dart' show AppLanguage;
 import 'arcade_input_controller.dart';
+import 'game_saldo.dart';
 import 'high_score_service.dart';
 
 const _kPW = 120.0, _kPH = 80.0;
@@ -26,6 +28,7 @@ class PongScreen extends StatefulWidget {
   final double currentSaldo;
   final ArcadeInputController controller;
   final void Function(double) onSaldoChanged;
+  final AppLanguage language;
 
   const PongScreen({
     super.key,
@@ -34,6 +37,7 @@ class PongScreen extends StatefulWidget {
     required this.currentSaldo,
     required this.controller,
     required this.onSaldoChanged,
+    this.language = AppLanguage.spanish,
   });
 
   @override
@@ -53,6 +57,7 @@ class _PongScreenState extends State<PongScreen> {
 
   int _hiScore = 0;
   late double _saldo;
+  late double _lastCommitted;
   _PongPhase _phase = _PongPhase.ready;
   String _msg = '';
 
@@ -67,10 +72,14 @@ class _PongScreenState extends State<PongScreen> {
 
   bool _paused = false;
 
+  String _t(String es, String en) =>
+      widget.language == AppLanguage.spanish ? es : en;
+
   @override
   void initState() {
     super.initState();
     _saldo = widget.currentSaldo;
+    _lastCommitted = widget.currentSaldo;
     widget.controller.addListener(_onInput);
     HighScoreService.load('pong').then((v) {
       if (mounted) setState(() => _hiScore = v);
@@ -210,36 +219,47 @@ class _PongScreenState extends State<PongScreen> {
     if (_playerScore >= _kWinScore || _aiScore >= _kWinScore) {
       if (_playerScore >= _kWinScore) {
         _playerRounds++;
-        _msg = '¡GANASTE LA RONDA!';
+        _msg = _t('¡GANASTE LA RONDA!', 'YOU WON THE ROUND!');
         final newSaldo = _saldo + 1;
         _saldo = newSaldo;
         widget.onSaldoChanged(newSaldo);
         _updateFirestore(newSaldo);
       } else {
         _aiRounds++;
-        _msg = 'IA GANA LA RONDA';
+        _msg = _t('IA GANA LA RONDA', 'CPU WINS THE ROUND');
       }
       _round++;
       _playerScore = 0;
       _aiScore = 0;
       HighScoreService.submit('pong', _playerRounds);
     } else {
-      _msg = playerScored ? '¡PUNTO!' : 'IA ANOTA';
+      _msg = playerScored
+          ? _t('¡PUNTO!', 'POINT!')
+          : _t('IA ANOTA', 'CPU SCORES');
     }
     _phase = _PongPhase.scored;
     setState(() {});
   }
 
   Future<void> _updateFirestore(double newSaldo) async {
-    try {
-      final ref = FirebaseFirestore.instance
-          .collection('users').doc(widget.userId)
-          .collection('rewardsCard').doc('cardInfo');
-      final batch = FirebaseFirestore.instance.batch();
-      batch.update(ref, {'saldo': newSaldo});
-      batch.update(widget.rewardsDocRef, {'saldo': newSaldo});
-      await batch.commit();
-    } catch (e) { debugPrint('Pong Firestore: $e'); }
+    // Routes through the server-side `updateRewardsSaldo`
+    // callable instead of writing rewards/{docId} directly
+    // (admin-only collection — direct writes failed silently
+    // for every non-admin user). The CF resolves the wallet,
+    // applies the delta in a transaction, and mirrors the
+    // result to the owner-readable card cache.
+    final delta = newSaldo - _lastCommitted;
+    if (delta == 0) return;
+    final result = await applyArcadeDelta(
+      delta: delta,
+      reason: 'pong',
+    );
+    if (result != null) {
+      _lastCommitted = result;
+      if (mounted && _saldo != result) {
+        setState(() => _saldo = result);
+      }
+    }
   }
 
   @override
@@ -255,15 +275,21 @@ class _PongScreenState extends State<PongScreen> {
               playerRounds: _playerRounds, aiRounds: _aiRounds,
               round: _round,
               trail: List.unmodifiable(_ballTrail),
+              language: widget.language,
             ),
           ),
         ),
         if (_phase == _PongPhase.ready)
-          _buildOverlay('CONTRAGOLPE', 'Sube/Baja con el D-Pad\n¡Pulsa A para jugar!'),
+          _buildOverlay(
+            _t('CONTRAGOLPE', 'VOLT PONG'),
+            _t('Sube/Baja con el D-Pad\n¡Pulsa A para jugar!',
+                'Up/Down with the D-Pad\nPress A to play!'),
+          ),
         if (_phase == _PongPhase.scored)
-          _buildOverlay(_msg, 'Pulsa A para continuar'),
+          _buildOverlay(_msg, _t('Pulsa A para continuar', 'Press A to continue')),
         if (_paused && _phase == _PongPhase.playing)
-          _buildOverlay('⏸ PAUSA', 'Start para continuar'),
+          _buildOverlay(_t('⏸ PAUSA', '⏸ PAUSED'),
+              _t('Start para continuar', 'Press Start to resume')),
       ]),
     );
   }
@@ -294,7 +320,8 @@ class _PongScreenState extends State<PongScreen> {
             Padding(
               padding: const EdgeInsets.only(top: 8),
               child: Text(
-                  'Rondas  TÚ $_playerRounds  —  IA $_aiRounds',
+                  _t('Rondas  TÚ $_playerRounds  —  IA $_aiRounds',
+                      'Rounds  YOU $_playerRounds  —  CPU $_aiRounds'),
                   style: const TextStyle(
                       color: Colors.white38,
                       fontSize: 10,
@@ -310,6 +337,7 @@ class _PongPainter extends CustomPainter {
   final double py, ay, bx, by;
   final int playerScore, aiScore, playerRounds, aiRounds, round;
   final List<Offset> trail;
+  final AppLanguage language;
 
   const _PongPainter({
     required this.py, required this.ay,
@@ -318,7 +346,11 @@ class _PongPainter extends CustomPainter {
     required this.playerRounds, required this.aiRounds,
     required this.round,
     required this.trail,
+    this.language = AppLanguage.spanish,
   });
+
+  String _t(String es, String en) =>
+      language == AppLanguage.spanish ? es : en;
 
   @override bool shouldRepaint(_PongPainter o) => true;
 
@@ -405,7 +437,7 @@ class _PongPainter extends CustomPainter {
     canvas.drawCircle(bscr, br, p);
 
     if (round > 0) {
-      txt('RONDA $round', size.width * 0.42, size.height * 0.91,
+      txt(_t('RONDA $round', 'ROUND $round'), size.width * 0.42, size.height * 0.91,
           Colors.white38, size.height / 40);
     }
   }

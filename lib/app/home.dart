@@ -7,6 +7,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:click/app/recipes.dart';
 import 'package:click/app/promotions.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../utils/callable_retry.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -21,6 +22,7 @@ import '../constants/app_images.dart';
 import 'cart/cart_provider.dart';
 import 'category/filter_dialog.dart';
 import 'category/product_display.dart';
+import 'category/variant_expansion.dart';
 import 'game/arcade_center_screen.dart';
 import 'constants/gridview.dart';
 import 'ads_carousel.dart';
@@ -61,10 +63,27 @@ class Home extends StatefulWidget {
   State<Home> createState() => HomeState();
 }
 
-class HomeState extends State<Home> with TickerProviderStateMixin {
+class HomeState extends State<Home>
+    with TickerProviderStateMixin, WidgetsBindingObserver {
   final TextEditingController _searchController = TextEditingController();
+  // FocusNode lets us drive the search-mode UI off focus state, not
+  // just the typed text — so the home content fades out the moment
+  // the user taps into the field, before they've typed anything.
+  final FocusNode _searchFocus = FocusNode();
+  // Mirrored in state because AnimatedSwitcher needs a setState
+  // signal when focus flips. Kept in sync via the focus listener.
+  bool _searchFocused = false;
+  // Tracks the previous viewInsets.bottom so didChangeMetrics can
+  // detect the keyboard-just-closed transition. Initial value
+  // matches the "keyboard not open at app start" baseline.
+  bool _wasKeyboardOpen = false;
   String _searchText = '';
-  List<AlgoliaObjectSnapshot> _searchResults = [];
+  // Debounces Algolia network calls so we fire one query when typing
+  // pauses, not one per keystroke. Cancelled in dispose and on every
+  // new keystroke.
+  Timer? _searchDebounce;
+
+  List<DocumentSnapshot> _searchResults = [];
   bool _isSearching = false;
   bool _showRecipeDetail = false;
   bool _showPromoDetail = false;
@@ -110,6 +129,8 @@ class HomeState extends State<Home> with TickerProviderStateMixin {
   void initState() {
     super.initState();
     _searchController.addListener(_onSearchChanged);
+    _searchFocus.addListener(_onSearchFocusChanged);
+    WidgetsBinding.instance.addObserver(this);
 
     _shakeCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 380));
     _shakeAnim = TweenSequence<double>([
@@ -147,8 +168,12 @@ class HomeState extends State<Home> with TickerProviderStateMixin {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _searchFocus.removeListener(_onSearchFocusChanged);
+    _searchFocus.dispose();
     _searchController.removeListener(_onSearchChanged);
     _searchController.dispose();
+    _searchDebounce?.cancel();
     _pageController.dispose();
     _shakeCtrl.dispose();
     _crtCtrl.dispose();
@@ -160,15 +185,82 @@ class HomeState extends State<Home> with TickerProviderStateMixin {
     super.dispose();
   }
 
+  void _onSearchFocusChanged() {
+    if (!mounted) return;
+    final hasFocus = _searchFocus.hasFocus;
+    if (_searchFocused != hasFocus) {
+      setState(() => _searchFocused = hasFocus);
+    }
+  }
+
+  /// Watch for the keyboard-just-closed transition. When the OS
+  /// dismisses the keyboard (system back button, swipe-down, etc.)
+  /// AND the search bar is still focused with no text, we drop the
+  /// focus so the home view smoothly fades back in. If the user
+  /// typed something, focus is kept — they should still see their
+  /// results until they explicitly clear the bar.
+  ///
+  /// Reading viewInsets from `View.of(context)` directly because
+  /// `MediaQuery.of(context)` updates asynchronously after metrics
+  /// change, so it can lag a frame behind reality here.
+  @override
+  void didChangeMetrics() {
+    super.didChangeMetrics();
+    if (!mounted) return;
+    final view = View.of(context);
+    final keyboardOpen = view.viewInsets.bottom > 0;
+    if (_wasKeyboardOpen && !keyboardOpen) {
+      if (_searchFocus.hasFocus &&
+          _searchController.text.trim().isEmpty) {
+        _searchFocus.unfocus();
+      }
+    }
+    _wasKeyboardOpen = keyboardOpen;
+  }
+
+  bool get _inSearchMode =>
+      _searchFocused || _isSearching || _searchText.isNotEmpty;
+
+  /// Refresh saldo when the app returns to the foreground. The
+  /// home now reads saldo via `getRewardsBalance` (callable) rather
+  /// than a Firestore stream, so we lose real-time updates. The
+  /// most common stale-saldo scenarios — PDV-side recharge, order
+  /// placement debit, claim-coupon top-up — all coincide with the
+  /// user putting the app in the background and re-opening it.
+  /// Polling on resume covers them with one round-trip.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    if (state == AppLifecycleState.resumed && mounted) {
+      _refreshSaldo();
+    }
+  }
+
   void _onSearchChanged() {
+    // Cancel any pending fire — the user is still typing.
+    _searchDebounce?.cancel();
     setState(() {
       _searchText = _searchController.text;
       if (_searchText.isNotEmpty) {
-        _searchAlgolia(_searchText);
+        // Flip the spinner on immediately so the UI feels responsive
+        // even though the network call waits for typing to settle.
+        _isSearching = true;
       } else {
+        // Clearing happens instantly — no network call to debounce.
+        _isSearching = false;
         _searchResults = [];
       }
     });
+    if (_searchText.isNotEmpty) {
+      final pending = _searchText;
+      _searchDebounce = Timer(const Duration(milliseconds: 300), () {
+        if (!mounted) return;
+        // Guard against a stale fire — if the text changed between
+        // scheduling and now, a newer Timer will (or has) handled it.
+        if (_searchController.text != pending) return;
+        _searchAlgolia(pending);
+      });
+    }
   }
 
   void _clearFilters() {
@@ -198,6 +290,10 @@ class HomeState extends State<Home> with TickerProviderStateMixin {
         .where('price', isLessThanOrEqualTo: priceRange.end);
 
     query.get().then((snapshot) {
+      // Guard against the user navigating away mid-query — without
+      // this the .then() lands on a defunct State and Flutter
+      // throws `setState() called after dispose()`.
+      if (!mounted) return;
       final docs = snapshot.docs
           .where((d) =>
               ((d.data() as Map<String, dynamic>?)?['hide_online'] as bool?) !=
@@ -276,7 +372,12 @@ class HomeState extends State<Home> with TickerProviderStateMixin {
       _isSearching = true;
     });
     Algolia algolia = AlgoliaService().algolia;
-    AlgoliaQuery query = algolia.instance.index('t_sty.db').query(searchText);
+    // Cap the hit count — the search list is for typeahead, 12 is plenty and
+    // it keeps the Firestore hydrate inside ONE whereIn chunk (cap = 30).
+    AlgoliaQuery query = algolia.instance
+        .index('t_sty.db')
+        .query(searchText)
+        .setHitsPerPage(12);
 
     try {
       if (kDebugMode) {
@@ -284,7 +385,8 @@ class HomeState extends State<Home> with TickerProviderStateMixin {
       }
       AlgoliaQuerySnapshot snapshot = await query.getObjects();
       final String q = _normalizeForSearch(searchText);
-      final hits = snapshot.hits.where((h) {
+
+      final algoliaHits = snapshot.hits.where((h) {
         if ((h.data['hide_online'] as bool?) == true) return false;
         final name = _normalizeForSearch((h.data['nombre'] ?? '').toString());
         final variante =
@@ -299,18 +401,84 @@ class HomeState extends State<Home> with TickerProviderStateMixin {
           if (aExact != bExact) return aExact - bExact;
           return an.compareTo(bn);
         });
+
+      final ids = algoliaHits.map((h) => h.objectID).toList();
+      final hydrated = await _hydrateProductDocs(ids);
+
+      final filtered = hydrated.where((doc) {
+        final data = doc.data() as Map<String, dynamic>?;
+        if (data == null) return false;
+        if ((data['hide_online'] as bool?) == true) return false;
+        final name = _normalizeForSearch((data['nombre'] ?? '').toString());
+        final variante =
+            _normalizeForSearch((data['variante'] ?? '').toString());
+        if (_fuzzyMatch(name, q) || _fuzzyMatch(variante, q)) return true;
+        if (data['has_variants'] == true && data['variants'] is Map) {
+          for (final v in (data['variants'] as Map).values) {
+            if (v is Map) {
+              final vn = _normalizeForSearch((v['name'] ?? '').toString());
+              if (_fuzzyMatch(vn, q)) return true;
+            }
+          }
+        }
+        return false;
+      }).toList();
+
+      if (!mounted) return;
       setState(() {
-        _searchResults = hits;
+        _searchResults = filtered;
         _isSearching = false;
       });
     } catch (e) {
       if (kDebugMode) {
         print("Error: $e");
       }
+      if (!mounted) return;
       setState(() {
         _isSearching = false;
       });
     }
+  }
+
+  Future<List<DocumentSnapshot>> _hydrateProductDocs(
+      List<String> ids) async {
+    if (ids.isEmpty) return const [];
+    // Build chunks of 10 (Firestore whereIn cap is 30, kept at 10 for room
+    // to grow filters) and fire them in PARALLEL via Future.wait. The
+    // previous for-await loop was serial — at default hitsPerPage=20 that
+    // doubled the wall-clock added to every Algolia search. The hits cap
+    // (setHitsPerPage(12) in _searchAlgolia) keeps this to ONE chunk for
+    // the typical query, but the parallel shape stays robust if it's ever
+    // raised.
+    final chunks = <List<String>>[];
+    for (int i = 0; i < ids.length; i += 10) {
+      chunks.add(ids.sublist(
+          i, i + 10 > ids.length ? ids.length : i + 10));
+    }
+    final results = await Future.wait(
+      chunks.map((chunk) async {
+        try {
+          return await FirebaseFirestore.instance
+              .collection('products')
+              .where(FieldPath.documentId, whereIn: chunk)
+              .get();
+        } catch (e) {
+          if (kDebugMode) print('Hydrate chunk error: $e');
+          return null;
+        }
+      }),
+    );
+    final fetched = <String, DocumentSnapshot>{};
+    for (final snap in results) {
+      if (snap == null) continue;
+      for (final d in snap.docs) {
+        fetched[d.id] = d;
+      }
+    }
+    return [
+      for (final id in ids)
+        if (fetched.containsKey(id)) fetched[id]!,
+    ];
   }
 
   void _navigateToRecipeDetail(String recipeId) {
@@ -373,32 +541,63 @@ class HomeState extends State<Home> with TickerProviderStateMixin {
     });
   }
 
+  /// Fetches the signed-in user's wallet saldo via the
+  /// `getRewardsBalance` Cloud Function. The previous version
+  /// streamed `rewards/{docId}` directly from the client, which the
+  /// security rules deny to non-admins (the rewards collection is
+  /// admin-only by design — PIN/CVV/PII can't be read). The result
+  /// was that the arcade icon only appeared for admin accounts.
+  ///
+  /// The callable returns just `{saldo, hasWallet}` — no PII — so we
+  /// keep the existing security model intact while making the icon
+  /// visible to every signed-in user. We trade real-time updates
+  /// (the old snapshots() listener) for a polled read: we refresh
+  /// on init AND every time the app returns to the foreground
+  /// (`didChangeAppLifecycleState.resumed`), which is plenty fresh
+  /// for an icon visibility toggle.
   Future<void> _initSaldoListener() async {
+    await _refreshSaldo();
+  }
+
+  Future<void> _refreshSaldo() async {
     final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
+    if (user == null) {
+      if (mounted && _walletSaldo != 0) {
+        setState(() => _walletSaldo = 0);
+      }
+      return;
+    }
+
+    // Retries transient cold-launch failures (network/function warmup) so the
+    // saldo loads on first launch instead of staying blank until app resume.
     try {
-      final cardDoc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .collection('rewardsCard')
-          .doc('cardInfo')
-          .get();
-      final cardNumber = cardDoc.data()?['cardNumber'] as String?;
-      if (cardNumber == null || cardNumber.isEmpty) return;
-      final q = await FirebaseFirestore.instance
-          .collection('rewards')
-          .where('cardNumber', isEqualTo: cardNumber)
-          .limit(1)
-          .get();
-      if (q.docs.isEmpty) return;
-      _saldoSub = q.docs.first.reference.snapshots().listen((snap) {
-        final raw = snap.data()?['saldo'];
+      final res = await callIdempotentCallable('getRewardsBalance');
+      final data = res.data;
+      if (data is Map) {
+        // `hasWallet:false` means the wallet LINK failed to resolve (missing
+        // cardInfo, missing cardNumber, or an empty rewards query) — it is NOT
+        // a zero balance. Writing that 0 in blanked healthy wallets and, since
+        // the arcade icon is gated on `_walletSaldo`, made the icon vanish too.
+        // Keep whatever we already had and let the next resume retry.
+        if (data['hasWallet'] == false) {
+          if (kDebugMode) {
+            debugPrint('getRewardsBalance: wallet unresolved; keeping cached saldo');
+          }
+          return;
+        }
+        final raw = data['saldo'];
         final s = raw is num
             ? raw.toDouble()
             : (raw is String ? (double.tryParse(raw) ?? 0.0) : 0.0);
-        if (mounted) setState(() => _walletSaldo = s);
-      });
-    } catch (_) {}
+        if (mounted && s != _walletSaldo) {
+          setState(() => _walletSaldo = s);
+        }
+      }
+    } catch (e) {
+      // Leave the cached value so a hiccup doesn't blank the icon mid-session;
+      // it'll refresh on the next app resume.
+      if (kDebugMode) debugPrint('getRewardsBalance failed: $e');
+    }
   }
 
   Future<void> _launchGame() async {
@@ -406,38 +605,35 @@ class HomeState extends State<Home> with TickerProviderStateMixin {
     if (user == null) return;
     final uid = user.uid;
 
-    final cardDoc = await FirebaseFirestore.instance
+    // Saldo + wallet lookup — both routed through the
+    // `getRewardsBalance` Cloud Function so non-admin users don't
+    // hit PERMISSION_DENIED on the admin-only `rewards` collection.
+    // We force a fresh read here (instead of trusting the cached
+    // `_walletSaldo`) so a brand-new install / fresh sign-in still
+    // gets a correct gate-check without waiting for the next
+    // app-resume tick.
+    await _refreshSaldo();
+    if (!mounted) return;
+    if (_walletSaldo < 5) return;
+
+    // The 11 arcade game widgets accept a `rewardsDocRef` param but
+    // none of them DEREFERENCE it any more (the Phase 2 refactor
+    // routes every saldo move through the `updateRewardsSaldo`
+    // callable, which resolves the wallet server-side from auth).
+    // The widget signatures still require a `DocumentReference`,
+    // so we pass the owner-readable `users/{uid}/rewardsCard/cardInfo`
+    // doc as a harmless placeholder. If a future game ever tries
+    // to use the ref, it'll read a doc the client owns rather than
+    // hitting the admin-only `rewards` collection.
+    final placeholderRef = FirebaseFirestore.instance
         .collection('users')
         .doc(uid)
         .collection('rewardsCard')
-        .doc('cardInfo')
-        .get();
-    if (!cardDoc.exists) return;
-
-    final cardNumber = cardDoc.data()?['cardNumber'] as String?;
-    if (cardNumber == null) return;
-
-    final rewardsSnap = await FirebaseFirestore.instance
-        .collection('rewards')
-        .where('cardNumber', isEqualTo: cardNumber)
-        .limit(1)
-        .get();
-    if (rewardsSnap.docs.isEmpty) return;
-
-    final rewardsDoc = rewardsSnap.docs.first;
-    final raw = rewardsDoc.data()['saldo'];
-    final double saldo = raw is String
-        ? double.tryParse(raw) ?? 0.0
-        : raw is int
-            ? raw.toDouble()
-            : (raw as double? ?? 0.0);
-
-    if (saldo < 5) return;
-    if (!mounted) return;
+        .doc('cardInfo');
 
     _pendingUid        = uid;
-    _pendingRewardsRef = rewardsDoc.reference;
-    _pendingSaldo      = saldo;
+    _pendingRewardsRef = placeholderRef;
+    _pendingSaldo      = _walletSaldo;
     if (!_crtActive) {
       setState(() => _crtActive = true);
       _crtBlackOverlay = OverlayEntry(
@@ -501,6 +697,15 @@ class HomeState extends State<Home> with TickerProviderStateMixin {
         FirebaseAuth.instance.currentUser != null && _walletSaldo >= 5;
 
     final body = Scaffold(
+        // Keep the layout from collapsing under the keyboard. The
+        // BottomFade sits inside an Expanded; if the body shrinks
+        // when the keyboard opens, LayoutBuilder reports a smaller
+        // maxHeight and the fade rides up above the keyboard,
+        // detaching from the nav bar. With this off, the fade and
+        // nav stay pinned to the screen bottom and the keyboard
+        // simply overlays the lower portion of the product grid —
+        // which is what you want when the user is mid-search.
+        resizeToAvoidBottomInset: false,
         appBar: AppBar(
           automaticallyImplyLeading: false,
           scrolledUnderElevation: 0,
@@ -544,6 +749,7 @@ class HomeState extends State<Home> with TickerProviderStateMixin {
                   Expanded(
                     child: TextField(
                       controller: _searchController,
+                      focusNode: _searchFocus,
                       decoration: InputDecoration(
                         hintText: 'Buscar...',
                         prefixIcon: const Icon(Icons.search),
@@ -592,13 +798,34 @@ class HomeState extends State<Home> with TickerProviderStateMixin {
               child: BottomFade(
                 clearHeight: 96,
                 fadeHeight: 48,
-                child: _isSearching
-                    ? const CustomLoader()
-                    : (_searchText.isNotEmpty
-                    ? _buildSearchResults()
-                    : (_selectedFilters.isNotEmpty
-                    ? _buildFilteredProductList()
-                    : _buildProductGrids())),
+                // Crossfade between two top-level modes:
+                //   * Search mode — triggered by focus, in-flight
+                //     query, OR existing typed text. Renders a
+                //     skeleton list while empty / loading, real
+                //     results once they land.
+                //   * Home mode — the usual filtered or default
+                //     product grids.
+                // Keyed subtrees so AnimatedSwitcher knows to run
+                // the FadeTransition when we flip modes; same key
+                // would just rebuild in place.
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 220),
+                  switchInCurve: Curves.easeOut,
+                  switchOutCurve: Curves.easeIn,
+                  transitionBuilder: (child, animation) =>
+                      FadeTransition(opacity: animation, child: child),
+                  child: _inSearchMode
+                      ? KeyedSubtree(
+                          key: const ValueKey('home-search-mode'),
+                          child: _buildSearchModePane(),
+                        )
+                      : KeyedSubtree(
+                          key: const ValueKey('home-grids-mode'),
+                          child: _selectedFilters.isNotEmpty
+                              ? _buildFilteredProductList()
+                              : _buildProductGrids(),
+                        ),
+                ),
               ),
             ),
           ],
@@ -664,7 +891,7 @@ class HomeState extends State<Home> with TickerProviderStateMixin {
   Widget _buildFilteredProductList() {
     if (_filteredProducts.isEmpty) {
       return const Center(
-          child: Text('No products found for the applied filters.'));
+          child: Text('No se encontraron productos con los filtros aplicados.'));
     }
 
     return ListView.builder(
@@ -874,7 +1101,7 @@ class HomeState extends State<Home> with TickerProviderStateMixin {
 
   Widget _buildSearchResults() {
     if (_searchResults.isEmpty) {
-      return const Center(child: Text('No products found.'));
+      return const Center(child: Text('No se encontraron productos.'));
     }
 
     return ListView.builder(
@@ -887,7 +1114,105 @@ class HomeState extends State<Home> with TickerProviderStateMixin {
     );
   }
 
+  /// Single entry-point for the search pane shown by the home
+  /// AnimatedSwitcher. Picks between three states:
+  ///   * in-flight query → skeleton list
+  ///   * results landed and non-empty → results list
+  ///   * focused but no text (or empty results) → skeleton list as
+  ///     a calm placeholder, never the old "No products found"
+  ///     copy on tap (that'd be a confusing flash for the user who
+  ///     just opened the bar). The empty-text case never reaches
+  ///     `_buildSearchResults`, so its "No products found." copy
+  ///     remains the right thing for real empty-result queries.
+  Widget _buildSearchModePane() {
+    if (_isSearching) return _buildSearchSkeleton();
+    if (_searchText.isNotEmpty) return _buildSearchResults();
+    return _buildSearchSkeleton();
+  }
+
+  /// Skeleton list shown while a search is in flight. Mirrors the
+  /// real `_renderSearchRow` layout — same margins, card shadow,
+  /// 90×90 image slot, three stacked text-sized bars, button-sized
+  /// bar on the right — so the layout doesn't jump when results
+  /// arrive. Replaces the old centred CustomLoader spinner.
+  Widget _buildSearchSkeleton() {
+    final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    return ListView.builder(
+      padding: const EdgeInsets.only(bottom: 120),
+      itemCount: 6,
+      itemBuilder: (context, _) {
+        return Container(
+          margin: const EdgeInsets.fromLTRB(8.0, 8.0, 5.0, 5.0),
+          decoration: BoxDecoration(
+            color: isDarkMode ? Colors.grey[800] : Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.2),
+                blurRadius: 10,
+                offset: const Offset(4, 4),
+              ),
+            ],
+          ),
+          child: const Padding(
+            padding: EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.all(Radius.circular(10.0)),
+                  child: ShimmerPlaceholder(width: 90, height: 90),
+                ),
+                SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      ShimmerPlaceholder(width: 220, height: 14),
+                      SizedBox(height: 8),
+                      ShimmerPlaceholder(width: 110, height: 12),
+                      SizedBox(height: 8),
+                      ShimmerPlaceholder(width: 70, height: 12),
+                    ],
+                  ),
+                ),
+                SizedBox(width: 8),
+                SizedBox(
+                  width: 100,
+                  height: 36,
+                  child: ShimmerPlaceholder(),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   Widget _buildListItem(BuildContext context, dynamic doc) {
+
+    if (doc is DocumentSnapshot) {
+      final raw = doc.data();
+      final m = raw is Map<String, dynamic> ? raw : null;
+      if (m != null && m['has_variants'] == true) {
+        final entries = expandVariantEntries([doc]);
+        if (entries.length > 1 ||
+            (entries.length == 1 && entries.first.isVariant)) {
+          return Column(
+            children: [
+              for (final e in entries) _renderSearchRow(context, doc, e),
+            ],
+          );
+        }
+      }
+    }
+    return _renderSearchRow(context, doc, null);
+  }
+
+  Widget _renderSearchRow(
+      BuildContext context, dynamic doc, VariantEntry? entry) {
     Map<String, dynamic> data;
     String? docId;
     String? name;
@@ -897,6 +1222,8 @@ class HomeState extends State<Home> with TickerProviderStateMixin {
     double stock;
     String? typeSpecific;
     String? variante;
+    String? variantKey;
+    String? variantName;
 
     if (doc is AlgoliaObjectSnapshot) {
       data = doc.data;
@@ -912,12 +1239,25 @@ class HomeState extends State<Home> with TickerProviderStateMixin {
       data = doc.data() as Map<String, dynamic>;
       docId = doc.id;
       name = data['nombre'] as String?;
-      price = (data['price'] as num?)?.toDouble();
-      imageUrl = data['image_url'] as String?;
+      final double parentPrice = (data['price'] as num?)?.toDouble() ?? 0.0;
+      final String parentImage = (data['image_url'] as String?) ?? '';
+      final double parentStock = (data['stock'] as num?)?.toDouble() ?? 0.0;
       isBulk = data['bulk'] as bool? ?? false;
-      stock = (data['stock'] as num?)?.toDouble() ?? 0.0;
       typeSpecific = data['type_specific'] as String?;
-      variante = data['variante'] as String?;
+
+      if (entry != null && entry.isVariant) {
+        price = entry.effectivePrice(parentPrice);
+        imageUrl = entry.effectiveImageUrl(parentImage);
+        stock = entry.effectiveStock(parentStock);
+        variante = entry.variantName;
+        variantKey = entry.variantKey;
+        variantName = entry.variantName;
+      } else {
+        price = parentPrice;
+        imageUrl = parentImage;
+        stock = parentStock;
+        variante = data['variante'] as String?;
+      }
     } else {
       return const SizedBox.shrink();
     }
@@ -996,6 +1336,8 @@ class HomeState extends State<Home> with TickerProviderStateMixin {
             SizedBox(
               width: 100,
               child: _AddToCartButton(
+                key: ValueKey(
+                    'home-search-$docId${variantKey == null ? '' : '#$variantKey'}'),
                 data: {
                   'docId': docId,
                   'nombre': name,
@@ -1005,6 +1347,8 @@ class HomeState extends State<Home> with TickerProviderStateMixin {
                   'stock': stock,
                   'type_specific': typeSpecific,
                   'variante': variante,
+                  if (variantKey != null) 'variantKey': variantKey,
+                  if (variantName != null) 'variantName': variantName,
                 },
                 textColor: textColor,
               ),
@@ -1115,8 +1459,10 @@ class _FirestoreProductGridState extends State<FirestoreProductGrid> {
               ..sort((a, b) => (indexById[a.id] ?? last)
                   .compareTo(indexById[b.id] ?? last));
           }
+
+          final entries = expandVariantEntries(docs);
           List<Widget> items =
-              docs.map((doc) => _buildGridItem(context, doc)).toList();
+              entries.map((e) => _buildGridItem(context, e)).toList();
           return ListView(
             scrollDirection: Axis.horizontal,
             children: items,
@@ -1126,17 +1472,26 @@ class _FirestoreProductGridState extends State<FirestoreProductGrid> {
     );
   }
 
-  Widget _buildGridItem(BuildContext context, DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>;
+  Widget _buildGridItem(BuildContext context, VariantEntry entry) {
+    final doc = entry.doc;
+    final Map<String, dynamic> data = entry.parentData;
 
     final String docId = doc.id;
-    final String? name = data['nombre'] as String?;
-    final double? price = (data['price'] as num?)?.toDouble();
-    final String? imageUrl = data['image_url'] as String?;
+    final String parentName = (data['nombre'] as String?) ?? 'Unnamed';
+    final double parentPrice = (data['price'] as num?)?.toDouble() ?? 0.0;
+    final String parentImage = (data['image_url'] as String?) ?? '';
+    final double parentStock = (data['stock'] as num?)?.toDouble() ?? 0.0;
     final bool isBulk = data['bulk'] as bool? ?? false;
-    final double stock = (data['stock'] as num?)?.toDouble() ?? 0.0;
     final String? typeSpecific = data['type_specific'] as String?;
-    final String? variante = data['variante'] as String?;
+
+    final String name = parentName;
+    final double price = entry.effectivePrice(parentPrice);
+    final String imageUrl = entry.effectiveImageUrl(parentImage);
+    final double stock = entry.effectiveStock(parentStock);
+
+    final String? variante = entry.isVariant
+        ? entry.variantName
+        : data['variante'] as String?;
 
     final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
     final textColor = isDarkMode ? Colors.white : Colors.black;
@@ -1170,7 +1525,7 @@ class _FirestoreProductGridState extends State<FirestoreProductGrid> {
                     height: 136,
                     width: double.infinity,
                     child: CachedNetworkImage(
-                      imageUrl: imageUrl ?? '',
+                      imageUrl: imageUrl,
                       fit: BoxFit.contain,
                       placeholder: (context, url) =>
                       const ShimmerPlaceholder(height: 80),
@@ -1187,7 +1542,7 @@ class _FirestoreProductGridState extends State<FirestoreProductGrid> {
               child: Column(
                 children: [
                   Text(
-                    name ?? 'Unnamed',
+                    name,
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
                       color: textColor,
@@ -1240,6 +1595,7 @@ class _FirestoreProductGridState extends State<FirestoreProductGrid> {
                 width: double.infinity,
                 height: 40,
                 child: _AddToCartButton(
+                  key: ValueKey('home-grid-${entry.lineKey}'),
                   data: {
                     'docId': docId,
                     'nombre': name,
@@ -1249,6 +1605,8 @@ class _FirestoreProductGridState extends State<FirestoreProductGrid> {
                     'stock': stock,
                     'type_specific': typeSpecific,
                     'variante': variante,
+                    if (entry.isVariant) 'variantKey': entry.variantKey,
+                    if (entry.isVariant) 'variantName': entry.variantName,
                   },
                   textColor: textColor,
                 ),
@@ -1270,7 +1628,8 @@ class _AddToCartButton extends StatefulWidget {
   final Map<String, dynamic> data;
   final Color textColor;
 
-  const _AddToCartButton({required this.data, required this.textColor});
+  const _AddToCartButton(
+      {super.key, required this.data, required this.textColor});
 
   @override
   _AddToCartButtonState createState() => _AddToCartButtonState();
@@ -1285,6 +1644,13 @@ class _AddToCartButtonState extends State<_AddToCartButton> {
   late double stock;
   CartProvider? cartProvider;
 
+  String? _lineId() {
+    final docId = widget.data['docId'] as String?;
+    if (docId == null) return null;
+    final variantKey = widget.data['variantKey'] as String?;
+    return buildCartLineId(docId, variantKey);
+  }
+
   @override
   void initState() {
     super.initState();
@@ -1298,10 +1664,10 @@ class _AddToCartButtonState extends State<_AddToCartButton> {
 
   void _initializeCartState() {
     final cartProvider = Provider.of<CartProvider>(context, listen: false);
-    final String? docId = widget.data['docId'] as String?;
+    final lineId = _lineId();
 
-    if (docId != null) {
-      final cartItem = cartProvider.getItem(docId);
+    if (lineId != null) {
+      final cartItem = cartProvider.getItem(lineId);
 
       if (cartItem != null) {
         setState(() {
@@ -1317,10 +1683,10 @@ class _AddToCartButtonState extends State<_AddToCartButton> {
     if (!mounted) return;
 
     final cartProvider = Provider.of<CartProvider>(context, listen: false);
-    final String? docId = widget.data['docId'] as String?;
+    final lineId = _lineId();
 
-    if (docId != null) {
-      final cartItem = cartProvider.getItem(docId);
+    if (lineId != null) {
+      final cartItem = cartProvider.getItem(lineId);
 
       if (cartItem != null && cartItem.quantity > 0) {
         setState(() {
@@ -1359,6 +1725,8 @@ class _AddToCartButtonState extends State<_AddToCartButton> {
     final bool isBulk = widget.data['bulk'] as bool? ?? false;
     final String? typeSpecific = widget.data['type_specific'];
     final String? variante = widget.data['variante'];
+    final String? variantKey = widget.data['variantKey'] as String?;
+    final String? variantName = widget.data['variantName'] as String?;
 
     if (docId != null && name != null && price != null && imageUrl != null) {
       if (isBulk) {
@@ -1372,7 +1740,7 @@ class _AddToCartButtonState extends State<_AddToCartButton> {
         });
 
         _commitToCart(docId, name, price, imageUrl, cartProvider, isBulk,
-            typeSpecific, variante);
+            typeSpecific, variante, variantKey, variantName);
         _resetAndStartTimer();
       }
     }
@@ -1386,7 +1754,9 @@ class _AddToCartButtonState extends State<_AddToCartButton> {
       CartProvider cartProvider,
       bool isBulk,
       String? typeSpecific,
-      String? variante) {
+      String? variante,
+      String? variantKey,
+      String? variantName) {
     if (_quantity > 0) {
       cartProvider.setItem(
         docId,
@@ -1398,9 +1768,11 @@ class _AddToCartButtonState extends State<_AddToCartButton> {
         stock: stock,
         typeSpecific: typeSpecific,
         variante: variante,
+        variantKey: variantKey,
+        variantName: variantName,
       );
     } else {
-      cartProvider.removeItemCompletely(docId);
+      cartProvider.removeItemCompletely(buildCartLineId(docId, variantKey));
     }
   }
 
@@ -1440,9 +1812,11 @@ class _AddToCartButtonState extends State<_AddToCartButton> {
       final cartProvider = Provider.of<CartProvider>(context, listen: false);
       final String? typeSpecific = widget.data['type_specific'];
       final String? variante = widget.data['variante'];
+      final String? variantKey = widget.data['variantKey'] as String?;
+      final String? variantName = widget.data['variantName'] as String?;
 
       _commitToCart(docId!, name!, price!, imageUrl!, cartProvider, isBulk,
-          typeSpecific, variante);
+          typeSpecific, variante, variantKey, variantName);
       _resetAndStartTimer();
     }
   }
@@ -1462,9 +1836,11 @@ class _AddToCartButtonState extends State<_AddToCartButton> {
       final cartProvider = Provider.of<CartProvider>(context, listen: false);
       final String? typeSpecific = widget.data['type_specific'];
       final String? variante = widget.data['variante'];
+      final String? variantKey = widget.data['variantKey'] as String?;
+      final String? variantName = widget.data['variantName'] as String?;
 
       _commitToCart(docId!, name!, price!, imageUrl!, cartProvider, isBulk,
-          typeSpecific, variante);
+          typeSpecific, variante, variantKey, variantName);
       _resetAndStartTimer();
     }
   }
@@ -1556,221 +1932,53 @@ class _AddToCartButtonState extends State<_AddToCartButton> {
   }
 
   void _showBulkOrderDialog({bool prefill = false}) {
-    final pesosController = TextEditingController();
-    final kilosController = TextEditingController();
-    final FocusNode pesosFocusNode = FocusNode();
-    final FocusNode kilosFocusNode = FocusNode();
-    final pricePerKilo = widget.data['price'] ?? 0.0;
-
-    if (prefill && _quantity > 0) {
-      kilosController.text = _quantity.toStringAsFixed(3);
-      pesosController.text =
-      '\$${(_quantity * pricePerKilo).toStringAsFixed(2)}';
-    }
-
     final cartProvider = Provider.of<CartProvider>(context, listen: false);
+    final pricePerKilo = (widget.data['price'] as num?)?.toDouble() ?? 0.0;
     final cartItem = cartProvider.getItem(widget.data['docId']);
-    final currentQuantity = cartItem?.quantity ?? 0.0;
-    kilosController.text = currentQuantity.toStringAsFixed(3);
-    pesosController.text =
-    '\$${(currentQuantity * pricePerKilo).toStringAsFixed(2)}';
-
-    pesosFocusNode.addListener(() {
-      if (!pesosFocusNode.hasFocus) {
-        final pesos =
-        double.tryParse(pesosController.text.replaceAll('\$', ''));
-        if (pesos != null && pricePerKilo != null) {
-          kilosController.text = (pesos / pricePerKilo).toStringAsFixed(3);
-          pesosController.text = '\$${pesos.toStringAsFixed(2)}';
-        }
-      }
-    });
-
-    kilosFocusNode.addListener(() {
-      if (!kilosFocusNode.hasFocus) {
-        final kilos = double.tryParse(kilosController.text);
-        if (kilos != null && pricePerKilo != null) {
-          pesosController.text =
-          '\$${(kilos * pricePerKilo).toStringAsFixed(2)}';
-        }
-      }
-    });
+    // Original behavior: prefill is computed first, but the cart-item value
+    // always overrides it (matches pre-refactor logic).
+    final double initialKilos = cartItem?.quantity ??
+        (prefill && _quantity > 0 ? _quantity.toDouble() : 0.0);
 
     showDialog(
-        context: context,
-        builder: (context) {
-          return BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
-            child: AlertDialog(
-              title: const Center(child: Text("Producto a Granel")),
-              content: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Row(
-                      children: [
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(8.0),
-                          child: CachedNetworkImage(
-                            imageUrl: widget.data['image_url'] ?? '',
-                            width: 50,
-                            height: 50,
-                            fit: BoxFit.contain,
-                            placeholder: (context, url) =>
-                            const ShimmerPlaceholder(width: 50, height: 50),
-                            errorWidget: (context, url, error) =>
-                            const Icon(Icons.error),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              widget.data['nombre'] ?? 'Unnamed',
-                              style:
-                              const TextStyle(fontWeight: FontWeight.bold),
-                            ),
-                            Text(widget.data['variante'] ?? 'No variant'),
-                            Text(
-                              _formatPrice(widget.data['price']),
-                              style: const TextStyle(color: Colors.green),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    RichText(
-                      textAlign: TextAlign.justify,
-                      text: const TextSpan(
-                        style: TextStyle(color: Colors.black),
-                        children: [
-                          TextSpan(
-                            text:
-                            "Este producto se vende a granel, por favor indique la cantidad que desea recibir.\n",
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    const Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        'Valor en pesos',
-                        style: TextStyle(color: Colors.black),
-                      ),
-                    ),
-                    Row(
-                      children: [
-                        Expanded(
-                          flex: 2,
-                          child: TextField(
-                            controller: pesosController,
-                            keyboardType: TextInputType.number,
-                            focusNode: pesosFocusNode,
-                            textAlign: TextAlign.center,
-                            decoration: InputDecoration(
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        const Expanded(
-                          flex: 1,
-                          child: Text(
-                            'MXN',
-                            style: TextStyle(color: Colors.black),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    const Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        'Peso en kilo',
-                        style: TextStyle(color: Colors.black),
-                      ),
-                    ),
-                    Row(
-                      children: [
-                        Expanded(
-                          flex: 2,
-                          child: TextField(
-                            controller: kilosController,
-                            keyboardType: TextInputType.number,
-                            focusNode: kilosFocusNode,
-                            textAlign: TextAlign.center,
-                            decoration: InputDecoration(
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        const Expanded(
-                          flex: 1,
-                          child: Text(
-                            'kg',
-                            style: TextStyle(color: Colors.black),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    RichText(
-                      textAlign: TextAlign.justify,
-                      text: const TextSpan(
-                        style: TextStyle(color: Colors.black),
-                        children: [
-                          TextSpan(
-                            text:
-                            "\n*Tenga en cuenta que la cantidad recibida puede variar ligeramente.",
-                            style: TextStyle(fontStyle: FontStyle.italic),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () {
-                    final kilos = double.tryParse(kilosController.text) ?? 0.0;
-                    if (kilos > stock) {
-                      return;
-                    } else {
-                      Navigator.of(context).pop();
-                      if (widget.data['docId'] != null &&
-                          widget.data['nombre'] != null) {
-                        cartProvider.setItem(
-                          widget.data['docId'],
-                          widget.data['nombre'],
-                          widget.data['price'],
-                          widget.data['image_url'] ?? '/images/placeholder.png',
-                          kilos,
-                          isBulk: true,
-                          stock: stock,
-                          typeSpecific: widget.data['type_specific'],
-                          variante: widget.data['variante'],
-                        );
-                      }
-                      if (kDebugMode) {
-                        print('Bulk order set: $kilos kg');
-                      }
-                    }
-                  },
-                  child: const Text('Agregar'),
-                ),
-              ],
-            ),
-          );
-        });
+      context: context,
+      builder: (context) {
+        return BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+          child: _BulkOrderDialog(
+            imageUrl: widget.data['image_url'] ?? '',
+            nombre: widget.data['nombre'] ?? 'Unnamed',
+            variante: widget.data['variante'] ?? 'No variant',
+            priceLabel: _formatPrice(widget.data['price']),
+            pricePerKilo: pricePerKilo,
+            initialKilos: initialKilos,
+            stock: stock,
+            onConfirm: (kilos) {
+              Navigator.of(context).pop();
+              if (widget.data['docId'] != null &&
+                  widget.data['nombre'] != null) {
+                cartProvider.setItem(
+                  widget.data['docId'],
+                  widget.data['nombre'],
+                  widget.data['price'],
+                  widget.data['image_url'] ?? '/images/placeholder.png',
+                  kilos,
+                  isBulk: true,
+                  stock: stock,
+                  typeSpecific: widget.data['type_specific'],
+                  variante: widget.data['variante'],
+                  variantKey: widget.data['variantKey'] as String?,
+                  variantName: widget.data['variantName'] as String?,
+                );
+              }
+              if (kDebugMode) {
+                print('Bulk order set: $kilos kg');
+              }
+            },
+          ),
+        );
+      },
+    );
   }
 
   String _formatPrice(dynamic price) {
@@ -1778,7 +1986,241 @@ class _AddToCartButtonState extends State<_AddToCartButton> {
     return '\$${(price as num).toStringAsFixed(2)}';
   }
 }
-enum _TermPhase { booting, awaitingKey, keyError, hacking }
+
+/// Bulk-order dialog body. Owns its own FocusNode + TextEditingController
+/// instances so they get disposed when the dialog closes (the previous
+/// inline implementation leaked both nodes and their listeners every time
+/// the dialog opened).
+class _BulkOrderDialog extends StatefulWidget {
+  final String imageUrl;
+  final String nombre;
+  final String variante;
+  final String priceLabel;
+  final double pricePerKilo;
+  final double initialKilos;
+  final double stock;
+  final ValueChanged<double> onConfirm;
+
+  const _BulkOrderDialog({
+    required this.imageUrl,
+    required this.nombre,
+    required this.variante,
+    required this.priceLabel,
+    required this.pricePerKilo,
+    required this.initialKilos,
+    required this.stock,
+    required this.onConfirm,
+  });
+
+  @override
+  State<_BulkOrderDialog> createState() => _BulkOrderDialogState();
+}
+
+class _BulkOrderDialogState extends State<_BulkOrderDialog> {
+  final TextEditingController pesosController = TextEditingController();
+  final TextEditingController kilosController = TextEditingController();
+  final FocusNode pesosFocusNode = FocusNode();
+  final FocusNode kilosFocusNode = FocusNode();
+
+  @override
+  void initState() {
+    super.initState();
+    kilosController.text = widget.initialKilos.toStringAsFixed(3);
+    pesosController.text =
+    '\$${(widget.initialKilos * widget.pricePerKilo).toStringAsFixed(2)}';
+
+    pesosFocusNode.addListener(_handlePesosFocus);
+    kilosFocusNode.addListener(_handleKilosFocus);
+  }
+
+  void _handlePesosFocus() {
+    if (!pesosFocusNode.hasFocus) {
+      final pesos =
+      double.tryParse(pesosController.text.replaceAll('\$', ''));
+      if (pesos != null) {
+        kilosController.text =
+            (pesos / widget.pricePerKilo).toStringAsFixed(3);
+        pesosController.text = '\$${pesos.toStringAsFixed(2)}';
+      }
+    }
+  }
+
+  void _handleKilosFocus() {
+    if (!kilosFocusNode.hasFocus) {
+      final kilos = double.tryParse(kilosController.text);
+      if (kilos != null) {
+        pesosController.text =
+        '\$${(kilos * widget.pricePerKilo).toStringAsFixed(2)}';
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    pesosFocusNode.removeListener(_handlePesosFocus);
+    kilosFocusNode.removeListener(_handleKilosFocus);
+    pesosFocusNode.dispose();
+    kilosFocusNode.dispose();
+    pesosController.dispose();
+    kilosController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Center(child: Text("Producto a Granel")),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8.0),
+                  child: CachedNetworkImage(
+                    imageUrl: widget.imageUrl,
+                    width: 50,
+                    height: 50,
+                    fit: BoxFit.contain,
+                    placeholder: (context, url) =>
+                    const ShimmerPlaceholder(width: 50, height: 50),
+                    errorWidget: (context, url, error) =>
+                    const Icon(Icons.error),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      widget.nombre,
+                      style:
+                      const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    Text(widget.variante),
+                    Text(
+                      widget.priceLabel,
+                      style: const TextStyle(color: Colors.green),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            RichText(
+              textAlign: TextAlign.justify,
+              text: const TextSpan(
+                style: TextStyle(color: Colors.black),
+                children: [
+                  TextSpan(
+                    text:
+                    "Este producto se vende a granel, por favor indique la cantidad que desea recibir.\n",
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 10),
+            const Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                'Valor en pesos',
+                style: TextStyle(color: Colors.black),
+              ),
+            ),
+            Row(
+              children: [
+                Expanded(
+                  flex: 2,
+                  child: TextField(
+                    controller: pesosController,
+                    keyboardType: TextInputType.number,
+                    focusNode: pesosFocusNode,
+                    textAlign: TextAlign.center,
+                    decoration: InputDecoration(
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                const Expanded(
+                  flex: 1,
+                  child: Text(
+                    'MXN',
+                    style: TextStyle(color: Colors.black),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            const Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                'Peso en kilo',
+                style: TextStyle(color: Colors.black),
+              ),
+            ),
+            Row(
+              children: [
+                Expanded(
+                  flex: 2,
+                  child: TextField(
+                    controller: kilosController,
+                    keyboardType: TextInputType.number,
+                    focusNode: kilosFocusNode,
+                    textAlign: TextAlign.center,
+                    decoration: InputDecoration(
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                const Expanded(
+                  flex: 1,
+                  child: Text(
+                    'kg',
+                    style: TextStyle(color: Colors.black),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            RichText(
+              textAlign: TextAlign.justify,
+              text: const TextSpan(
+                style: TextStyle(color: Colors.black),
+                children: [
+                  TextSpan(
+                    text:
+                    "\n*Tenga en cuenta que la cantidad recibida puede variar ligeramente.",
+                    style: TextStyle(fontStyle: FontStyle.italic),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () {
+            final kilos = double.tryParse(kilosController.text) ?? 0.0;
+            if (kilos > widget.stock) {
+              return;
+            }
+            widget.onConfirm(kilos);
+          },
+          child: const Text('Agregar'),
+        ),
+      ],
+    );
+  }
+}
+enum _TermPhase { booting, hacking }
 
 class _ArcadeLaunchPage extends StatefulWidget {
   final String userId;
@@ -1799,9 +2241,6 @@ class _ArcadeLaunchPageState extends State<_ArcadeLaunchPage> {
   _TermPhase _phase = _TermPhase.booting;
   final List<String> _visibleLines = [];
   Timer? _lineTimer;
-  String? _expectedKey;
-  final TextEditingController _keyCtrl = TextEditingController();
-  final FocusNode _keyFocus = FocusNode();
   final ScrollController _scrollCtrl = ScrollController();
 
   static const _bootLines = [
@@ -1823,10 +2262,9 @@ class _ArcadeLaunchPageState extends State<_ArcadeLaunchPage> {
     ' Allocating framebuffer ......... [ OK ]',
     ' Audio subsystem ................ [ OK ]',
     '',
-    r' C:\> authenticate --require-key',
+    r' C:\> authenticate --auto',
     '',
-    ' [!] AUTHORIZED ACCESS ONLY',
-    ' [!] ENTER CONFIRMATION CODE TO CONTINUE',
+    ' [OK] JUGADOR RECONOCIDO — ACCESO CONCEDIDO',
   ];
 
   static const _hackerLines = [
@@ -1862,20 +2300,7 @@ class _ArcadeLaunchPageState extends State<_ArcadeLaunchPage> {
   @override
   void initState() {
     super.initState();
-    _fetchKey();
     _startBootLines();
-  }
-
-  Future<void> _fetchKey() async {
-    try {
-      final doc = await FirebaseFirestore.instance
-          .collection('settings')
-          .doc('store')
-          .get();
-      if (mounted) {
-        setState(() => _expectedKey = (doc.data()?['key_word'] as String?)?.trim().toLowerCase());
-      }
-    } catch (_) { }
   }
 
   void _scrollToBottom() {
@@ -1886,9 +2311,12 @@ class _ArcadeLaunchPageState extends State<_ArcadeLaunchPage> {
     });
   }
 
+  // No gate anymore: boot rolls straight into the hacker script and the
+  // arcade. Line cadence compressed (230→90ms / 130→75ms) so the whole
+  // power-on transition runs ~4s instead of ~9s with the old key prompt.
   void _startBootLines() {
     int idx = 0;
-    _lineTimer = Timer.periodic(const Duration(milliseconds: 230), (t) {
+    _lineTimer = Timer.periodic(const Duration(milliseconds: 90), (t) {
       if (!mounted) { t.cancel(); return; }
       if (idx < _bootLines.length) {
         setState(() => _visibleLines.add(_bootLines[idx]));
@@ -1896,41 +2324,11 @@ class _ArcadeLaunchPageState extends State<_ArcadeLaunchPage> {
         idx++;
       } else {
         t.cancel();
-        setState(() => _phase = _TermPhase.awaitingKey);
-        _scrollToBottom();
+        Future.delayed(const Duration(milliseconds: 350), () {
+          if (mounted) _startHackerScript();
+        });
       }
     });
-  }
-
-  void _checkKey() {
-    final input = _keyCtrl.text.trim().toLowerCase();
-    if (_expectedKey == null || _expectedKey!.isEmpty) {
-      _startHackerScript();
-      return;
-    }
-    if (input == _expectedKey) {
-      _startHackerScript();
-    } else {
-      setState(() {
-        _phase = _TermPhase.keyError;
-        _visibleLines.add('');
-        _visibleLines.add(' [!!!] CÓDIGO INCORRECTO — ACCESO DENEGADO');
-        _visibleLines.add('');
-        _keyCtrl.clear();
-      });
-      _scrollToBottom();
-      Future.delayed(const Duration(milliseconds: 1400), () {
-        if (!mounted) return;
-        setState(() {
-          _phase = _TermPhase.awaitingKey;
-          _visibleLines.removeLast();
-          _visibleLines.removeLast();
-          _visibleLines.removeLast();
-        });
-        _scrollToBottom();
-        _keyFocus.requestFocus();
-      });
-    }
   }
 
   void _startHackerScript() {
@@ -1940,7 +2338,7 @@ class _ArcadeLaunchPageState extends State<_ArcadeLaunchPage> {
     });
     _scrollToBottom();
     int idx = 0;
-    _lineTimer = Timer.periodic(const Duration(milliseconds: 130), (t) {
+    _lineTimer = Timer.periodic(const Duration(milliseconds: 75), (t) {
       if (!mounted) { t.cancel(); return; }
       if (idx < _hackerLines.length) {
         setState(() => _visibleLines.add(_hackerLines[idx]));
@@ -1948,7 +2346,7 @@ class _ArcadeLaunchPageState extends State<_ArcadeLaunchPage> {
         idx++;
       } else {
         t.cancel();
-        Future.delayed(const Duration(milliseconds: 900), _launchArcade);
+        Future.delayed(const Duration(milliseconds: 600), _launchArcade);
       }
     });
   }
@@ -1972,16 +2370,13 @@ class _ArcadeLaunchPageState extends State<_ArcadeLaunchPage> {
   @override
   void dispose() {
     _lineTimer?.cancel();
-    _keyCtrl.dispose();
-    _keyFocus.dispose();
     _scrollCtrl.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final isInputPhase = _phase == _TermPhase.awaitingKey || _phase == _TermPhase.keyError;
-    final isHacker     = _phase == _TermPhase.hacking;
+    final isHacker = _phase == _TermPhase.hacking;
 
     return Scaffold(
       backgroundColor: const Color(0xFF010D01),
@@ -2017,8 +2412,7 @@ class _ArcadeLaunchPageState extends State<_ArcadeLaunchPage> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         ..._visibleLines.map((l) => _TermLine(text: l, isHacker: isHacker)),
-                        if (isInputPhase) _buildKeyInput(),
-                        if (!isInputPhase) const _BlinkCursor(),
+                        const _BlinkCursor(),
                       ],
                     ),
                   ),
@@ -2031,58 +2425,6 @@ class _ArcadeLaunchPageState extends State<_ArcadeLaunchPage> {
     );
   }
 
-  Widget _buildKeyInput() {
-    return GestureDetector(
-      onTap: () => _keyFocus.requestFocus(),
-      child: Row(
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        const Text(
-          r' C:\> ACCESS_CODE: ',
-          style: TextStyle(
-            color: Color(0xFF88FFBB),
-            fontFamily: 'monospace',
-            fontSize: 11,
-            fontWeight: FontWeight.bold,
-            letterSpacing: 0.6,
-            height: 1.35,
-            shadows: [Shadow(color: Color(0xFF00FF88), blurRadius: 8)],
-          ),
-        ),
-        Expanded(
-          child: TextField(
-            controller: _keyCtrl,
-            focusNode: _keyFocus,
-            onSubmitted: (_) => _checkKey(),
-            autofocus: false,
-            style: const TextStyle(
-              color: Color(0xFF00FF88),
-              fontFamily: 'monospace',
-              fontSize: 11,
-              letterSpacing: 0.6,
-              height: 1.35,
-              shadows: [Shadow(color: Color(0xFF00FF88), blurRadius: 5)],
-            ),
-            cursorColor: const Color(0xFF00FF88),
-            cursorWidth: 7,
-            cursorHeight: 13,
-            decoration: const InputDecoration(
-              border: InputBorder.none,
-              enabledBorder: InputBorder.none,
-              focusedBorder: InputBorder.none,
-              errorBorder: InputBorder.none,
-              disabledBorder: InputBorder.none,
-              fillColor: Colors.transparent,
-              filled: false,
-              isDense: true,
-              contentPadding: EdgeInsets.zero,
-            ),
-          ),
-        ),
-      ],
-    ),
-    );
-  }
 }
 
 class _TermLine extends StatelessWidget {

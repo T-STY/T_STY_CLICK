@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'arcade_center_screen.dart' show AppLanguage;
 import 'arcade_input_controller.dart';
 import 'game_saldo.dart';
 import 'high_score_service.dart';
@@ -34,8 +35,10 @@ class TrafficHopperScreen extends StatefulWidget {
   final double currentSaldo;
   final ArcadeInputController controller;
   final void Function(double) onSaldoChanged;
+  final AppLanguage language;
   const TrafficHopperScreen({super.key, required this.userId, required this.rewardsDocRef,
-      required this.currentSaldo, required this.controller, required this.onSaldoChanged});
+      required this.currentSaldo, required this.controller, required this.onSaldoChanged,
+      this.language = AppLanguage.spanish});
   @override State<TrafficHopperScreen> createState() => _TrafficHopperScreenState();
 }
 
@@ -46,6 +49,7 @@ class _TrafficHopperScreenState extends State<TrafficHopperScreen> {
   static const List<int> kRoadRows = [7, 8, 9, 10, 11];
 
   late double _saldo;
+  late double _lastCommitted;
   int _score = 0;
   int _hiScore = 0;
   int _lives = 3;
@@ -71,11 +75,18 @@ class _TrafficHopperScreenState extends State<TrafficHopperScreen> {
 
   final _rng = Random();
 
+  String _t(String es, String en) =>
+      widget.language == AppLanguage.spanish ? es : en;
+
   @override
   void initState() {
     super.initState();
     _saldo = widget.currentSaldo;
-    HighScoreService.load('hopper').then((v) => setState(() => _hiScore = v));
+    _lastCommitted = widget.currentSaldo;
+    HighScoreService.load('hopper').then((v) {
+      if (!mounted) return;
+      setState(() => _hiScore = v);
+    });
     widget.controller.addListener(_onControllerEvent);
     _initObjects();
   }
@@ -402,19 +413,34 @@ class _TrafficHopperScreenState extends State<TrafficHopperScreen> {
     if (ns == null) return;
     if (!mounted) return;
     setState(() => _saldo = ns);
+    // The replay charge already committed server-side, so the ledger has to
+    // follow it — otherwise the next credit's delta (newSaldo - _lastCommitted)
+    // comes out short by the play cost and debits the player instead.
+    _lastCommitted = ns;
     widget.onSaldoChanged(ns);
     _tickTimer?.cancel();
     _startGame();
   }
 
   Future<void> _updateFirestore(double newSaldo) async {
-    try {
-      final userCardRef = FirebaseFirestore.instance.collection('users').doc(widget.userId).collection('rewardsCard').doc('cardInfo');
-      final batch = FirebaseFirestore.instance.batch();
-      batch.update(userCardRef, {'saldo': newSaldo});
-      batch.update(widget.rewardsDocRef, {'saldo': newSaldo});
-      await batch.commit();
-    } catch (e) { debugPrint('Hopper Firestore: $e'); }
+    // Routes through the server-side `updateRewardsSaldo`
+    // callable instead of writing rewards/{docId} directly
+    // (admin-only collection — direct writes failed silently
+    // for every non-admin user). The CF resolves the wallet,
+    // applies the delta in a transaction, and mirrors the
+    // result to the owner-readable card cache.
+    final delta = newSaldo - _lastCommitted;
+    if (delta == 0) return;
+    final result = await applyArcadeDelta(
+      delta: delta,
+      reason: 'traffic_hopper',
+    );
+    if (result != null) {
+      _lastCommitted = result;
+      if (mounted && _saldo != result) {
+        setState(() => _saldo = result);
+      }
+    }
   }
 
   @override
@@ -438,7 +464,10 @@ class _TrafficHopperScreenState extends State<TrafficHopperScreen> {
         color: Colors.black.withOpacity(0.65),
         padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
         child: Text(
-          'Lvl $_level  ·  Score: $_score  ·  Best: $_hiScore  ·  Lives: $_lives  ·  ${_saldo.toStringAsFixed(0)} pts',
+          _t(
+            'Niv $_level  ·  Puntos: $_score  ·  Mejor: $_hiScore  ·  Vidas: $_lives  ·  ${_saldo.toStringAsFixed(0)} pts',
+            'Lvl $_level  ·  Score: $_score  ·  Best: $_hiScore  ·  Lives: $_lives  ·  ${_saldo.toStringAsFixed(0)} pts',
+          ),
           style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
           textAlign: TextAlign.center,
         ),
@@ -479,8 +508,8 @@ class _TrafficHopperScreenState extends State<TrafficHopperScreen> {
           children: [
             const Text('🐸', style: TextStyle(fontSize: 60)),
             const SizedBox(height: 8),
-            const Text('RANA SALTARINA',
-              style: TextStyle(
+            Text(_t('RANA SALTARINA', 'HOPPING FROG'),
+              style: const TextStyle(
                 color: Colors.white,
                 fontSize: 26,
                 fontWeight: FontWeight.bold,
@@ -488,8 +517,8 @@ class _TrafficHopperScreenState extends State<TrafficHopperScreen> {
                 shadows: [Shadow(color: Color(0xFF004400), blurRadius: 8)],
               )),
             const SizedBox(height: 4),
-            const Text('Cruza el río y la carretera',
-              style: TextStyle(color: Color(0xFF88DDAA), fontSize: 12, letterSpacing: 1)),
+            Text(_t('Cruza el río y la carretera', 'Cross the river and the road'),
+              style: const TextStyle(color: Color(0xFF88DDAA), fontSize: 12, letterSpacing: 1)),
             const SizedBox(height: 22),
             Container(
               margin: const EdgeInsets.symmetric(horizontal: 28),
@@ -499,24 +528,25 @@ class _TrafficHopperScreenState extends State<TrafficHopperScreen> {
                 borderRadius: BorderRadius.circular(10),
                 border: Border.all(color: Colors.green.withOpacity(0.4), width: 1),
               ),
-              child: const Column(children: [
-                Text('D-pad: mover la rana', style: TextStyle(color: Colors.white, fontSize: 13)),
-                SizedBox(height: 5),
-                Text('Sube a los troncos para cruzar el río',
-                  style: TextStyle(color: Color(0xFF88DDAA), fontSize: 11),
+              child: Column(children: [
+                Text(_t('D-pad: mover la rana', 'D-pad: move the frog'),
+                  style: const TextStyle(color: Colors.white, fontSize: 13)),
+                const SizedBox(height: 5),
+                Text(_t('Sube a los troncos para cruzar el río', 'Ride the logs to cross the river'),
+                  style: const TextStyle(color: Color(0xFF88DDAA), fontSize: 11),
                   textAlign: TextAlign.center),
-                SizedBox(height: 5),
-                Text('Evita los coches en la carretera',
-                  style: TextStyle(color: Color(0xFFFFAA44), fontSize: 11),
+                const SizedBox(height: 5),
+                Text(_t('Evita los coches en la carretera', 'Dodge the cars on the road'),
+                  style: const TextStyle(color: Color(0xFFFFAA44), fontSize: 11),
                   textAlign: TextAlign.center),
-                SizedBox(height: 8),
-                Text('+1 PTO REAL POR NIVEL',
-                  style: TextStyle(color: Color(0xFFFFDD44), fontSize: 12, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 8),
+                Text(_t('+1 PTO REAL POR NIVEL', '+1 REAL POINT PER LEVEL'),
+                  style: const TextStyle(color: Color(0xFFFFDD44), fontSize: 12, fontWeight: FontWeight.bold)),
               ]),
             ),
             const SizedBox(height: 20),
-            const Text('¡Lleva 5 ranas a la orilla para ganar!',
-              style: TextStyle(color: Color(0xFF44AA66), fontSize: 11)),
+            Text(_t('¡Lleva 5 ranas a la orilla para ganar!', 'Get 5 frogs home to win!'),
+              style: const TextStyle(color: Color(0xFF44AA66), fontSize: 11)),
             const SizedBox(height: 16),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 32),
@@ -527,7 +557,8 @@ class _TrafficHopperScreenState extends State<TrafficHopperScreen> {
                     backgroundColor: const Color(0xFF22AA44),
                     foregroundColor: Colors.white,
                     shape: const StadiumBorder()),
-                  child: const Text('¡A Saltar!', style: TextStyle(fontWeight: FontWeight.bold)),
+                  child: Text(_t('¡A Saltar!', "Let's Hop!"),
+                      style: const TextStyle(fontWeight: FontWeight.bold)),
                 ),
               ),
             ),
@@ -553,21 +584,21 @@ class _TrafficHopperScreenState extends State<TrafficHopperScreen> {
             const Text('🚗', style: TextStyle(fontSize: 40)),
             const Text('💀', style: TextStyle(fontSize: 28)),
             const SizedBox(height: 8),
-            const Text('¡APLASTADA!',
-              style: TextStyle(
+            Text(_t('¡APLASTADA!', 'SQUASHED!'),
+              style: const TextStyle(
                 color: Color(0xFFFF3300),
                 fontSize: 30,
                 fontWeight: FontWeight.bold,
                 letterSpacing: 3,
               )),
             const SizedBox(height: 4),
-            const Text('La rana no logró cruzar',
-              style: TextStyle(color: Color(0xFF884433), fontSize: 11)),
+            Text(_t('La rana no logró cruzar', 'The frog never made it across'),
+              style: const TextStyle(color: Color(0xFF884433), fontSize: 11)),
             const SizedBox(height: 18),
-            Text('Puntuación: $_score',
+            Text(_t('Puntuación: $_score', 'Score: $_score'),
               style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
             const SizedBox(height: 4),
-            Text('Récord: $_hiScore',
+            Text(_t('Récord: $_hiScore', 'Best: $_hiScore'),
               style: const TextStyle(color: Color(0xFFFFD700), fontSize: 14)),
             const SizedBox(height: 28),
             Padding(
@@ -579,7 +610,8 @@ class _TrafficHopperScreenState extends State<TrafficHopperScreen> {
                     backgroundColor: const Color(0xFF22AA44),
                     foregroundColor: Colors.white,
                     shape: const StadiumBorder()),
-                  child: const Text('Volver a Saltar', style: TextStyle(fontWeight: FontWeight.bold)),
+                  child: Text(_t('Volver a Saltar', 'Hop Again'),
+                      style: const TextStyle(fontWeight: FontWeight.bold)),
                 ),
               ),
             ),
@@ -596,10 +628,11 @@ class _TrafficHopperScreenState extends State<TrafficHopperScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Text('¡NIVEL $_level!',
+            Text(_t('¡NIVEL $_level!', 'LEVEL $_level!'),
                 style: const TextStyle(color: Colors.greenAccent, fontSize: 36, fontWeight: FontWeight.bold, letterSpacing: 4)),
             const SizedBox(height: 12),
-            const Text('+500 pts  ·  +1 pto', style: TextStyle(color: Colors.amber, fontSize: 18)),
+            Text(_t('+500 pts  ·  +1 pto', '+500 pts  ·  +1 point'),
+                style: const TextStyle(color: Colors.amber, fontSize: 18)),
           ],
         ),
       ),
@@ -609,14 +642,16 @@ class _TrafficHopperScreenState extends State<TrafficHopperScreen> {
   Widget _buildPauseOverlay() => Positioned.fill(
     child: Container(
       color: const Color(0xCC000000),
-      child: const Column(
+      child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Text('⏸', style: TextStyle(fontSize: 48)),
-          SizedBox(height: 8),
-          Text('PAUSA', style: TextStyle(color: Colors.greenAccent, fontSize: 28, fontWeight: FontWeight.bold, letterSpacing: 6)),
-          SizedBox(height: 16),
-          Text('START para continuar', style: TextStyle(color: Color(0xFF336633), fontSize: 12)),
+          const Text('⏸', style: TextStyle(fontSize: 48)),
+          const SizedBox(height: 8),
+          Text(_t('PAUSA', 'PAUSED'),
+              style: const TextStyle(color: Colors.greenAccent, fontSize: 28, fontWeight: FontWeight.bold, letterSpacing: 6)),
+          const SizedBox(height: 16),
+          Text(_t('START para continuar', 'START to continue'),
+              style: const TextStyle(color: Color(0xFF336633), fontSize: 12)),
         ],
       ),
     ),

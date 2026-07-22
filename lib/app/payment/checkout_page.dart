@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -11,6 +12,10 @@ import '../../components/bottom_fade.dart';
 import '../../constants/app_colors.dart';
 import '../../constants/app_defaults.dart';
 import '../../constants/app_images.dart';
+import '../../utils/callable_retry.dart';
+import 'delivery_window_picker.dart';
+import '../../utils/coupon_filter.dart' as cf;
+import '../../utils/order_window.dart';
 import '../cart/cart_provider.dart';
 import '../cart/components/product_tile_cart.dart';
 import '../../utils/phone_format.dart';
@@ -32,6 +37,16 @@ class CheckoutPage extends StatefulWidget {
   State<CheckoutPage> createState() => _CheckoutPageState();
 }
 
+/// Whether a coupon is currently usable against the cart in view.
+/// - `ok`: filter inactive OR at least one item matches.
+/// - `pending`: filter active and product metadata is still loading.
+///   UI shows a spinner + "Verificando elegibilidad…" so the user doesn't
+///   misread a transient empty cache as "this coupon doesn't apply."
+/// - `noMatch`: filter active and zero items match. UI dims the card,
+///   disables the tap (except to deselect), and `_calculateDiscount`
+///   auto-deselects to avoid the silent-$0 confusion.
+enum _CouponEligibility { ok, pending, noMatch }
+
 class _CheckoutPageState extends State<CheckoutPage> {
   String _selectedPaymentMethod = 'efectivo';
 
@@ -42,6 +57,12 @@ class _CheckoutPageState extends State<CheckoutPage> {
   List<Map<String, dynamic>> _assignedCoupons = [];
   String? _selectedCouponCode;
   final TextEditingController _couponController = TextEditingController();
+  // Re-entrancy + visible-progress guard for `_applyCoupon`. The Aplicar
+  // button fires a Cloud Function call; without this flag a fast double-
+  // tap would queue two `claimCoupon` calls. We flip it true on entry
+  // and back to false in a finally block so the button can render a
+  // spinner and be disabled while the network call is in flight.
+  bool _isApplyingCoupon = false;
 
   Map<String, dynamic> _coloniaPricing = {};
 
@@ -50,6 +71,15 @@ class _CheckoutPageState extends State<CheckoutPage> {
   double _total = 0.0;
 
   bool _isInstorePickup = false;
+  // Re-entrancy guard for `_placeOrder`. The SlideAction widget
+  // can fire `onSubmit` repeatedly on quick taps before its own
+  // dismissal animation completes; without this flag a user
+  // double-tapping the slider would send two `placeOrder` CF
+  // calls and post two real orders. We flip this true on entry,
+  // back to false at every exit path (success, validation reject,
+  // exception). Wrapped in setState so the SlideAction's enabled
+  // state can be driven off it.
+  bool _isPlacingOrder = false;
 
   double _rewardsBalance = 0.0;
   double _appliedRewards = 0.0;
@@ -61,6 +91,284 @@ class _CheckoutPageState extends State<CheckoutPage> {
   String _userName = '';
   String _userPhone = '';
 
+  /// Resolved store/delivery state, refreshed from a live `settings/store`
+  /// stream. The submit handler reads this; the order options panel uses
+  /// it to disable the delivery toggle outside the window.
+  OrderWindow _window = OrderWindow.openPlaceholder;
+  StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _storeSub;
+  CartProvider? _cartProviderRef;
+
+  /// Chosen 30-min slot start, or null = "Lo antes posible".
+  TimeOfDay? _deliverySlot;
+
+  /// Free-text order note for the store (referencias, "sin cebolla",
+  /// "plátanos maduros"…). Optional; capped and trimmed server-side.
+  final TextEditingController _notesController = TextEditingController();
+
+  /// Cash "pago con" — how much the customer will hand over so the driver
+  /// brings change. null | 'exacto' | '100' | '200' | '500' | '1000' | 'otro'.
+  /// Only relevant when the payment method is efectivo.
+  String? _cashOption;
+  final TextEditingController _cashOtherController = TextEditingController();
+
+  /// The amount the customer will pay with (bill/exact/custom), or null when
+  /// unspecified. 'exacto' tracks the live total so it stays correct if a
+  /// coupon/saldo changes it.
+  double? get _cashGiven {
+    switch (_cashOption) {
+      case 'exacto':
+        return _total;
+      case 'otro':
+        return double.tryParse(_cashOtherController.text.trim());
+      case null:
+        return null;
+      default:
+        return double.tryParse(_cashOption!);
+    }
+  }
+
+  /// Device-clock skew vs the server (server - device). Slot generation adds
+  /// this to DateTime.now() so a wrong device clock can't offer stale slots;
+  /// placeOrder re-validates with real server time regardless.
+  Duration _clockSkew = Duration.zero;
+
+  DateTime get _networkNow => DateTime.now().add(_clockSkew);
+
+  Widget _buildCashPaySection() {
+    // Bills that actually cover the order; "Otro" handles anything else.
+    final bills =
+        [100.0, 200.0, 500.0, 1000.0].where((b) => b >= _total).toList();
+    final given = _cashGiven;
+    final change = (_cashOption != null &&
+            _cashOption != 'exacto' &&
+            given != null &&
+            given >= _total)
+        ? given - _total
+        : null;
+    final bool otherTooLow = _cashOption == 'otro' &&
+        given != null &&
+        given < _total;
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.payments_outlined,
+                  size: 20, color: Colors.grey.shade800),
+              const SizedBox(width: 8),
+              const Text('¿Con cuánto pagas?',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+            ],
+          ),
+          const SizedBox(height: 2),
+          Text('Para llevarte tu cambio exacto.',
+              style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+          const SizedBox(height: 10),
+          _cashChipGrid([
+            _cashChip('Pago justo', 'exacto'),
+            for (final b in bills)
+              _cashChip('\$${b.toInt()}', b.toInt().toString()),
+            _cashChip('Otro', 'otro'),
+          ]),
+          if (_cashOption == 'otro') ...[
+            const SizedBox(height: 10),
+            TextField(
+              controller: _cashOtherController,
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
+              onChanged: (_) => setState(() {}),
+              decoration: InputDecoration(
+                prefixText: '\$ ',
+                hintText: 'Monto en efectivo',
+                isDense: true,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: Colors.grey.shade300),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: Colors.grey.shade300),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: const BorderSide(color: Colors.black, width: 1.4),
+                ),
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              ),
+            ),
+          ],
+          if (_cashOption == 'exacto') ...[
+            const SizedBox(height: 8),
+            Text('Pagas justo, sin cambio.',
+                style: TextStyle(
+                    fontSize: 12.5,
+                    color: Colors.grey.shade700,
+                    fontWeight: FontWeight.w600)),
+          ] else if (change != null) ...[
+            const SizedBox(height: 8),
+            Text('Tu cambio: \$${change.toStringAsFixed(2)}',
+                style: const TextStyle(
+                    fontSize: 13,
+                    color: Colors.green,
+                    fontWeight: FontWeight.w800)),
+          ] else if (otherTooLow) ...[
+            const SizedBox(height: 8),
+            Text('El monto debe ser al menos \$${_total.toStringAsFixed(2)}.',
+                style: TextStyle(
+                    fontSize: 12.5,
+                    color: Colors.red.shade600,
+                    fontWeight: FontWeight.w600)),
+          ],
+        ],
+      ),
+    );
+  }
+
+  /// Lays the cash chips out three per row, every chip the same width with
+  /// even gaps. Short final rows are padded with empty slots so the leftover
+  /// chips keep the standard width instead of stretching across the row.
+  Widget _cashChipGrid(List<Widget> chips) {
+    const double gap = 8;
+    final List<Widget> rows = [];
+    for (int i = 0; i < chips.length; i += 3) {
+      final int end = (i + 3 <= chips.length) ? i + 3 : chips.length;
+      final List<Widget> slice = chips.sublist(i, end);
+      rows.add(Row(
+        children: [
+          for (int j = 0; j < 3; j++) ...[
+            if (j > 0) const SizedBox(width: gap),
+            Expanded(
+              child: j < slice.length ? slice[j] : const SizedBox.shrink(),
+            ),
+          ],
+        ],
+      ));
+      if (end < chips.length) rows.add(const SizedBox(height: gap));
+    }
+    return Column(children: rows);
+  }
+
+  Widget _cashChip(String label, String value) {
+    final selected = _cashOption == value;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => setState(() => _cashOption = selected ? null : value),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 120),
+        alignment: Alignment.center,
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 9),
+        decoration: BoxDecoration(
+          color: selected ? Colors.black : Colors.grey.shade100,
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(
+              color: selected ? Colors.black : Colors.grey.shade300),
+        ),
+        child: Text(
+          label,
+          textAlign: TextAlign.center,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+            color: selected ? Colors.white : Colors.grey.shade800,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNotesSection() {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.edit_note, size: 20, color: Colors.grey.shade800),
+              const SizedBox(width: 8),
+              const Text(
+                'Notas del pedido (opcional)',
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          TextField(
+            controller: _notesController,
+            maxLines: 3,
+            maxLength: 300,
+            textInputAction: TextInputAction.newline,
+            decoration: InputDecoration(
+              hintText:
+                  'Ej: casa azul, tocar timbre, plátanos maduros, sin popote…',
+              hintStyle:
+                  TextStyle(color: Colors.grey.shade400, fontSize: 13),
+              isDense: true,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: Colors.grey.shade300),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: Colors.grey.shade300),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: Colors.black, width: 1.4),
+              ),
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Map<String, String> _buildDeliveryWindowPayload(TimeOfDay slot) {
+    String two(int n) => n.toString().padLeft(2, '0');
+    final n = _networkNow;
+    final endMin = slot.hour * 60 + slot.minute + 30;
+    return {
+      'date': '${n.year}-${two(n.month)}-${two(n.day)}',
+      'start': '${two(slot.hour)}:${two(slot.minute)}',
+      'end': '${two(endMin ~/ 60 % 24)}:${two(endMin % 60)}',
+    };
+  }
+
+  Future<void> _fetchServerTimeSkew() async {
+    try {
+      final res = await callIdempotentCallable('getServerTime');
+      final epochMs = (res.data?['epochMs'] as num?)?.toInt();
+      if (epochMs != null && mounted) {
+        setState(() {
+          _clockSkew = DateTime.fromMillisecondsSinceEpoch(epochMs)
+              .difference(DateTime.now());
+        });
+      }
+    } catch (_) {
+      // Device time is the graceful fallback; the CF stays authoritative.
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -69,6 +377,53 @@ class _CheckoutPageState extends State<CheckoutPage> {
     _fetchAssignedCoupons();
     _fetchAddresses();
     _fetchUserInfo();
+    _subscribeOrderWindow();
+    _fetchServerTimeSkew();
+    // Listen to the SCOPED product-meta channel so the coupon row can flip
+    // from "Verificando elegibilidad…" to its real label without forcing
+    // every CartProvider Consumer (notably home/search) to rebuild on
+    // every product fetch. The broader Consumer<CartProvider>(context)
+    // path below already covers actual cart mutations.
+    _cartProviderRef =
+        Provider.of<CartProvider>(context, listen: false);
+    _cartProviderRef!.productMetaVersion.addListener(_onProductMetaChanged);
+  }
+
+  void _onProductMetaChanged() {
+    if (!mounted) return;
+    // Trigger a rebuild so `_buildSelectableCoupon` re-evaluates
+    // eligibility now that one more item's category/provedor is known.
+    setState(_calculateTotal);
+  }
+
+  /// Stream `settings/store` so the delivery/pickup state stays live while
+  /// the user is on this screen. When the user crosses the delivery cutoff
+  /// mid-checkout, the toggle auto-flips to pickup and the delivery option
+  /// disables itself in the next rebuild.
+  void _subscribeOrderWindow() {
+    _storeSub = FirebaseFirestore.instance
+        .collection('settings')
+        .doc('store')
+        .snapshots()
+        .listen((snap) {
+      if (!mounted || !snap.exists) return;
+      final win =
+          OrderWindow.evaluate(doc: snap.data() ?? const {}, now: DateTime.now());
+      var pickupFlip = _isInstorePickup;
+      if (win.status == OrderingStatus.pickupOnly && !pickupFlip) {
+        pickupFlip = true;
+      }
+      // Second mounted check — the listener fires asynchronously
+      // and any future addition between the top-of-listener check
+      // and the setState could introduce an await window where the
+      // user navigates away. Cheap defense against drift.
+      if (!mounted) return;
+      setState(() {
+        _window = win;
+        _isInstorePickup = pickupFlip;
+      });
+      _calculateDeliveryFee();
+    });
   }
 
   double _toDouble(dynamic value) {
@@ -81,6 +436,42 @@ class _CheckoutPageState extends State<CheckoutPage> {
     } else {
       return 0.0;
     }
+  }
+
+  /// Colonia strings reach us from two different writers: the curated
+  /// dropdown, and free text — which includes the raw geocoder `subLocality`
+  /// whenever GPS reverse-geocoding doesn't match the curated list. So the
+  /// same place arrives as "Centro", "centro", "Céntro" or " Centro ".
+  /// Matching the pricing map by exact key meant identical addresses were
+  /// billed differently depending on how the address happened to be created.
+  static String normalizeColonia(String s) {
+    var out = s.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
+    const accented = 'áàäâãéèëêíìïîóòöôõúùüûñç';
+    const plain = 'aaaaaeeeeiiiiooooouuuunc';
+    for (var i = 0; i < accented.length; i++) {
+      out = out.replaceAll(accented[i], plain[i]);
+    }
+    return out;
+  }
+
+  /// Fee for [colonia], or null when the pricing map genuinely has no entry.
+  ///
+  /// When several pricing keys collapse to the same normalized colonia (the
+  /// classic case being one entry typed with accents and one without) the
+  /// LOWEST fee wins, so a duplicate or typo'd row can never overcharge a
+  /// customer — it can only ever undercharge, which is the safe direction.
+  double? _feeForColonia(String colonia) {
+    final target = normalizeColonia(colonia);
+    double? best;
+    _coloniaPricing.forEach((key, value) {
+      if (normalizeColonia(key) != target) return;
+      final v = value is num
+          ? value.toDouble()
+          : double.tryParse(value.toString());
+      if (v == null) return;
+      if (best == null || v < best!) best = v;
+    });
+    return best;
   }
 
   Future<void> _fetchStorePricing() async {
@@ -135,23 +526,10 @@ class _CheckoutPageState extends State<CheckoutPage> {
 
     String colonia = selectedAddress['colonia'];
 
-    if (_coloniaPricing.containsKey(colonia)) {
-      var priceVal = _coloniaPricing[colonia];
-      double fee = 0.0;
-      if (priceVal is String) {
-        fee = double.tryParse(priceVal) ?? 0.0;
-      } else if (priceVal is num) {
-        fee = priceVal.toDouble();
-      }
-
-      setState(() {
-        _deliveryFee = fee;
-      });
-    } else {
-      setState(() {
-        _deliveryFee = 20.0;
-      });
-    }
+    final matched = _feeForColonia(colonia);
+    setState(() {
+      _deliveryFee = matched ?? 20.0;
+    });
     _calculateTotal();
   }
 
@@ -168,9 +546,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
 
     if (userCardDoc.exists) {
       try {
-        final result = await FirebaseFunctions.instance
-            .httpsCallable('getRewardsBalance')
-            .call();
+        final result = await callIdempotentCallable('getRewardsBalance');
         final data = Map<String, dynamic>.from(result.data as Map);
         if (data['hasWallet'] == true) {
           setState(() {
@@ -373,6 +749,11 @@ class _CheckoutPageState extends State<CheckoutPage> {
         ),
       ),
     ).then((_) {
+      // The user can pop the addresses screen via system back at
+      // any time; if the checkout itself was disposed in between
+      // (deep-nav pop, timeout dialog, etc.) we'd setState in
+      // `_fetchAddresses` on a defunct State.
+      if (!mounted) return;
       _fetchAddresses();
     });
   }
@@ -401,7 +782,11 @@ class _CheckoutPageState extends State<CheckoutPage> {
   }
 
   Future<void> _applyCoupon(String code) async {
+    if (_isApplyingCoupon) return;
     final upper = code.toUpperCase();
+    setState(() {
+      _isApplyingCoupon = true;
+    });
     try {
       await FirebaseFunctions.instance
           .httpsCallable('claimCoupon')
@@ -421,6 +806,12 @@ class _CheckoutPageState extends State<CheckoutPage> {
     } catch (_) {
       if (!mounted) return;
       _showAlertDialog('Error', 'No se pudo aplicar el cupón.');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isApplyingCoupon = false;
+        });
+      }
     }
   }
 
@@ -434,8 +825,44 @@ class _CheckoutPageState extends State<CheckoutPage> {
       if (couponData.isNotEmpty) {
         double percentage = _toDouble(couponData['percentage']);
         double maxDiscount = _toDouble(couponData['max_discount']);
+        // Honor the coupon's product-filter when present. eligibleSubtotalFor
+        // returns the full subtotal for inactive filters (back-compat with
+        // pre-feature coupons), so the legacy code path is preserved.
+        // Returns null IFF an active filter needs product meta and it's
+        // still loading — we treat that as "0 discount for now" but DON'T
+        // auto-deselect (the eligibility check below distinguishes
+        // unresolved from genuinely-zero).
+        final cartProvider =
+            Provider.of<CartProvider>(context, listen: false);
+        final filter = couponData['productFilter'];
+        final filterMap =
+            filter is Map ? Map<String, dynamic>.from(filter) : null;
+        final eligibleRaw = cartProvider.eligibleSubtotalFor(filterMap);
+        final hasActiveFilter = filterMap != null &&
+            ((filterMap['mode'] ?? 'all') == 'include' ||
+                (filterMap['mode'] ?? 'all') == 'exclude');
+
+        // Auto-deselect when the cart mutates and the eligible amount
+        // genuinely drops to 0 (meta loaded, no matches). Skip when meta
+        // is still loading (eligibleRaw == null) — that's a transient
+        // "verifying" state, not a final answer.
+        if (hasActiveFilter && eligibleRaw != null && eligibleRaw <= 0) {
+          _selectedCouponCode = null;
+          _discount = 0.0;
+          return;
+        }
+
+        final effectiveEligible = eligibleRaw ?? 0.0;
+        // Clamp to the post-combo subtotal so coupon + combo discount never
+        // overshoot the cart's actual value. Mirrors the server's Math.min
+        // guard against an inflated items[] payload.
+        final base = effectiveEligible > _subtotal ? _subtotal : effectiveEligible;
+        // Defensive clamp upper bound — admin form already validates
+        // max_discount >= 0, but Dart's num.clamp throws ArgumentError if
+        // upperLimit < lowerLimit, so guard against a malformed master doc.
+        final maxClamp = maxDiscount < 0 ? 0.0 : maxDiscount;
         double discountAmount =
-        (_subtotal * percentage / 100).clamp(0, maxDiscount);
+            (base * percentage / 100).clamp(0, maxClamp).toDouble();
         setState(() {
           _discount = discountAmount;
         });
@@ -445,6 +872,24 @@ class _CheckoutPageState extends State<CheckoutPage> {
         _discount = 0.0;
       });
     }
+  }
+
+  /// Eligibility status of a coupon against the current cart, used by
+  /// `_buildSelectableCoupon` to render badges.
+  /// - `pending`: filter is active and product meta hasn't loaded yet.
+  /// - `noMatch`: filter is active and ZERO items qualify.
+  /// - `ok`: filter inactive, or at least one item qualifies.
+  _CouponEligibility _couponEligibility(Map<String, dynamic> coupon) {
+    final filter = coupon['productFilter'];
+    if (filter is! Map) return _CouponEligibility.ok;
+    final mode = (filter['mode'] ?? 'all').toString();
+    if (mode != 'include' && mode != 'exclude') return _CouponEligibility.ok;
+    final cartProvider = Provider.of<CartProvider>(context, listen: false);
+    final eligible = cartProvider
+        .eligibleSubtotalFor(Map<String, dynamic>.from(filter));
+    if (eligible == null) return _CouponEligibility.pending;
+    if (eligible <= 0) return _CouponEligibility.noMatch;
+    return _CouponEligibility.ok;
   }
 
   void _calculateTotal() {
@@ -474,9 +919,38 @@ class _CheckoutPageState extends State<CheckoutPage> {
   }
 
   void _placeOrder() async {
+    // Re-entrancy guard. A SlideAction `onSubmit` could fire twice
+    // on a rapid double-tap and post two orders. The flag also
+    // disables the slider in the UI while in flight.
+    if (_isPlacingOrder) return;
+
     final userId = FirebaseAuth.instance.currentUser?.uid;
     if (userId == null) return;
     final cartProvider = Provider.of<CartProvider>(context, listen: false);
+
+    // Re-check the window at submit time. Belt-and-braces against the user
+    // sitting on the page long enough to cross either the delivery cutoff
+    // or the global quiet-hours window. The CF will reject too, but doing
+    // it here gives a clearer message instead of a generic CF error.
+    if (_window.status == OrderingStatus.closed) {
+      _showAlertDialog('Estamos cerrados',
+          'No estamos tomando pedidos entre '
+              '${formatHourMinute(_window.quietStart)} y '
+              '${formatHourMinute(_window.quietEnd)}. '
+              'Vuelve más tarde.');
+      return;
+    }
+    if (!_isInstorePickup &&
+        _window.status == OrderingStatus.pickupOnly) {
+      _showAlertDialog(
+          'Solo entrega en tienda',
+          _window.deliveryRestToday
+              ? 'Hoy no estamos haciendo entregas a domicilio. Puedes recoger en tienda.'
+              : 'Las entregas a domicilio se reanudan a las '
+                  '${formatHourMinute(_window.todayOpen!)}. '
+                  'Mientras tanto puedes recoger en tienda.');
+      return;
+    }
 
     if (!_isInstorePickup && _selectedAddressId == null) {
       _showAlertDialog(
@@ -484,6 +958,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
       return;
     }
 
+    setState(() => _isPlacingOrder = true);
     try {
       await FirebaseFunctions.instance
           .httpsCallable('placeOrder')
@@ -496,6 +971,14 @@ class _CheckoutPageState extends State<CheckoutPage> {
         'useRewardsBalance': _useRewardsBalance,
         'isInstorePickup': _isInstorePickup,
         'couponCode': _selectedCouponCode,
+        if (_deliverySlot != null)
+          'deliveryWindow': _buildDeliveryWindowPayload(_deliverySlot!),
+        if (_notesController.text.trim().isNotEmpty)
+          'notes': _notesController.text.trim(),
+        if (_selectedPaymentMethod == 'efectivo' &&
+            _cashGiven != null &&
+            _cashGiven! >= _total)
+          'cashPaidWith': _cashGiven,
       });
 
       cartProvider.clearCart();
@@ -508,12 +991,21 @@ class _CheckoutPageState extends State<CheckoutPage> {
       if (!mounted) return;
       if (kDebugMode) debugPrint('Error placing order: $e');
       _showAlertDialog('Error', 'No se pudo completar el pedido. Intenta de nuevo.');
+    } finally {
+      // Re-enable the slider on every exit — success, validation,
+      // exception. If the widget was disposed mid-flight (rare),
+      // setState would throw; the mounted guard suppresses that.
+      if (mounted) setState(() => _isPlacingOrder = false);
     }
   }
 
   @override
   void dispose() {
+    _storeSub?.cancel();
+    _cartProviderRef?.productMetaVersion.removeListener(_onProductMetaChanged);
     _couponController.dispose();
+    _notesController.dispose();
+    _cashOtherController.dispose();
     super.dispose();
   }
 
@@ -662,6 +1154,11 @@ class _CheckoutPageState extends State<CheckoutPage> {
           child: SingleChildScrollView(
           child: Column(
             children: [
+              // ── 1. WHAT you're buying ─────────────────────────────
+              const SizedBox(height: 16.0),
+              _buildOrderReview(),
+
+              // ── 2. WHERE + WHEN ───────────────────────────────────
               const SizedBox(height: 16.0),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16.0),
@@ -680,23 +1177,68 @@ class _CheckoutPageState extends State<CheckoutPage> {
                   onPickupToggled: (bool value) {
                     setState(() {
                       _isInstorePickup = value;
+                      // Slots differ between delivery and pickup hours —
+                      // reset to "Lo antes posible" on mode change.
+                      _deliverySlot = null;
                     });
                     _calculateDeliveryFee();
                   },
+                  deliveryLockedReason:
+                      _window.status == OrderingStatus.pickupOnly
+                          ? (_window.deliveryRestToday
+                              ? 'Hoy no hacemos entregas a domicilio.'
+                              : 'Entregas a domicilio: '
+                                  '${formatHourMinute(_window.todayOpen!)} – '
+                                  '${formatHourMinute(_window.todayClose!)}.')
+                          : null,
                 ),
               ),
-              const SizedBox(height: 16.0),
-              _buildOrderReview(),
-              const SizedBox(height: 16.0),
+              DeliveryWindowPicker(
+                window: _window,
+                isPickup: _isInstorePickup,
+                now: _networkNow,
+                selected: _deliverySlot,
+                onChanged: (slot) => setState(() => _deliverySlot = slot),
+              ),
+
+              // ── 3. HOW you pay + discounts ────────────────────────
+              const SizedBox(height: 16),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                child: const Text(
-                  'Información de Facturación',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                child: PaymentMethods(
+                  selectedPaymentMethod: _selectedPaymentMethod,
+                  onPaymentMethodSelected: (String? value) {
+                    setState(() {
+                      _selectedPaymentMethod = value!;
+                      // The "pago con" question only applies to cash.
+                      if (value != 'efectivo') _cashOption = null;
+                    });
+                  },
                 ),
               ),
-              const SizedBox(height: 8.0),
-              if (_rewardsBalance > 0) _buildRewardsSection(),
+              if (_selectedPaymentMethod == 'efectivo') _buildCashPaySection(),
+              const SizedBox(height: 16),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                child: _buildCouponSection(),
+              ),
+              if (_rewardsBalance > 0) ...[
+                const SizedBox(height: 8.0),
+                _buildRewardsSection(),
+              ],
+
+              // ── 4. SUMMARY (reflects every choice above) ──────────
+              const SizedBox(height: 16.0),
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 16.0),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    'Resumen de pago',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ),
               const SizedBox(height: 8.0),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16.0),
@@ -724,23 +1266,10 @@ class _CheckoutPageState extends State<CheckoutPage> {
                   ),
                 ),
               ),
-              const SizedBox(height: 16.0),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                child: PaymentMethods(
-                  selectedPaymentMethod: _selectedPaymentMethod,
-                  onPaymentMethodSelected: (String? value) {
-                    setState(() {
-                      _selectedPaymentMethod = value!;
-                    });
-                  },
-                ),
-              ),
-              const SizedBox(height: 16),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                child: _buildCouponSection(),
-              ),
+
+              // ── 5. NOTE + CONFIRM ─────────────────────────────────
+              const SizedBox(height: 8),
+              _buildNotesSection(),
               const SizedBox(height: 16),
               if (_userPhone == '0000000000' ||
                   _userPhone.isEmpty ||
@@ -796,13 +1325,20 @@ class _CheckoutPageState extends State<CheckoutPage> {
                 SizedBox(
                   width: MediaQuery.of(context).size.width * 0.8,
                   child: SlideAction(
-                    text: 'Desliza para pagar',
+                    text: _isPlacingOrder
+                        ? 'Procesando…'
+                        : 'Desliza para pagar',
                     textStyle: Theme.of(context).textTheme.bodyLarge?.copyWith(
                       color: Colors.white,
                     ),
                     outerColor: AppColors.primary,
                     innerColor: Colors.white,
-                    onSubmit: _placeOrder,
+                    // Suppress the submit handler while in flight —
+                    // SlideAction will visually slide back but
+                    // won't re-fire `_placeOrder` because the no-op
+                    // returns immediately and `onSubmit` returning
+                    // null aborts the slide animation gracefully.
+                    onSubmit: _isPlacingOrder ? null : _placeOrder,
                   ),
                 ),
               const SizedBox(height: 10),
@@ -898,19 +1434,31 @@ class _CheckoutPageState extends State<CheckoutPage> {
                         borderRadius: BorderRadius.circular(12),
                       ),
                     ),
-                    onPressed: () {
-                      String code = _couponController.text.trim();
-                      if (code.isNotEmpty) {
-                        _applyCoupon(code).then((_) {
-                          _couponController.clear();
-                        });
-                      } else {
-                        _showAlertDialog('Error',
-                            'Por favor, ingresa un código de cupón.');
-                      }
-                    },
-                    child: const Text('Aplicar',
-                        style: TextStyle(fontWeight: FontWeight.bold)),
+                    onPressed: _isApplyingCoupon
+                        ? null
+                        : () {
+                            String code = _couponController.text.trim();
+                            if (code.isNotEmpty) {
+                              _applyCoupon(code).then((_) {
+                                _couponController.clear();
+                              });
+                            } else {
+                              _showAlertDialog('Error',
+                                  'Por favor, ingresa un código de cupón.');
+                            }
+                          },
+                    child: _isApplyingCoupon
+                        ? const SizedBox(
+                            height: 18,
+                            width: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor:
+                                  AlwaysStoppedAnimation<Color>(Colors.white),
+                            ),
+                          )
+                        : const Text('Aplicar',
+                            style: TextStyle(fontWeight: FontWeight.bold)),
                   ),
                 ),
               ],
@@ -928,82 +1476,181 @@ class _CheckoutPageState extends State<CheckoutPage> {
     final exp = coupon['expiry_date'];
     final String expText = exp is Timestamp ? _fmtCheckoutDate(exp) : '';
 
+    final filter = coupon['productFilter'];
+    final filterMode =
+        filter is Map ? (filter['mode'] ?? 'all').toString() : 'all';
+    final hasFilter = filterMode == 'include' || filterMode == 'exclude';
+    final filterLabel = hasFilter ? _filterLabel(filter as Map) : '';
+    final eligibility =
+        hasFilter ? _couponEligibility(coupon) : _CouponEligibility.ok;
+    final notApplicable = eligibility == _CouponEligibility.noMatch;
+    final pending = eligibility == _CouponEligibility.pending;
+
+    // Long-press / hover tooltip explaining WHY the tap was ignored when
+    // the coupon is greyed out. Without this, users tap repeatedly thinking
+    // it's a misfire. Empty when not disabled so Tooltip renders nothing.
+    final disabledHint = (notApplicable && !isSelected)
+        ? (hasFilter
+            ? 'Este cupón aplica $filterLabel. Agrega un producto elegible para usarlo.'
+            : 'Este cupón no aplica a tu carrito actual.')
+        : '';
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
-      child: GestureDetector(
+      child: Tooltip(
+        message: disabledHint,
+        triggerMode: TooltipTriggerMode.tap,
+        showDuration: const Duration(seconds: 3),
+        preferBelow: false,
+        textStyle: const TextStyle(color: Colors.white, fontSize: 12.5),
+        decoration: BoxDecoration(
+          color: Colors.black.withValues(alpha: 0.86),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        child: GestureDetector(
         behavior: HitTestBehavior.opaque,
-        onTap: () {
-          setState(() {
-            _selectedCouponCode = isSelected ? null : code;
-            _calculateTotal();
-          });
-        },
-        child: Container(
-          height: 62,
-          decoration: BoxDecoration(
-            color: isSelected ? Colors.black.withValues(alpha: 0.04) : Colors.white,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: isSelected ? Colors.black : Colors.grey.shade300,
-              width: isSelected ? 1.5 : 1,
-            ),
-          ),
-          clipBehavior: Clip.antiAlias,
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Container(
-                width: 58,
-                alignment: Alignment.center,
-                color: isSelected ? Colors.black : Colors.grey.shade400,
-                child: Text(
-                  '${pct.toStringAsFixed(0)}%',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
+        // Selecting a non-applicable coupon is blocked, but if the user was
+        // already on it when the cart shifted out of eligibility we still
+        // allow them to tap to deselect — otherwise they'd be stuck on a
+        // greyed-out card showing $0 discount.
+        onTap: (notApplicable && !isSelected)
+            ? null
+            : () {
+                setState(() {
+                  _selectedCouponCode = isSelected ? null : code;
+                  _calculateTotal();
+                });
+              },
+        child: Opacity(
+          opacity: notApplicable ? 0.55 : 1.0,
+          child: Container(
+            constraints: const BoxConstraints(minHeight: 62),
+            decoration: BoxDecoration(
+              color: isSelected
+                  ? Colors.black.withValues(alpha: 0.04)
+                  : Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: isSelected ? Colors.black : Colors.grey.shade300,
+                width: isSelected ? 1.5 : 1,
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      code,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
+            ),
+            clipBehavior: Clip.antiAlias,
+            child: IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Container(
+                    width: 58,
+                    alignment: Alignment.center,
+                    color: isSelected ? Colors.black : Colors.grey.shade400,
+                    child: Text(
+                      '${pct.toStringAsFixed(0)}%',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
                         fontWeight: FontWeight.w800,
-                        fontSize: 14,
-                        letterSpacing: 0.5,
-                        color: isSelected ? Colors.black : Colors.black87,
                       ),
                     ),
-                    if (expText.isNotEmpty) ...[
-                      const SizedBox(height: 2),
-                      Text('Vence $expText',
-                          style:
-                              TextStyle(fontSize: 11.5, color: Colors.grey[600])),
-                    ],
-                  ],
-                ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            code,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontWeight: FontWeight.w800,
+                              fontSize: 14,
+                              letterSpacing: 0.5,
+                              color: isSelected ? Colors.black : Colors.black87,
+                            ),
+                          ),
+                          if (expText.isNotEmpty) ...[
+                            const SizedBox(height: 2),
+                            Text('Vence $expText',
+                                style: TextStyle(
+                                    fontSize: 11.5, color: Colors.grey[600])),
+                          ],
+                          if (hasFilter) ...[
+                            const SizedBox(height: 4),
+                            Row(
+                              children: [
+                                if (pending)
+                                  SizedBox(
+                                    width: 11,
+                                    height: 11,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 1.6,
+                                      valueColor: AlwaysStoppedAnimation<Color>(
+                                        Colors.grey[700]!,
+                                      ),
+                                    ),
+                                  )
+                                else
+                                  Icon(
+                                    filterMode == 'include'
+                                        ? Icons.check_circle_outline
+                                        : Icons.do_not_disturb_alt_outlined,
+                                    size: 12,
+                                    color: notApplicable
+                                        ? Colors.redAccent
+                                        : Colors.grey[700],
+                                  ),
+                                const SizedBox(width: 4),
+                                Expanded(
+                                  child: Text(
+                                    pending
+                                        ? 'Verificando elegibilidad…'
+                                        : notApplicable
+                                            ? 'No aplica a tu carrito actual'
+                                            : filterLabel,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w700,
+                                      color: notApplicable
+                                          ? Colors.redAccent
+                                          : Colors.grey[700],
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.only(right: 12),
+                    child: Icon(
+                      isSelected ? Icons.check_circle : Icons.circle_outlined,
+                      color: isSelected ? Colors.black : Colors.grey[400],
+                    ),
+                  ),
+                ],
               ),
-              Padding(
-                padding: const EdgeInsets.only(right: 12),
-                child: Icon(
-                  isSelected ? Icons.check_circle : Icons.circle_outlined,
-                  color: isSelected ? Colors.black : Colors.grey[400],
-                ),
-              ),
-            ],
+            ),
           ),
         ),
       ),
+      ),
     );
   }
+
+  /// Renders the productFilter as a short label for the coupon card.
+  /// Thin wrapper over [cf.productFilterSummary] so checkout, the receipt
+  /// view, and the settings card all stay in lockstep.
+  String _filterLabel(Map filter) => cf.productFilterSummary(filter);
 
   String _fmtCheckoutDate(Timestamp ts) {
     final d = ts.toDate().toLocal();
@@ -1056,6 +1703,11 @@ class AddressCardWidget extends StatelessWidget {
   final String userPhone;
   final bool isInstorePickup;
   final ValueChanged<bool> onPickupToggled;
+  // When non-null, the delivery option is unavailable right now and the
+  // pickup toggle is locked on. Used outside the configured delivery
+  // window so the user can't switch back to "Entrega a domicilio" only to
+  // bounce off submit. The string is rendered as a small caption.
+  final String? deliveryLockedReason;
 
   const AddressCardWidget({
     super.key,
@@ -1066,6 +1718,7 @@ class AddressCardWidget extends StatelessWidget {
     required this.userPhone,
     required this.isInstorePickup,
     required this.onPickupToggled,
+    this.deliveryLockedReason,
   });
 
   @override
@@ -1084,13 +1737,19 @@ class AddressCardWidget extends StatelessWidget {
                 ),
               ),
               GestureDetector(
-                onTap: () => onPickupToggled(!isInstorePickup),
+                // Locked outside delivery hours — tap is a no-op and the
+                // chip stays in the active (pickup) state.
+                onTap: deliveryLockedReason != null
+                    ? null
+                    : () => onPickupToggled(!isInstorePickup),
                 behavior: HitTestBehavior.opaque,
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Icon(
-                      Icons.storefront,
+                      deliveryLockedReason != null
+                          ? Icons.lock_outline
+                          : Icons.storefront,
                       size: 18,
                       color: isInstorePickup
                           ? AppColors.primary
@@ -1113,6 +1772,19 @@ class AddressCardWidget extends StatelessWidget {
             ],
           ),
         ),
+        if (deliveryLockedReason != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 6, right: 20),
+            child: Text(
+              deliveryLockedReason!,
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.orange[800],
+                fontWeight: FontWeight.w600,
+                height: 1.35,
+              ),
+            ),
+          ),
         const SizedBox(height: 8.0),
         if (isInstorePickup)
           Container(
@@ -1127,7 +1799,7 @@ class AddressCardWidget extends StatelessWidget {
             ),
             child: Column(
               children: [
-                Icon(
+                const Icon(
                   Icons.storefront,
                   size: 56,
                   color: AppColors.primary,

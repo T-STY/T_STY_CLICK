@@ -5,6 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'arcade_center_screen.dart' show AppLanguage;
 import 'arcade_input_controller.dart';
 import 'game_saldo.dart';
 import 'high_score_service.dart';
@@ -64,6 +65,7 @@ class SpaceShooterScreen extends StatefulWidget {
   final double currentSaldo;
   final ArcadeInputController controller;
   final void Function(double) onSaldoChanged;
+  final AppLanguage language;
 
   const SpaceShooterScreen({
     super.key,
@@ -72,6 +74,7 @@ class SpaceShooterScreen extends StatefulWidget {
     required this.currentSaldo,
     required this.controller,
     required this.onSaldoChanged,
+    this.language = AppLanguage.spanish,
   });
 
   @override
@@ -105,6 +108,7 @@ class _SpaceShooterScreenState extends State<SpaceShooterScreen> {
   double _specialCooldown = 0;
 
   late double _saldo;
+  late double _lastCommitted;
   bool _awardingPoints = false;
 
   List<_Bullet> _bullets = [];
@@ -131,10 +135,14 @@ class _SpaceShooterScreenState extends State<SpaceShooterScreen> {
   DateTime? _lastTick;
   late final List<_Star> _stars;
 
+  String _t(String es, String en) =>
+      widget.language == AppLanguage.spanish ? es : en;
+
   @override
   void initState() {
     super.initState();
     _saldo = widget.currentSaldo;
+    _lastCommitted = widget.currentSaldo;
     _stars = List.generate(40, (_) => _Star(_rng));
     _buildSpawnQueue(_wave);
     widget.controller.addListener(_onControllerEvent);
@@ -568,6 +576,10 @@ class _SpaceShooterScreenState extends State<SpaceShooterScreen> {
     if (ns == null) return;
     if (!mounted) return;
     setState(() => _saldo = ns);
+    // The replay charge already committed on the server, so the ledger has to
+    // move with it — otherwise the next credit's delta is computed against the
+    // pre-charge value and debits the player instead of paying them.
+    _lastCommitted = ns;
     widget.onSaldoChanged(ns);
     _wave = 1;
     _score = 0;
@@ -586,18 +598,23 @@ class _SpaceShooterScreenState extends State<SpaceShooterScreen> {
   }
 
   Future<void> _updateFirestore(double newSaldo) async {
-    try {
-      final userCardRef = FirebaseFirestore.instance
-          .collection('users')
-          .doc(widget.userId)
-          .collection('rewardsCard')
-          .doc('cardInfo');
-      final batch = FirebaseFirestore.instance.batch();
-      batch.update(userCardRef, {'saldo': newSaldo});
-      batch.update(widget.rewardsDocRef, {'saldo': newSaldo});
-      await batch.commit();
-    } catch (e) {
-      debugPrint('Shooter Firestore error: $e');
+    // Routes through the server-side `updateRewardsSaldo`
+    // callable instead of writing rewards/{docId} directly
+    // (admin-only collection — direct writes failed silently
+    // for every non-admin user). The CF resolves the wallet,
+    // applies the delta in a transaction, and mirrors the
+    // result to the owner-readable card cache.
+    final delta = newSaldo - _lastCommitted;
+    if (delta == 0) return;
+    final result = await applyArcadeDelta(
+      delta: delta,
+      reason: 'space_shooter',
+    );
+    if (result != null) {
+      _lastCommitted = result;
+      if (mounted && _saldo != result) {
+        setState(() => _saldo = result);
+      }
     }
   }
 
@@ -646,7 +663,8 @@ class _SpaceShooterScreenState extends State<SpaceShooterScreen> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
-                    '¡OLA $_wave COMPLETADA!  +200 PTS',
+                    _t('¡OLA $_wave COMPLETADA!  +200 PTS',
+                        'WAVE $_wave CLEARED!  +200 PTS'),
                     style: const TextStyle(
                       color: Color(0xFF00FFD4),
                       fontSize: 11,
@@ -657,7 +675,8 @@ class _SpaceShooterScreenState extends State<SpaceShooterScreen> {
                     textAlign: TextAlign.center,
                   ),
                   Text(
-                    'SIGUIENTE OLA EN ${_betweenWaveTimer.ceil()}s…',
+                    _t('SIGUIENTE OLA EN ${_betweenWaveTimer.ceil()}s…',
+                        'NEXT WAVE IN ${_betweenWaveTimer.ceil()}s…'),
                     style: const TextStyle(
                       color: Color(0xFF4488BB),
                       fontSize: 9,
@@ -712,7 +731,8 @@ class _SpaceShooterScreenState extends State<SpaceShooterScreen> {
 
   Widget _scoreHud(int score) => _neonPill('$score', _kCyan, fontSize: 11, letterSpacing: 1, blurRadius: 8);
 
-  Widget _waveHud(int wave) => _neonPill('OLA $wave', _kMagenta, letterSpacing: 1);
+  Widget _waveHud(int wave) =>
+      _neonPill(_t('OLA $wave', 'WAVE $wave'), _kMagenta, letterSpacing: 1);
 
   Widget _buildStartOverlay() {
     return Positioned.fill(
@@ -729,8 +749,8 @@ class _SpaceShooterScreenState extends State<SpaceShooterScreen> {
           children: [
             CustomPaint(size: const Size(60, 60), painter: _LargeShipPainter()),
             const SizedBox(height: 12),
-            const Text('CAZA ESTELAR',
-                style: TextStyle(
+            Text(_t('CAZA ESTELAR', 'STAR BLASTER'),
+                style: const TextStyle(
                     color: Color(0xFF00E5FF),
                     fontSize: 26,
                     fontWeight: FontWeight.bold,
@@ -754,21 +774,22 @@ class _SpaceShooterScreenState extends State<SpaceShooterScreen> {
                 borderRadius: BorderRadius.circular(12),
                 boxShadow: [BoxShadow(color: const Color(0xFF00E5FF).withOpacity(0.1), blurRadius: 12)],
               ),
-              child: const Column(children: [
+              child: Column(children: [
                 Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                  Text('D-pad ', style: TextStyle(color: Color(0xFF00E5FF), fontSize: 11, fontWeight: FontWeight.bold)),
-                  Text('mover nave', style: TextStyle(color: Colors.white70, fontSize: 11)),
+                  const Text('D-pad ', style: TextStyle(color: Color(0xFF00E5FF), fontSize: 11, fontWeight: FontWeight.bold)),
+                  Text(_t('mover nave', 'move ship'), style: const TextStyle(color: Colors.white70, fontSize: 11)),
                 ]),
-                SizedBox(height: 5),
+                const SizedBox(height: 5),
                 Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                  Text('A ', style: TextStyle(color: Color(0xFF69F0AE), fontSize: 11, fontWeight: FontWeight.bold)),
-                  Text('disparar  ', style: TextStyle(color: Colors.white70, fontSize: 11)),
-                  Text('X ', style: TextStyle(color: Color(0xFFFF9800), fontSize: 11, fontWeight: FontWeight.bold)),
-                  Text('especial', style: TextStyle(color: Colors.white70, fontSize: 11)),
+                  const Text('A ', style: TextStyle(color: Color(0xFF69F0AE), fontSize: 11, fontWeight: FontWeight.bold)),
+                  Text(_t('disparar  ', 'fire  '), style: const TextStyle(color: Colors.white70, fontSize: 11)),
+                  const Text('X ', style: TextStyle(color: Color(0xFFFF9800), fontSize: 11, fontWeight: FontWeight.bold)),
+                  Text(_t('especial', 'special'), style: const TextStyle(color: Colors.white70, fontSize: 11)),
                 ]),
-                SizedBox(height: 8),
-                Text('+1 PTO REAL POR OLA COMPLETADA',
-                    style: TextStyle(
+                const SizedBox(height: 8),
+                Text(_t('+1 PTO REAL POR OLA COMPLETADA',
+                        '+1 REAL POINT PER WAVE CLEARED'),
+                    style: const TextStyle(
                         color: Color(0xFFFFDD00),
                         fontSize: 11,
                         fontWeight: FontWeight.bold,
@@ -784,19 +805,21 @@ class _SpaceShooterScreenState extends State<SpaceShooterScreen> {
                 borderRadius: BorderRadius.circular(30),
                 boxShadow: [BoxShadow(color: const Color(0xFF00AAFF).withOpacity(0.4), blurRadius: 12)],
               ),
-              child: const Text('PRESIONA CUALQUIER BOTÓN',
-                  style: TextStyle(
+              child: Text(_t('PRESIONA CUALQUIER BOTÓN', 'PRESS ANY BUTTON'),
+                  style: const TextStyle(
                       color: Colors.white,
                       fontSize: 11,
                       fontWeight: FontWeight.bold,
                       letterSpacing: 1)),
             ),
             const SizedBox(height: 10),
-            const Text('Los enemigos también disparan — ¡esquívalos!',
-                style: TextStyle(color: Color(0xFF334466), fontSize: 9)),
+            Text(
+                _t('Los enemigos también disparan — ¡esquívalos!',
+                    'The enemies shoot back — dodge them!'),
+                style: const TextStyle(color: Color(0xFF334466), fontSize: 9)),
             const SizedBox(height: 3),
-            const Text('SELECT para volver al menú',
-                style: TextStyle(color: Color(0xFF223344), fontSize: 9)),
+            Text(_t('SELECT para volver al menú', 'SELECT to return to the menu'),
+                style: const TextStyle(color: Color(0xFF223344), fontSize: 9)),
           ],
         ),
       ),
@@ -818,8 +841,8 @@ class _SpaceShooterScreenState extends State<SpaceShooterScreen> {
           children: [
             CustomPaint(size: const Size(64, 64), painter: _ExplosionIconPainter()),
             const SizedBox(height: 10),
-            const Text('NAVE DESTRUIDA',
-                style: TextStyle(
+            Text(_t('NAVE DESTRUIDA', 'SHIP DESTROYED'),
+                style: const TextStyle(
                     color: Color(0xFFFF3030),
                     fontSize: 22,
                     fontWeight: FontWeight.bold,
@@ -829,18 +852,20 @@ class _SpaceShooterScreenState extends State<SpaceShooterScreen> {
                       Shadow(color: Color(0xFFFF0000), blurRadius: 30),
                     ])),
             const SizedBox(height: 4),
-            const Text('Los alienígenas han ganado esta ronda',
-                style: TextStyle(color: Color(0xFF663333), fontSize: 10)),
+            Text(
+                _t('Los alienígenas han ganado esta ronda',
+                    'The aliens won this round'),
+                style: const TextStyle(color: Color(0xFF663333), fontSize: 10)),
             const SizedBox(height: 18),
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                _statCard('PUNTOS', '$_score', const Color(0xFF00E5FF)),
+                _statCard(_t('PUNTOS', 'SCORE'), '$_score', const Color(0xFF00E5FF)),
                 const SizedBox(width: 10),
-                _statCard('OLA', '$_wave', const Color(0xFFE040FB)),
+                _statCard(_t('OLA', 'WAVE'), '$_wave', const Color(0xFFE040FB)),
                 if (_bestScore > 0) ...[
                   const SizedBox(width: 10),
-                  _statCard('RÉCORD', '$_bestScore', const Color(0xFFFFD700)),
+                  _statCard(_t('RÉCORD', 'BEST'), '$_bestScore', const Color(0xFFFFD700)),
                 ],
               ],
             ),
@@ -854,8 +879,8 @@ class _SpaceShooterScreenState extends State<SpaceShooterScreen> {
                   borderRadius: BorderRadius.circular(30),
                   boxShadow: [BoxShadow(color: const Color(0xFFFF0044).withOpacity(0.4), blurRadius: 14)],
                 ),
-                child: const Text('RELANZAR NAVE',
-                    style: TextStyle(
+                child: Text(_t('RELANZAR NAVE', 'RELAUNCH SHIP'),
+                    style: const TextStyle(
                         color: Colors.white,
                         fontSize: 13,
                         fontWeight: FontWeight.bold,
@@ -863,8 +888,8 @@ class _SpaceShooterScreenState extends State<SpaceShooterScreen> {
               ),
             ),
             const SizedBox(height: 8),
-            const Text('SELECT para volver al menú',
-                style: TextStyle(color: Color(0xFF223344), fontSize: 9)),
+            Text(_t('SELECT para volver al menú', 'SELECT to return to the menu'),
+                style: const TextStyle(color: Color(0xFF223344), fontSize: 9)),
           ],
         ),
       ),
@@ -919,16 +944,16 @@ class _SpaceShooterScreenState extends State<SpaceShooterScreen> {
                       fontWeight: FontWeight.bold)),
             ),
             const SizedBox(height: 14),
-            const Text('PAUSA',
-                style: TextStyle(
+            Text(_t('PAUSA', 'PAUSED'),
+                style: const TextStyle(
                     color: Color(0xFF00E5FF),
                     fontSize: 26,
                     fontWeight: FontWeight.bold,
                     letterSpacing: 8,
                     shadows: [Shadow(color: Color(0xFF00E5FF), blurRadius: 16)])),
             const SizedBox(height: 14),
-            const Text('START para continuar',
-                style: TextStyle(color: Color(0xFF4488AA), fontSize: 12, letterSpacing: 1)),
+            Text(_t('START para continuar', 'START to resume'),
+                style: const TextStyle(color: Color(0xFF4488AA), fontSize: 12, letterSpacing: 1)),
           ],
         ),
       ),

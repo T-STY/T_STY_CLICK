@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'arcade_center_screen.dart' show AppLanguage;
 import 'arcade_input_controller.dart';
 import 'game_saldo.dart';
 import 'high_score_service.dart';
@@ -45,6 +46,7 @@ class MazeChasScreen extends StatefulWidget {
   final double currentSaldo;
   final ArcadeInputController controller;
   final void Function(double) onSaldoChanged;
+  final AppLanguage language;
 
   const MazeChasScreen({
     super.key,
@@ -53,6 +55,7 @@ class MazeChasScreen extends StatefulWidget {
     required this.currentSaldo,
     required this.controller,
     required this.onSaldoChanged,
+    this.language = AppLanguage.spanish,
   });
 
   @override
@@ -80,6 +83,7 @@ class _MazeChasScreenState extends State<MazeChasScreen> {
   bool _scaredActive = false;
 
   double _saldo = 0;
+  late double _lastCommitted;
 
   Timer? _playerTimer;
   Timer? _ghostTimer;
@@ -93,10 +97,14 @@ class _MazeChasScreenState extends State<MazeChasScreen> {
 
   final _rng = Random();
 
+  String _t(String es, String en) =>
+      widget.language == AppLanguage.spanish ? es : en;
+
   @override
   void initState() {
     super.initState();
     _saldo = widget.currentSaldo;
+    _lastCommitted = widget.currentSaldo;
     _buildGrid();
     _spawnGhosts();
     widget.controller.addListener(_onControllerEvent);
@@ -233,6 +241,11 @@ class _MazeChasScreenState extends State<MazeChasScreen> {
     _levelCompleteTimer?.cancel();
     setState(() {
       _saldo = ns;
+      // Resync the ledger: the replay charge already committed on the
+      // server, so _lastCommitted must follow _saldo. Otherwise the next
+      // credit's delta (newSaldo - _lastCommitted) comes out negative and
+      // debits the player instead of paying them.
+      _lastCommitted = ns;
       _buildGrid();
       _spawnGhosts();
       _playerRow = 11;
@@ -470,11 +483,12 @@ class _MazeChasScreenState extends State<MazeChasScreen> {
       _scaredActive = false;
     });
 
+    // +1 punto per level clear. _updateFirestore is the only writer of
+    // _saldo here — it applies the server's authoritative result. Adding
+    // it again locally paid the player twice from level 2 onward.
     _updateFirestore(_saldo + 1).then((_) {
       if (!mounted) return;
-      final newSaldo = _saldo + 1;
-      setState(() => _saldo = newSaldo);
-      widget.onSaldoChanged(newSaldo);
+      widget.onSaldoChanged(_saldo);
     });
 
     _levelCompleteTimer = Timer(const Duration(milliseconds: 1500), () {
@@ -496,18 +510,23 @@ class _MazeChasScreenState extends State<MazeChasScreen> {
   }
 
   Future<void> _updateFirestore(double newSaldo) async {
-    try {
-      final userCardRef = FirebaseFirestore.instance
-          .collection('users')
-          .doc(widget.userId)
-          .collection('rewardsCard')
-          .doc('cardInfo');
-      final batch = FirebaseFirestore.instance.batch();
-      batch.update(userCardRef, {'saldo': newSaldo});
-      batch.update(widget.rewardsDocRef, {'saldo': newSaldo});
-      await batch.commit();
-    } catch (e) {
-      debugPrint('MazeChase Firestore error: $e');
+    // Routes through the server-side `updateRewardsSaldo`
+    // callable instead of writing rewards/{docId} directly
+    // (admin-only collection — direct writes failed silently
+    // for every non-admin user). The CF resolves the wallet,
+    // applies the delta in a transaction, and mirrors the
+    // result to the owner-readable card cache.
+    final delta = newSaldo - _lastCommitted;
+    if (delta == 0) return;
+    final result = await applyArcadeDelta(
+      delta: delta,
+      reason: 'maze_chase',
+    );
+    if (result != null) {
+      _lastCommitted = result;
+      if (mounted && _saldo != result) {
+        setState(() => _saldo = result);
+      }
     }
   }
 
@@ -544,6 +563,7 @@ class _MazeChasScreenState extends State<MazeChasScreen> {
                 level: _level,
                 pelletBlink: _pelletBlink,
                 scaredBlink: _pelletBlink,
+                language: widget.language,
               ),
               child: SizedBox(
                 width: constraints.maxWidth,
@@ -591,7 +611,7 @@ class _MazeChasScreenState extends State<MazeChasScreen> {
             ),
             const SizedBox(height: 10),
             Text(
-              'COMECOCOS',
+              _t('COMECOCOS', 'GHOST MAZE'),
               style: TextStyle(
                 color: const Color(0xFFFFFF22),
                 fontSize: 30,
@@ -641,11 +661,11 @@ class _MazeChasScreenState extends State<MazeChasScreen> {
                 ],
               ),
               child: Column(children: [
-                _instrRow('D-pad', 'Mover por el laberinto', const Color(0xFF00EEFF)),
+                _instrRow('D-pad', _t('Mover por el laberinto', 'Move through the maze'), const Color(0xFF00EEFF)),
                 const SizedBox(height: 8),
-                _instrRow('', 'Come todos los puntos para pasar de nivel', Colors.white70),
+                _instrRow('', _t('Come todos los puntos para pasar de nivel', 'Eat every dot to clear the level'), Colors.white70),
                 const SizedBox(height: 8),
-                _instrRow('Pastilla', '¡Fantasmas comestibles!', const Color(0xFF00FF99)),
+                _instrRow(_t('Pastilla', 'Power'), _t('¡Fantasmas comestibles!', 'Ghosts turn edible!'), const Color(0xFF00FF99)),
                 const SizedBox(height: 12),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
@@ -659,9 +679,9 @@ class _MazeChasScreenState extends State<MazeChasScreen> {
                       BoxShadow(color: const Color(0xFF00FF66).withOpacity(0.3), blurRadius: 10),
                     ],
                   ),
-                  child: const Text(
-                    '🪙  +1 PTO REAL POR NIVEL',
-                    style: TextStyle(
+                  child: Text(
+                    _t('🪙  +1 PTO REAL POR NIVEL', '🪙  +1 REAL POINT PER LEVEL'),
+                    style: const TextStyle(
                       color: Color(0xFF00FF99),
                       fontSize: 12,
                       fontWeight: FontWeight.bold,
@@ -686,9 +706,9 @@ class _MazeChasScreenState extends State<MazeChasScreen> {
                   BoxShadow(color: const Color(0xFF2266FF).withOpacity(0.55), blurRadius: 16),
                 ],
               ),
-              child: const Text(
-                'Presiona A o START para jugar',
-                style: TextStyle(
+              child: Text(
+                _t('Presiona A o START para jugar', 'Press A or START to play'),
+                style: const TextStyle(
                   color: Colors.white,
                   fontSize: 13,
                   fontWeight: FontWeight.bold,
@@ -839,7 +859,7 @@ class _MazeChasScreenState extends State<MazeChasScreen> {
             ),
             const SizedBox(height: 10),
             Text(
-              'ATRAPADO',
+              _t('ATRAPADO', 'CAUGHT'),
               style: TextStyle(
                 color: const Color(0xFFFF2255),
                 fontSize: 36,
@@ -854,7 +874,7 @@ class _MazeChasScreenState extends State<MazeChasScreen> {
             ),
             const SizedBox(height: 4),
             Text(
-              'Un fantasma te ha engullido',
+              _t('Un fantasma te ha engullido', 'A ghost gobbled you up'),
               style: TextStyle(
                 color: const Color(0xFFBB6688),
                 fontSize: 12,
@@ -889,9 +909,9 @@ class _MazeChasScreenState extends State<MazeChasScreen> {
                     ],
                   ),
                 ),
-                const Text(
-                  'PUNTOS',
-                  style: TextStyle(
+                Text(
+                  _t('PUNTOS', 'POINTS'),
+                  style: const TextStyle(
                     color: Color(0xFF886688),
                     fontSize: 11,
                     letterSpacing: 3,
@@ -906,9 +926,9 @@ class _MazeChasScreenState extends State<MazeChasScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Text(
-                      'RÉCORD  ',
-                      style: TextStyle(color: Color(0xFF886688), fontSize: 12, letterSpacing: 1),
+                    Text(
+                      _t('RÉCORD  ', 'RECORD  '),
+                      style: const TextStyle(color: Color(0xFF886688), fontSize: 12, letterSpacing: 1),
                     ),
                     Text(
                       '$_hiScore',
@@ -942,9 +962,9 @@ class _MazeChasScreenState extends State<MazeChasScreen> {
                     BoxShadow(color: const Color(0xFF2266FF).withOpacity(0.6), blurRadius: 18),
                   ],
                 ),
-                child: const Text(
-                  'Nueva Partida',
-                  style: TextStyle(
+                child: Text(
+                  _t('Nueva Partida', 'New Game'),
+                  style: const TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.bold,
                     fontSize: 15,
@@ -988,7 +1008,7 @@ class _MazeChasScreenState extends State<MazeChasScreen> {
                 ],
               ),
               child: Text(
-                '¡NIVEL $_level!',
+                _t('¡NIVEL $_level!', 'LEVEL $_level!'),
                 style: TextStyle(
                   color: const Color(0xFF00FF99),
                   fontSize: 13,
@@ -1000,7 +1020,7 @@ class _MazeChasScreenState extends State<MazeChasScreen> {
             ),
             const SizedBox(height: 10),
             Text(
-              'COMPLETADO',
+              _t('COMPLETADO', 'COMPLETE'),
               style: TextStyle(
                 color: const Color(0xFFFFFF22),
                 fontSize: 32,
@@ -1025,9 +1045,9 @@ class _MazeChasScreenState extends State<MazeChasScreen> {
                   BoxShadow(color: const Color(0xFF00FF66).withOpacity(0.4), blurRadius: 14),
                 ],
               ),
-              child: const Text(
-                '🪙  +1 pto real añadido',
-                style: TextStyle(
+              child: Text(
+                _t('🪙  +1 pto real añadido', '🪙  +1 real point added'),
+                style: const TextStyle(
                   color: Color(0xFF00FF99),
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
@@ -1064,7 +1084,7 @@ class _MazeChasScreenState extends State<MazeChasScreen> {
           ),
           const SizedBox(height: 14),
           Text(
-            'PAUSA',
+            _t('PAUSA', 'PAUSE'),
             style: TextStyle(
               color: const Color(0xFFFFFF33),
               fontSize: 32,
@@ -1084,9 +1104,9 @@ class _MazeChasScreenState extends State<MazeChasScreen> {
               borderRadius: BorderRadius.circular(20),
               border: Border.all(color: const Color(0xFF4444AA), width: 1),
             ),
-            child: const Text(
-              'START para continuar',
-              style: TextStyle(
+            child: Text(
+              _t('START para continuar', 'Press START to continue'),
+              style: const TextStyle(
                 color: Color(0xFF9999CC),
                 fontSize: 12,
                 letterSpacing: 1.5,
@@ -1106,6 +1126,7 @@ class _MazePainter extends CustomPainter {
   final int score, lives, level;
   final bool pelletBlink;
   final bool scaredBlink;
+  final AppLanguage language;
 
   const _MazePainter({
     required this.grid,
@@ -1118,7 +1139,11 @@ class _MazePainter extends CustomPainter {
     required this.level,
     required this.pelletBlink,
     required this.scaredBlink,
+    this.language = AppLanguage.spanish,
   });
+
+  String _pt(String es, String en) =>
+      language == AppLanguage.spanish ? es : en;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -1568,7 +1593,7 @@ class _MazePainter extends CustomPainter {
 
     _paintHudText(
       canvas,
-      'SCORE  $score',
+      _pt('PUNTOS  $score', 'SCORE  $score'),
       Offset(offsetX + cs * 0.45, textY),
       const Color(0xFFFFFF33),
       fontSize,
@@ -1579,7 +1604,7 @@ class _MazePainter extends CustomPainter {
 
     _paintHudText(
       canvas,
-      'NVL $level',
+      _pt('NVL $level', 'LVL $level'),
       Offset(offsetX + cs * _kMazeCols / 2, textY),
       const Color(0xFF00FFFF),
       fontSize,
@@ -1671,7 +1696,7 @@ class _MazePainter extends CustomPainter {
 
     final labelTp = TextPainter(
       text: TextSpan(
-        text: 'VIDAS',
+        text: _pt('VIDAS', 'LIVES'),
         style: TextStyle(
           color: const Color(0xFF88AAFF),
           fontSize: (fontSize * 0.75).clamp(6.0, 11.0),
@@ -1713,6 +1738,7 @@ class _MazePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_MazePainter old) =>
+      language != old.language ||
       pelletBlink != old.pelletBlink ||
       scaredBlink != old.scaredBlink ||
       playerRow != old.playerRow ||

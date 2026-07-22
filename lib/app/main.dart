@@ -8,6 +8,7 @@ import '../components/coupon_notification_dialog.dart';
 import '../components/geo_nav_icons.dart';
 import '../services/local_notifications_service.dart';
 import '../services/notification_actions.dart';
+import '../services/push_notifications_service.dart';
 import 'cart/cart_page.dart';
 import 'cart/cart_provider.dart';
 import 'home.dart';
@@ -61,7 +62,16 @@ class MainMenuScreenState extends State<MainMenuScreen>
 
     WidgetsBinding.instance.addObserver(this);
     NotificationActions.instance.pending.addListener(_onPendingAction);
-    WidgetsBinding.instance.addPostFrameCallback((_) => _onPendingAction());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _onPendingAction();
+      // Home-screen permission nudge — soft cadence (3 days). Won't show
+      // anything when permission is already granted or the user dismissed
+      // the dialog recently.
+      if (_currentIndex == 2 && mounted) {
+        PushNotificationsService.instance
+            .maybeNudgePermission(context, source: 'home');
+      }
+    });
   }
 
   @override
@@ -115,6 +125,26 @@ class MainMenuScreenState extends State<MainMenuScreen>
       _currentIndex = index;
       _animationController.forward(from: 0);
     });
+    _maybeNudgeForTab(index);
+  }
+
+  /// Permission nudge dispatcher per tab. Tight cadence on cart (the
+  /// moment a user actually cares about order updates); loose cadence
+  /// on home. The service itself handles "already granted" and the
+  /// dismiss-cooldown — we just have to call it.
+  void _maybeNudgeForTab(int index) {
+    if (!mounted) return;
+    final source = switch (index) {
+      3 => 'cart',
+      2 => 'home',
+      _ => null,
+    };
+    if (source == null) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      PushNotificationsService.instance
+          .maybeNudgePermission(context, source: source);
+    });
   }
 
   int _currentIndex = 2;
@@ -124,6 +154,9 @@ class MainMenuScreenState extends State<MainMenuScreen>
       if (index == 0) _recetasKey.currentState?.handleBack();
       if (index == 2) _homeKey.currentState?.handleBack();
       if (index == 3) _cartKey.currentState?.handleBack();
+    }
+    if (index != _currentIndex) {
+      _maybeNudgeForTab(index);
     }
     setState(() {
       _currentIndex = index;

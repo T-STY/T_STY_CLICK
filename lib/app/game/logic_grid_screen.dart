@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'arcade_center_screen.dart' show AppLanguage;
 import 'arcade_input_controller.dart';
 import 'game_saldo.dart';
 import 'high_score_service.dart';
@@ -25,6 +26,7 @@ class LogicGridScreen extends StatefulWidget {
   final double currentSaldo;
   final ArcadeInputController controller;
   final void Function(double) onSaldoChanged;
+  final AppLanguage language;
 
   const LogicGridScreen({
     super.key,
@@ -33,6 +35,7 @@ class LogicGridScreen extends StatefulWidget {
     required this.currentSaldo,
     required this.controller,
     required this.onSaldoChanged,
+    this.language = AppLanguage.spanish,
   });
 
   @override
@@ -48,6 +51,7 @@ class _LogicGridScreenState extends State<LogicGridScreen> {
   int _score = 0;
   int _hiScore = 0;
   late double _saldo;
+  late double _lastCommitted;
   bool _awardingPoints = false;
   bool _isRunning = false;
   bool _isWon = false;
@@ -59,10 +63,14 @@ class _LogicGridScreenState extends State<LogicGridScreen> {
   int _triggeredMineRow = -1;
   int _triggeredMineCol = -1;
 
+  String _t(String es, String en) =>
+      widget.language == AppLanguage.spanish ? es : en;
+
   @override
   void initState() {
     super.initState();
     _saldo = widget.currentSaldo;
+    _lastCommitted = widget.currentSaldo;
     _initGrid();
     HighScoreService.load('minesweeper').then((v) {
       if (mounted) setState(() => _hiScore = v);
@@ -105,6 +113,10 @@ class _LogicGridScreenState extends State<LogicGridScreen> {
     _score = 0;
     _awardingPoints = false;
     _initGrid();
+    // Resync the ledger: the replay charge already hit the server, so
+    // `ns` is the committed saldo. Without this the next credit would
+    // compute its delta against the pre-charge value and debit instead.
+    _lastCommitted = ns;
     setState(() => _saldo = ns);
   }
 
@@ -293,18 +305,23 @@ class _LogicGridScreenState extends State<LogicGridScreen> {
   }
 
   Future<void> _updateFirestore(double newSaldo) async {
-    try {
-      final userCardRef = FirebaseFirestore.instance
-          .collection('users')
-          .doc(widget.userId)
-          .collection('rewardsCard')
-          .doc('cardInfo');
-      final batch = FirebaseFirestore.instance.batch();
-      batch.update(userCardRef, {'saldo': newSaldo});
-      batch.update(widget.rewardsDocRef, {'saldo': newSaldo});
-      await batch.commit();
-    } catch (e) {
-      debugPrint('LogicGrid Firestore: $e');
+    // Routes through the server-side `updateRewardsSaldo`
+    // callable instead of writing rewards/{docId} directly
+    // (admin-only collection — direct writes failed silently
+    // for every non-admin user). The CF resolves the wallet,
+    // applies the delta in a transaction, and mirrors the
+    // result to the owner-readable card cache.
+    final delta = newSaldo - _lastCommitted;
+    if (delta == 0) return;
+    final result = await applyArcadeDelta(
+      delta: delta,
+      reason: 'logic_grid',
+    );
+    if (result != null) {
+      _lastCommitted = result;
+      if (mounted && _saldo != result) {
+        setState(() => _saldo = result);
+      }
     }
   }
 
@@ -327,6 +344,7 @@ class _LogicGridScreenState extends State<LogicGridScreen> {
                 score: _score,
                 triggeredMineRow: _triggeredMineRow,
                 triggeredMineCol: _triggeredMineCol,
+                language: widget.language,
               ),
             ),
           ),
@@ -347,30 +365,30 @@ class _LogicGridScreenState extends State<LogicGridScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text('💣 CAMPO MINADO',
-                  style: TextStyle(
+              Text(_t('💣 CAMPO MINADO', '💣 MINEFIELD'),
+                  style: const TextStyle(
                       fontSize: 22,
                       fontWeight: FontWeight.bold,
                       color: Color(0xFFFF6600),
                       letterSpacing: 2)),
               const SizedBox(height: 4),
-              const Text('ZONA PELIGROSA',
-                  style: TextStyle(fontSize: 11, color: Color(0xFFCCAA44), letterSpacing: 3)),
+              Text(_t('ZONA PELIGROSA', 'DANGER ZONE'),
+                  style: const TextStyle(fontSize: 11, color: Color(0xFFCCAA44), letterSpacing: 3)),
               const SizedBox(height: 20),
-              const Text('← → ↑ ↓ : mover cursor',
-                  style: TextStyle(fontSize: 13, color: Color(0xFFCCBB88))),
+              Text(_t('← → ↑ ↓ : mover cursor', '← → ↑ ↓ : move cursor'),
+                  style: const TextStyle(fontSize: 13, color: Color(0xFFCCBB88))),
               const SizedBox(height: 6),
-              const Text('A : revelar   B : bandera',
-                  style: TextStyle(fontSize: 13, color: Color(0xFFCCBB88))),
+              Text(_t('A : revelar   B : bandera', 'A : reveal   B : flag'),
+                  style: const TextStyle(fontSize: 13, color: Color(0xFFCCBB88))),
               const SizedBox(height: 6),
-              const Text('12 minas · 1000−(t×5)+banderas×20',
-                  style: TextStyle(fontSize: 11, color: Color(0xFFFFCC00))),
+              Text(_t('12 minas · 1000−(t×5)+banderas×20', '12 mines · 1000−(t×5)+flags×20'),
+                  style: const TextStyle(fontSize: 11, color: Color(0xFFFFCC00))),
               const SizedBox(height: 4),
-              const Text('+1 pto por tablero completado',
-                  style: TextStyle(fontSize: 11, color: Color(0xFFFFCC00))),
+              Text(_t('+1 pto por tablero completado', '+1 pt per board cleared'),
+                  style: const TextStyle(fontSize: 11, color: Color(0xFFFFCC00))),
               const SizedBox(height: 20),
-              const Text('Pulsa cualquier botón para empezar',
-                  style: TextStyle(fontSize: 12, color: Color(0xFF887755))),
+              Text(_t('Pulsa cualquier botón para empezar', 'Press any button to start'),
+                  style: const TextStyle(fontSize: 12, color: Color(0xFF887755))),
             ],
           ),
         ),
@@ -386,20 +404,20 @@ class _LogicGridScreenState extends State<LogicGridScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text('✅ ¡CAMPO LIMPIO!',
-                  style: TextStyle(
+              Text(_t('✅ ¡CAMPO LIMPIO!', '✅ FIELD CLEARED!'),
+                  style: const TextStyle(
                       fontSize: 22,
                       fontWeight: FontWeight.bold,
                       color: Color(0xFF88FF44),
                       letterSpacing: 1)),
               const SizedBox(height: 4),
-              const Text('TODAS LAS MINAS NEUTRALIZADAS',
-                  style: TextStyle(fontSize: 10, color: Color(0xFFCCAA44), letterSpacing: 2)),
+              Text(_t('TODAS LAS MINAS NEUTRALIZADAS', 'ALL MINES NEUTRALIZED'),
+                  style: const TextStyle(fontSize: 10, color: Color(0xFFCCAA44), letterSpacing: 2)),
               const SizedBox(height: 12),
-              Text('Tiempo: ${_elapsedSeconds}s',
+              Text(_t('Tiempo: ${_elapsedSeconds}s', 'Time: ${_elapsedSeconds}s'),
                   style: const TextStyle(fontSize: 14, color: Color(0xFFCCBB88))),
               const SizedBox(height: 6),
-              Text('Puntuación: $_score',
+              Text(_t('Puntuación: $_score', 'Score: $_score'),
                   style: const TextStyle(fontSize: 16, color: Colors.white, fontWeight: FontWeight.bold)),
               const SizedBox(height: 20),
               Padding(
@@ -412,7 +430,8 @@ class _LogicGridScreenState extends State<LogicGridScreen> {
                         backgroundColor: const Color(0xFFFF6600),
                         foregroundColor: Colors.white,
                         shape: const StadiumBorder()),
-                    child: const Text('Nueva Partida', style: TextStyle(fontWeight: FontWeight.bold)),
+                    child: Text(_t('Nueva Partida', 'New Game'),
+                        style: const TextStyle(fontWeight: FontWeight.bold)),
                   ),
                 ),
               ),
@@ -431,20 +450,20 @@ class _LogicGridScreenState extends State<LogicGridScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text('💥 ¡EXPLOSIÓN!',
-                  style: TextStyle(
+              Text(_t('💥 ¡EXPLOSIÓN!', '💥 BOOM!'),
+                  style: const TextStyle(
                       fontSize: 26,
                       fontWeight: FontWeight.bold,
                       color: Color(0xFFFF3300),
                       letterSpacing: 2)),
               const SizedBox(height: 4),
-              const Text('HAS PISADO UNA MINA',
-                  style: TextStyle(fontSize: 11, color: Color(0xFFFF8844), letterSpacing: 2)),
+              Text(_t('HAS PISADO UNA MINA', 'YOU STEPPED ON A MINE'),
+                  style: const TextStyle(fontSize: 11, color: Color(0xFFFF8844), letterSpacing: 2)),
               const SizedBox(height: 16),
-              Text('Puntuación: $_score',
+              Text(_t('Puntuación: $_score', 'Score: $_score'),
                   style: const TextStyle(fontSize: 16, color: Colors.white, fontWeight: FontWeight.bold)),
               const SizedBox(height: 6),
-              Text('Mejor: $_hiScore',
+              Text(_t('Mejor: $_hiScore', 'Best: $_hiScore'),
                   style: const TextStyle(fontSize: 14, color: Color(0xFFFFCC00))),
               const SizedBox(height: 20),
               Padding(
@@ -457,7 +476,8 @@ class _LogicGridScreenState extends State<LogicGridScreen> {
                         backgroundColor: const Color(0xFFFF3300),
                         foregroundColor: Colors.white,
                         shape: const StadiumBorder()),
-                    child: const Text('Intentar de nuevo', style: TextStyle(fontWeight: FontWeight.bold)),
+                    child: Text(_t('Intentar de nuevo', 'Try Again'),
+                        style: const TextStyle(fontWeight: FontWeight.bold)),
                   ),
                 ),
               ),
@@ -471,14 +491,14 @@ class _LogicGridScreenState extends State<LogicGridScreen> {
   Widget _buildPauseOverlay() => Positioned.fill(
     child: Container(
       color: const Color(0xCC000000),
-      child: const Column(
+      child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Text('⏸', style: TextStyle(fontSize: 48)),
-          SizedBox(height: 8),
-          Text('PAUSA', style: TextStyle(color: Color(0xFF88DDFF), fontSize: 28, fontWeight: FontWeight.bold, letterSpacing: 6)),
-          SizedBox(height: 16),
-          Text('START para continuar', style: TextStyle(color: Color(0xFF446677), fontSize: 12)),
+          const Text('⏸', style: TextStyle(fontSize: 48)),
+          const SizedBox(height: 8),
+          Text(_t('PAUSA', 'PAUSED'), style: const TextStyle(color: Color(0xFF88DDFF), fontSize: 28, fontWeight: FontWeight.bold, letterSpacing: 6)),
+          const SizedBox(height: 16),
+          Text(_t('START para continuar', 'START to resume'), style: const TextStyle(color: Color(0xFF446677), fontSize: 12)),
         ],
       ),
     ),
@@ -491,6 +511,7 @@ class _GridPainter extends CustomPainter {
   final bool isLost, isWon;
   final int flagCount, elapsedSeconds, score;
   final int triggeredMineRow, triggeredMineCol;
+  final AppLanguage language;
 
   const _GridPainter({
     required this.grid,
@@ -503,7 +524,11 @@ class _GridPainter extends CustomPainter {
     required this.score,
     required this.triggeredMineRow,
     required this.triggeredMineCol,
+    this.language = AppLanguage.spanish,
   });
+
+  String _t(String es, String en) =>
+      language == AppLanguage.spanish ? es : en;
 
   static const int kRows = 9;
   static const int kCols = 9;
@@ -779,9 +804,9 @@ class _GridPainter extends CustomPainter {
 
     final textY = contentTop + 2.0;
     final titlePainter = TextPainter(
-      text: const TextSpan(
-        text: '⚠  ZONA PELIGROSA  ⚠',
-        style: TextStyle(
+      text: TextSpan(
+        text: _t('⚠  ZONA PELIGROSA  ⚠', '⚠  DANGER ZONE  ⚠'),
+        style: const TextStyle(
           color: Color(0xFFFF6600),
           fontSize: 11,
           fontWeight: FontWeight.bold,
@@ -795,10 +820,10 @@ class _GridPainter extends CustomPainter {
 
     final statsY = cy + mineR * 1.6 + 6;
     final statsPainter = TextPainter(
-      text: const TextSpan(
+      text: TextSpan(
         children: [
-          TextSpan(text: '12 MINAS  •  ', style: TextStyle(color: Color(0xFFFF4400), fontSize: 10, fontWeight: FontWeight.bold)),
-          TextSpan(text: '+1 PTO POR TABLERO', style: TextStyle(color: Color(0xFFCCBB88), fontSize: 10)),
+          TextSpan(text: _t('12 MINAS  •  ', '12 MINES  •  '), style: const TextStyle(color: Color(0xFFFF4400), fontSize: 10, fontWeight: FontWeight.bold)),
+          TextSpan(text: _t('+1 PTO POR TABLERO', '+1 PT PER BOARD'), style: const TextStyle(color: Color(0xFFCCBB88), fontSize: 10)),
         ],
       ),
       textDirection: TextDirection.ltr,

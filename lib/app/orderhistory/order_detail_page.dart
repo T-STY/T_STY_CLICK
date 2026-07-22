@@ -8,6 +8,7 @@ import '../../components/bottom_fade.dart';
 import '../../components/custom_loader.dart';
 import '../../components/shimmer_placeholder.dart';
 import '../../constants/app_colors.dart';
+import '../../utils/coupon_filter.dart' as cf;
 import '../verse/verse_model.dart';
 import 'applied_coupon.dart';
 import 'constants/address_section.dart';
@@ -75,6 +76,38 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
   ];
 
   Future<void> _fetchAddress() async {
+    // Pickup orders display the STORE address (one fixed doc at
+    // `settings/address` maintained by the admin), not the customer's
+    // address. The user never set a delivery target for these orders —
+    // their `addressId` is null/"N/A" on the order doc, and we want to
+    // show them where to go pick up.
+    if (widget.order.isInstorePickup) {
+      try {
+        final storeDoc = await FirebaseFirestore.instance
+            .collection('settings')
+            .doc('address')
+            .get();
+        if (storeDoc.exists) {
+          setState(() {
+            _addressData = storeDoc.data();
+            _isFetchingAddress = false;
+          });
+        } else {
+          setState(() {
+            _isFetchingAddress = false;
+            _fetchError =
+                'Falta la dirección de la tienda en configuración.';
+          });
+        }
+      } catch (e) {
+        setState(() {
+          _isFetchingAddress = false;
+          _fetchError = 'Error al obtener la dirección de la tienda: $e';
+        });
+      }
+      return;
+    }
+
     final userId = FirebaseAuth.instance.currentUser?.uid;
     if (userId == null) {
       setState(() {
@@ -146,13 +179,17 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
                       ),
                     ),
                     subtitle: Text(
-                      'Fecha: ${_formatDate(widget.order.timestamp)}',
+                      widget.order.deliveryWindowLabel == null
+                          ? 'Fecha: ${_formatDate(widget.order.timestamp)}'
+                          : 'Fecha: ${_formatDate(widget.order.timestamp)}\n'
+                              '${widget.order.isInstorePickup ? 'Recoges' : 'Entrega'}: '
+                              '${widget.order.deliveryWindowLabel}',
                       style: TextStyle(
                         color: Colors.grey[600],
                         fontSize: 14,
                       ),
                     ),
-                    trailing: _buildStatusIndicator(widget.order.status),
+                    trailing: _buildStatusIndicator(widget.order),
                   ),
                 ],
               ),
@@ -165,11 +202,16 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
                 _fetchError!,
                 style: const TextStyle(color: Colors.red),
               )
-            else
+            else ...[
               AddressDisplayTile(
-                addressId: widget.order.addressId,
+                // For pickup, addressId is null/"N/A" on the order doc — we
+                // pass a stable marker key instead so the map pin renders.
+                addressId: widget.order.isInstorePickup
+                    ? 'store-pickup'
+                    : widget.order.addressId,
                 addressData: _addressData!,
               ),
+            ],
             const SizedBox(height: 16),
             _buildSectionCard(
               color: cardColor,
@@ -183,11 +225,33 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
                   ),
                 ),
                 subtitle: Text(
-                  widget.order.paymentMethod.capitalize(),
+                  widget.order.cashPaidWith > widget.order.total
+                      ? '${widget.order.paymentMethod.capitalize()} · '
+                          'Pagas con \$${widget.order.cashPaidWith.toStringAsFixed(0)}'
+                      : widget.order.paymentMethod.capitalize(),
                   style: TextStyle(color: Colors.grey[600]),
                 ),
               ),
             ),
+            if (widget.order.notes.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              _buildSectionCard(
+                color: cardColor,
+                child: ListTile(
+                  leading: const Icon(Icons.sticky_note_2_outlined,
+                      color: AppColors.primary),
+                  title: Text(
+                    'Notas del pedido',
+                    style: TextStyle(
+                        fontWeight: FontWeight.bold, color: textColor),
+                  ),
+                  subtitle: Text(
+                    widget.order.notes,
+                    style: TextStyle(color: Colors.grey[700]),
+                  ),
+                ),
+              ),
+            ],
             const SizedBox(height: 16),
             _buildFinancialDetailsCard(),
             const SizedBox(height: 16),
@@ -206,8 +270,18 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
     );
   }
 
-  Widget _buildStatusIndicator(String status) {
-    final bool canCancel = status.toLowerCase() == 'en revision';
+  Widget _buildStatusIndicator(UserOrder order) {
+    // `order.status` is the canonical Firestore value used by colour logic
+    // + the cancel-eligibility check. `order.displayStatus` is what the
+    // user sees — pickup orders flagged "Enviado" read as "Listo para
+    // recoger" so the customer knows to come collect the package.
+    final String rawStatus = order.status;
+    // Customers may cancel while the order is still 'En Revisión' OR
+    // 'Preparando' — nothing has shipped or deducted stock yet at either
+    // stage. Once it's Enviado the cancel affordance disappears.
+    final String rawStatusLower = rawStatus.toLowerCase();
+    final bool canCancel =
+        rawStatusLower == 'en revision' || rawStatusLower == 'preparando';
 
     return GestureDetector(
       onTap: canCancel ? _cancelOrder : null,
@@ -219,9 +293,9 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
                 ? SystemMouseCursors.click
                 : SystemMouseCursors.basic,
             child: Text(
-              status.capitalize(),
+              order.displayStatus.capitalize(),
               style: TextStyle(
-                color: _getStatusColor(status),
+                color: _getStatusColor(rawStatus),
                 fontWeight: FontWeight.bold,
                 fontSize: 14,
               ),
@@ -230,7 +304,7 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
           const SizedBox(width: 8),
           Icon(
             Icons.circle,
-            color: _getStatusColor(status),
+            color: _getStatusColor(rawStatus),
             size: 12,
           ),
         ],
@@ -391,6 +465,18 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
                               fontSize: 14,
                             ),
                           ),
+                          if (item.variantName != null &&
+                              item.variantName!.isNotEmpty) ...[
+                            const SizedBox(height: 2),
+                            Text(
+                              item.variantName!,
+                              style: TextStyle(
+                                color: Colors.grey[700],
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
                           const SizedBox(height: 4),
                           Text(
                             'Cantidad: ${item.quantity.toStringAsFixed(2)}',
@@ -462,6 +548,10 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
                 color: Colors.grey[800],
               ),
             ),
+            if (coupon.productFilterSummary.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              _CouponScopeBlock(filter: coupon.productFilter),
+            ],
           ],
         ),
       ),
@@ -541,6 +631,8 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
     switch (status.toLowerCase()) {
       case 'en revision':
         return Colors.orange;
+      case 'preparando':
+        return Colors.purple;
       case 'enviado':
         return Colors.blue;
       case 'entregado':
@@ -553,7 +645,8 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
   }
 
   Future<void> _cancelOrder() async {
-    if (widget.order.status.toLowerCase() != 'en revision') {
+    final String s = widget.order.status.toLowerCase();
+    if (s != 'en revision' && s != 'preparando') {
       return;
     }
 
@@ -654,5 +747,149 @@ extension StringCasingExtension on String {
   String capitalize() {
     if (isEmpty) return this;
     return '${this[0].toUpperCase()}${substring(1)}';
+  }
+}
+
+/// Expanded scope view on a placed-order receipt — shows the actual
+/// subcategory / provedor names + a "N productos específicos" chip when
+/// the coupon was restricted, so the customer can audit the discount they
+/// got. The terser one-liner (`productFilterSummary`) is still used on
+/// smaller surfaces like the checkout coupon card and the "Mis cupones"
+/// list — this widget is only for the receipt where space is available.
+class _CouponScopeBlock extends StatelessWidget {
+  final Map<String, dynamic>? filter;
+
+  const _CouponScopeBlock({required this.filter});
+
+  @override
+  Widget build(BuildContext context) {
+    final details = cf.productFilterDetails(filter);
+    if (details == null) return const SizedBox.shrink();
+
+    final isInclude = details.isInclude;
+    final headerColor =
+        isInclude ? const Color(0xFF1B5E20) : const Color(0xFFB45309);
+    final headerBg = isInclude
+        ? const Color(0xFFDCEFDC)
+        : const Color(0xFFFFF1D6);
+    final headerLabel = isInclude
+        ? 'Aplicó únicamente a:'
+        : 'No aplicó a:';
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+      decoration: BoxDecoration(
+        color: headerBg.withValues(alpha: 0.55),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                isInclude
+                    ? Icons.check_circle_outline
+                    : Icons.do_not_disturb_alt_outlined,
+                size: 16,
+                color: headerColor,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                headerLabel,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                  color: headerColor,
+                  letterSpacing: 0.2,
+                ),
+              ),
+            ],
+          ),
+          if (!details.hasAnyChips) ...[
+            const SizedBox(height: 6),
+            Text(
+              'Sin selección específica.',
+              style: TextStyle(fontSize: 12, color: Colors.grey[700]),
+            ),
+          ],
+          if (details.subcategories.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            const _SubLabel(text: 'Categorías'),
+            const SizedBox(height: 4),
+            _ChipsWrap(items: details.subcategories, color: headerColor),
+          ],
+          if (details.provedores.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            const _SubLabel(text: 'Provedores'),
+            const SizedBox(height: 4),
+            _ChipsWrap(items: details.provedores, color: headerColor),
+          ],
+          if (details.productIds.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            const _SubLabel(text: 'Productos específicos'),
+            const SizedBox(height: 4),
+            _ChipsWrap(
+              items: [
+                '${details.productIds.length} '
+                    'producto${details.productIds.length == 1 ? '' : 's'}',
+              ],
+              color: headerColor,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _SubLabel extends StatelessWidget {
+  final String text;
+  const _SubLabel({required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      text.toUpperCase(),
+      style: TextStyle(
+        fontSize: 10.5,
+        fontWeight: FontWeight.w800,
+        color: Colors.grey[700],
+        letterSpacing: 0.8,
+      ),
+    );
+  }
+}
+
+class _ChipsWrap extends StatelessWidget {
+  final List<String> items;
+  final Color color;
+  const _ChipsWrap({required this.items, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: 5,
+      runSpacing: 5,
+      children: [
+        for (final t in items)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(color: color.withValues(alpha: 0.45)),
+            ),
+            child: Text(
+              t,
+              style: TextStyle(
+                fontSize: 11.5,
+                fontWeight: FontWeight.w700,
+                color: color,
+              ),
+            ),
+          ),
+      ],
+    );
   }
 }

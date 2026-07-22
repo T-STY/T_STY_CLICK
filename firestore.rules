@@ -81,15 +81,18 @@ service cloud.firestore {
     // Orders are CREATED server-side by the placeOrder Cloud Function (admin
     // SDK), which recomputes prices/discounts/saldo — clients never create or
     // delete. A customer may READ their own order and may only UPDATE it to
-    // cancel: the order must still be 'En Revision', the diff may touch nothing
-    // but `state` (→ 'Cancelado') and `cancellationTimestamp`, so a client
-    // can't flip an order to 'Entregado' or rewrite items/totals. Saldo + coupon
-    // are reinstated server-side by reinstateOnCancel. Admin via catch-all.
+    // cancel: the order must still be 'En Revision' OR 'Preparando' (nothing
+    // has shipped or deducted stock at either stage), the diff may touch
+    // nothing but `state` (→ 'Cancelado') and `cancellationTimestamp`, so a
+    // client can't flip an order to 'Entregado' or rewrite items/totals.
+    // Saldo + coupon are reinstated server-side by reinstateOnCancel.
+    // Admin via catch-all.
     match /orders/{orderId} {
       allow read: if isAuth() && resource.data.userId == request.auth.uid;
       allow update: if isAuth()
         && resource.data.userId == request.auth.uid
-        && resource.data.state == 'En Revision'
+        && (resource.data.state == 'En Revision'
+            || resource.data.state == 'Preparando')
         && request.resource.data.diff(resource.data).affectedKeys()
              .hasOnly(['state', 'cancellationTimestamp'])
         && request.resource.data.state == 'Cancelado';
@@ -180,17 +183,41 @@ service cloud.firestore {
         allow read, delete: if isOwner(userId);
       }
 
+      // Order archive — CF-managed only. The `archiveDeletedOrderHistory`
+      // trigger mirrors every `orderHistory` delete here so support can
+      // look up old orders even after a client cleanup. Owners can READ
+      // their own archive (it's their data), but nobody on the client
+      // side can ever write or delete — otherwise a tampered app could
+      // erase its own paper trail right after the mirror happens.
+      match /order_archive/{archiveId} {
+        allow read: if isOwner(userId) || isAdmin();
+        allow write: if false;
+      }
+
       // Everything else under the user's tree stays fully owner-managed. The
-      // `col` guards keep client writes OUT of coupons and workerActions (rules
-      // are OR-ed, so a broad write here would otherwise re-open them): coupons
-      // are CF-granted only, and workerActions is governed by its own
-      // constrained create rule above (type/status validated) — without this
-      // guard a worker could enqueue an action with an arbitrary type/status.
+      // `col` guards keep client writes OUT of coupons, workerActions,
+      // order_archive AND rewardsCard. Rules are OR-ed, so a broad
+      // write here would otherwise re-open them:
+      //   - coupons:       CF-granted only.
+      //   - workerActions: own constrained create rule above (type/
+      //                    status validated).
+      //   - order_archive: immutable support-recovery log.
+      //   - rewardsCard:   linked-wallet card info — clients used to
+      //                    write `saldo` directly here (the arcade
+      //                    game flow). That client-side saldo write
+      //                    is now obsolete (every saldo move routes
+      //                    through the `updateRewardsSaldo` callable
+      //                    which mirrors the new value into this doc
+      //                    server-side via admin SDK), and any
+      //                    remaining client write is a tamper vector.
+      //                    Block it at the rule level too.
       match /{col}/{docId=**} {
         allow read:  if isOwner(userId);
         allow write: if isOwner(userId)
           && col != 'coupons'
-          && col != 'workerActions';
+          && col != 'workerActions'
+          && col != 'order_archive'
+          && col != 'rewardsCard';
       }
     }
 
@@ -207,6 +234,14 @@ service cloud.firestore {
 
     match /store/specifics {
       // Bulk screens + product editor read brand/distributor option lists.
+      allow read:  if isAuth();
+      allow write: if isAdmin();
+    }
+
+    // Per-screen barcode access tokens used by the kiosk. Any signed-in user
+    // can read (so managers can show the code to a cashier), only admins
+    // regenerate or disable.
+    match /store/access_codes {
       allow read:  if isAuth();
       allow write: if isAdmin();
     }
@@ -231,6 +266,31 @@ service cloud.firestore {
       allow read:   if isAdmin() || isStockEditor();
       allow create: if isAdmin() || isStockEditor();
       allow update, delete: if isAdmin();
+    }
+
+    // ─── 7d. STOCKOUT LOGS ────────────────────────────────────
+    // Append-only audit trail of every product/variant that crossed
+    // > 0 → ≤ 0 stock, written by the `logProductStockouts` CF.
+    // Clients (admin + stock editor) read only; the CF writes via admin
+    // SDK which bypasses rules. The catch-all override at the bottom of
+    // this file carves stockout_logs out of admin-write so even a
+    // compromised admin session can't tamper with the trail.
+    match /stockout_logs/{docId} {
+      allow read:  if isAdmin() || isStockEditor();
+      allow write: if false;
+    }
+
+    // ─── 7e. PUSH AUDIT LOG ───────────────────────────────────
+    // Every FCM send attempt (broadcast, order_status, order_new) is
+    // mirrored here by the push-sending CFs so the admin can answer
+    // "did this user actually get the coupon I sent last week?" with a
+    // Firestore query. Admin-only read; ALL client writes denied
+    // (`if false`) so the audit trail can't be tampered with by anyone
+    // outside the admin SDK — including spoofed-admin requests via
+    // user-token writes.
+    match /push_log/{docId} {
+      allow read:  if isAdmin();
+      allow write: if false;
     }
 
     // ─── 8. EMPLOYEE TREE ─────────────────────────────────────
@@ -295,6 +355,31 @@ service cloud.firestore {
 
     // ─── 9. ADMIN GLOBAL OVERRIDE ─────────────────────────────
     // Must be last — grants admins full access to any path not matched above.
+    //
+    // ⚠ DO NOT try to carve out audit collections via path inspection
+    // (e.g. `document[0] != 'push_log'`, or split-rule patterns with
+    // wildcard `{col}` segments). Path indexing on a recursive
+    // wildcard does NOT resolve during LIST evaluation and silently
+    // denies admin queries on every top-level collection (broke PDV
+    // login on `employee`/`cortes`). Wildcard `{col}` segments do NOT
+    // enable COLLECTION GROUP queries — Firestore requires a concrete
+    // collection name there, so a `{path=**}/{col}/{docId}` carve-out
+    // silently denies `collectionGroup('tickets')` (broke PDV ticket
+    // sparkline and credit-sale paths). The single `{document=**}`
+    // recursive wildcard is the only form that authorizes everything
+    // admins legitimately need — including CG queries.
+    //
+    // ⚠ Trade-off: rules are UNIONED, so this catch-all OR-overrides
+    // the dedicated `allow write: if false;` on `push_log` and
+    // `stockout_logs`. Admins technically CAN write to those from a
+    // client. Tamper resistance in practice comes from:
+    //   1. Neither admin app exposes a UI that writes to audit logs.
+    //   2. Cloud Functions (admin SDK) are the canonical writer.
+    //   3. push_log carries `expireAt` for automatic 180d TTL purge.
+    // If true tamper-proofing is required later, move audit log
+    // collections under a parent-document path that the catch-all
+    // cannot match (e.g. `system/_audit/push_log/{id}`) and grant
+    // admin write nowhere in this file.
     match /{document=**} {
       allow read, write: if isAdmin();
     }

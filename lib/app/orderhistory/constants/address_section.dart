@@ -18,6 +18,7 @@ class AddressDisplayTile extends StatelessWidget {
     final city = addressData['city'] ?? '';
     final state = addressData['state'] ?? '';
     final zipCode = addressData['zipCode'] ?? '';
+    final references = (addressData['references'] ?? '').toString().trim();
 
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
@@ -42,7 +43,9 @@ class AddressDisplayTile extends StatelessWidget {
               fontWeight: FontWeight.w600,
             ),
           ),
-          subtitle: Text('$city, $state, $zipCode'),
+          subtitle: Text(references.isEmpty
+              ? '$city, $state, $zipCode'
+              : '$city, $state, $zipCode\nRef: $references'),
           children: [
             if (addressData['latitude'] != null && addressData['longitude'] != null)
               ClipRRect(
@@ -51,7 +54,7 @@ class AddressDisplayTile extends StatelessWidget {
                   bottomRight: Radius.circular(12),
                 ),
                 child: SizedBox(
-                  height: 200,
+                  height: 180,
                   child: GoogleMap(
                     initialCameraPosition: CameraPosition(
                       target: LatLng(
