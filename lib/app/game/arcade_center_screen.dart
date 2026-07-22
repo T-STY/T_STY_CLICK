@@ -1594,7 +1594,9 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen>
                     const SizedBox(height: 5),
                     Row(children: [
                       Text(
-                        score > 0 ? 'HI  $score pts' : 'No high score yet',
+                        score > 0
+                            ? _t('RÉCORD  $score pts', 'HI  $score pts')
+                            : _t('Sin récord aún', 'No high score yet'),
                         style: TextStyle(
                           color: score > 0
                               ? Colors.amber.withOpacity(0.90)

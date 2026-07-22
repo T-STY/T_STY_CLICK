@@ -2220,7 +2220,7 @@ class _BulkOrderDialogState extends State<_BulkOrderDialog> {
     );
   }
 }
-enum _TermPhase { booting, hacking }
+// (_TermPhase removed: the boot sequence is the only phase now.)
 
 class _ArcadeLaunchPage extends StatefulWidget {
   final String userId;
@@ -2238,7 +2238,6 @@ class _ArcadeLaunchPage extends StatefulWidget {
 }
 
 class _ArcadeLaunchPageState extends State<_ArcadeLaunchPage> {
-  _TermPhase _phase = _TermPhase.booting;
   final List<String> _visibleLines = [];
   Timer? _lineTimer;
   final ScrollController _scrollCtrl = ScrollController();
@@ -2267,35 +2266,10 @@ class _ArcadeLaunchPageState extends State<_ArcadeLaunchPage> {
     ' [OK] JUGADOR RECONOCIDO — ACCESO CONCEDIDO',
   ];
 
-  static const _hackerLines = [
-    '',
-    r' C:\> cls && ./h4ck.sh --silent --escalate',
-    '',
-    ' /-----------------------------------------\\',
-    ' |   *** KERNEL EXPLOIT INJECTED ***       |',
-    ' |   >>  ROOT ACCESS  :  GRANTED  <<       |',
-    ' |   >>  SECURITY     :  DISABLED <<       |',
-    ' \\-----------------------------------------/',
-    '',
-    ' [>] Bypassing auth layer ........... DONE',
-    ' [>] Injecting root payload ......... DONE',
-    ' [>] Disabling security modules ..... DONE',
-    ' [>] Escalating privileges .......... [ROOT]',
-    ' [>] Patching kernel memory ......... DONE',
-    ' [>] Planting backdoor .............. DONE',
-    ' [>] Wiping access logs ............. DONE',
-    '',
-    ' Progress: [####################] 100%',
-    '',
-    ' [!!!] SISTEMA COMPROMETIDO',
-    ' [!!!] CONTROL TOTAL OBTENIDO',
-    ' [!!!] DATOS EXFILTRADOS: 2.4 GB',
-    ' [!!!] HUELLAS BORRADAS',
-    '',
-    r' C:\> launch_arcade --god-mode --override',
-    '',
-    ' > ARCADE CENTER INICIANDO EN MODO DIOS...',
-  ];
+  // The old "hacker" phase (fake kernel exploit, "SISTEMA COMPROMETIDO",
+  // "DATOS EXFILTRADOS: 2.4 GB", "HUELLAS BORRADAS") was removed. It was
+  // meant as a joke, but this app holds wallets and saved cards — a customer
+  // has no way to tell a staged breach notice from a real one.
 
   @override
   void initState() {
@@ -2311,37 +2285,13 @@ class _ArcadeLaunchPageState extends State<_ArcadeLaunchPage> {
     });
   }
 
-  // No gate anymore: boot rolls straight into the hacker script and the
-  // arcade. Line cadence compressed (230→90ms / 130→75ms) so the whole
-  // power-on transition runs ~4s instead of ~9s with the old key prompt.
+  // No gate anymore: the boot sequence rolls straight into the arcade.
   void _startBootLines() {
     int idx = 0;
     _lineTimer = Timer.periodic(const Duration(milliseconds: 90), (t) {
       if (!mounted) { t.cancel(); return; }
       if (idx < _bootLines.length) {
         setState(() => _visibleLines.add(_bootLines[idx]));
-        _scrollToBottom();
-        idx++;
-      } else {
-        t.cancel();
-        Future.delayed(const Duration(milliseconds: 350), () {
-          if (mounted) _startHackerScript();
-        });
-      }
-    });
-  }
-
-  void _startHackerScript() {
-    setState(() {
-      _phase = _TermPhase.hacking;
-      _visibleLines.clear();
-    });
-    _scrollToBottom();
-    int idx = 0;
-    _lineTimer = Timer.periodic(const Duration(milliseconds: 75), (t) {
-      if (!mounted) { t.cancel(); return; }
-      if (idx < _hackerLines.length) {
-        setState(() => _visibleLines.add(_hackerLines[idx]));
         _scrollToBottom();
         idx++;
       } else {
@@ -2376,8 +2326,6 @@ class _ArcadeLaunchPageState extends State<_ArcadeLaunchPage> {
 
   @override
   Widget build(BuildContext context) {
-    final isHacker = _phase == _TermPhase.hacking;
-
     return Scaffold(
       backgroundColor: const Color(0xFF010D01),
       resizeToAvoidBottomInset: true,
@@ -2411,7 +2359,7 @@ class _ArcadeLaunchPageState extends State<_ArcadeLaunchPage> {
                       mainAxisAlignment: MainAxisAlignment.end,
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        ..._visibleLines.map((l) => _TermLine(text: l, isHacker: isHacker)),
+                        ..._visibleLines.map((l) => _TermLine(text: l)),
                         const _BlinkCursor(),
                       ],
                     ),
@@ -2429,13 +2377,12 @@ class _ArcadeLaunchPageState extends State<_ArcadeLaunchPage> {
 
 class _TermLine extends StatelessWidget {
   final String text;
-  final bool isHacker;
-  const _TermLine({required this.text, this.isHacker = false});
+  const _TermLine({required this.text});
 
   @override
   Widget build(BuildContext context) {
-    final isDanger  = isHacker && (text.contains('[!!!]') || text.contains('COMPROMETIDO')
-        || text.contains('DIOS') || text.contains('DATOS'));
+    // The red "danger" styling went out with the fake-breach lines it used to
+    // colour; only the ordinary boot sequence renders here now.
     final isBanner  = text.contains('╔') || text.contains('║') || text.contains('╚')
         || text.contains('██') || text.contains('***');
     final isCmd     = text.trimLeft().startsWith(r'C:\>') || text.trimLeft().startsWith('[>]');
@@ -2445,15 +2392,7 @@ class _TermLine extends StatelessWidget {
     final FontWeight weight;
     final List<Shadow> shadows;
 
-    if (isDanger) {
-      color   = const Color(0xFFFF3322);
-      weight  = FontWeight.bold;
-      shadows = const [Shadow(color: Color(0xFFFF3322), blurRadius: 18), Shadow(color: Color(0xFFFF3322), blurRadius: 6)];
-    } else if (isBanner && isHacker) {
-      color   = const Color(0xFF00FF88);
-      weight  = FontWeight.bold;
-      shadows = const [Shadow(color: Color(0xFF00FF88), blurRadius: 20), Shadow(color: Color(0xFF00FF88), blurRadius: 8)];
-    } else if (isBanner) {
+    if (isBanner) {
       color   = const Color(0xFF00FF88);
       weight  = FontWeight.bold;
       shadows = const [Shadow(color: Color(0xFF00FF88), blurRadius: 14), Shadow(color: Color(0xFF00FF88), blurRadius: 5)];
