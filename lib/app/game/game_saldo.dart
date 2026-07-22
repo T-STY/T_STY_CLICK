@@ -48,6 +48,21 @@ void notifyInsufficientSaldo() => arcadeInsufficientSaldoTick.value++;
 final ValueNotifier<Completer<bool>?> arcadeReplayConfirm =
     ValueNotifier<Completer<bool>?>(null);
 
+/// Nesting depth of the hub's attract-mode demo (`_HeroDemoGame`).
+///
+/// The demo builds a REAL cartridge, so when it plays itself to game over its
+/// restart runs the PAID replay path against the signed-in user's wallet —
+/// charging someone for a demo they never started, on a loop, while they just
+/// sit on the hub. A counter rather than a bool because several demo widgets
+/// can be mounted at once (hero card + carousel).
+int _arcadeDemoDepth = 0;
+
+bool get arcadeDemoMode => _arcadeDemoDepth > 0;
+void enterArcadeDemo() => _arcadeDemoDepth++;
+void exitArcadeDemo() {
+  if (_arcadeDemoDepth > 0) _arcadeDemoDepth--;
+}
+
 Future<bool> _askReplayConfirm() {
   final pending = arcadeReplayConfirm.value;
   // A prompt is already on screen — don't stack a second one.
@@ -114,6 +129,11 @@ Future<double?> chargeForReplay({
   required DocumentReference rewardsDocRef,
   required double currentSaldo,
 }) async {
+  // The attract-mode demo restarts itself indefinitely. It must never spend
+  // the user's puntos, and must never raise the cost prompt — returning the
+  // unchanged balance lets the demo loop freely for free.
+  if (arcadeDemoMode) return currentSaldo;
+
   if (currentSaldo < kArcadePlayCost) {
     notifyInsufficientSaldo();
     return null;

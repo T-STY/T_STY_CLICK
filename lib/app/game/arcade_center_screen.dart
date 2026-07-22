@@ -2248,6 +2248,11 @@ class _HeroDemoGameState extends State<_HeroDemoGame> {
   void initState() {
     super.initState();
     HighScoreService.setDemoMode(true);
+    // The demo drives a REAL cartridge, so its game-over restart would run the
+    // paid replay path against the signed-in user's wallet — charging them for
+    // a demo they never started, repeatedly, while they idle on the hub.
+    // High scores were already shielded above; puntos were not.
+    enterArcadeDemo();
     _bot = ArcadeInputController();
     _botTimer = Timer.periodic(const Duration(milliseconds: 120), (_) {
       if (!mounted) return;
@@ -2325,6 +2330,7 @@ class _HeroDemoGameState extends State<_HeroDemoGame> {
     _botTimer?.cancel();
     _bot.dispose();
     HighScoreService.setDemoMode(false);
+    exitArcadeDemo();
     super.dispose();
   }
 
