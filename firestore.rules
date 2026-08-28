@@ -399,6 +399,49 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Only an APPROVED member sees program pricing. `allow read: if isAuth()`
+    // would leak the discounted prices to every signed-up stranger, which is
+    // the benefit the program exists to give its members.
+    function isApoyoMember() {
+      return isAuth() &&
+        exists(/databases/$(database)/documents/apoyo_members/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/apoyo_members/$(request.auth.uid))
+          .data.status == 'aprobado';
+    }
+
+    match /apoyo_catalog/{itemId} {
+      allow read:  if isApoyoMember();
+      allow write: if false;   // admin via the catch-all
+    }
+
+    match /apoyo_cycles/{cycleId} {
+      allow read:  if isApoyoMember();
+      allow write: if false;
+
+      // The frozen price list and the remaining-quantity counters are what a
+      // member's catalog screen reads.
+      match /catalog_snapshot/{itemId} {
+        allow read:  if isApoyoMember();
+        allow write: if false;
+      }
+      match /commitments/{itemId} {
+        allow read:  if isApoyoMember();
+        allow write: if false;
+      }
+      // The shopping list carries COST per product. That is the owner's
+      // buying position and must never reach a member.
+      match /lines/{lineId} {
+        allow read, write: if false;
+      }
+    }
+
+    // The doc id is `{cycleId}_{uid}`, so ownership is checked on the field.
+    // A client listing orders must filter by uid or the query is denied.
+    match /apoyo_orders/{orderId} {
+      allow read:  if isAuth() && resource.data.uid == request.auth.uid;
+      allow write: if false;   // placeApoyoOrder / cancelApoyoOrder only
+    }
+
     match /{document=**} {
       allow read, write: if isAdmin();
     }
