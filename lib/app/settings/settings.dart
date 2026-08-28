@@ -11,6 +11,7 @@ import '../../auth/login_page.dart';
 import '../../components/bottom_fade.dart';
 import '../../components/custom_loader.dart';
 import '../../constants/app_images.dart';
+import '../apoyo/apoyo_common.dart';
 import 'addresses_section.dart';
 import 'rewards.dart';
 import 'create_new_card.dart';
@@ -25,6 +26,16 @@ class SettingsPage extends StatefulWidget {
 
 class _SettingsPageState extends State<SettingsPage> {
   int _currentIndex = 0;
+
+  /// Where the addresses tab returns to. Apoyo Social sends the user there to
+  /// add a domicilio; sending them back to the settings home would lose the
+  /// registration they were in the middle of.
+  int _addressesReturnIndex = 0;
+
+  /// Lets the Android back button reach ApoyoSection's own back step (the
+  /// re-apply form → status screen) before this page leaves the section.
+  /// Same GlobalKey+handleBack pattern MainMenuScreen uses for Home/Cart.
+  final GlobalKey<ApoyoSectionState> _apoyoKey = GlobalKey<ApoyoSectionState>();
 
   late TextEditingController _emailController;
   late TextEditingController _phoneNumberController;
@@ -59,6 +70,7 @@ class _SettingsPageState extends State<SettingsPage> {
   void _navigateToSettings() {
     setState(() {
       _currentIndex = 0;
+      _addressesReturnIndex = 0;
     });
   }
 
@@ -295,7 +307,13 @@ class _SettingsPageState extends State<SettingsPage> {
   List<Widget> _buildPages() {
     return [
       _buildSettingsContent(),
-      AddressesSection(onBack: _navigateToSettings),
+      AddressesSection(onBack: () {
+        final back = _addressesReturnIndex;
+        setState(() {
+          _currentIndex = back;
+          _addressesReturnIndex = 0;
+        });
+      }),
       RewardsCardPage(
         onBack: _navigateToSettings,
         onCreateCard: () => setState(() => _currentIndex = 3),
@@ -305,6 +323,16 @@ class _SettingsPageState extends State<SettingsPage> {
       // their new monedero immediately after creating it.
       CreateNewCard(onBack: () => setState(() => _currentIndex = 2)),
       CouponsSection(onBack: _navigateToSettings),
+      // Apoyo Social. A member without a saved address can't apply, so the
+      // section jumps straight to the addresses tab instead of dead-ending.
+      ApoyoSection(
+        key: _apoyoKey,
+        onBack: _navigateToSettings,
+        onAddAddress: () => setState(() {
+          _addressesReturnIndex = 5;
+          _currentIndex = 1;
+        }),
+      ),
     ];
   }
 
@@ -375,6 +403,12 @@ class _SettingsPageState extends State<SettingsPage> {
       canPop: _currentIndex == 0,
       onPopInvokedWithResult: (didPop, result) {
         if (didPop) return;
+        // Apoyo Social has an internal back step (re-apply form → status).
+        // Give it the press before we leave the section entirely.
+        if (_currentIndex == 5 &&
+            (_apoyoKey.currentState?.handleBack() ?? false)) {
+          return;
+        }
         if (_currentIndex != 0) {
           _navigateToSettings();
         }
@@ -473,10 +507,12 @@ class _SettingsPageState extends State<SettingsPage> {
               cardColor: cardColor,
               onTap: () {
                 setState(() {
+                  _addressesReturnIndex = 0;
                   _currentIndex = 1;
                 });
               },
             ),
+            _buildApoyoEntry(cardColor),
           ],
                 ),
               ),
@@ -829,6 +865,123 @@ class _SettingsPageState extends State<SettingsPage> {
         ),
       ),
     );
+  }
+
+  /// Entry point to the Apoyo Social membership (index 5).
+  ///
+  /// Hidden while the program is switched off in `settings/apoyo_social` AND
+  /// the user has no membership row — there's no point advertising a closed
+  /// door. An existing member always keeps the door to their own standing,
+  /// even after the owner pauses new sign-ups.
+  Widget _buildApoyoEntry(Color cardColor) {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return const SizedBox.shrink();
+
+    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+      stream:
+          FirebaseFirestore.instance.doc('settings/apoyo_social').snapshots(),
+      builder: (context, cfgSnap) {
+        final config = ApoyoConfig.fromMap(cfgSnap.data?.data());
+        return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+          stream:
+              FirebaseFirestore.instance.doc('apoyo_members/$uid').snapshots(),
+          builder: (context, memberSnap) {
+            final member = memberSnap.data?.data();
+            if (!config.enabled && member == null) {
+              return const SizedBox.shrink();
+            }
+
+            final status = (member?['status'] ?? '').toString();
+            final subtitle = member == null
+                ? 'Despensa de la semana a precio de apoyo. Conoce las reglas '
+                    'y regístrate.'
+                : _apoyoSubtitle(status);
+
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SizedBox(height: 22),
+                _sectionLabel('Comunidad'),
+                Card(
+                  color: cardColor,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                  elevation: 4,
+                  shadowColor: Colors.black26,
+                  clipBehavior: Clip.antiAlias,
+                  child: InkWell(
+                    onTap: () => setState(() => _currentIndex = 5),
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
+                      child: Row(
+                        children: [
+                          const ApoyoIconTile(
+                              icon: Icons.volunteer_activism_outlined),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    const Flexible(
+                                      child: Text(
+                                        'Apoyo Social',
+                                        style: TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w600,
+                                          color: Colors.black,
+                                        ),
+                                      ),
+                                    ),
+                                    if (member != null) ...[
+                                      const SizedBox(width: 8),
+                                      ApoyoStatusChip(status: status),
+                                    ],
+                                  ],
+                                ),
+                                const SizedBox(height: 3),
+                                Text(
+                                  subtitle,
+                                  style: TextStyle(
+                                    fontSize: 12.5,
+                                    height: 1.3,
+                                    color: Colors.grey[600],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const Icon(Icons.chevron_right,
+                              color: Colors.black38),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  String _apoyoSubtitle(String status) {
+    switch (status) {
+      case 'pendiente':
+        return 'Tu solicitud está en revisión. Te avisamos por notificación.';
+      case 'aprobado':
+        return 'Ya eres parte del programa. Consulta las reglas de tu ciclo.';
+      case 'suspendido':
+        return 'Tu acceso está suspendido. Toca para ver los detalles.';
+      case 'rechazado':
+        return 'Tu solicitud no fue aceptada. Toca para ver los detalles.';
+      case 'baja':
+        return 'Tu acceso fue dado de baja. Toca para ver los detalles.';
+      default:
+        return 'Consulta el estado de tu membresía.';
+    }
   }
 
   Widget _sectionLabel(String text) {
