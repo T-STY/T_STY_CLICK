@@ -380,6 +380,25 @@ service cloud.firestore {
     // collections under a parent-document path that the catch-all
     // cannot match (e.g. `system/_audit/push_log/{id}`) and grant
     // admin write nowhere in this file.
+    // ─── APOYO SOCIAL ─────────────────────────────────────────
+    // Membership is written ONLY by Cloud Functions (admin SDK, which
+    // bypasses these rules). The client may read its own row so the status
+    // screen can stream it, and nothing else. Every gate that matters —
+    // approval, strikes, blocked households — is re-checked server-side
+    // inside the callable, so a tampered client cannot buy itself in.
+    //
+    // Admins reach both collections through the catch-all below.
+    match /apoyo_members/{uid} {
+      allow read:  if isOwner(uid);
+      allow write: if false;
+    }
+
+    // Blocked households and phones. A member must never be able to read the
+    // block list (it names other people's addresses) nor clear their own ban.
+    match /apoyo_blocked/{key} {
+      allow read, write: if false;
+    }
+
     match /{document=**} {
       allow read, write: if isAdmin();
     }
