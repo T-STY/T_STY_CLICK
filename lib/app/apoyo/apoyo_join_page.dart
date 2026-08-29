@@ -8,17 +8,6 @@ import '../../utils/phone_format.dart';
 import '../settings/addresses_section.dart';
 import 'apoyo_common.dart';
 
-/// Callable failures whose `message` is an SDK string, not member-facing copy.
-/// Mirrors `_retryableCodes` in `utils/callable_retry.dart`; `unknown` and
-/// `cancelled` are added because they surface the same way.
-const _kTransportCodes = <String>{
-  'unavailable',
-  'deadline-exceeded',
-  'internal',
-  'unknown',
-  'cancelled',
-};
-
 /// ── APOYO SOCIAL — join ─────────────────────────────────────────────────────
 ///
 /// This screen is the ONLY place a neighbour learns the rules of the program,
@@ -211,24 +200,19 @@ class _ApoyoJoinPageState extends State<ApoyoJoinPage> {
       if (!mounted) return;
       widget.onSubmitted?.call();
     } on FirebaseFunctionsException catch (e) {
-      // Every reject path returns a finished sentence written for the member
-      // (household blocked, phone blocked, already applied, re-apply too
-      // soon…). Showing it verbatim is the whole point — a generic "Error"
-      // would leave them retrying forever.
-      //
-      // The exception: transport/crash codes carry the SDK's own English
-      // string ("INTERNAL", "UNAVAILABLE", "DEADLINE_EXCEEDED"), never a
-      // sentence anyone wrote for a member. Those get the Spanish fallback.
+      // Rejections come back as finished Spanish sentences written for the
+      // member (household blocked, phone blocked, already applied, re-apply
+      // too soon…); `apoyoCallableMessage` renders those verbatim and swaps
+      // only the SDK's English transport strings for the fallback.
       if (!mounted) return;
-      final authored = !_kTransportCodes.contains(e.code) &&
-          (e.message ?? '').trim().isNotEmpty;
       await apoyoAlert(
         context,
         title: 'No pudimos registrarte',
-        message: authored
-            ? e.message!
-            : 'No se pudo enviar tu solicitud. Revisa tu conexión e '
-                'intenta de nuevo.',
+        message: apoyoCallableMessage(
+          e,
+          'No se pudo enviar tu solicitud. Revisa tu conexión e intenta de '
+          'nuevo.',
+        ),
       );
     } catch (_) {
       if (!mounted) return;

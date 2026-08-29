@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
@@ -127,6 +128,33 @@ PreferredSizeWidget apoyoAppBar(BuildContext context, {VoidCallback? onBack}) {
       ),
     ),
   );
+}
+
+/// Callable failures whose `message` is an SDK string, not member-facing copy.
+/// Mirrors `_retryableCodes` in `utils/callable_retry.dart`; `unknown` and
+/// `cancelled` are added because they surface the same way.
+const Set<String> kApoyoTransportCodes = <String>{
+  'unavailable',
+  'deadline-exceeded',
+  'internal',
+  'unknown',
+  'cancelled',
+};
+
+/// The message to show for a failed Apoyo callable.
+///
+/// Every reject path in the Apoyo functions returns a finished sentence
+/// written for the member (household blocked, order past the cutoff, a total
+/// that moved, a cap reached…). Showing it verbatim is the whole point — a
+/// generic "Error" would leave them retrying forever.
+///
+/// The exception: transport/crash codes carry the SDK's own English string
+/// ("INTERNAL", "UNAVAILABLE", "DEADLINE_EXCEEDED"), never a sentence anyone
+/// wrote for a member. Those get [fallback], in Spanish.
+String apoyoCallableMessage(FirebaseFunctionsException e, String fallback) {
+  final authored = !kApoyoTransportCodes.contains(e.code) &&
+      (e.message ?? '').trim().isNotEmpty;
+  return authored ? e.message! : fallback;
 }
 
 Future<void> apoyoAlert(

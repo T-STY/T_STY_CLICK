@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../../components/bottom_fade.dart';
 import '../../utils/phone_format.dart';
 import 'apoyo_common.dart';
+import 'apoyo_order_section.dart';
 
 /// ── APOYO SOCIAL — status ───────────────────────────────────────────────────
 ///
@@ -12,8 +13,9 @@ import 'apoyo_common.dart';
 /// joined weeks ago should be able to re-read how the cycle works without
 /// hunting for the sign-up flow they can no longer reach.
 ///
-/// The catalog is P2 — this screen only shows the placeholder that says when
-/// it opens.
+/// The week itself — the open cycle, the member's order for it, and the way
+/// in and out while it is open — lives in [ApoyoOrderSection], which is the
+/// only part of this screen with listeners of its own.
 class ApoyoStatusPage extends StatelessWidget {
   final ApoyoConfig config;
   final Map<String, dynamic> member;
@@ -180,7 +182,7 @@ class ApoyoStatusPage extends StatelessWidget {
           _limitCard(),
           const SizedBox(height: 22),
           apoyoSectionLabel('Tu pedido'),
-          _catalogPlaceholder(),
+          ApoyoOrderSection(config: config, member: member),
           const SizedBox(height: 22),
           apoyoSectionLabel('El programa'),
           ApoyoRulesCard(config: config),
@@ -425,63 +427,6 @@ class ApoyoStatusPage extends StatelessWidget {
               iconColor: kApoyoAmber,
               strong: true,
             ),
-        ],
-      ),
-    );
-  }
-
-  /// P2 builds the real catalog. This only tells an approved member when the
-  /// list opens, so an empty screen never reads as "the app is broken".
-  Widget _catalogPlaceholder() {
-    return ApoyoCard(
-      padding: const EdgeInsets.fromLTRB(16, 20, 16, 20),
-      child: Column(
-        children: [
-          Container(
-            width: 54,
-            height: 54,
-            decoration: BoxDecoration(
-              color: Colors.grey[100],
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.grey.shade300),
-            ),
-            child: Icon(Icons.shopping_basket_outlined,
-                size: 26, color: Colors.grey[500]),
-          ),
-          const SizedBox(height: 12),
-          const Text(
-            'El catálogo abre el sábado',
-            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            'Aquí verás la lista de esta semana con sus precios. Puedes pedir '
-            'de sábado a martes; el pedido cierra el martes a las 11:59 PM y '
-            'lo recibes el viernes.',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 12.5,
-              height: 1.35,
-              color: Colors.grey[600],
-            ),
-          ),
-          const SizedBox(height: 12),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-            decoration: BoxDecoration(
-              color: Colors.grey[100],
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Text(
-              'PRÓXIMAMENTE',
-              style: TextStyle(
-                fontSize: 10.5,
-                letterSpacing: 0.9,
-                fontWeight: FontWeight.w800,
-                color: Colors.grey[600],
-              ),
-            ),
-          ),
         ],
       ),
     );

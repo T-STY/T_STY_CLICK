@@ -13,6 +13,7 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'app/apoyo/apoyo_cart_provider.dart';
 import 'app/cart/cart_provider.dart';
 import 'app/main.dart';
 import 'components/custom_loader.dart';
@@ -80,6 +81,10 @@ Future<void> main() async {
           AppTheme(context).darkTheme,
         )),
         ChangeNotifierProvider(create: (_) => CartProvider()),
+        // Apoyo Social keeps its own selection: ids and quantities for one
+        // weekly cycle, never prices, and never mixed into the store cart the
+        // user may already have waiting for a normal delivery.
+        ChangeNotifierProvider(create: (_) => ApoyoCartProvider()),
       ],
       child: const NetworkAwareApp(),
     ),
