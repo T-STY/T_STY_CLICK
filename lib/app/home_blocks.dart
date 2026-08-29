@@ -24,11 +24,17 @@ void dispatchHomeAction(
   Map<String, dynamic>? action, {
   ProductTargetTap? onProductTarget,
   void Function(String comboId)? onCombo,
+  void Function()? onApoyo,
   String? imageUrl,
 }) {
   final a = action ?? const <String, dynamic>{};
   final type = (a['type'] as String?) ?? 'none';
   switch (type) {
+    case 'apoyo':
+      // Opens inside the Home shell, like combos do, so the bottom bar stays
+      // put and Back returns to the carousel instead of unwinding the tab.
+      onApoyo?.call();
+      return;
     case 'url':
       final url = a['url'] as String?;
       if (url != null && url.isNotEmpty) {
@@ -88,12 +94,14 @@ class HeroBanner extends StatelessWidget {
   final Map<String, dynamic> data;
   final ProductTargetTap? onProductTarget;
   final void Function(String comboId)? onCombo;
+  final void Function()? onApoyo;
 
   const HeroBanner({
     super.key,
     required this.data,
     this.onProductTarget,
     this.onCombo,
+    this.onApoyo,
   });
 
   @override
@@ -113,6 +121,7 @@ class HeroBanner extends StatelessWidget {
             ? () => dispatchHomeAction(context, action,
                 onProductTarget: onProductTarget,
                 onCombo: onCombo,
+                onApoyo: onApoyo,
                 imageUrl: image.isNotEmpty ? image : null)
             : null,
         child: ClipRRect(

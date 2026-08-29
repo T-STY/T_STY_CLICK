@@ -1008,6 +1008,7 @@ class HomeState extends State<Home>
           title: title,
           onProductTarget: _openProductDisplay,
           onCombo: _openCombo,
+          onApoyo: _openApoyo,
           adIds: (data['adIds'] as List?)?.cast<String>(),
         );
       case 'hero_banner':
@@ -1016,6 +1017,7 @@ class HomeState extends State<Home>
           data: data,
           onProductTarget: _openProductDisplay,
           onCombo: _openCombo,
+          onApoyo: _openApoyo,
         );
       case 'spotlight':
         return SpotlightBlock(key: key, data: data);

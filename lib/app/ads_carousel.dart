@@ -14,6 +14,10 @@ class AdsCarousel extends StatefulWidget {
 
   final void Function(String comboId)? onCombo;
 
+  /// Opens Apoyo Social inside the Home shell. Lets a banner be the way in,
+  /// configured from the admin panel like any other ad action.
+  final void Function()? onApoyo;
+
   final List<String>? adIds;
 
   const AdsCarousel({
@@ -22,6 +26,7 @@ class AdsCarousel extends StatefulWidget {
     this.title,
     this.onProductTarget,
     this.onCombo,
+    this.onApoyo,
     this.adIds,
   });
 
@@ -247,6 +252,7 @@ class _AdsCarouselState extends State<AdsCarousel> {
       data['action'] as Map<String, dynamic>?,
       onProductTarget: widget.onProductTarget,
       onCombo: widget.onCombo,
+      onApoyo: widget.onApoyo,
       imageUrl: (image != null && image.isNotEmpty) ? image : null,
     );
   }
