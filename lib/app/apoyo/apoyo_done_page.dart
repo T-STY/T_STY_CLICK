@@ -97,7 +97,7 @@ class ApoyoDonePage extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: isDarkMode ? Colors.grey[900] : Colors.white,
-      appBar: apoyoAppBar(context),
+      appBar: apoyoAppBar(context, title: 'Pedido apartado'),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
         children: [

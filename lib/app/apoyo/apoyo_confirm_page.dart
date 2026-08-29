@@ -283,7 +283,9 @@ class _ApoyoConfirmPageState extends State<ApoyoConfirmPage> {
     return Scaffold(
       backgroundColor: isDarkMode ? Colors.grey[900] : Colors.white,
       resizeToAvoidBottomInset: true,
-      appBar: apoyoAppBar(context, onBack: () => Navigator.of(context).pop()),
+      appBar: apoyoAppBar(context,
+          onBack: () => Navigator.of(context).pop(),
+          title: 'Confirmar pedido'),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
         children: [

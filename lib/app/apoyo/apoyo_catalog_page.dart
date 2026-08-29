@@ -345,7 +345,9 @@ class _ApoyoCatalogPageState extends State<ApoyoCatalogPage> {
 
     return Scaffold(
       backgroundColor: isDarkMode ? Colors.grey[900] : Colors.white,
-      appBar: apoyoAppBar(context, onBack: () => Navigator.of(context).pop()),
+      appBar: apoyoAppBar(context,
+          onBack: () => Navigator.of(context).pop(),
+          title: 'Despensa de la semana'),
       body: _loadingItems
           ? const Center(
               child: SizedBox(

@@ -3,7 +3,6 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
-import '../../constants/app_images.dart';
 import 'apoyo_join_page.dart';
 import 'apoyo_status_page.dart';
 
@@ -110,27 +109,40 @@ String apoyoDate(DateTime d) {
 
 /// Same logo bar every settings sub-screen uses. The back arrow is optional so
 /// these pages also work when pushed as a standalone route.
-PreferredSizeWidget apoyoAppBar(BuildContext context, {VoidCallback? onBack}) {
+/// App bar for the apoyo screens that are PUSHED as their own route
+/// (catálogo, confirmar, listo).
+///
+/// Screens hosted inside Home's shell must NOT use this: Home already draws
+/// the T_STY header, so adding another one rendered the logo twice with a
+/// stray arrow under it. Same rule combo_detail.dart follows — it only builds
+/// its own Scaffold when `onBack == null`, i.e. when it was pushed.
+PreferredSizeWidget apoyoAppBar(
+  BuildContext context, {
+  VoidCallback? onBack,
+  String title = 'Apoyo Social',
+}) {
   final isDarkMode = Theme.of(context).brightness == Brightness.dark;
   return AppBar(
     backgroundColor: isDarkMode ? Colors.grey[900] : Colors.white,
     elevation: 0,
     scrolledUnderElevation: 0,
-    centerTitle: true,
+    centerTitle: false,
     automaticallyImplyLeading: false,
     leading: onBack == null
         ? null
         : IconButton(
-            icon: const Icon(Icons.arrow_back, color: Colors.black),
+            icon: Icon(Icons.arrow_back,
+                color: isDarkMode ? Colors.white : Colors.black),
             onPressed: onBack,
             tooltip: 'Volver',
           ),
-    title: SizedBox(
-      height: 150,
-      width: 250,
-      child: Image.asset(
-        isDarkMode ? AppImages.logowhite : AppImages.logo,
-        fit: BoxFit.contain,
+    title: Text(
+      title,
+      style: TextStyle(
+        fontSize: 17,
+        fontWeight: FontWeight.w700,
+        letterSpacing: -0.2,
+        color: isDarkMode ? Colors.white : kApoyoInk,
       ),
     ),
   );
@@ -662,7 +674,6 @@ class ApoyoSectionState extends State<ApoyoSection> {
     if (uid == null) {
       return Scaffold(
         backgroundColor: Colors.white,
-        appBar: apoyoAppBar(context, onBack: widget.onBack),
         body: Center(
           child: Padding(
             padding: const EdgeInsets.all(24),
@@ -688,10 +699,9 @@ class ApoyoSectionState extends State<ApoyoSection> {
           builder: (context, memberSnap) {
             if (memberSnap.connectionState == ConnectionState.waiting &&
                 !memberSnap.hasData) {
-              return Scaffold(
+              return const Scaffold(
                 backgroundColor: Colors.white,
-                appBar: apoyoAppBar(context, onBack: widget.onBack),
-                body: const SizedBox.shrink(),
+                        body: SizedBox.shrink(),
               );
             }
 

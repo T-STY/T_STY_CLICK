@@ -57,7 +57,6 @@ class ApoyoStatusPage extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: isDarkMode ? Colors.grey[900] : Colors.white,
-      appBar: apoyoAppBar(context, onBack: onBack),
       body: BottomFade(
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 150),

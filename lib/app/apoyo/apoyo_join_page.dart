@@ -234,7 +234,6 @@ class _ApoyoJoinPageState extends State<ApoyoJoinPage> {
     return Scaffold(
       backgroundColor: isDarkMode ? Colors.grey[900] : Colors.white,
       resizeToAvoidBottomInset: true,
-      appBar: apoyoAppBar(context, onBack: widget.onBack),
       body: BottomFade(
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 150),
