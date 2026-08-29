@@ -346,18 +346,18 @@ class _ApoyoOrderSectionState extends State<ApoyoOrderSection> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
+          const Row(
             children: [
-              const Icon(Icons.event_busy_outlined,
+              Icon(Icons.event_busy_outlined,
                   size: 20, color: kApoyoAmber),
-              const SizedBox(width: 8),
+              SizedBox(width: 8),
               Expanded(
                 child: Text(
                   'Esta semana ya cerró',
                   style: TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w800,
-                    color: Colors.brown.shade900,
+                    color: kApoyoInk,
                   ),
                 ),
               ),
@@ -367,8 +367,8 @@ class _ApoyoOrderSectionState extends State<ApoyoOrderSection> {
           Text(
             'No hiciste pedido para ${cycle.elDeliveryLabel}. La próxima '
             'lista abre el sábado y se entrega el viernes siguiente.',
-            style: TextStyle(
-                fontSize: 13, height: 1.4, color: Colors.brown.shade900),
+            style: const TextStyle(
+                fontSize: 13, height: 1.4, color: kApoyoInk),
           ),
         ],
       ),
@@ -449,13 +449,13 @@ class _ApoyoOrderSectionState extends State<ApoyoOrderSection> {
             ),
             child: Row(
               children: [
-                Expanded(
+                const Expanded(
                   child: Text(
                     'Ten en efectivo',
                     style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w700,
-                      color: Colors.green.shade900,
+                      color: kApoyoInk,
                     ),
                   ),
                 ),
@@ -560,10 +560,10 @@ class _ApoyoOrderSectionState extends State<ApoyoOrderSection> {
                   Expanded(
                     child: Text(
                       _lockedReason,
-                      style: TextStyle(
+                      style: const TextStyle(
                         fontSize: 12.5,
                         height: 1.35,
-                        color: Colors.brown.shade900,
+                        color: kApoyoInk,
                       ),
                     ),
                   ),

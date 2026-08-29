@@ -131,23 +131,23 @@ class ApoyoDonePage extends StatelessWidget {
                 Text(
                   _headline,
                   textAlign: TextAlign.center,
-                  style: TextStyle(
+                  style: const TextStyle(
                     fontSize: 15,
                     height: 1.4,
                     fontWeight: FontWeight.w600,
-                    color: Colors.green.shade900,
+                    color: kApoyoInk,
                   ),
                 ),
                 if (receipt.edited) ...[
                   const SizedBox(height: 10),
-                  Text(
+                  const Text(
                     'Actualizamos tu pedido anterior — es el mismo folio, no '
                     'un pedido nuevo.',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 12.5,
                       height: 1.35,
-                      color: Colors.green.shade900,
+                      color: kApoyoInk,
                     ),
                   ),
                 ],

@@ -463,11 +463,11 @@ class _ApoyoConfirmPageState extends State<ApoyoConfirmPage> {
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(color: kApoyoAmberLine),
               ),
-              child: Row(
+              child: const Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Icon(Icons.info_outline, size: 18, color: kApoyoAmber),
-                  const SizedBox(width: 8),
+                  Icon(Icons.info_outline, size: 18, color: kApoyoAmber),
+                  SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       'Tu membresía no tiene una dirección registrada, así '
@@ -476,7 +476,7 @@ class _ApoyoConfirmPageState extends State<ApoyoConfirmPage> {
                       style: TextStyle(
                         fontSize: 12.5,
                         height: 1.35,
-                        color: Colors.brown.shade900,
+                        color: kApoyoInk,
                       ),
                     ),
                   ),
@@ -508,10 +508,10 @@ class _ApoyoConfirmPageState extends State<ApoyoConfirmPage> {
                           : 'Tu membresía está marcada como sólo para recoger '
                               'en la tienda. Si crees que es un error, habla '
                               'con la tienda.',
-                      style: TextStyle(
+                      style: const TextStyle(
                         fontSize: 12.5,
                         height: 1.35,
-                        color: Colors.brown.shade900,
+                        color: kApoyoInk,
                       ),
                     ),
                   ),
@@ -779,8 +779,8 @@ class _ApoyoConfirmPageState extends State<ApoyoConfirmPage> {
           Text(
             'La comida se compra el miércoles con tu pedido adentro. Si no la '
             '$verb, se pierde — por eso esta casilla.',
-            style: TextStyle(
-                fontSize: 12.5, height: 1.35, color: Colors.brown.shade900),
+            style: const TextStyle(
+                fontSize: 12.5, height: 1.35, color: kApoyoInk),
           ),
           const SizedBox(height: 10),
           InkWell(

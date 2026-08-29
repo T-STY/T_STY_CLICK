@@ -456,8 +456,8 @@ class _ApoyoCatalogPageState extends State<ApoyoCatalogPage> {
                             fontSize: 13.5,
                             fontWeight: FontWeight.w800,
                             color: open
-                                ? Colors.green.shade900
-                                : Colors.brown.shade900,
+                                ? kApoyoInk
+                                : kApoyoInk,
                           ),
                         ),
                         if (cycle?.closesAt != null) ...[
@@ -469,8 +469,8 @@ class _ApoyoCatalogPageState extends State<ApoyoCatalogPage> {
                               fontSize: 12,
                               height: 1.3,
                               color: open
-                                  ? Colors.green.shade900
-                                  : Colors.brown.shade900,
+                                  ? kApoyoInk
+                                  : kApoyoInk,
                             ),
                           ),
                         ],
@@ -518,10 +518,10 @@ class _ApoyoCatalogPageState extends State<ApoyoCatalogPage> {
               'Ya tienes el pedido ${order.folio} por '
               '${apoyoMoney(order.total)}. Si confirmas otra vez, reemplazas '
               'ese pedido con lo que elijas aquí — no se suma.',
-              style: TextStyle(
+              style: const TextStyle(
                 fontSize: 12.5,
                 height: 1.35,
-                color: Colors.brown.shade900,
+                color: kApoyoInk,
               ),
             ),
           ),

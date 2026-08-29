@@ -298,12 +298,12 @@ class _ApoyoJoinPageState extends State<ApoyoJoinPage> {
               borderRadius: BorderRadius.circular(12),
               border: Border.all(color: kApoyoGreenLine),
             ),
-            child: Row(
+            child: const Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Icon(Icons.how_to_reg_outlined,
+                Icon(Icons.how_to_reg_outlined,
                     size: 18, color: kApoyoGreen),
-                const SizedBox(width: 8),
+                SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     'Lee todo antes de registrarte. La tienda revisa cada '
@@ -311,7 +311,7 @@ class _ApoyoJoinPageState extends State<ApoyoJoinPage> {
                     style: TextStyle(
                       fontSize: 12.5,
                       height: 1.35,
-                      color: Colors.green.shade900,
+                      color: kApoyoInk,
                     ),
                   ),
                 ),
@@ -333,16 +333,16 @@ class _ApoyoJoinPageState extends State<ApoyoJoinPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
+          const Row(
             children: [
-              const Icon(Icons.history, size: 18, color: kApoyoAmber),
-              const SizedBox(width: 8),
+              Icon(Icons.history, size: 18, color: kApoyoAmber),
+              SizedBox(width: 8),
               Text(
                 'Solicitud anterior',
                 style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w800,
-                  color: Colors.brown.shade900,
+                  color: kApoyoInk,
                 ),
               ),
             ],
@@ -353,10 +353,10 @@ class _ApoyoJoinPageState extends State<ApoyoJoinPage> {
                 ? 'Tu solicitud anterior no fue aceptada. Puedes volver a '
                     'intentarlo con tus datos actualizados.'
                 : 'Motivo de la vez anterior: $reason',
-            style: TextStyle(
+            style: const TextStyle(
               fontSize: 12.5,
               height: 1.35,
-              color: Colors.brown.shade900,
+              color: kApoyoInk,
             ),
           ),
         ],
@@ -659,7 +659,7 @@ class _ApoyoJoinPageState extends State<ApoyoJoinPage> {
                           style: TextStyle(
                             fontSize: 12,
                             height: 1.3,
-                            color: Colors.brown.shade700,
+                            color: Colors.grey.shade700,
                           ),
                         ),
                         const SizedBox(height: 4),

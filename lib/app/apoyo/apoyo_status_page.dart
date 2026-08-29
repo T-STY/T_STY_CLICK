@@ -356,18 +356,18 @@ class ApoyoStatusPage extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
+          const Row(
             children: [
-              const Icon(Icons.looks_one_outlined,
+              Icon(Icons.looks_one_outlined,
                   size: 20, color: kApoyoAmber),
-              const SizedBox(width: 8),
+              SizedBox(width: 8),
               Expanded(
                 child: Text(
                   'Tu primer pedido',
                   style: TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w800,
-                    color: Colors.brown.shade900,
+                    color: kApoyoInk,
                   ),
                 ),
               ),
@@ -383,10 +383,10 @@ class ApoyoStatusPage extends StatelessWidget {
                     'domicilio por ${apoyoMoney(config.deliveryFee)}.'
                 : 'El primero es de máximo '
                     '${apoyoMoney(config.firstOrderMaxTotal)}.',
-            style: TextStyle(
+            style: const TextStyle(
               fontSize: 13,
               height: 1.4,
-              color: Colors.brown.shade900,
+              color: kApoyoInk,
             ),
           ),
         ],

@@ -18,13 +18,19 @@ import 'apoyo_status_page.dart';
 /// inline text inside the card it belongs to.
 
 // Palette — pulled from the styles already used across settings/rewards.
+// The app is black, white and grey. Everything else was drift.
+//
+// These names are kept so the call sites don't churn, but they no longer
+// carry a hue: "green" is ink, "amber" is a mid grey. Red survives alone,
+// because the rest of the app already uses red for real errors and nothing
+// else — and only for errors, never for emphasis.
 const Color kApoyoInk = Color(0xFF1A1A1A);
-const Color kApoyoGreen = Color(0xFF2E7D32);
-const Color kApoyoGreenTint = Color(0xFFE8F3EA);
-const Color kApoyoGreenLine = Color(0xFFBFDCC5);
-const Color kApoyoAmber = Color(0xFFB26A00);
-const Color kApoyoAmberTint = Color(0xFFFFF6E5);
-const Color kApoyoAmberLine = Color(0xFFF0DCB0);
+const Color kApoyoGreen = kApoyoInk;
+const Color kApoyoGreenTint = Color(0xFFF4F4F4);
+const Color kApoyoGreenLine = Color(0xFFE4E4E4);
+const Color kApoyoAmber = Color(0xFF5A5A5A);
+const Color kApoyoAmberTint = Color(0xFFF7F7F7);
+const Color kApoyoAmberLine = Color(0xFFE4E4E4);
 const Color kApoyoRed = Color(0xFFC62828);
 const Color kApoyoRedTint = Color(0xFFFDECEC);
 const Color kApoyoRedLine = Color(0xFFF2C7C7);
@@ -310,58 +316,90 @@ Widget apoyoRule(
   );
 }
 
-/// The program, in full. Shown on the join screen AND kept on the status
-/// screen — a member should never have to remember a rule from a screen they
-/// saw once.
-class ApoyoRulesCard extends StatelessWidget {
-  final ApoyoConfig config;
-  const ApoyoRulesCard({super.key, required this.config});
+/// Collapsed by default. A tappable header with a chevron; the body animates
+/// open. Used so the join screen is a form with reference material attached,
+/// not a wall of prose the member has to scroll past to reach the button.
+class ApoyoDisclosure extends StatefulWidget {
+  final String title;
+  final String? trailing;
+  final Widget child;
+  final bool initiallyOpen;
+
+  const ApoyoDisclosure({
+    super.key,
+    required this.title,
+    required this.child,
+    this.trailing,
+    this.initiallyOpen = false,
+  });
+
+  @override
+  State<ApoyoDisclosure> createState() => _ApoyoDisclosureState();
+}
+
+class _ApoyoDisclosureState extends State<ApoyoDisclosure> {
+  late bool _open = widget.initiallyOpen;
 
   @override
   Widget build(BuildContext context) {
     return ApoyoCard(
+      padding: EdgeInsets.zero,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          apoyoCardTitle('Cómo funciona'),
-          const SizedBox(height: 12),
-          apoyoRule(
-            Icons.calendar_month_outlined,
-            'Pides de sábado a martes. El pedido cierra el martes a las '
-            '11:59 PM.',
+          Material(
+            color: Colors.transparent,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(16),
+              onTap: () => setState(() => _open = !_open),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 15, 14, 15),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        widget.title,
+                        style: const TextStyle(
+                          fontSize: 14.5,
+                          fontWeight: FontWeight.w700,
+                          color: kApoyoInk,
+                          letterSpacing: -0.1,
+                        ),
+                      ),
+                    ),
+                    if (widget.trailing != null && !_open)
+                      Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: Text(
+                          widget.trailing!,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey.shade500,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    AnimatedRotation(
+                      turns: _open ? 0.5 : 0,
+                      duration: const Duration(milliseconds: 160),
+                      child: Icon(Icons.keyboard_arrow_down_rounded,
+                          size: 22, color: Colors.grey.shade500),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ),
-          apoyoRule(
-            Icons.local_shipping_outlined,
-            'Te lo llevamos el viernes después de las 3:00 PM por '
-            '${apoyoMoney(config.deliveryFee)} de entrega.',
-          ),
-          apoyoRule(
-            Icons.storefront_outlined,
-            'O lo recoges gratis en la tienda el viernes de 4:00 a 7:00 PM.',
-          ),
-          apoyoRule(
-            Icons.payments_outlined,
-            'Pagas en EFECTIVO al recibir. No te cobramos nada por adelantado.',
-            strong: true,
-          ),
-          apoyoRule(
-            Icons.report_gmailerrorred_outlined,
-            'El monto debe ir COMPLETO. Si falta dinero, no se entrega.',
-            iconColor: kApoyoAmber,
-            strong: true,
-          ),
-          apoyoRule(
-            Icons.home_outlined,
-            'Una membresía por domicilio.',
-          ),
-          apoyoRule(
-            Icons.looks_one_outlined,
-            config.firstOrderPickupOnly
-                ? 'Tu primer pedido: máximo '
-                    '${apoyoMoney(config.firstOrderMaxTotal)} y sólo para '
-                    'recoger en la tienda.'
-                : 'Tu primer pedido: máximo '
-                    '${apoyoMoney(config.firstOrderMaxTotal)}.',
+          AnimatedCrossFade(
+            firstChild: const SizedBox(width: double.infinity, height: 0),
+            secondChild: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              child: widget.child,
+            ),
+            crossFadeState:
+                _open ? CrossFadeState.showSecond : CrossFadeState.showFirst,
+            duration: const Duration(milliseconds: 160),
+            sizeCurve: Curves.easeOutCubic,
           ),
         ],
       ),
@@ -369,77 +407,138 @@ class ApoyoRulesCard extends StatelessWidget {
   }
 }
 
-/// The strikes ladder. Deliberately loud and deliberately shown BEFORE
-/// joining — a member must never discover this on the Friday they miss.
+/// One line of the program spec: a label and its value, like a receipt.
+/// Deliberately NOT an icon plus an explanatory sentence — that reads like a
+/// brochure, and the member already knows what a delivery is.
+Widget apoyoSpecRow(String label, String value, {bool strong = false}) {
+  return Padding(
+    padding: const EdgeInsets.only(bottom: 9),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: 96,
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 12.5,
+              height: 1.3,
+              color: Colors.grey.shade500,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ),
+        Expanded(
+          child: Text(
+            value,
+            style: TextStyle(
+              fontSize: 13,
+              height: 1.3,
+              color: strong ? kApoyoInk : Colors.grey.shade800,
+              fontWeight: strong ? FontWeight.w700 : FontWeight.w500,
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+/// The program as a spec sheet, collapsed by default.
+class ApoyoRulesCard extends StatelessWidget {
+  final ApoyoConfig config;
+  final bool initiallyOpen;
+  const ApoyoRulesCard({
+    super.key,
+    required this.config,
+    this.initiallyOpen = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ApoyoDisclosure(
+      title: 'Cómo funciona',
+      trailing: 'Cierra martes 11:59 PM',
+      initiallyOpen: initiallyOpen,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          apoyoSpecRow('Pides', 'Sábado a martes · cierra 11:59 PM'),
+          apoyoSpecRow('Entrega',
+              'Viernes desde 3:00 PM · ${apoyoMoney(config.deliveryFee)}'),
+          apoyoSpecRow('Recoger', 'Viernes 4:00 a 7:00 PM · gratis'),
+          apoyoSpecRow('Pago', 'Efectivo al recibir, monto completo',
+              strong: true),
+          apoyoSpecRow('Membresía', 'Una por domicilio'),
+          apoyoSpecRow(
+            'Primer pedido',
+            config.firstOrderPickupOnly
+                ? 'Hasta ${apoyoMoney(config.firstOrderMaxTotal)}, sólo en tienda'
+                : 'Hasta ${apoyoMoney(config.firstOrderMaxTotal)}',
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The strikes ladder. Still shown before joining — a member must not meet
+/// this for the first time on the Friday they miss — but stated once, plainly,
+/// instead of shouted in a coloured panel.
 class ApoyoStrikesCard extends StatelessWidget {
   final ApoyoConfig config;
   final int? currentStrikes;
+  final bool initiallyOpen;
 
   const ApoyoStrikesCard({
     super.key,
     required this.config,
     this.currentStrikes,
+    this.initiallyOpen = false,
   });
 
   @override
   Widget build(BuildContext context) {
     final strikes = currentStrikes ?? 0;
-    return ApoyoCard(
-      color: kApoyoAmberTint,
-      borderColor: kApoyoAmberLine,
+    return ApoyoDisclosure(
+      title: 'Si no recoges o no pagas',
+      trailing: strikes > 0 ? 'Llevas $strikes' : null,
+      initiallyOpen: initiallyOpen || strikes > 0,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              const Icon(Icons.gpp_maybe_outlined,
-                  size: 20, color: kApoyoAmber),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'Si no recoges o no pagas',
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w800,
-                    color: Colors.brown.shade900,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          _step('1 falta', 'Te damos un aviso.'),
-          _step('2 faltas', 'Suspensión de ${config.suspensionCycles} ciclos.'),
-          _step('${config.strikesToBan} faltas',
-              'Baja definitiva del domicilio.'),
-          const SizedBox(height: 4),
+          apoyoSpecRow('1 falta', 'Aviso'),
+          apoyoSpecRow(
+              '2 faltas', 'Suspensión de ${config.suspensionCycles} ciclos'),
+          apoyoSpecRow('3 faltas', 'Baja del domicilio', strong: true),
+          const SizedBox(height: 2),
           Text(
-            'La comida ya está comprada cuando llega el viernes. Por eso una '
-            'baja cierra el programa para todo el domicilio, no sólo para una '
-            'persona.',
+            'Tu despensa ya está comprada cuando llega el viernes.',
             style: TextStyle(
               fontSize: 12,
               height: 1.35,
-              color: Colors.brown.shade700,
+              color: Colors.grey.shade600,
+              fontWeight: FontWeight.w500,
             ),
           ),
           if (strikes > 0) ...[
-            const SizedBox(height: 12),
+            const SizedBox(height: 10),
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: kApoyoRedTint,
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: kApoyoAmberLine),
+                border: Border.all(color: kApoyoRedLine),
               ),
               child: Text(
                 strikes == 1
-                    ? 'Tienes 1 falta registrada.'
-                    : 'Tienes $strikes faltas registradas.',
+                    ? 'Llevas 1 falta.'
+                    : 'Llevas $strikes faltas.',
                 style: const TextStyle(
                   fontSize: 12.5,
-                  fontWeight: FontWeight.w800,
-                  color: kApoyoAmber,
+                  fontWeight: FontWeight.w700,
+                  color: kApoyoRed,
                 ),
               ),
             ),
@@ -448,50 +547,8 @@ class ApoyoStrikesCard extends StatelessWidget {
       ),
     );
   }
-
-  Widget _step(String label, String text) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: kApoyoAmberLine),
-            ),
-            child: Text(
-              label,
-              style: const TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w800,
-                color: kApoyoAmber,
-              ),
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.only(top: 3),
-              child: Text(
-                text,
-                style: TextStyle(
-                  fontSize: 12.5,
-                  height: 1.3,
-                  color: Colors.brown.shade900,
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 }
 
-/// Human label + colour for an `apoyo_members.status`.
 class ApoyoStatusStyle {
   final String label;
   final Color color;
@@ -666,6 +723,120 @@ class ApoyoSectionState extends State<ApoyoSection> {
               member: member,
               onBack: widget.onBack,
               onReapply: () => setState(() => _forceJoin = true),
+            );
+          },
+        );
+      },
+    );
+  }
+}
+
+/// The way into Apoyo Social, shown on HOME.
+///
+/// It lived in Ajustes and that was wrong: this is a way to shop, not a
+/// preference. It stays hidden while the program is switched off AND the user
+/// has no membership row — no point advertising a closed door — but a member
+/// always keeps the way to their own standing, even after sign-ups pause.
+class ApoyoHomeEntry extends StatelessWidget {
+  final VoidCallback onTap;
+  const ApoyoHomeEntry({super.key, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return const SizedBox.shrink();
+
+    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+      stream:
+          FirebaseFirestore.instance.doc('settings/apoyo_social').snapshots(),
+      builder: (context, cfgSnap) {
+        final config = ApoyoConfig.fromMap(cfgSnap.data?.data());
+        return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+          stream:
+              FirebaseFirestore.instance.doc('apoyo_members/$uid').snapshots(),
+          builder: (context, memberSnap) {
+            final member = memberSnap.data?.data();
+            if (!config.enabled && member == null) {
+              return const SizedBox.shrink();
+            }
+            final status = (member?['status'] ?? '').toString();
+            final String note;
+            switch (status) {
+              case 'aprobado':
+                note = 'Haz tu pedido de la semana';
+              case 'pendiente':
+                note = 'Tu solicitud está en revisión';
+              case 'suspendido':
+                note = 'Tu acceso está suspendido';
+              case 'baja':
+                note = 'Diste de baja el programa';
+              case 'rechazado':
+                note = 'Solicitud no aceptada';
+              default:
+                note = 'Despensa semanal a precio de apoyo';
+            }
+
+            return Padding(
+              padding: const EdgeInsets.fromLTRB(12, 4, 12, 14),
+              child: Material(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(14),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(14),
+                  onTap: onTap,
+                  child: Container(
+                    padding: const EdgeInsets.fromLTRB(14, 13, 10, 13),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: Colors.grey.shade200),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 38,
+                          height: 38,
+                          decoration: BoxDecoration(
+                            color: kApoyoInk,
+                            borderRadius: BorderRadius.circular(11),
+                          ),
+                          child: const Icon(Icons.volunteer_activism_outlined,
+                              color: Colors.white, size: 20),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Apoyo Social',
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w700,
+                                  color: kApoyoInk,
+                                  letterSpacing: -0.2,
+                                ),
+                              ),
+                              const SizedBox(height: 1),
+                              Text(
+                                note,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 12.5,
+                                  color: Colors.grey.shade600,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Icon(Icons.chevron_right_rounded,
+                            color: Colors.grey.shade400, size: 22),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
             );
           },
         );

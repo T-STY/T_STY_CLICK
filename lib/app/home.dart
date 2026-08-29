@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'apoyo/apoyo_common.dart';
+import 'settings/addresses_section.dart';
 import 'dart:io';
 import 'dart:ui';
 
@@ -95,6 +97,7 @@ class HomeState extends State<Home>
   String? _pdTitle;
   String? _pdImageUrl;
   bool _showComboDetail = false;
+  bool _showApoyo = false;
   String? _comboId;
   Map<String, dynamic> _selectedFilters = {};
   String? selectedRecipeId;
@@ -494,6 +497,7 @@ class HomeState extends State<Home>
       _showPromoDetail = false;
       _showProductDisplay = false;
       _showComboDetail = false;
+      _showApoyo = false;
     });
   }
 
@@ -501,11 +505,19 @@ class HomeState extends State<Home>
     if (_showRecipeDetail ||
         _showPromoDetail ||
         _showProductDisplay ||
-        _showComboDetail) {
+        _showComboDetail ||
+        _showApoyo) {
       _navigateBackToGrid();
       return true;
     }
     return false;
+  }
+
+  /// Apoyo Social lives HERE, not in Ajustes — it is a way to shop, not a
+  /// preference. Adding an address pushes the addresses editor as its own
+  /// route so the flow never has to hop to another tab and back.
+  void _openApoyo() {
+    setState(() => _showApoyo = true);
   }
 
   void _openCombo(String comboId) {
@@ -734,11 +746,13 @@ class HomeState extends State<Home>
           actions: [if (showGameIcon) _buildGameIcon(isDarkMode)],
         ),
         body: IndexedStack(
-          index: _showComboDetail
-              ? 4
-              : _showProductDisplay
-                  ? 3
-                  : (_showRecipeDetail ? 1 : (_showPromoDetail ? 2 : 0)),
+          index: _showApoyo
+              ? 5
+              : _showComboDetail
+                  ? 4
+                  : _showProductDisplay
+                      ? 3
+                      : (_showRecipeDetail ? 1 : (_showPromoDetail ? 2 : 0)),
           children: [
             Column(
           children: [
@@ -863,6 +877,25 @@ class HomeState extends State<Home>
                     onBack: _navigateBackToGrid,
                   )
                 : const SizedBox.shrink(),
+            // Apoyo Social — built only while open, so its streams are not
+            // running behind every other tab.
+            _showApoyo
+                ? ApoyoSection(
+                    onBack: _navigateBackToGrid,
+                    onAddAddress: () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (ctx) => Scaffold(
+                          backgroundColor: Colors.white,
+                          body: SafeArea(
+                            child: AddressesSection(
+                              onBack: () => Navigator.of(ctx).pop(),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  )
+                : const SizedBox.shrink(),
           ],
         ),
       );
@@ -930,6 +963,7 @@ class HomeState extends State<Home>
 
             return Column(
               children: [
+                ApoyoHomeEntry(onTap: _openApoyo),
                 ...sections,
                 Text(
                   'Isaías 45:7–9 ',
