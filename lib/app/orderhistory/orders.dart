@@ -143,6 +143,11 @@ class OrderItem {
   final double price;
   final String imageUrl;
   final bool isBulk;
+  /// Piezas pedidas y kilos que salieron de la báscula, cuando se pidió por
+  /// pieza. El cliente pidió piezas pero paga por lo que pesaron, así que el
+  /// ticket enseña las dos cosas.
+  final double? pieces;
+  final double? weightKg;
 
   final String productId;
   final String? variantKey;
@@ -155,6 +160,8 @@ class OrderItem {
     required this.price,
     required this.imageUrl,
     required this.isBulk,
+    this.pieces,
+    this.weightKg,
     String? productId,
     this.variantKey,
     this.variantName,
@@ -197,6 +204,8 @@ class OrderItem {
       price: parseDouble(data['price']),
       imageUrl: parseString(data['imageUrl']),
       isBulk: parseBool(data['isBulk']),
+      pieces: (data['pieces'] as num?)?.toDouble(),
+      weightKg: (data['weightKg'] as num?)?.toDouble(),
       productId: parseOptString(data['productId']),
       variantKey: parseOptString(data['variantKey']),
       variantName: parseOptString(data['variantName']),

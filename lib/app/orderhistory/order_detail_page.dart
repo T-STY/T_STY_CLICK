@@ -2,6 +2,8 @@ import 'dart:math';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+
+import '../fraction_utils.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../components/bottom_fade.dart';
@@ -469,7 +471,18 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
                           ],
                           const SizedBox(height: 4),
                           Text(
-                            'Cantidad: ${item.quantity.toStringAsFixed(2)}',
+                            item.pieces != null &&
+                                    item.pieces! > 0 &&
+                                    item.weightKg != null
+                                ? '${qtyLabel(item.pieces!)} '
+                                    'pieza${item.pieces == 1 ? '' : 's'} · '
+                                    '${item.weightKg!.toStringAsFixed(3)} kg'
+                                : item.pieces != null && item.pieces! > 0
+                                    ? '${qtyLabel(item.pieces!)} '
+                                        'pieza${item.pieces == 1 ? '' : 's'} · '
+                                        'se cobra al pesar'
+                                    : 'Cantidad: '
+                                        '${item.quantity.toStringAsFixed(2)}',
                             style: TextStyle(
                               color: Colors.grey[600],
                               fontSize: 12,

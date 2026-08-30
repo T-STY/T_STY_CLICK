@@ -156,7 +156,7 @@ class BulkOrderDialogState extends State<BulkOrderDialog> {
                 textAlign: TextAlign.justify,
                 style: TextStyle(color: Colors.black),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 12),
               Row(
                 children: [
                   const Text('Piezas',
@@ -207,12 +207,12 @@ class BulkOrderDialogState extends State<BulkOrderDialog> {
                 children: [
                   TextSpan(
                     text:
-                    "Este producto se vende a granel, por favor indique la cantidad que desea recibir.\n",
+                    "Este producto se vende a granel, por favor indique la cantidad que desea recibir.",
                   ),
                 ],
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
             _MoneyField(
               label: 'Valor en pesos',
               suffix: 'MXN',
