@@ -100,10 +100,18 @@ class CartProvider extends ChangeNotifier {
   double get totalPrice {
     double total = 0.0;
     _items.forEach((key, cartItem) {
-      total += cartItem.price * cartItem.quantity;
+      total += cartItem.lineTotal;
     });
     return total;
   }
+
+  /// Líneas pedidas por pieza cuyo precio depende de la báscula. No suman al
+  /// total todavía, así que hay que decirlo en pantalla: si no, el cliente ve
+  /// un total que no es lo que va a pagar.
+  int get pendingWeighCount =>
+      _items.values.where((i) => i.pricePending).length;
+
+  bool get hasPendingWeigh => pendingWeighCount > 0;
 
   double get discountAmount => _totalDiscount;
 
@@ -153,7 +161,7 @@ class CartProvider extends ChangeNotifier {
           item.productId.isNotEmpty && ids.contains(item.productId);
       final matched = matchedCategory || matchedProvedor || matchedId;
       final pass = mode == 'include' ? matched : !matched;
-      if (pass) eligible += item.price * item.quantity;
+      if (pass) eligible += item.lineTotal;
     }
     return eligible;
   }
@@ -759,6 +767,15 @@ class CartItem {
   final String? variantKey;
   final String? variantName;
 
+  /// Piezas pedidas cuando el cliente pidió "3 manzanas" en vez de un peso.
+  /// Null cuando la línea se pidió por kilo.
+  final double? pieces;
+
+  /// El total todavía no se puede cobrar: depende de lo que pesen esas piezas.
+  /// La línea entra al pedido igual, pero no suma al total hasta que la tienda
+  /// las pese y cierre el precio.
+  final bool pricePending;
+
   CartItem({
     required this.nombre,
     required this.price,
@@ -773,7 +790,14 @@ class CartItem {
     String? productId,
     this.variantKey,
     this.variantName,
+    this.pieces,
+    this.pricePending = false,
   }) : productId = productId ?? objectID;
+
+  /// Lo que esta línea aporta al total de hoy. Una línea por pesar aporta cero
+  /// hasta que alguien la pese: mostrar un número inventado ahí es prometerle
+  /// al cliente un precio que la báscula todavía no confirmó.
+  double get lineTotal => pricePending ? 0 : price * quantity;
 
   Map<String, dynamic> toMap() {
     return {
@@ -791,6 +815,8 @@ class CartItem {
       'productId': productId,
       if (variantKey != null) 'variantKey': variantKey,
       if (variantName != null) 'variantName': variantName,
+      if (pieces != null) 'pieces': pieces,
+      if (pricePending) 'pricePending': true,
     };
   }
 
@@ -809,6 +835,8 @@ class CartItem {
       productId: json['productId'] as String?,
       variantKey: json['variantKey'] as String?,
       variantName: json['variantName'] as String?,
+      pieces: (json['pieces'] as num?)?.toDouble(),
+      pricePending: json['pricePending'] == true,
     );
   }
 }
