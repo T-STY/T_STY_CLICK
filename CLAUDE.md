@@ -1,89 +1,47 @@
-# T_STY_CLICK — Arcade Center (Flutter)
+# T_STY: Beyond — app de cliente (Flutter)
 
-A handheld arcade emulator UI built in Flutter. All games are rendered via
-`CustomPainter` on a Canvas; there is no game engine dependency.
+App de tienda y lealtad para T_STY. Bundle `com.tsty.mx.beyond`, proyecto
+Firebase `arthemis-f2966`, compartido con el panel de administración
+(`t_sty_delivery`), el punto de venta (`PDV_GEN2-main`) y el kiosco
+(`kiosk_gen2`).
 
-## Active branch
-`claude/add-hidden-retro-game-MhVIB`
+# Reglas
 
-## Architecture
-- **Entry / shell**: `lib/app/game/arcade_center_screen.dart`
-  - Game selector: **Neon Arcade Cabinet 3×3 grid** — alphabetical order
-  - Each cell has a neon-colored border/glow from `_kNeonColors` (one per game)
-  - Power-on **splash screen** on launch: boot lines animate in, then "¡BIENVENIDO, NAME!" is shown; user presses A/Start to continue. User name fetched from Firestore `users/{userId}['userInfo']['name']`.
-  - **CRT scanline overlay** (`_CrtOverlayPainter`) renders over all bezel content
-  - Top console strip (gray "ARCADE CENTER" + saldo) is the only place these are shown — they are NOT duplicated inside the grid
-  - D-pad: left/right moves ±1, up/down moves ±3 (columns) in the grid
-  - `_CartridgePainter` still used as card art background
-  - Registered games: `kArcadeGames` list of `ArcadeGameDef` — **alphabetical by new Spanish title**
-  - Shared point/score system via `HighScoreService` (IDs unchanged for score compatibility)
-- **Input**: `lib/app/game/arcade_input_controller.dart` — virtual D-pad + ABXY/Select/Start
+## Sin comentarios
+No se escriben comentarios en el código, en ningún archivo bajo `lib/`. Ni
+explicativos, ni de documentación (`///`), ni separadores de sección, ni TODOs.
 
-## Game Registry — Alphabetical by Title
+La única excepción son los comentarios que la herramienta necesita para
+funcionar: `// ignore:` y `// ignore_for_file:`.
 
-| Grid pos | ID | Emoji | New Title | Game type |
-|---|---|---|---|---|
-| 0 (row0,col0) | `tetris` | 🟦 | **Bloques Caídos** | Tetris |
-| 1 (row0,col1) | `logic` | 💣 | **Campo Minado** | Minesweeper |
-| 2 (row0,col2) | `match3` | 🍬 | **Cascada Dulce** | Match-3 |
-| 3 (row1,col0) | `shooter` | 🚀 | **Caza Estelar** | Space shooter |
-| 4 (row1,col1) | `maze` | 👻 | **Comecocos** | Pac-Man maze |
-| 5 (row1,col2) | `raycaster` | 🔥 | **Cripta Maldita** | Doom-style FPS |
-| 6 (row2,col0) | `hopper` | 🐸 | **Rana Saltarina** | Frogger — frog 10% smaller (scale 0.90) |
-| 7 (row2,col1) | `snake` | 🐍 | **Víbora Veloz** | Snake |
-| 8 (row2,col2) | `flappy` | ✈️ | **Kamikaze Flight** | Flappy Bird |
+La explicación va en el mensaje del commit, no en el archivo. Si un bloque
+parece necesitar un comentario para entenderse, se renombra o se reestructura.
 
-In-game titles also updated in each screen's start overlay.
+## Sin SnackBars
+Nunca usar SnackBars. Usar AlertDialog o mensajes en línea.
 
-## Cripta Maldita (raycaster_screen.dart) — current state
+## Color
+Negro principalmente, gris a lo mucho. No introducir colores nuevos.
 
-### Weapons
-| Weapon | Rotation | Anchor | Fire rate | Unlock | Ammo/wave | Notes |
-|---|---|---|---|---|---|---|
-| Pistol | -0.375 rad | (0.82w, 0.95h) | 0.25s | always | +30 | semi-auto |
-| Shotgun | -0.245 rad | (0.68w, 0.95h) | 0.55s | wave 2 | +6 shells | 7-pellet spread |
-| SMG | -0.325 rad | (0.78w, 0.95h) | 0.08s | wave 4 | +20 | full-auto (hold A) |
+# Estructura
 
-- All weapon rotations computed so barrel aims toward crosshair (screen centre)
-- B button cycles through all *unlocked* weapons
-- Muzzle flash: directional star-burst (forward spike + side petals + white core), NOT circles
-- Wall-check: `_hasLos()` DDA march before registering any bullet hit (no shooting through walls)
+- `lib/app/home.dart` — shell del Home. Navegación por `IndexedStack`; las
+  secciones internas (producto, combo, Apoyo) se abren dentro del shell para
+  que la barra inferior no se mueva.
+- `lib/app/home_blocks.dart` — bloques del home servidos desde Firestore
+  (`home_sections`) y `dispatchHomeAction`, que resuelve la acción de un
+  anuncio: `url`, `combo`, `category`, `brand`, `provedor`, `products`,
+  `apoyo`.
+- `lib/app/ads_carousel.dart` — carrusel de anuncios (`ads`).
+- `lib/app/apoyo/` — Apoyo Social: alta, catálogo del ciclo, pedido y
+  seguimiento.
+- `lib/app/category/product_display.dart` — listado y ficha de producto.
+- `lib/app/cart/` — carrito y monedero.
+- `lib/app/game/` — Arcade Center, una función secundaria dentro de la app.
+  Los juegos se dibujan con `CustomPainter`; no hay motor de juego.
 
-### Enemies — Wave Scaling
-- HP: `baseHp × (1.0 + (wave-1) × 0.25)` — grows each wave
-- Damage: `baseDamage × (1.0 + (wave-1) × 0.15)` — caps at 3×
-- **Skeleton**: 1 hp base, 15 dmg base
-- **Demon**: 3 hp base, 10 dmg base — **20% shorter** (kPad=0.10 compression), scarier: wide swept-back horns w/ edge highlight, glowing eyes + white hot core, fanged mouth + white fang pixels, clawed arm tips, knee highlights
-- **Cacodemon**: 2 hp base, 7 dmg base, floating
+# Datos
 
-### Radar
-- Bottom-left mini-map — situational awareness only
-- No wall-penetration shooting; radar is for navigation
-
-### Enemy AI
-- A* pathfinding on 32×32 grid — recomputes path every 1.2 s (or immediately if no LOS and path empty)
-- Direct movement when line-of-sight is clear; A* navigation through walls otherwise
-- Legacy wall-steering fallback still active if stuck
-
-### Floor / environment
-- Floor gradient: bright amber/colour near horizon, darkening to black at feet — clearly distinct from ceiling
-- Horizon separator line with soft glow separates floor from sky
-- Boundary walls rendered as bone-pile walls (pale yellowed bone + skull eye patches) — visible map limits
-- Blood pools + screen-edge infernal vignette
-
-## CRT Overlay (`_CrtOverlayPainter` in arcade_center_screen.dart)
-- Horizontal scanlines every 2px at 14% opacity
-- Vertical pixel grid every 2px at 4% opacity
-- Radial vignette at 42% edge opacity
-- Green phosphor tint at 2.2% opacity
-- Applied over all bezel content via `Stack` + `IgnorePointer`
-
-## Pending / next session tasks
-
-### New game
-- User wants to add a new game (topic TBD — discuss at start of session)
-
-### Possible tweaks to revisit
-- Weapon angles may need visual fine-tuning after seeing on device
-- Radar range-limiting to reduce its tactical advantage further
-- CRT overlay intensity (opacity values above are current baseline)
+- Los productos guardan la imagen en `image_url`. Los anuncios, recetas y
+  combos la guardan en `imageURL` / `imageUrl`.
+- Los productos guardan el proveedor en `distribuitor_name` (con la errata).

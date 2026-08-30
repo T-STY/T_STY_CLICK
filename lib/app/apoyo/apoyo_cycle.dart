@@ -198,6 +198,8 @@ class ApoyoOrder {
   final double total;
   final double? cashPaidWith;
   final String cancelReason;
+  final String id;
+  final String cancelRequestState;
   final List<ApoyoOrderItem> items;
 
   const ApoyoOrder({
@@ -214,6 +216,8 @@ class ApoyoOrder {
     required this.total,
     required this.cashPaidWith,
     required this.cancelReason,
+    required this.id,
+    required this.cancelRequestState,
     required this.items,
   });
 
@@ -237,6 +241,10 @@ class ApoyoOrder {
       total: (d['total'] as num?)?.toDouble() ?? 0,
       cashPaidWith: (d['cashPaidWith'] as num?)?.toDouble(),
       cancelReason: (d['cancelReason'] ?? '').toString(),
+      id: doc.id,
+      cancelRequestState: d['cancelRequest'] is Map
+          ? ((d['cancelRequest'] as Map)['state'] ?? '').toString()
+          : '',
       items: raw is List
           ? [
               for (final it in raw)

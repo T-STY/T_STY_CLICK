@@ -103,11 +103,85 @@ class _ApoyoOrderSectionState extends State<ApoyoOrderSection> {
     }, onError: (_) {});
   }
 
-  String get _lockedReason {
-    final phone = widget.config.storePhone;
-    return 'Ya no puedes editar ni cancelar: ya compramos tu pedido. '
-        '${phone.isEmpty ? 'Habla con la tienda' : 'Llámanos al $phone'} si '
-        'algo cambió.';
+  String get _lockedReason =>
+      'Ya no puedes editar ni cancelar: ya compramos tu pedido. Si algo '
+      'cambió, mándanos una solicitud y la revisamos.';
+
+  bool get _cancelRequestPending =>
+      _order?.cancelRequestState == 'pendiente';
+
+  Future<void> _requestCancel() async {
+    final order = _order;
+    if (order == null) return;
+    final ctrl = TextEditingController();
+    final send = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18)),
+        title: const Text('Solicitar cancelación',
+            style: TextStyle(fontWeight: FontWeight.w800, color: kApoyoInk)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Ya compramos tu despensa, así que la cancelación no es '
+              'automática: la revisamos y te avisamos por aquí.',
+              style: TextStyle(fontSize: 13, height: 1.35, color: kApoyoAmber),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: ctrl,
+              maxLines: 3,
+              maxLength: 400,
+              decoration: const InputDecoration(
+                hintText: '¿Qué pasó?',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Ahora no'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Enviar solicitud'),
+          ),
+        ],
+      ),
+    );
+    if (send != true || !mounted) return;
+    final reason = ctrl.text.trim();
+    if (reason.length < 4) {
+      await apoyoAlert(context,
+          title: 'Falta el motivo',
+          message: 'Escríbenos aunque sea una línea de por qué.');
+      return;
+    }
+    setState(() => _cancelling = true);
+    try {
+      await FirebaseFunctions.instance
+          .httpsCallable('requestApoyoCancel')
+          .call(<String, dynamic>{'orderId': order.id, 'reason': reason});
+      if (!mounted) return;
+      await apoyoAlert(context,
+          title: 'Solicitud enviada',
+          message: 'Ya la recibimos. Te avisamos aquí mismo en cuanto la '
+              'revisemos.');
+    } on FirebaseFunctionsException catch (e) {
+      if (!mounted) return;
+      await apoyoAlert(context,
+          title: 'No pudimos enviarla',
+          message: apoyoCallableMessage(
+              e, 'Revisa tu conexión e intenta de nuevo.'));
+    } finally {
+      if (mounted) setState(() => _cancelling = false);
+    }
   }
 
   Future<void> _openCatalog() async {
@@ -524,13 +598,36 @@ class _ApoyoOrderSectionState extends State<ApoyoOrderSection> {
                   const Icon(Icons.lock_outline, size: 18, color: kApoyoAmber),
                   const SizedBox(width: 8),
                   Expanded(
-                    child: Text(
-                      _lockedReason,
-                      style: const TextStyle(
-                        fontSize: 12.5,
-                        height: 1.35,
-                        color: kApoyoInk,
-                      ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _cancelRequestPending
+                              ? 'Recibimos tu solicitud de cancelación. Te '
+                                  'avisamos aquí en cuanto la revisemos.'
+                              : _lockedReason,
+                          style: const TextStyle(
+                            fontSize: 12.5,
+                            height: 1.35,
+                            color: kApoyoInk,
+                          ),
+                        ),
+                        if (!_cancelRequestPending) ...[
+                          const SizedBox(height: 6),
+                          GestureDetector(
+                            onTap: _cancelling ? null : _requestCancel,
+                            child: const Text(
+                              'Solicitar cancelación',
+                              style: TextStyle(
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w800,
+                                color: kApoyoInk,
+                                decoration: TextDecoration.underline,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                   ),
                 ],

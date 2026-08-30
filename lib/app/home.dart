@@ -871,7 +871,6 @@ class HomeState extends State<Home>
 
             return Column(
               children: [
-                ApoyoHomeEntry(onTap: _openApoyo),
                 ...sections,
                 Text(
                   'Isaías 45:7–9 ',
