@@ -1275,6 +1275,7 @@ class HomeState extends State<Home>
                   'image_url': imageUrl,
                   'bulk': isBulk,
                   'fracciones': data['fracciones'],
+                  'fraccion_unidad': data['fraccion_unidad'],
                   'stock': stock,
                   'type_specific': typeSpecific,
                   'variante': variante,
@@ -1534,6 +1535,7 @@ class _FirestoreProductGridState extends State<FirestoreProductGrid> {
                     'image_url': imageUrl,
                     'bulk': isBulk,
                     'fracciones': data['fracciones'],
+                    'fraccion_unidad': data['fraccion_unidad'],
                     'stock': stock,
                     'type_specific': typeSpecific,
                     'variante': variante,
@@ -1672,6 +1674,7 @@ class _AddToCartButtonState extends State<_AddToCartButton> {
             fractions: fractions,
             unitPrice: price,
             stock: (widget.data['stock'] as num?)?.toDouble() ?? 0.0,
+            unit: fractionUnit(widget.data),
           );
           if (chosen == null || !mounted) return;
           setState(() {

@@ -15,15 +15,31 @@ List<double> productFractions(Map<String, dynamic>? data) {
 bool sellsByFraction(Map<String, dynamic>? data) =>
     productFractions(data).isNotEmpty;
 
-String fractionLabel(double f) {
-  if (f == 1) return 'Entera';
+/// De qué es la fracción. Una lechuga se parte a la mitad; un camarón no —ahí
+/// la mitad es de KILO. Cambia las etiquetas y el texto, nunca el cálculo.
+String fractionUnit(Map<String, dynamic>? data) =>
+    (data?['fraccion_unidad'] as String?) == 'kilo' ? 'kilo' : 'pieza';
+
+String _plainFraction(double f) {
+  if (f == 1) return '1';
   if (f == 0.5) return '½';
   if (f == 0.25) return '¼';
   if (f == 0.75) return '¾';
-  if (f == 2) return 'Doble';
   final s = f.toStringAsFixed(3);
   return s.replaceFirst(RegExp(r'\.?0+$'), '');
 }
+
+String fractionLabel(double f, {String unit = 'pieza'}) {
+  if (unit == 'kilo') return '${_plainFraction(f)} kg';
+  if (f == 1) return 'Entera';
+  if (f == 2) return 'Doble';
+  return _plainFraction(f);
+}
+
+String fractionIntro(String unit) => unit == 'kilo'
+    ? 'Este producto se vende por kilo. Elige cuánto quieres llevar.'
+    : 'Este producto se vende por piezas completas o partidas. Elige cuánto '
+        'quieres llevar.';
 
 class FractionTile extends StatelessWidget {
   final String label;
@@ -54,7 +70,7 @@ class FractionTile extends StatelessWidget {
           onTap: enabled ? onTap : null,
           borderRadius: BorderRadius.circular(16),
           child: Container(
-            padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 12),
+            padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 8),
             decoration: BoxDecoration(
               color: fill,
               borderRadius: BorderRadius.circular(16),
@@ -81,10 +97,17 @@ class FractionTile extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 8),
-                Text(
-                  price,
-                  style: TextStyle(
-                      fontSize: 16, fontWeight: FontWeight.w700, color: ink),
+                // Con tres fracciones las fichas quedan angostas y un precio
+                // como $110.00 se partía en dos renglones.
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    price,
+                    maxLines: 1,
+                    softWrap: false,
+                    style: TextStyle(
+                        fontSize: 16, fontWeight: FontWeight.w700, color: ink),
+                  ),
                 ),
                 if (!enabled)
                   Padding(
@@ -106,7 +129,7 @@ class FractionTile extends StatelessWidget {
 
 /// El diálogo de fracciones de la app del cliente: mismo formato que el de
 /// granel de esta app —AlertDialog, título centrado, la fila con imagen,
-/// nombre, variante y precio en verde— pero ofreciendo las fracciones.
+/// nombre, variante y precio— pero ofreciendo las fracciones.
 Future<double?> pickFraction({
   required BuildContext context,
   required String productName,
@@ -115,6 +138,7 @@ Future<double?> pickFraction({
   required List<double> fractions,
   required double unitPrice,
   required double stock,
+  String unit = 'pieza',
 }) {
   return showDialog<double>(
     context: context,
@@ -147,7 +171,9 @@ Future<double?> pickFraction({
                           style: const TextStyle(fontWeight: FontWeight.bold)),
                       if ((variante ?? '').isNotEmpty) Text(variante!),
                       Text(
-                        '\$${unitPrice.toStringAsFixed(2)} c/u',
+                        unit == 'kilo'
+                            ? '\$${unitPrice.toStringAsFixed(2)} / kg'
+                            : '\$${unitPrice.toStringAsFixed(2)} c/u',
                         style: const TextStyle(color: Colors.green),
                       ),
                     ],
@@ -156,11 +182,10 @@ Future<double?> pickFraction({
               ],
             ),
             const SizedBox(height: 10),
-            const Text(
-              'Este producto se vende por piezas completas o partidas. '
-              'Elige cuánto quieres llevar.',
+            Text(
+              fractionIntro(unit),
               textAlign: TextAlign.justify,
-              style: TextStyle(color: Colors.black),
+              style: const TextStyle(color: Colors.black),
             ),
             const SizedBox(height: 14),
             Row(
@@ -169,7 +194,7 @@ Future<double?> pickFraction({
                   if (i > 0) const SizedBox(width: 10),
                   Expanded(
                     child: FractionTile(
-                      label: fractionLabel(fractions[i]),
+                      label: fractionLabel(fractions[i], unit: unit),
                       price:
                           '\$${(unitPrice * fractions[i]).toStringAsFixed(2)}',
                       enabled: fractions[i] <= stock + 1e-9,
