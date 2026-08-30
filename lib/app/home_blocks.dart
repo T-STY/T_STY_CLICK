@@ -415,6 +415,7 @@ class _SpotlightBlockState extends State<SpotlightBlock> {
                           'bulk': p['bulk'] as bool? ?? false,
                           'fracciones': p['fracciones'],
                           'fraccion_unidad': p['fraccion_unidad'],
+                          'permite_por_pieza': p['permite_por_pieza'],
                           'stock': stock,
                           'type_specific': p['type_specific'] as String?,
                           'variante': entry.isVariant

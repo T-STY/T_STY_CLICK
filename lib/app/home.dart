@@ -14,6 +14,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import 'bulk_order_dialog.dart';
 import 'fraction_utils.dart';
 import 'package:provider/provider.dart';
 
@@ -1276,6 +1277,7 @@ class HomeState extends State<Home>
                   'bulk': isBulk,
                   'fracciones': data['fracciones'],
                   'fraccion_unidad': data['fraccion_unidad'],
+                  'permite_por_pieza': data['permite_por_pieza'],
                   'stock': stock,
                   'type_specific': typeSpecific,
                   'variante': variante,
@@ -1536,6 +1538,7 @@ class _FirestoreProductGridState extends State<FirestoreProductGrid> {
                     'bulk': isBulk,
                     'fracciones': data['fracciones'],
                     'fraccion_unidad': data['fraccion_unidad'],
+                    'permite_por_pieza': data['permite_por_pieza'],
                     'stock': stock,
                     'type_specific': typeSpecific,
                     'variante': variante,
@@ -1798,6 +1801,10 @@ class _AddToCartButtonState extends State<_AddToCartButton> {
       _reopenFractionDialog();
       return;
     }
+    if (widget.data['bulk'] == true) {
+      _showBulkOrderDialog(prefill: true);
+      return;
+    }
     if (_quantity < stock) {
       setState(() {
         _quantity++;
@@ -1824,6 +1831,10 @@ class _AddToCartButtonState extends State<_AddToCartButton> {
   void _decrementQuantity() {
     if (sellsByFraction(widget.data)) {
       _reopenFractionDialog();
+      return;
+    }
+    if (widget.data['bulk'] == true) {
+      _showBulkOrderDialog(prefill: true);
       return;
     }
     if (_quantity > 1) {
@@ -1950,7 +1961,7 @@ class _AddToCartButtonState extends State<_AddToCartButton> {
       builder: (context) {
         return BackdropFilter(
           filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
-          child: _BulkOrderDialog(
+          child: BulkOrderDialog(
             imageUrl: widget.data['image_url'] ?? '',
             nombre: widget.data['nombre'] ?? 'Unnamed',
             variante: widget.data['variante'] ?? 'No variant',
@@ -1958,6 +1969,28 @@ class _AddToCartButtonState extends State<_AddToCartButton> {
             pricePerKilo: pricePerKilo,
             initialKilos: initialKilos,
             stock: stock,
+            allowByPiece: widget.data['permite_por_pieza'] == true,
+            onConfirmPieces: (pieces) {
+              Navigator.of(context).pop();
+              final docId = widget.data['docId'];
+              final nombre = widget.data['nombre'];
+              if (docId == null || nombre == null) return;
+              cartProvider.setItem(
+                docId,
+                nombre,
+                widget.data['price'],
+                widget.data['image_url'] ?? '/images/placeholder.png',
+                0,
+                isBulk: true,
+                stock: stock,
+                typeSpecific: widget.data['type_specific'],
+                variante: widget.data['variante'],
+                variantKey: widget.data['variantKey'] as String?,
+                variantName: widget.data['variantName'] as String?,
+                pieces: pieces.toDouble(),
+                pricePending: true,
+              );
+            },
             onConfirm: (kilos) {
               Navigator.of(context).pop();
               if (widget.data['docId'] != null &&
@@ -1989,236 +2022,6 @@ class _AddToCartButtonState extends State<_AddToCartButton> {
   String _formatPrice(dynamic price) {
     if (price == null) return 'N/A';
     return '\$${(price as num).toStringAsFixed(2)}';
-  }
-}
-
-class _BulkOrderDialog extends StatefulWidget {
-  final String imageUrl;
-  final String nombre;
-  final String variante;
-  final String priceLabel;
-  final double pricePerKilo;
-  final double initialKilos;
-  final double stock;
-  final ValueChanged<double> onConfirm;
-
-  const _BulkOrderDialog({
-    required this.imageUrl,
-    required this.nombre,
-    required this.variante,
-    required this.priceLabel,
-    required this.pricePerKilo,
-    required this.initialKilos,
-    required this.stock,
-    required this.onConfirm,
-  });
-
-  @override
-  State<_BulkOrderDialog> createState() => _BulkOrderDialogState();
-}
-
-class _BulkOrderDialogState extends State<_BulkOrderDialog> {
-  final TextEditingController pesosController = TextEditingController();
-  final TextEditingController kilosController = TextEditingController();
-  final FocusNode pesosFocusNode = FocusNode();
-  final FocusNode kilosFocusNode = FocusNode();
-
-  @override
-  void initState() {
-    super.initState();
-    kilosController.text = widget.initialKilos.toStringAsFixed(3);
-    pesosController.text =
-    '\$${(widget.initialKilos * widget.pricePerKilo).toStringAsFixed(2)}';
-
-    pesosFocusNode.addListener(_handlePesosFocus);
-    kilosFocusNode.addListener(_handleKilosFocus);
-  }
-
-  void _handlePesosFocus() {
-    if (!pesosFocusNode.hasFocus) {
-      final pesos =
-      double.tryParse(pesosController.text.replaceAll('\$', ''));
-      if (pesos != null) {
-        kilosController.text =
-            (pesos / widget.pricePerKilo).toStringAsFixed(3);
-        pesosController.text = '\$${pesos.toStringAsFixed(2)}';
-      }
-    }
-  }
-
-  void _handleKilosFocus() {
-    if (!kilosFocusNode.hasFocus) {
-      final kilos = double.tryParse(kilosController.text);
-      if (kilos != null) {
-        pesosController.text =
-        '\$${(kilos * widget.pricePerKilo).toStringAsFixed(2)}';
-      }
-    }
-  }
-
-  @override
-  void dispose() {
-    pesosFocusNode.removeListener(_handlePesosFocus);
-    kilosFocusNode.removeListener(_handleKilosFocus);
-    pesosFocusNode.dispose();
-    kilosFocusNode.dispose();
-    pesosController.dispose();
-    kilosController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Center(child: Text("Producto a Granel")),
-      content: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Row(
-              children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(8.0),
-                  child: CachedNetworkImage(
-                    imageUrl: widget.imageUrl,
-                    width: 50,
-                    height: 50,
-                    fit: BoxFit.contain,
-                    placeholder: (context, url) =>
-                    const ShimmerPlaceholder(width: 50, height: 50),
-                    errorWidget: (context, url, error) =>
-                    const Icon(Icons.error),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      widget.nombre,
-                      style:
-                      const TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                    Text(widget.variante),
-                    Text(
-                      widget.priceLabel,
-                      style: const TextStyle(color: Colors.green),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            RichText(
-              textAlign: TextAlign.justify,
-              text: const TextSpan(
-                style: TextStyle(color: Colors.black),
-                children: [
-                  TextSpan(
-                    text:
-                    "Este producto se vende a granel, por favor indique la cantidad que desea recibir.\n",
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 10),
-            const Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                'Valor en pesos',
-                style: TextStyle(color: Colors.black),
-              ),
-            ),
-            Row(
-              children: [
-                Expanded(
-                  flex: 2,
-                  child: TextField(
-                    controller: pesosController,
-                    keyboardType: TextInputType.number,
-                    focusNode: pesosFocusNode,
-                    textAlign: TextAlign.center,
-                    decoration: InputDecoration(
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                const Expanded(
-                  flex: 1,
-                  child: Text(
-                    'MXN',
-                    style: TextStyle(color: Colors.black),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            const Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                'Peso en kilo',
-                style: TextStyle(color: Colors.black),
-              ),
-            ),
-            Row(
-              children: [
-                Expanded(
-                  flex: 2,
-                  child: TextField(
-                    controller: kilosController,
-                    keyboardType: TextInputType.number,
-                    focusNode: kilosFocusNode,
-                    textAlign: TextAlign.center,
-                    decoration: InputDecoration(
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                const Expanded(
-                  flex: 1,
-                  child: Text(
-                    'kg',
-                    style: TextStyle(color: Colors.black),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            RichText(
-              textAlign: TextAlign.justify,
-              text: const TextSpan(
-                style: TextStyle(color: Colors.black),
-                children: [
-                  TextSpan(
-                    text:
-                    "\n*Tenga en cuenta que la cantidad recibida puede variar ligeramente.",
-                    style: TextStyle(fontStyle: FontStyle.italic),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () {
-            final kilos = double.tryParse(kilosController.text) ?? 0.0;
-            if (kilos > widget.stock) {
-              return;
-            }
-            widget.onConfirm(kilos);
-          },
-          child: const Text('Agregar'),
-        ),
-      ],
-    );
   }
 }
 

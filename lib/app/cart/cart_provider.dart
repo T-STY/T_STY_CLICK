@@ -551,15 +551,19 @@ class CartProvider extends ChangeNotifier {
       String? variante,
       String brand = '',
       String? variantKey,
-      String? variantName}) {
-    if (quantity > stock) {
+      String? variantName,
+      double? pieces,
+      bool pricePending = false}) {
+    if (!pricePending && quantity > stock) {
       quantity = stock;
       _showStockExceededDialog(name);
     }
 
     final lineId = buildCartLineId(productId, variantKey);
 
-    if (quantity > 0) {
+    // Una línea por pesar llega con cantidad 0 —todavía no hay kilos— y la
+    // guarda de "quantity > 0" la borraba en el acto.
+    if (quantity > 0 || pricePending) {
       _items.update(
         lineId,
         (existingCartItem) => CartItem(
@@ -576,6 +580,8 @@ class CartProvider extends ChangeNotifier {
           productId: productId,
           variantKey: variantKey ?? existingCartItem.variantKey,
           variantName: variantName ?? existingCartItem.variantName,
+          pieces: pieces ?? existingCartItem.pieces,
+          pricePending: pricePending,
         ),
         ifAbsent: () => CartItem(
           nombre: name,
@@ -591,6 +597,8 @@ class CartProvider extends ChangeNotifier {
           productId: productId,
           variantKey: variantKey,
           variantName: variantName,
+          pieces: pieces,
+          pricePending: pricePending,
         ),
       );
       _ensureProductMeta(productId);

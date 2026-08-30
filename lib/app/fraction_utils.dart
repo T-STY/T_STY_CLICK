@@ -272,21 +272,20 @@ class _FractionChooserState extends State<FractionChooser> {
               color: _fits ? muted : Colors.red.shade700),
         ),
         const SizedBox(height: 16),
-        SizedBox(
-          height: 48,
-          child: ElevatedButton(
-            onPressed: _fits ? () => widget.onConfirm(_total) : null,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.black,
-              foregroundColor: Colors.white,
-              elevation: 0,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14)),
-            ),
-            child: const Text('Agregar',
-                style: TextStyle(
-                    fontSize: 15, fontWeight: FontWeight.w800)),
+        ElevatedButton(
+          onPressed: _fits ? () => widget.onConfirm(_total) : null,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.black,
+            foregroundColor: Colors.white,
+            elevation: 0,
+            // Con alto fijo el texto quedaba recortado arriba y abajo.
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14)),
           ),
+          child: const Text('Agregar',
+              style: TextStyle(
+                  fontSize: 15, fontWeight: FontWeight.w800, height: 1.2)),
         ),
       ],
     );
