@@ -523,6 +523,8 @@ class ProductDisplayPageState extends State<ProductDisplayPage> {
                 'fracciones': data['fracciones'],
                 'fraccion_unidad': data['fraccion_unidad'],
                 'permite_por_pieza': data['permite_por_pieza'],
+                'peso_muestra_total': data['peso_muestra_total'],
+                'piezas_muestra_total': data['piezas_muestra_total'],
                 'stock': stock,
                 'type_specific': typeSpecific,
                 'variante': variante,
@@ -652,6 +654,8 @@ class ProductDisplayPageState extends State<ProductDisplayPage> {
                 'fracciones': v['fracciones'] ?? pd['fracciones'],
                 'fraccion_unidad': v['fraccion_unidad'] ?? pd['fraccion_unidad'],
                 'permite_por_pieza': v['permite_por_pieza'] ?? pd['permite_por_pieza'],
+                'peso_muestra_total': v['peso_muestra_total'] ?? pd['peso_muestra_total'],
+                'piezas_muestra_total': v['piezas_muestra_total'] ?? pd['piezas_muestra_total'],
                 'stock': stock,
                 'type_specific': typeSpecific,
                 'variante': variantName,
@@ -883,10 +887,25 @@ class _AddToCartButtonState extends State<AddToCartButton> {
         fracciones: productFractions(widget.data),
         fraccionUnidad: fractionUnit(widget.data),
         permitePorPieza: widget.data['permite_por_pieza'] == true,
+        avgPieceKg: avgPieceWeight(widget.data),
       );
     } else {
       cartProvider.removeItemCompletely(buildCartLineId(docId, variantKey));
     }
+  }
+
+  /// Una línea por pesar tiene cantidad 0 —todavía no hay kilos—, así que el
+  /// botón decía "Agregado (0)". Lo que el cliente pidió son piezas.
+  String _addedLabel() {
+    final cart = Provider.of<CartProvider>(context, listen: false);
+    final item = cart.getItem(buildCartLineId(
+        widget.data['docId'] as String? ?? '',
+        widget.data['variantKey'] as String?));
+    final pieces = item?.pieces;
+    if (item?.pricePending == true && pieces != null && pieces > 0) {
+      return '${qtyLabel(pieces)} pz';
+    }
+    return qtyLabel(_quantity);
   }
 
   void _resetAndStartTimer() {
@@ -1019,7 +1038,7 @@ class _AddToCartButtonState extends State<AddToCartButton> {
           maximumSize: const Size(double.infinity, 36),
           textStyle: const TextStyle(fontSize: 12),
         ),
-        child: Text('Agregado (${qtyLabel(_quantity)})',
+        child: Text('Agregado (${_addedLabel()})',
             style: TextStyle(color: widget.textColor)),
       );
     } else if (_showSwitchTile) {
@@ -1089,6 +1108,7 @@ class _AddToCartButtonState extends State<AddToCartButton> {
             initialKilos: initialKilos,
             stock: stock,
             allowByPiece: widget.data['permite_por_pieza'] == true,
+            avgPieceKg: avgPieceWeight(widget.data),
             onConfirmPieces: (pieces) {
               Navigator.of(context).pop();
               final docId = widget.data['docId'];
@@ -1114,6 +1134,7 @@ class _AddToCartButtonState extends State<AddToCartButton> {
                 fracciones: productFractions(widget.data),
                 fraccionUnidad: fractionUnit(widget.data),
                 permitePorPieza: widget.data['permite_por_pieza'] == true,
+                avgPieceKg: avgPieceWeight(widget.data),
               );
             },
             onConfirm: (kilos) {
@@ -1135,6 +1156,7 @@ class _AddToCartButtonState extends State<AddToCartButton> {
                   fracciones: productFractions(widget.data),
                   fraccionUnidad: fractionUnit(widget.data),
                   permitePorPieza: widget.data['permite_por_pieza'] == true,
+                  avgPieceKg: avgPieceWeight(widget.data),
                 );
               }
               if (kDebugMode) {

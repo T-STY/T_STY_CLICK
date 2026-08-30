@@ -565,6 +565,7 @@ class CartPageState extends State<CartPage> {
           initialKilos: item.quantity,
           stock: item.stock,
           allowByPiece: item.permitePorPieza,
+          avgPieceKg: item.avgPieceKg,
           onConfirmPieces: (pieces) {
             Navigator.of(ctx).pop();
             cartProvider.setItem(
@@ -584,6 +585,7 @@ class CartPageState extends State<CartPage> {
               fracciones: item.fracciones,
               fraccionUnidad: item.fraccionUnidad,
               permitePorPieza: item.permitePorPieza,
+              avgPieceKg: item.avgPieceKg,
             );
           },
           onConfirm: (kilos) {
@@ -603,6 +605,7 @@ class CartPageState extends State<CartPage> {
               fracciones: item.fracciones,
               fraccionUnidad: item.fraccionUnidad,
               permitePorPieza: item.permitePorPieza,
+              avgPieceKg: item.avgPieceKg,
             );
           },
         ),
@@ -639,6 +642,7 @@ class CartPageState extends State<CartPage> {
       fracciones: item.fracciones,
       fraccionUnidad: item.fraccionUnidad,
       permitePorPieza: item.permitePorPieza,
+      avgPieceKg: item.avgPieceKg,
     );
   }
 
@@ -692,6 +696,7 @@ class CartPageState extends State<CartPage> {
       fracciones: fracciones,
       fraccionUnidad: unidad,
       permitePorPieza: porPieza,
+      avgPieceKg: item.avgPieceKg,
     );
 
     if (fracciones.isNotEmpty) {

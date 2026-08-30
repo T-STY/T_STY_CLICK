@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'fraction_utils.dart';
+
 class BulkOrderDialog extends StatefulWidget {
   final String imageUrl;
   final String nombre;
@@ -11,6 +13,8 @@ class BulkOrderDialog extends StatefulWidget {
   final ValueChanged<double> onConfirm;
   /// Verdura y fruta que también se puede pedir por pieza ("3 manzanas").
   final bool allowByPiece;
+  /// Peso promedio por pieza aprendido en el mostrador, si ya hay muestras.
+  final double? avgPieceKg;
   /// Piezas pedidas; el precio queda pendiente hasta que la tienda las pese.
   final ValueChanged<int>? onConfirmPieces;
 
@@ -25,6 +29,7 @@ class BulkOrderDialog extends StatefulWidget {
     required this.stock,
     required this.onConfirm,
     this.allowByPiece = false,
+    this.avgPieceKg,
     this.onConfirmPieces,
   });
 
@@ -176,7 +181,20 @@ class BulkOrderDialogState extends State<BulkOrderDialog> {
                 ],
               ),
               const SizedBox(height: 6),
-              Text('Se cobra al pesar',
+              if (widget.avgPieceKg != null) ...[
+                Text(
+                  'Aproximado: '
+                  '${(widget.avgPieceKg! * _pieces).toStringAsFixed(2)} kg · '
+                  '\$${(widget.avgPieceKg! * _pieces * widget.pricePerKilo).toStringAsFixed(2)}',
+                  style: const TextStyle(
+                      fontSize: 14, fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: 2),
+              ],
+              Text(
+                  widget.avgPieceKg != null
+                      ? 'El precio final se calcula al pesarlas.'
+                      : 'Se cobra al pesar',
                   style: TextStyle(
                       fontSize: 12.5,
                       fontWeight: FontWeight.w600,

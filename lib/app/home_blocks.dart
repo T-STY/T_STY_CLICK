@@ -416,6 +416,8 @@ class _SpotlightBlockState extends State<SpotlightBlock> {
                           'fracciones': p['fracciones'],
                           'fraccion_unidad': p['fraccion_unidad'],
                           'permite_por_pieza': p['permite_por_pieza'],
+                          'peso_muestra_total': p['peso_muestra_total'],
+                          'piezas_muestra_total': p['piezas_muestra_total'],
                           'stock': stock,
                           'type_specific': p['type_specific'] as String?,
                           'variante': entry.isVariant

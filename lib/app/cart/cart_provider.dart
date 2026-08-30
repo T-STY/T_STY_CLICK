@@ -556,7 +556,8 @@ class CartProvider extends ChangeNotifier {
       bool pricePending = false,
       List<double> fracciones = const [],
       String fraccionUnidad = 'pieza',
-      bool permitePorPieza = false}) {
+      bool permitePorPieza = false,
+      double? avgPieceKg}) {
     if (!pricePending && quantity > stock) {
       quantity = stock;
       _showStockExceededDialog(name);
@@ -590,6 +591,7 @@ class CartProvider extends ChangeNotifier {
               : existingCartItem.fracciones,
           fraccionUnidad: fraccionUnidad,
           permitePorPieza: permitePorPieza,
+          avgPieceKg: avgPieceKg,
         ),
         ifAbsent: () => CartItem(
           nombre: name,
@@ -610,6 +612,7 @@ class CartProvider extends ChangeNotifier {
           fracciones: fracciones,
           fraccionUnidad: fraccionUnidad,
           permitePorPieza: permitePorPieza,
+          avgPieceKg: avgPieceKg,
         ),
       );
       _ensureProductMeta(productId);
@@ -796,6 +799,8 @@ class CartItem {
   final List<double> fracciones;
   final String fraccionUnidad;
   final bool permitePorPieza;
+  /// Peso promedio por pieza aprendido en el mostrador.
+  final double? avgPieceKg;
 
   /// El total todavía no se puede cobrar: depende de lo que pesen esas piezas.
   /// La línea entra al pedido igual, pero no suma al total hasta que la tienda
@@ -821,6 +826,7 @@ class CartItem {
     this.fracciones = const [],
     this.fraccionUnidad = 'pieza',
     this.permitePorPieza = false,
+    this.avgPieceKg,
   }) : productId = productId ?? objectID;
 
   /// Lo que esta línea aporta al total de hoy. Una línea por pesar aporta cero
@@ -849,6 +855,7 @@ class CartItem {
       if (fracciones.isNotEmpty) 'fracciones': fracciones,
       'fraccionUnidad': fraccionUnidad,
       if (permitePorPieza) 'permitePorPieza': true,
+      if (avgPieceKg != null) 'avgPieceKg': avgPieceKg,
     };
   }
 
@@ -875,6 +882,7 @@ class CartItem {
           const [],
       fraccionUnidad: json['fraccionUnidad'] as String? ?? 'pieza',
       permitePorPieza: json['permitePorPieza'] == true,
+      avgPieceKg: (json['avgPieceKg'] as num?)?.toDouble(),
     );
   }
 }

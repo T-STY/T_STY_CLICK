@@ -332,6 +332,22 @@ class _StepBtn extends StatelessWidget {
 }
 
 
+/// Peso promedio por pieza, aprendido de lo que se pesa en el mostrador.
+///
+/// Se guardan DOS sumas —kilos y piezas— en vez de un promedio ya calculado.
+/// Así cada muestra es un FieldValue.increment: no hace falta transacción, dos
+/// cajas pueden registrar a la vez sin pisarse, y funciona aunque la escritura
+/// salga de la cola de sincronización mucho después.
+double? avgPieceWeight(Map<String, dynamic>? data) {
+  final kg = (data?['peso_muestra_total'] as num?)?.toDouble() ?? 0;
+  final pz = (data?['piezas_muestra_total'] as num?)?.toDouble() ?? 0;
+  if (kg <= 0 || pz <= 0) return null;
+  return kg / pz;
+}
+
+int pieceSampleCount(Map<String, dynamic>? data) =>
+    ((data?['muestras_pieza'] as num?)?.toInt()) ?? 0;
+
 /// El diálogo de fracciones de la app del cliente: mismo formato que el de
 /// granel de esta app —AlertDialog, título centrado, la fila con imagen,
 /// nombre, variante y precio— con el selector de tamaño y cantidad.
