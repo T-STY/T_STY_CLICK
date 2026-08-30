@@ -4,6 +4,8 @@ import 'dart:ui';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+
+import '../fraction_utils.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -774,7 +776,10 @@ class _AddToCartButtonState extends State<AddToCartButton> {
     final String? variantName = widget.data['variantName'] as String?;
 
     if (docId != null && name != null && price != null && imageUrl != null) {
-      if (isBulk) {
+      if (sellsByFraction(widget.data)) {
+        _showFractionOrderDialog(cartProvider, docId, name, price, imageUrl,
+            typeSpecific, variante, variantKey, variantName);
+      } else if (isBulk) {
         _showBulkOrderDialog();
       } else {
         setState(() {
@@ -790,6 +795,44 @@ class _AddToCartButtonState extends State<AddToCartButton> {
         _resetAndStartTimer();
       }
     }
+  }
+
+  /// Fracciones fijas: entera o media, sin pesar nada. Por dentro es un
+  /// producto a granel con las cantidades limitadas, así que el carrito, el
+  /// precio y el pedido no cambian en nada.
+  Future<void> _showFractionOrderDialog(
+    CartProvider cartProvider,
+    String docId,
+    String name,
+    double price,
+    String imageUrl,
+    String? typeSpecific,
+    String? variante,
+    String? variantKey,
+    String? variantName,
+  ) async {
+    final fractions = productFractions(widget.data);
+    if (fractions.isEmpty) return;
+    final double available =
+        (widget.data['stock'] as num?)?.toDouble() ?? 0.0;
+    final chosen = await pickFraction(
+      context: context,
+      productName: name,
+      fractions: fractions,
+      unitPrice: price,
+      stock: available,
+    );
+    if (chosen == null || !mounted) return;
+    setState(() {
+      _showSwitchTile = true;
+      _quantity = chosen;
+      _showAgregadoButton = false;
+      _pendingCommit = true;
+    });
+    _commitToCart(docId, name, price, imageUrl, cartProvider, true,
+        typeSpecific, variante,
+        variantKey: variantKey, variantName: variantName);
+    _resetAndStartTimer();
   }
 
   void _commitToCart(

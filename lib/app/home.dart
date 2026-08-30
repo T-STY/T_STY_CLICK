@@ -13,6 +13,8 @@ import '../utils/callable_retry.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+
+import 'fraction_utils.dart';
 import 'package:provider/provider.dart';
 
 import '../../auth/login_page.dart';
@@ -1657,7 +1659,28 @@ class _AddToCartButtonState extends State<_AddToCartButton> {
     final String? variantName = widget.data['variantName'] as String?;
 
     if (docId != null && name != null && price != null && imageUrl != null) {
-      if (isBulk) {
+      if (sellsByFraction(widget.data)) {
+        () async {
+          final fractions = productFractions(widget.data);
+          final chosen = await pickFraction(
+            context: context,
+            productName: name,
+            fractions: fractions,
+            unitPrice: price,
+            stock: (widget.data['stock'] as num?)?.toDouble() ?? 0.0,
+          );
+          if (chosen == null || !mounted) return;
+          setState(() {
+            _showSwitchTile = true;
+            _quantity = chosen;
+            _showAgregadoButton = false;
+            _pendingCommit = true;
+          });
+          _commitToCart(docId, name, price, imageUrl, cartProvider, true,
+              typeSpecific, variante, variantKey, variantName);
+          _resetAndStartTimer();
+        }();
+      } else if (isBulk) {
         _showBulkOrderDialog();
       } else {
         setState(() {
