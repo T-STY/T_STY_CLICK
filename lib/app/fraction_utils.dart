@@ -32,52 +32,132 @@ Future<double?> pickFraction({
   required double unitPrice,
   required double stock,
 }) {
-  String money(double v) => '\$${v.toStringAsFixed(2)}';
   return showDialog<double>(
     context: context,
-    builder: (ctx) => AlertDialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-      title: Text(productName,
-          style: const TextStyle(fontWeight: FontWeight.w800)),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Disponible: ${stock.toStringAsFixed(stock % 1 == 0 ? 0 : 2)}',
-              style: TextStyle(color: Colors.grey.shade600, fontSize: 12.5)),
-          const SizedBox(height: 14),
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: [
-              for (final f in fractions)
-                _FractionChip(
-                  label: fractionLabel(f),
-                  price: money(unitPrice * f),
-                  enabled: f <= stock + 1e-9,
-                  onTap: () => Navigator.pop(ctx, f),
-                ),
-            ],
-          ),
-        ],
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(ctx),
-          child: const Text('Cancelar'),
-        ),
-      ],
+    barrierColor: Colors.black.withValues(alpha: 0.3),
+    builder: (_) => _FractionPickerDialog(
+      productName: productName,
+      fractions: fractions,
+      unitPrice: unitPrice,
+      stock: stock,
     ),
   );
 }
 
-class _FractionChip extends StatelessWidget {
+class _FractionPickerDialog extends StatelessWidget {
+  final String productName;
+  final List<double> fractions;
+  final double unitPrice;
+  final double stock;
+
+  const _FractionPickerDialog({
+    required this.productName,
+    required this.fractions,
+    required this.unitPrice,
+    required this.stock,
+  });
+
+  String _money(double v) => '\$${v.toStringAsFixed(2)}';
+
+  String _stockText() {
+    final s = stock % 1 == 0
+        ? stock.toStringAsFixed(0)
+        : stock.toStringAsFixed(2);
+    return 'Quedan $s';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: Colors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      insetPadding: const EdgeInsets.symmetric(horizontal: 28),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 560),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 18, 12, 14),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '¿Cuánto se lleva?',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 0.6,
+                            color: Colors.grey.shade600,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          productName,
+                          style: const TextStyle(
+                              fontSize: 18, fontWeight: FontWeight.bold),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(Icons.close),
+                    tooltip: 'Cancelar',
+                  ),
+                ],
+              ),
+            ),
+            Divider(height: 1, thickness: 1, color: Colors.grey.shade200),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+              child: Row(
+                children: [
+                  for (int i = 0; i < fractions.length; i++) ...[
+                    if (i > 0) const SizedBox(width: 12),
+                    Expanded(
+                      child: _FractionTile(
+                        label: fractionLabel(fractions[i]),
+                        price: _money(unitPrice * fractions[i]),
+                        enabled: fractions[i] <= stock + 1e-9,
+                        onTap: () =>
+                            Navigator.of(context).pop(fractions[i]),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 4, 20, 16),
+              child: Text(
+                _stockText(),
+                style: TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.grey.shade600),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _FractionTile extends StatelessWidget {
   final String label;
   final String price;
   final bool enabled;
   final VoidCallback onTap;
 
-  const _FractionChip({
+  const _FractionTile({
     required this.label,
     required this.price,
     required this.enabled,
@@ -87,35 +167,53 @@ class _FractionChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Opacity(
-      opacity: enabled ? 1 : 0.4,
-      child: InkWell(
-        onTap: enabled ? onTap : null,
-        borderRadius: BorderRadius.circular(14),
-        child: Container(
-          width: 104,
-          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 10),
-          decoration: BoxDecoration(
-            border: Border.all(color: Colors.grey.shade400),
-            borderRadius: BorderRadius.circular(14),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(label,
-                  style: const TextStyle(
-                      fontSize: 20, fontWeight: FontWeight.w900)),
-              const SizedBox(height: 4),
-              Text(price,
-                  style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.green.shade700)),
-              if (!enabled)
-                const Padding(
-                  padding: EdgeInsets.only(top: 2),
-                  child: Text('sin stock', style: TextStyle(fontSize: 10)),
+      opacity: enabled ? 1 : 0.45,
+      child: Material(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        child: InkWell(
+          onTap: enabled ? onTap : null,
+          borderRadius: BorderRadius.circular(16),
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 14),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.grey.shade300),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Un glifo corto como ½ y una palabra como "Entera" no caben
+                // igual: se escala hacia abajo para que ninguna se pegue a los
+                // bordes y las dos se lean con el mismo peso.
+                SizedBox(
+                  height: 38,
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      label,
+                      maxLines: 1,
+                      style: const TextStyle(
+                          fontSize: 32,
+                          height: 1.05,
+                          fontWeight: FontWeight.w900),
+                    ),
+                  ),
                 ),
-            ],
+                const SizedBox(height: 10),
+                Text(
+                  price,
+                  style: const TextStyle(
+                      fontSize: 17, fontWeight: FontWeight.w700),
+                ),
+                if (!enabled)
+                  const Padding(
+                    padding: EdgeInsets.only(top: 4),
+                    child: Text('sin stock',
+                        style: TextStyle(fontSize: 11, height: 1)),
+                  ),
+              ],
+            ),
           ),
         ),
       ),
