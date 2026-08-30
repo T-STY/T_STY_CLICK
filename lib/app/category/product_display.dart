@@ -801,6 +801,21 @@ class _AddToCartButtonState extends State<AddToCartButton> {
     }
   }
 
+  void _reopenFractionDialog() {
+    final cartProvider = Provider.of<CartProvider>(context, listen: false);
+    _showFractionOrderDialog(
+      cartProvider,
+      widget.data['docId'] as String,
+      (widget.data['nombre'] as String?) ?? '',
+      (widget.data['price'] as num?)?.toDouble() ?? 0,
+      (widget.data['image_url'] as String?) ?? '',
+      widget.data['type_specific'] as String?,
+      widget.data['variante'] as String?,
+      widget.data['variantKey'] as String?,
+      widget.data['variantName'] as String?,
+    );
+  }
+
   Future<void> _showFractionOrderDialog(
     CartProvider cartProvider,
     String docId,
@@ -889,6 +904,13 @@ class _AddToCartButtonState extends State<AddToCartButton> {
   }
 
   void _incrementQuantity() {
+    // En un producto por fracciones sumar 1 no significa nada: media lechuga
+    // pasaría a 1.5. Se vuelve a abrir el selector para que elija tamaño y
+    // cantidad otra vez.
+    if (sellsByFraction(widget.data)) {
+      _reopenFractionDialog();
+      return;
+    }
     if (_quantity < stock) {
       setState(() {
         _quantity++;
@@ -913,6 +935,10 @@ class _AddToCartButtonState extends State<AddToCartButton> {
   }
 
   void _decrementQuantity() {
+    if (sellsByFraction(widget.data)) {
+      _reopenFractionDialog();
+      return;
+    }
     if (_quantity > 1) {
       setState(() {
         _quantity--;
@@ -961,7 +987,9 @@ class _AddToCartButtonState extends State<AddToCartButton> {
           setState(() {
             _showSwitchTile = true;
             _showAgregadoButton = false;
-            if (widget.data['bulk'] == true) {
+            if (sellsByFraction(widget.data)) {
+              _reopenFractionDialog();
+            } else if (widget.data['bulk'] == true) {
               _showBulkOrderDialog(
                   prefill: true);
             }
@@ -975,7 +1003,7 @@ class _AddToCartButtonState extends State<AddToCartButton> {
           maximumSize: const Size(double.infinity, 36),
           textStyle: const TextStyle(fontSize: 12),
         ),
-        child: Text('Agregado ($_quantity)',
+        child: Text('Agregado (${qtyLabel(_quantity)})',
             style: TextStyle(color: widget.textColor)),
       );
     } else if (_showSwitchTile) {
@@ -994,7 +1022,7 @@ class _AddToCartButtonState extends State<AddToCartButton> {
                 constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
                 onPressed: _quantity > 1 ? _decrementQuantity : null,
               ),
-              Text('$_quantity', style: TextStyle(color: widget.textColor)),
+              Text(qtyLabel(_quantity), style: TextStyle(color: widget.textColor)),
               IconButton(
                 icon: const Icon(Icons.add, size: 18),
                 padding: EdgeInsets.zero,

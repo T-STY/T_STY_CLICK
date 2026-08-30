@@ -36,6 +36,14 @@ String fractionLabel(double f, {String unit = 'pieza'}) {
   return _plainFraction(f);
 }
 
+/// Una cantidad como se le enseña a una persona: 1 y no "1.0", 0.5 y no
+/// "0.500". Interpolar el double directo alarga el texto y desbordaba el botón
+/// de "Agregado".
+String qtyLabel(double q) {
+  if (q == q.roundToDouble()) return q.toStringAsFixed(0);
+  return q.toStringAsFixed(3).replaceFirst(RegExp(r'0+$'), '');
+}
+
 String fractionIntro(String unit) => unit == 'kilo'
     ? 'Este producto se vende por kilo. Elige cuánto quieres llevar.'
     : 'Este producto se vende por piezas completas o partidas. Elige cuánto '
@@ -46,6 +54,7 @@ class FractionTile extends StatelessWidget {
   final String price;
   final bool enabled;
   final bool isDark;
+  final bool selected;
   final VoidCallback onTap;
 
   const FractionTile({
@@ -55,12 +64,17 @@ class FractionTile extends StatelessWidget {
     required this.enabled,
     required this.onTap,
     this.isDark = false,
+    this.selected = false,
   });
 
   @override
   Widget build(BuildContext context) {
-    final Color fill = isDark ? Colors.black26 : Colors.grey[50]!;
-    final Color line = isDark ? Colors.white10 : Colors.grey[300]!;
+    final Color fill = selected
+        ? (isDark ? Colors.white10 : Colors.grey[200]!)
+        : (isDark ? Colors.black26 : Colors.grey[50]!);
+    final Color line = selected
+        ? (isDark ? Colors.white : Colors.black87)
+        : (isDark ? Colors.white10 : Colors.grey[300]!);
     final Color ink = isDark ? Colors.white : Colors.black87;
     return Opacity(
       opacity: enabled ? 1 : 0.45,
@@ -74,7 +88,7 @@ class FractionTile extends StatelessWidget {
             decoration: BoxDecoration(
               color: fill,
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: line),
+              border: Border.all(color: line, width: selected ? 2 : 1),
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -127,9 +141,201 @@ class FractionTile extends StatelessWidget {
   }
 }
 
+
+/// Elegir CUÁNTO: primero el tamaño (1 kg, ½ kg, Entera…) y luego cuántos de
+/// ese tamaño. Sin el contador no había manera de pedir 2 kilos de camarón ni
+/// dos lechugas: la lista de fracciones sólo llega hasta la pieza completa.
+class FractionChooser extends StatefulWidget {
+  final List<double> fractions;
+  final String unit;
+  final double unitPrice;
+  final double stock;
+  final bool isDark;
+  final ValueChanged<double> onConfirm;
+
+  const FractionChooser({
+    super.key,
+    required this.fractions,
+    required this.unit,
+    required this.unitPrice,
+    required this.stock,
+    required this.onConfirm,
+    this.isDark = false,
+  });
+
+  @override
+  State<FractionChooser> createState() => _FractionChooserState();
+}
+
+class _FractionChooserState extends State<FractionChooser> {
+  late double _size = widget.fractions.firstWhere(
+      (f) => f <= widget.stock + 1e-9,
+      orElse: () => widget.fractions.last);
+  int _count = 1;
+
+  double get _total => _size * _count;
+  bool get _fits => _total <= widget.stock + 1e-9;
+  bool get _canAddMore => _size * (_count + 1) <= widget.stock + 1e-9;
+
+  String _money(double v) => '\$${v.toStringAsFixed(2)}';
+
+  String _stockText() {
+    final s = widget.stock % 1 == 0
+        ? widget.stock.toStringAsFixed(0)
+        : widget.stock.toStringAsFixed(2);
+    return widget.unit == 'kilo' ? 'Disponible: $s kg' : 'Disponible: $s';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final Color ink = widget.isDark ? Colors.white : Colors.black87;
+    final Color muted =
+        widget.isDark ? Colors.grey[400]! : Colors.grey[600]!;
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            for (int i = 0; i < widget.fractions.length; i++) ...[
+              if (i > 0) const SizedBox(width: 8),
+              Expanded(
+                child: FractionTile(
+                  label: fractionLabel(widget.fractions[i], unit: widget.unit),
+                  price: _money(widget.unitPrice * widget.fractions[i]),
+                  enabled: widget.fractions[i] <= widget.stock + 1e-9,
+                  selected: widget.fractions[i] == _size,
+                  isDark: widget.isDark,
+                  onTap: () => setState(() {
+                    _size = widget.fractions[i];
+                    _count = 1;
+                  }),
+                ),
+              ),
+            ],
+          ],
+        ),
+        const SizedBox(height: 16),
+        Row(
+          children: [
+            Text('Cantidad',
+                style: TextStyle(
+                    fontSize: 13, fontWeight: FontWeight.w700, color: muted)),
+            const Spacer(),
+            _StepBtn(
+              icon: Icons.remove,
+              enabled: _count > 1,
+              isDark: widget.isDark,
+              onTap: () => setState(() => _count--),
+            ),
+            SizedBox(
+              width: 46,
+              child: Text('$_count',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w900,
+                      color: ink)),
+            ),
+            _StepBtn(
+              icon: Icons.add,
+              enabled: _canAddMore,
+              isDark: widget.isDark,
+              onTap: () => setState(() => _count++),
+            ),
+          ],
+        ),
+        const SizedBox(height: 14),
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                '${fractionLabel(_size, unit: widget.unit)} x $_count',
+                style: TextStyle(
+                    fontSize: 13, fontWeight: FontWeight.w600, color: muted),
+              ),
+            ),
+            Text(
+              _money(widget.unitPrice * _total),
+              style: TextStyle(
+                  fontSize: 20, fontWeight: FontWeight.w900, color: ink),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Text(
+          _fits ? _stockText() : 'No alcanza el inventario.',
+          style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: _fits ? muted : Colors.red.shade700),
+        ),
+        const SizedBox(height: 16),
+        SizedBox(
+          height: 48,
+          child: ElevatedButton(
+            onPressed: _fits ? () => widget.onConfirm(_total) : null,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.black,
+              foregroundColor: Colors.white,
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14)),
+            ),
+            child: const Text('Agregar',
+                style: TextStyle(
+                    fontSize: 15, fontWeight: FontWeight.w800)),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _StepBtn extends StatelessWidget {
+  final IconData icon;
+  final bool enabled;
+  final bool isDark;
+  final VoidCallback onTap;
+
+  const _StepBtn({
+    required this.icon,
+    required this.enabled,
+    required this.isDark,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final Color line = isDark ? Colors.white24 : Colors.grey.shade400;
+    return Opacity(
+      opacity: enabled ? 1 : 0.35,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: enabled ? onTap : null,
+          borderRadius: BorderRadius.circular(10),
+          child: Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: line),
+            ),
+            child: Icon(icon,
+                size: 20, color: isDark ? Colors.white : Colors.black87),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+
 /// El diálogo de fracciones de la app del cliente: mismo formato que el de
 /// granel de esta app —AlertDialog, título centrado, la fila con imagen,
-/// nombre, variante y precio— pero ofreciendo las fracciones.
+/// nombre, variante y precio— con el selector de tamaño y cantidad.
 Future<double?> pickFraction({
   required BuildContext context,
   required String productName,
@@ -144,6 +350,9 @@ Future<double?> pickFraction({
     context: context,
     builder: (ctx) => AlertDialog(
       title: const Center(child: Text('Producto por Fracción')),
+      // El relleno por omisión del AlertDialog (24 por lado) no deja espacio
+      // para tres fichas y la fila se desbordaba.
+      contentPadding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
       content: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -188,21 +397,12 @@ Future<double?> pickFraction({
               style: const TextStyle(color: Colors.black),
             ),
             const SizedBox(height: 14),
-            Row(
-              children: [
-                for (int i = 0; i < fractions.length; i++) ...[
-                  if (i > 0) const SizedBox(width: 10),
-                  Expanded(
-                    child: FractionTile(
-                      label: fractionLabel(fractions[i], unit: unit),
-                      price:
-                          '\$${(unitPrice * fractions[i]).toStringAsFixed(2)}',
-                      enabled: fractions[i] <= stock + 1e-9,
-                      onTap: () => Navigator.pop(ctx, fractions[i]),
-                    ),
-                  ),
-                ],
-              ],
+            FractionChooser(
+              fractions: fractions,
+              unit: unit,
+              unitPrice: unitPrice,
+              stock: stock,
+              onConfirm: (total) => Navigator.pop(ctx, total),
             ),
           ],
         ),
