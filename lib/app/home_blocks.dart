@@ -31,8 +31,7 @@ void dispatchHomeAction(
   final type = (a['type'] as String?) ?? 'none';
   switch (type) {
     case 'apoyo':
-      // Opens inside the Home shell, like combos do, so the bottom bar stays
-      // put and Back returns to the carousel instead of unwinding the tab.
+
       onApoyo?.call();
       return;
     case 'url':

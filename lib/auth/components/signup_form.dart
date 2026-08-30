@@ -24,10 +24,6 @@ class _SignUpFormState extends State<SignUpForm> {
   final TextEditingController _passwordController = TextEditingController();
   bool _acceptTerms = false;
 
-  /// Latches on the first tap so the account can only ever be created once.
-  /// Without it the button stayed live during the network round-trip, and a
-  /// second tap raced in as 'email-already-in-use' — which read to the
-  /// customer as "registration failed" even though it had just succeeded.
   bool _submitting = false;
 
   static final _emailRegex = RegExp(
@@ -80,13 +76,8 @@ class _SignUpFormState extends State<SignUpForm> {
     final email = _emailController.text.trim();
     final password = _passwordController.text;
 
-    // Resolved before the first await. The form can be disposed mid-flight
-    // (back button), but we still owe the customer the hand-off to the login
-    // screen — driving it off `context` would silently swallow a successful
-    // registration and leave them thinking it failed.
     final NavigatorState navigator = Navigator.of(context);
 
-    // ── Phase 1: create the account. This is the only fatal step. ──
     try {
       await _auth.createUserWithEmailAndPassword(
         email: email,
@@ -94,7 +85,7 @@ class _SignUpFormState extends State<SignUpForm> {
       );
     } on FirebaseAuthException catch (e) {
       if (!mounted) return;
-      // Nothing was created — release the latch so they can fix and retry.
+
       setState(() => _submitting = false);
       String message;
       switch (e.code) {
@@ -122,12 +113,6 @@ class _SignUpFormState extends State<SignUpForm> {
       return;
     }
 
-    // ── Phase 2: the account now EXISTS. Everything below is best-effort. ──
-    // A failure here must never be reported as "signup failed": the customer
-    // would retry, hit 'email-already-in-use', and land right back in the
-    // confusion this change removes. Each call is also bounded — a Firestore
-    // set() resolves only on server ack, so an offline write would otherwise
-    // hang forever with the button latched and the spinner turning.
     const Duration limit = Duration(seconds: 15);
     final User? user = _auth.currentUser;
 
@@ -137,7 +122,7 @@ class _SignUpFormState extends State<SignUpForm> {
 
       try {
         await user.updateDisplayName(name).timeout(limit);
-      } catch (_) {/* cosmetic only */}
+      } catch (_) {}
 
       try {
         await userDocRef.set({
@@ -146,34 +131,23 @@ class _SignUpFormState extends State<SignUpForm> {
             'email': email,
           }
         }, SetOptions(merge: true)).timeout(limit);
-      } catch (_) {/* profile doc is recoverable later */}
+      } catch (_) {}
 
       try {
         await userDocRef.collection('userInfo').doc('userInfo').set({
           'phoneNumber': '0000000000',
         }, SetOptions(merge: true)).timeout(limit);
-      } catch (_) {/* profile doc is recoverable later */}
+      } catch (_) {}
 
       try {
         await user.sendEmailVerification().timeout(limit);
-      } catch (_) {/* they can retry from the login screen */}
+      } catch (_) {}
     }
 
-    // Unconditional teardown. createUserWithEmailAndPassword leaves the
-    // brand-new (still unverified) user SIGNED IN, and main.dart's
-    // _checkUser() admits any live session without testing emailVerified —
-    // so keeping it would let an unverified account into the app on the next
-    // cold launch. The login screen's gate becomes the only way in.
     try {
       await _auth.signOut().timeout(limit);
-    } catch (_) {/* fall through — the login gate still guards entry */}
+    } catch (_) {}
 
-    // Hand off with the credentials pre-filled. We deliberately do NOT sign
-    // them in: they must confirm the email first, then press "Ingresar".
-    // `route.isFirst` drops the signup page (so there's no backing into a
-    // stale, already-submitted form) while KEEPING the app root beneath —
-    // registration is usually entered from inside the app, and clearing the
-    // whole stack would leave no way back to browsing.
     navigator.pushAndRemoveUntil(
       customPageRoute(LoginPage(
         prefillEmail: email,
@@ -458,8 +432,7 @@ class _SignUpFormState extends State<SignUpForm> {
                   elevation: 2,
                 ),
                 child: _submitting
-                    // Immediate acknowledgement of the tap — the absence of
-                    // any feedback here is what drove the repeat taps.
+
                     ? const SizedBox(
                         height: 18,
                         width: 18,

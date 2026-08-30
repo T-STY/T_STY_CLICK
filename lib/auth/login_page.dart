@@ -9,8 +9,7 @@ import 'components/login_form.dart';
 import 'sign_up_page.dart';
 
 class LoginPage extends StatelessWidget {
-  /// Set when the user arrives straight from a successful registration:
-  /// seeds the form and explains why they must verify before signing in.
+
   final String? prefillEmail;
   final String? prefillPassword;
   final bool justRegistered;

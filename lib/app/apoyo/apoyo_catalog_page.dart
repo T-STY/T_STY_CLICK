@@ -12,19 +12,6 @@ import 'apoyo_common.dart';
 import 'apoyo_confirm_page.dart';
 import 'apoyo_cycle.dart';
 
-/// ── APOYO SOCIAL — the week's list ──────────────────────────────────────────
-///
-/// Everything on this screen comes from `apoyo_cycles/{cycleId}` and its
-/// `catalog_snapshot`: the live `apoyo_catalog` is never read here, because a
-/// price the owner edits on Wednesday must not change what a member already
-/// chose on Saturday.
-///
-/// The screen keeps four listeners open instead of nesting four
-/// StreamBuilders: the cycle doc (so the cutoff locks the screen the second it
-/// passes, even with the app open), the frozen list, the commitments (for
-/// "quedan N"), and the member's own order for this cycle (so "Editar" opens
-/// on what they actually ordered, and so their own hold is not counted against
-/// them by the cap).
 class ApoyoCatalogPage extends StatefulWidget {
   final ApoyoConfig config;
   final Map<String, dynamic> member;
@@ -55,25 +42,15 @@ class _ApoyoCatalogPageState extends State<ApoyoCatalogPage> {
 
   bool _loadingItems = true;
 
-  /// Completes on the FIRST cycle snapshot, whether or not the document
-  /// exists. Two things wait on it: the "pásala al viernes N" question (which
-  /// has no Friday to name until then) and the bottom bar (which must not
-  /// flash "ya cerraron" while the doc is still in flight).
   final Completer<void> _cycleLoaded = Completer<void>();
   bool _cycleReady = false;
 
   DateTime _now = DateTime.now();
 
-  /// Last countdown string painted. The ticker fires every second so the
-  /// final minute is honest, but a list of cards must not be rebuilt 60 times
-  /// to redraw "2 días 5 h" unchanged.
   String _countdownLabel = '';
 
-  /// One-shot: the "your selection is from last week" question must be asked
-  /// once, not on every snapshot.
   bool _cartResolved = false;
 
-  /// One-shot: seeding the selection from an existing order.
   bool _seeded = false;
 
   String get _cyclePath => 'apoyo_cycles/${widget.cycleId}';
@@ -135,8 +112,6 @@ class _ApoyoCatalogPageState extends State<ApoyoCatalogPage> {
       }, onError: (_) {});
     }
 
-    // Drives the countdown and, more importantly, the moment the cutoff
-    // passes while the member is still looking at the list.
     _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
       if (!mounted) return;
       final now = DateTime.now();
@@ -152,8 +127,6 @@ class _ApoyoCatalogPageState extends State<ApoyoCatalogPage> {
       });
     });
 
-    // After the first frame: `showDialog` during build/layout throws, and the
-    // cart question can fire the moment SharedPreferences resolves.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) unawaited(_resolveCart());
     });
@@ -169,11 +142,6 @@ class _ApoyoCatalogPageState extends State<ApoyoCatalogPage> {
     super.dispose();
   }
 
-  // ── cart ↔ cycle reconciliation ───────────────────────────────────────────
-
-  /// A selection saved under another cycle id is NOT wiped. The member picked
-  /// those things; the only thing that changed is which Friday they arrive on,
-  /// and that is a question, not a cleanup.
   Future<void> _resolveCart() async {
     final cart = context.read<ApoyoCartProvider>();
     await cart.ready;
@@ -229,8 +197,6 @@ class _ApoyoCatalogPageState extends State<ApoyoCatalogPage> {
     _pruneMissing();
   }
 
-  /// "Editar" must open on the order the member placed, not on an empty list.
-  /// Runs once, and never on top of a selection they are already building.
   void _seedFromOrder() {
     if (!_cartResolved || _seeded) return;
     final order = _order;
@@ -241,8 +207,6 @@ class _ApoyoCatalogPageState extends State<ApoyoCatalogPage> {
     cart.replaceAll(widget.cycleId, order.quantities);
   }
 
-  /// An entry the owner dropped between cycles cannot be ordered, so it is
-  /// removed — but the member is told, never left wondering where it went.
   Future<void> _pruneMissing() async {
     if (!_cartResolved || _loadingItems || _items.isEmpty) return;
     final cart = context.read<ApoyoCartProvider>();
@@ -260,12 +224,8 @@ class _ApoyoCatalogPageState extends State<ApoyoCatalogPage> {
     );
   }
 
-  // ── limits ────────────────────────────────────────────────────────────────
-
   bool get _isFirstOrder => widget.member['firstOrderDone'] != true;
 
-  /// Mirrors `placeApoyoOrder`: the first order is capped separately, and a
-  /// per-member override beats the settings default.
   double get _orderCap {
     if (_isFirstOrder) return widget.config.firstOrderMaxTotal.toDouble();
     final custom = widget.member['maxOrderTotal'];
@@ -273,9 +233,6 @@ class _ApoyoCatalogPageState extends State<ApoyoCatalogPage> {
     return widget.config.defaultMaxOrderTotal.toDouble();
   }
 
-  /// What is left of a `cycleCap`, from the member's point of view: their own
-  /// existing hold is already inside `commitments`, and the server counts the
-  /// cap as a delta against it, so it must not be double-charged here.
   double? _remainingFor(ApoyoCatalogItem item) {
     if (item.cycleCap <= 0) return null;
     final committed = _committed[item.id] ?? 0;
@@ -283,7 +240,6 @@ class _ApoyoCatalogPageState extends State<ApoyoCatalogPage> {
     return math.max(0, item.cycleCap - (committed - mine));
   }
 
-  /// The most this member may hold of [item] right now.
   double _maxFor(ApoyoCatalogItem item) {
     var cap = double.infinity;
     if (item.maxPerMember > 0) cap = item.maxPerMember;
@@ -302,8 +258,6 @@ class _ApoyoCatalogPageState extends State<ApoyoCatalogPage> {
   }
 
   bool get _isOpen => _cycle?.isOpenAt(_now) ?? false;
-
-  // ── actions ───────────────────────────────────────────────────────────────
 
   void _bump(ApoyoCatalogItem item, double delta) {
     final cart = context.read<ApoyoCartProvider>();
@@ -335,8 +289,6 @@ class _ApoyoCatalogPageState extends State<ApoyoCatalogPage> {
     );
     if (placed == true && mounted) Navigator.of(context).pop();
   }
-
-  // ── build ─────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
@@ -556,8 +508,6 @@ class _ApoyoCatalogPageState extends State<ApoyoCatalogPage> {
     );
   }
 
-  // ── one catalog entry ─────────────────────────────────────────────────────
-
   Widget _itemCard(ApoyoCatalogItem item, double qty) {
     final max = _maxFor(item);
     final remaining = _remainingFor(item);
@@ -663,9 +613,6 @@ class _ApoyoCatalogPageState extends State<ApoyoCatalogPage> {
     );
   }
 
-  /// "Incluye: 2 × Aceite · 1 × Arroz" — a despensa is ONE priced line, so its
-  /// contents are named rather than split into rows the member could try to
-  /// order separately.
   String _componentsLabel(ApoyoCatalogItem item) {
     final parts = item.components
         .map((c) => '${apoyoQty(c.quantity)} × ${c.nombre}')
@@ -765,8 +712,6 @@ class _ApoyoCatalogPageState extends State<ApoyoCatalogPage> {
       ),
     );
   }
-
-  // ── bottom bar ────────────────────────────────────────────────────────────
 
   Widget _bottomBar(ApoyoCartProvider cart) {
     final lines = _draftLines(cart);

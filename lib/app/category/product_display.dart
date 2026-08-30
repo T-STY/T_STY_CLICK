@@ -982,8 +982,7 @@ class _AddToCartButtonState extends State<AddToCartButton> {
     final cartProvider = Provider.of<CartProvider>(context, listen: false);
     final pricePerKilo = (widget.data['price'] as num?)?.toDouble() ?? 0.0;
     final cartItem = cartProvider.getItem(widget.data['docId']);
-    // Original behavior: prefill is computed first, but the cart-item value
-    // always overrides it (matches pre-refactor logic).
+
     final double initialKilos = cartItem?.quantity ??
         (prefill && _quantity > 0 ? _quantity.toDouble() : 0.0);
 
@@ -1034,10 +1033,6 @@ class _AddToCartButtonState extends State<AddToCartButton> {
   }
 }
 
-/// Bulk-order dialog body. Owns its own FocusNode + TextEditingController
-/// instances so they get disposed when the dialog closes (the previous
-/// inline implementation leaked both nodes and their listeners every time
-/// the dialog opened).
 class _BulkOrderDialog extends StatefulWidget {
   final String imageUrl;
   final String nombre;

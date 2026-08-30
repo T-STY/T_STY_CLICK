@@ -241,10 +241,7 @@ class _MazeChasScreenState extends State<MazeChasScreen> {
     _levelCompleteTimer?.cancel();
     setState(() {
       _saldo = ns;
-      // Resync the ledger: the replay charge already committed on the
-      // server, so _lastCommitted must follow _saldo. Otherwise the next
-      // credit's delta (newSaldo - _lastCommitted) comes out negative and
-      // debits the player instead of paying them.
+
       _lastCommitted = ns;
       _buildGrid();
       _spawnGhosts();
@@ -483,9 +480,6 @@ class _MazeChasScreenState extends State<MazeChasScreen> {
       _scaredActive = false;
     });
 
-    // +1 punto per level clear. _updateFirestore is the only writer of
-    // _saldo here — it applies the server's authoritative result. Adding
-    // it again locally paid the player twice from level 2 onward.
     _updateFirestore(_saldo + 1).then((_) {
       if (!mounted) return;
       widget.onSaldoChanged(_saldo);
@@ -510,12 +504,7 @@ class _MazeChasScreenState extends State<MazeChasScreen> {
   }
 
   Future<void> _updateFirestore(double newSaldo) async {
-    // Routes through the server-side `updateRewardsSaldo`
-    // callable instead of writing rewards/{docId} directly
-    // (admin-only collection — direct writes failed silently
-    // for every non-admin user). The CF resolves the wallet,
-    // applies the delta in a transaction, and mirrors the
-    // result to the owner-readable card cache.
+
     final delta = newSaldo - _lastCommitted;
     if (delta == 0) return;
     final result = await applyArcadeDelta(

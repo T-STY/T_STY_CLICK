@@ -1,46 +1,17 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 
-/// ── APOYO SOCIAL — the week, the frozen list, the member's order ───────────
-///
-/// Models for what the SERVER wrote: `apoyo_cycles/{cycleId}` (the three
-/// instants that define the week), its `catalog_snapshot` (the frozen price
-/// list every screen prices from), its `commitments` (what is already spoken
-/// for) and `apoyo_orders/{cycleId}_{uid}`.
-///
-/// Two rules this file exists to enforce:
-///
-///  * A DATE IS NEVER DERIVED ON THE CLIENT. The cycle id looks like a date
-///    ('2026-09-04') but `DateTime.parse` of it yields UTC midnight, which
-///    renders as *Thursday* in Mexico — the day before the delivery the
-///    member is being promised. Every date and weekday shown comes from a
-///    `Timestamp` the server computed in store time.
-///  * A PRICE IS NEVER COMPUTED FROM ANYTHING BUT THE SNAPSHOT. The live
-///    `apoyo_catalog` can be edited mid-week; the snapshot is what the member
-///    committed to and what `placeApoyoOrder` prices from.
-
-/// The pickup window, as the program states it everywhere else (the rules
-/// card on the join screen says the same words). Not server data — it is a
-/// property of the program, while `deliveryAt` (3:00 PM) is the instant the
-/// server computes for the delivery run.
 const String kApoyoPickupWindow = 'de 4:00 a 7:00 PM';
 
-// ── formatting ──────────────────────────────────────────────────────────────
-
-/// "viernes 4 de septiembre" — straight from a server Timestamp, never from
-/// the 'YYYY-MM-DD' cycle id.
 String apoyoLongDate(DateTime d) =>
     DateFormat("EEEE d 'de' MMMM", 'es').format(d);
 
-/// "3:00 PM". `DateFormat.jm('es')` renders "3:00 p. m.", which reads wrong
-/// next to the rest of the program copy.
 String apoyoClock(DateTime d) {
   final h = d.hour % 12 == 0 ? 12 : d.hour % 12;
   final m = d.minute.toString().padLeft(2, '0');
   return '$h:$m ${d.hour < 12 ? 'AM' : 'PM'}';
 }
 
-/// Live countdown copy: "2 días 5 h", "5 h 12 min", "42 s".
 String apoyoCountdown(Duration left) {
   if (left.isNegative || left.inSeconds <= 0) return 'Cerrado';
   final d = left.inDays;
@@ -53,7 +24,6 @@ String apoyoCountdown(Duration left) {
   return '$s s';
 }
 
-/// Quantities are doubles because bulk moves in half kilos. "2", "1.5".
 String apoyoQty(num q) {
   final v = q.toDouble();
   return (v - v.roundToDouble()).abs() < 0.001
@@ -64,12 +34,7 @@ String apoyoQty(num q) {
 String apoyoQtyUnit(num q, String unidad) =>
     '${apoyoQty(q)} ${unidad == 'kg' ? 'kg' : 'pz'}';
 
-/// Mirrors the server's cent rounding EXACTLY (`Math.round(x * 100) / 100`),
-/// so the `expectedTotal` we send matches the total it prices and the
-/// mismatch guard never fires on a rounding difference.
 double apoyoRound2(num v) => (v.toDouble() * 100).roundToDouble() / 100;
-
-// ── cycle ───────────────────────────────────────────────────────────────────
 
 class ApoyoCycle {
   final String id;
@@ -100,33 +65,20 @@ class ApoyoCycle {
     );
   }
 
-  /// The stored instant is authoritative — the same check `placeApoyoOrder`
-  /// makes inside its transaction. A cron that failed to flip `state` must
-  /// never leave the catalog tappable past the cutoff.
-  ///
-  /// A cycle missing `closesAt` is treated as open: we cannot prove it is
-  /// closed, and the callable re-checks everything anyway. Dead-ending a
-  /// member on a data glitch is the worse failure.
   bool isOpenAt(DateTime now) =>
       state == 'abierto' && (closesAt == null || !now.isAfter(closesAt!));
 
   Duration timeLeftAt(DateTime now) =>
       closesAt == null ? Duration.zero : closesAt!.difference(now);
 
-  /// "viernes 4 de septiembre" — the delivery Friday this cycle is named by.
   String get deliveryLabel =>
       deliveryAt == null ? '' : apoyoLongDate(deliveryAt!);
 
-  /// "el viernes 4 de septiembre" — the form every sentence needs. A cycle
-  /// that somehow arrived without its delivery instant degrades to a bare
-  /// "el viernes" instead of leaving a hole in the middle of a promise.
   String get elDeliveryLabel =>
       deliveryAt == null ? 'el viernes' : 'el ${apoyoLongDate(deliveryAt!)}';
 
-  /// "3:00 PM" — when the delivery run starts.
   String get deliveryClock => deliveryAt == null ? '' : apoyoClock(deliveryAt!);
 
-  /// The one line that answers "when and how do I get this?".
   String handoffLine(String fulfillment) {
     final day = deliveryLabel;
     if (day.isEmpty) return '';
@@ -135,8 +87,6 @@ class ApoyoCycle {
         : 'Recoges en la tienda el $day $kApoyoPickupWindow.';
   }
 }
-
-// ── frozen catalog ──────────────────────────────────────────────────────────
 
 class ApoyoComponent {
   final String nombre;
@@ -157,7 +107,6 @@ class ApoyoCatalogItem {
   final String imageUrl;
   final double memberPrice;
 
-  /// 0 means "sin límite" for both caps.
   final double maxPerMember;
   final double cycleCap;
   final int orden;
@@ -198,16 +147,12 @@ class ApoyoCatalogItem {
     );
   }
 
-  /// Bulk moves in half kilos — the same 0.5 steps the owner's shopping list
-  /// aggregates in. Pieces move in whole units.
   double get step => unidad == 'kg' ? 0.5 : 1;
 
   bool get isBundle => components.length > 1;
 
   String get priceLabel => unidad == 'kg' ? '/ kg' : 'c/u';
 }
-
-// ── the member's order ──────────────────────────────────────────────────────
 
 class ApoyoOrderItem {
   final String catalogItemId;
@@ -304,32 +249,21 @@ class ApoyoOrder {
 
   bool get isCancelled => state == 'Cancelado';
 
-  /// What the member owes on Friday, as a map the cart can be rebuilt from
-  /// when they tap "Editar".
   Map<String, double> get quantities => {
         for (final it in items)
           if (it.catalogItemId.isNotEmpty) it.catalogItemId: it.quantity,
       };
 }
 
-// ── the draft the member is building ────────────────────────────────────────
-
-/// One line of the selection, resolved against the frozen snapshot. Built on
-/// the catalog screen and handed to the confirm screen so both show the same
-/// numbers — and so the confirm screen never has to price anything itself.
 class ApoyoDraftLine {
   final ApoyoCatalogItem item;
   final double quantity;
 
   const ApoyoDraftLine(this.item, this.quantity);
 
-  /// Same order of operations as the server's
-  /// `Math.round(memberPrice * qty * 100) / 100`.
   double get total => apoyoRound2(item.memberPrice * quantity);
 }
 
-/// Sum of the lines, rounded once at the end — again exactly as the server
-/// does it, so `expectedTotal` agrees with what `placeApoyoOrder` computes.
 double apoyoDraftSubtotal(List<ApoyoDraftLine> lines) {
   var subtotal = 0.0;
   for (final l in lines) {

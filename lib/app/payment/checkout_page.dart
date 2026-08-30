@@ -37,14 +37,6 @@ class CheckoutPage extends StatefulWidget {
   State<CheckoutPage> createState() => _CheckoutPageState();
 }
 
-/// Whether a coupon is currently usable against the cart in view.
-/// - `ok`: filter inactive OR at least one item matches.
-/// - `pending`: filter active and product metadata is still loading.
-///   UI shows a spinner + "Verificando elegibilidad…" so the user doesn't
-///   misread a transient empty cache as "this coupon doesn't apply."
-/// - `noMatch`: filter active and zero items match. UI dims the card,
-///   disables the tap (except to deselect), and `_calculateDiscount`
-///   auto-deselects to avoid the silent-$0 confusion.
 enum _CouponEligibility { ok, pending, noMatch }
 
 class _CheckoutPageState extends State<CheckoutPage> {
@@ -57,11 +49,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
   List<Map<String, dynamic>> _assignedCoupons = [];
   String? _selectedCouponCode;
   final TextEditingController _couponController = TextEditingController();
-  // Re-entrancy + visible-progress guard for `_applyCoupon`. The Aplicar
-  // button fires a Cloud Function call; without this flag a fast double-
-  // tap would queue two `claimCoupon` calls. We flip it true on entry
-  // and back to false in a finally block so the button can render a
-  // spinner and be disabled while the network call is in flight.
+
   bool _isApplyingCoupon = false;
 
   Map<String, dynamic> _coloniaPricing = {};
@@ -71,14 +59,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
   double _total = 0.0;
 
   bool _isInstorePickup = false;
-  // Re-entrancy guard for `_placeOrder`. The SlideAction widget
-  // can fire `onSubmit` repeatedly on quick taps before its own
-  // dismissal animation completes; without this flag a user
-  // double-tapping the slider would send two `placeOrder` CF
-  // calls and post two real orders. We flip this true on entry,
-  // back to false at every exit path (success, validation reject,
-  // exception). Wrapped in setState so the SlideAction's enabled
-  // state can be driven off it.
+
   bool _isPlacingOrder = false;
 
   double _rewardsBalance = 0.0;
@@ -91,29 +72,17 @@ class _CheckoutPageState extends State<CheckoutPage> {
   String _userName = '';
   String _userPhone = '';
 
-  /// Resolved store/delivery state, refreshed from a live `settings/store`
-  /// stream. The submit handler reads this; the order options panel uses
-  /// it to disable the delivery toggle outside the window.
   OrderWindow _window = OrderWindow.openPlaceholder;
   StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _storeSub;
   CartProvider? _cartProviderRef;
 
-  /// Chosen 30-min slot start, or null = "Lo antes posible".
   TimeOfDay? _deliverySlot;
 
-  /// Free-text order note for the store (referencias, "sin cebolla",
-  /// "plátanos maduros"…). Optional; capped and trimmed server-side.
   final TextEditingController _notesController = TextEditingController();
 
-  /// Cash "pago con" — how much the customer will hand over so the driver
-  /// brings change. null | 'exacto' | '100' | '200' | '500' | '1000' | 'otro'.
-  /// Only relevant when the payment method is efectivo.
   String? _cashOption;
   final TextEditingController _cashOtherController = TextEditingController();
 
-  /// The amount the customer will pay with (bill/exact/custom), or null when
-  /// unspecified. 'exacto' tracks the live total so it stays correct if a
-  /// coupon/saldo changes it.
   double? get _cashGiven {
     switch (_cashOption) {
       case 'exacto':
@@ -127,15 +96,12 @@ class _CheckoutPageState extends State<CheckoutPage> {
     }
   }
 
-  /// Device-clock skew vs the server (server - device). Slot generation adds
-  /// this to DateTime.now() so a wrong device clock can't offer stale slots;
-  /// placeOrder re-validates with real server time regardless.
   Duration _clockSkew = Duration.zero;
 
   DateTime get _networkNow => DateTime.now().add(_clockSkew);
 
   Widget _buildCashPaySection() {
-    // Bills that actually cover the order; "Otro" handles anything else.
+
     final bills =
         [100.0, 200.0, 500.0, 1000.0].where((b) => b >= _total).toList();
     final given = _cashGiven;
@@ -234,9 +200,6 @@ class _CheckoutPageState extends State<CheckoutPage> {
     );
   }
 
-  /// Lays the cash chips out three per row, every chip the same width with
-  /// even gaps. Short final rows are padded with empty slots so the leftover
-  /// chips keep the standard width instead of stretching across the row.
   Widget _cashChipGrid(List<Widget> chips) {
     const double gap = 8;
     final List<Widget> rows = [];
@@ -365,7 +328,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
         });
       }
     } catch (_) {
-      // Device time is the graceful fallback; the CF stays authoritative.
+
     }
   }
 
@@ -379,11 +342,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
     _fetchUserInfo();
     _subscribeOrderWindow();
     _fetchServerTimeSkew();
-    // Listen to the SCOPED product-meta channel so the coupon row can flip
-    // from "Verificando elegibilidad…" to its real label without forcing
-    // every CartProvider Consumer (notably home/search) to rebuild on
-    // every product fetch. The broader Consumer<CartProvider>(context)
-    // path below already covers actual cart mutations.
+
     _cartProviderRef =
         Provider.of<CartProvider>(context, listen: false);
     _cartProviderRef!.productMetaVersion.addListener(_onProductMetaChanged);
@@ -391,15 +350,10 @@ class _CheckoutPageState extends State<CheckoutPage> {
 
   void _onProductMetaChanged() {
     if (!mounted) return;
-    // Trigger a rebuild so `_buildSelectableCoupon` re-evaluates
-    // eligibility now that one more item's category/provedor is known.
+
     setState(_calculateTotal);
   }
 
-  /// Stream `settings/store` so the delivery/pickup state stays live while
-  /// the user is on this screen. When the user crosses the delivery cutoff
-  /// mid-checkout, the toggle auto-flips to pickup and the delivery option
-  /// disables itself in the next rebuild.
   void _subscribeOrderWindow() {
     _storeSub = FirebaseFirestore.instance
         .collection('settings')
@@ -413,10 +367,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
       if (win.status == OrderingStatus.pickupOnly && !pickupFlip) {
         pickupFlip = true;
       }
-      // Second mounted check — the listener fires asynchronously
-      // and any future addition between the top-of-listener check
-      // and the setState could introduce an await window where the
-      // user navigates away. Cheap defense against drift.
+
       if (!mounted) return;
       setState(() {
         _window = win;
@@ -438,12 +389,6 @@ class _CheckoutPageState extends State<CheckoutPage> {
     }
   }
 
-  /// Colonia strings reach us from two different writers: the curated
-  /// dropdown, and free text — which includes the raw geocoder `subLocality`
-  /// whenever GPS reverse-geocoding doesn't match the curated list. So the
-  /// same place arrives as "Centro", "centro", "Céntro" or " Centro ".
-  /// Matching the pricing map by exact key meant identical addresses were
-  /// billed differently depending on how the address happened to be created.
   static String normalizeColonia(String s) {
     var out = s.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
     const accented = 'áàäâãéèëêíìïîóòöôõúùüûñç';
@@ -454,12 +399,6 @@ class _CheckoutPageState extends State<CheckoutPage> {
     return out;
   }
 
-  /// Fee for [colonia], or null when the pricing map genuinely has no entry.
-  ///
-  /// When several pricing keys collapse to the same normalized colonia (the
-  /// classic case being one entry typed with accents and one without) the
-  /// LOWEST fee wins, so a duplicate or typo'd row can never overcharge a
-  /// customer — it can only ever undercharge, which is the safe direction.
   double? _feeForColonia(String colonia) {
     final target = normalizeColonia(colonia);
     double? best;
@@ -749,10 +688,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
         ),
       ),
     ).then((_) {
-      // The user can pop the addresses screen via system back at
-      // any time; if the checkout itself was disposed in between
-      // (deep-nav pop, timeout dialog, etc.) we'd setState in
-      // `_fetchAddresses` on a defunct State.
+
       if (!mounted) return;
       _fetchAddresses();
     });
@@ -825,13 +761,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
       if (couponData.isNotEmpty) {
         double percentage = _toDouble(couponData['percentage']);
         double maxDiscount = _toDouble(couponData['max_discount']);
-        // Honor the coupon's product-filter when present. eligibleSubtotalFor
-        // returns the full subtotal for inactive filters (back-compat with
-        // pre-feature coupons), so the legacy code path is preserved.
-        // Returns null IFF an active filter needs product meta and it's
-        // still loading — we treat that as "0 discount for now" but DON'T
-        // auto-deselect (the eligibility check below distinguishes
-        // unresolved from genuinely-zero).
+
         final cartProvider =
             Provider.of<CartProvider>(context, listen: false);
         final filter = couponData['productFilter'];
@@ -842,10 +772,6 @@ class _CheckoutPageState extends State<CheckoutPage> {
             ((filterMap['mode'] ?? 'all') == 'include' ||
                 (filterMap['mode'] ?? 'all') == 'exclude');
 
-        // Auto-deselect when the cart mutates and the eligible amount
-        // genuinely drops to 0 (meta loaded, no matches). Skip when meta
-        // is still loading (eligibleRaw == null) — that's a transient
-        // "verifying" state, not a final answer.
         if (hasActiveFilter && eligibleRaw != null && eligibleRaw <= 0) {
           _selectedCouponCode = null;
           _discount = 0.0;
@@ -853,13 +779,9 @@ class _CheckoutPageState extends State<CheckoutPage> {
         }
 
         final effectiveEligible = eligibleRaw ?? 0.0;
-        // Clamp to the post-combo subtotal so coupon + combo discount never
-        // overshoot the cart's actual value. Mirrors the server's Math.min
-        // guard against an inflated items[] payload.
+
         final base = effectiveEligible > _subtotal ? _subtotal : effectiveEligible;
-        // Defensive clamp upper bound — admin form already validates
-        // max_discount >= 0, but Dart's num.clamp throws ArgumentError if
-        // upperLimit < lowerLimit, so guard against a malformed master doc.
+
         final maxClamp = maxDiscount < 0 ? 0.0 : maxDiscount;
         double discountAmount =
             (base * percentage / 100).clamp(0, maxClamp).toDouble();
@@ -874,11 +796,6 @@ class _CheckoutPageState extends State<CheckoutPage> {
     }
   }
 
-  /// Eligibility status of a coupon against the current cart, used by
-  /// `_buildSelectableCoupon` to render badges.
-  /// - `pending`: filter is active and product meta hasn't loaded yet.
-  /// - `noMatch`: filter is active and ZERO items qualify.
-  /// - `ok`: filter inactive, or at least one item qualifies.
   _CouponEligibility _couponEligibility(Map<String, dynamic> coupon) {
     final filter = coupon['productFilter'];
     if (filter is! Map) return _CouponEligibility.ok;
@@ -919,19 +836,13 @@ class _CheckoutPageState extends State<CheckoutPage> {
   }
 
   void _placeOrder() async {
-    // Re-entrancy guard. A SlideAction `onSubmit` could fire twice
-    // on a rapid double-tap and post two orders. The flag also
-    // disables the slider in the UI while in flight.
+
     if (_isPlacingOrder) return;
 
     final userId = FirebaseAuth.instance.currentUser?.uid;
     if (userId == null) return;
     final cartProvider = Provider.of<CartProvider>(context, listen: false);
 
-    // Re-check the window at submit time. Belt-and-braces against the user
-    // sitting on the page long enough to cross either the delivery cutoff
-    // or the global quiet-hours window. The CF will reject too, but doing
-    // it here gives a clearer message instead of a generic CF error.
     if (_window.status == OrderingStatus.closed) {
       _showAlertDialog('Estamos cerrados',
           'No estamos tomando pedidos entre '
@@ -992,9 +903,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
       if (kDebugMode) debugPrint('Error placing order: $e');
       _showAlertDialog('Error', 'No se pudo completar el pedido. Intenta de nuevo.');
     } finally {
-      // Re-enable the slider on every exit — success, validation,
-      // exception. If the widget was disposed mid-flight (rare),
-      // setState would throw; the mounted guard suppresses that.
+
       if (mounted) setState(() => _isPlacingOrder = false);
     }
   }
@@ -1154,11 +1063,10 @@ class _CheckoutPageState extends State<CheckoutPage> {
           child: SingleChildScrollView(
           child: Column(
             children: [
-              // ── 1. WHAT you're buying ─────────────────────────────
+
               const SizedBox(height: 16.0),
               _buildOrderReview(),
 
-              // ── 2. WHERE + WHEN ───────────────────────────────────
               const SizedBox(height: 16.0),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16.0),
@@ -1177,8 +1085,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
                   onPickupToggled: (bool value) {
                     setState(() {
                       _isInstorePickup = value;
-                      // Slots differ between delivery and pickup hours —
-                      // reset to "Lo antes posible" on mode change.
+
                       _deliverySlot = null;
                     });
                     _calculateDeliveryFee();
@@ -1201,7 +1108,6 @@ class _CheckoutPageState extends State<CheckoutPage> {
                 onChanged: (slot) => setState(() => _deliverySlot = slot),
               ),
 
-              // ── 3. HOW you pay + discounts ────────────────────────
               const SizedBox(height: 16),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16.0),
@@ -1210,7 +1116,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
                   onPaymentMethodSelected: (String? value) {
                     setState(() {
                       _selectedPaymentMethod = value!;
-                      // The "pago con" question only applies to cash.
+
                       if (value != 'efectivo') _cashOption = null;
                     });
                   },
@@ -1227,7 +1133,6 @@ class _CheckoutPageState extends State<CheckoutPage> {
                 _buildRewardsSection(),
               ],
 
-              // ── 4. SUMMARY (reflects every choice above) ──────────
               const SizedBox(height: 16.0),
               const Padding(
                 padding: EdgeInsets.symmetric(horizontal: 16.0),
@@ -1267,7 +1172,6 @@ class _CheckoutPageState extends State<CheckoutPage> {
                 ),
               ),
 
-              // ── 5. NOTE + CONFIRM ─────────────────────────────────
               const SizedBox(height: 8),
               _buildNotesSection(),
               const SizedBox(height: 16),
@@ -1333,11 +1237,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
                     ),
                     outerColor: AppColors.primary,
                     innerColor: Colors.white,
-                    // Suppress the submit handler while in flight —
-                    // SlideAction will visually slide back but
-                    // won't re-fire `_placeOrder` because the no-op
-                    // returns immediately and `onSubmit` returning
-                    // null aborts the slide animation gracefully.
+
                     onSubmit: _isPlacingOrder ? null : _placeOrder,
                   ),
                 ),
@@ -1486,9 +1386,6 @@ class _CheckoutPageState extends State<CheckoutPage> {
     final notApplicable = eligibility == _CouponEligibility.noMatch;
     final pending = eligibility == _CouponEligibility.pending;
 
-    // Long-press / hover tooltip explaining WHY the tap was ignored when
-    // the coupon is greyed out. Without this, users tap repeatedly thinking
-    // it's a misfire. Empty when not disabled so Tooltip renders nothing.
     final disabledHint = (notApplicable && !isSelected)
         ? (hasFilter
             ? 'Este cupón aplica $filterLabel. Agrega un producto elegible para usarlo.'
@@ -1510,10 +1407,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         child: GestureDetector(
         behavior: HitTestBehavior.opaque,
-        // Selecting a non-applicable coupon is blocked, but if the user was
-        // already on it when the cart shifted out of eligibility we still
-        // allow them to tap to deselect — otherwise they'd be stuck on a
-        // greyed-out card showing $0 discount.
+
         onTap: (notApplicable && !isSelected)
             ? null
             : () {
@@ -1647,9 +1541,6 @@ class _CheckoutPageState extends State<CheckoutPage> {
     );
   }
 
-  /// Renders the productFilter as a short label for the coupon card.
-  /// Thin wrapper over [cf.productFilterSummary] so checkout, the receipt
-  /// view, and the settings card all stay in lockstep.
   String _filterLabel(Map filter) => cf.productFilterSummary(filter);
 
   String _fmtCheckoutDate(Timestamp ts) {
@@ -1703,10 +1594,7 @@ class AddressCardWidget extends StatelessWidget {
   final String userPhone;
   final bool isInstorePickup;
   final ValueChanged<bool> onPickupToggled;
-  // When non-null, the delivery option is unavailable right now and the
-  // pickup toggle is locked on. Used outside the configured delivery
-  // window so the user can't switch back to "Entrega a domicilio" only to
-  // bounce off submit. The string is rendered as a small caption.
+
   final String? deliveryLockedReason;
 
   const AddressCardWidget({
@@ -1737,8 +1625,7 @@ class AddressCardWidget extends StatelessWidget {
                 ),
               ),
               GestureDetector(
-                // Locked outside delivery hours — tap is a no-op and the
-                // chip stays in the active (pickup) state.
+
                 onTap: deliveryLockedReason != null
                     ? null
                     : () => onPickupToggled(!isInstorePickup),

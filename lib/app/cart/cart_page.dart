@@ -25,10 +25,6 @@ class CartPage extends StatefulWidget {
 class CartPageState extends State<CartPage> {
   int _index = 0;
 
-  /// Resolved ordering window for "right now" — `open`, `pickupOnly`, or
-  /// `closed`. Defaults to a permissive `open` so the cart works even
-  /// before settings/store has loaded; the StreamBuilder rebuild fixes
-  /// the state in the next frame.
   OrderWindow _window = OrderWindow.openPlaceholder;
 
   @override
@@ -85,10 +81,6 @@ class CartPageState extends State<CartPage> {
     }
   }
 
-  // Evaluates the live `settings/store` snapshot via the shared helper.
-  // Returns the OrderWindow but does NOT call setState — used inside the
-  // StreamBuilder so we re-evaluate on every doc change without nested
-  // setState calls during build.
   OrderWindow _windowFromSnapshot(Map<String, dynamic> data) {
     return OrderWindow.evaluate(doc: data, now: DateTime.now());
   }
@@ -148,11 +140,7 @@ class CartPageState extends State<CartPage> {
   }
 
   Widget _buildCartContent(BuildContext context, {bool isLoading = false}) {
-    // Three-state ordering window:
-    //   - open       → deliver and pickup both available, CTA enabled
-    //   - pickupOnly → CTA enabled but a banner says "pickup only"
-    //   - closed     → CTA disabled, banner says we're physically closed
-    //                  (quiet hours, default 10 PM → 8 AM)
+
     final OrderingStatus status = _window.status;
     final bool ctaEnabled = status != OrderingStatus.closed;
 
@@ -218,9 +206,7 @@ class CartPageState extends State<CartPage> {
               children: [
                 Expanded(
                   child: BottomFade(
-                    // Small fade clear/height — the ListView's viewport now
-                    // ends naturally above the totals card, so the fade is
-                    // just a visual softener as items scroll out of view.
+
                     clearHeight: 0,
                     fadeHeight: 65,
                     child: Consumer<CartProvider>(
@@ -238,9 +224,7 @@ class CartPageState extends State<CartPage> {
                     ),
                   ),
                 ),
-                // Totals card sits BELOW the list in its own row of the
-                // Column — items can no longer hide behind it regardless of
-                // how many extra rows (Descuento, banner, etc.) it grows.
+
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 5, 16, 112),
                   child: Card(
@@ -601,10 +585,6 @@ class CartPageState extends State<CartPage> {
   }
 }
 
-/// Bulk-order dialog body. Owns its own FocusNode + TextEditingController
-/// instances so they get disposed when the dialog closes (the previous
-/// inline implementation leaked both nodes and their listeners every time
-/// the dialog opened).
 class _BulkOrderDialog extends StatefulWidget {
   final CartItem item;
   final ValueChanged<double> onConfirm;

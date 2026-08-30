@@ -3,9 +3,6 @@ import 'package:flutter/material.dart';
 import 'apoyo_common.dart';
 import 'apoyo_cycle.dart';
 
-/// What `placeApoyoOrder` returned. Captured, never discarded: the folio and
-/// the exact peso amount only exist in this response, and they are the two
-/// things the member has to walk away remembering.
 class ApoyoReceipt {
   final String folio;
   final double total;
@@ -15,8 +12,6 @@ class ApoyoReceipt {
   final String cycleId;
   final String fulfillment;
 
-  /// The instants the SERVER computed in store time. Formatting anything
-  /// about Friday from the 'YYYY-MM-DD' cycle id would render the day before.
   final DateTime? deliveryAt;
   final DateTime? closesAt;
 
@@ -55,10 +50,6 @@ class ApoyoReceipt {
   }
 }
 
-/// ── APOYO SOCIAL — done ─────────────────────────────────────────────────────
-///
-/// One sentence carries this screen: the folio, the amount, and the moment.
-/// Everything else is a reminder of what was already agreed to.
 class ApoyoDonePage extends StatelessWidget {
   final ApoyoConfig config;
   final ApoyoCycle cycle;
@@ -75,8 +66,6 @@ class ApoyoDonePage extends StatelessWidget {
 
   DateTime? get _closes => receipt.closesAt ?? cycle.closesAt;
 
-  /// "Ten $203.50 en efectivo el viernes 4 de septiembre después de las
-  /// 3:00 PM." — or the pickup window, when they are collecting in store.
   String get _headline {
     final money = apoyoMoney(receipt.total);
     final day = _delivery == null ? '' : apoyoLongDate(_delivery!);

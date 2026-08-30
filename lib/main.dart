@@ -44,10 +44,7 @@ Future<void> main() async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
-  // Loads the Spanish date-symbol tables that `DateFormat(<pattern>, 'es')`
-  // depends on. Without this, any `DateFormat(..., 'es')` call throws
-  // LocaleDataException at first build — e.g. the order history's
-  // "2 jun · 14:30" formatter. Cheap one-time tree shake.
+
   await initializeDateFormatting('es', null);
   await connectToFirebaseEmulatorsIfNeeded();
 
@@ -81,9 +78,7 @@ Future<void> main() async {
           AppTheme(context).darkTheme,
         )),
         ChangeNotifierProvider(create: (_) => CartProvider()),
-        // Apoyo Social keeps its own selection: ids and quantities for one
-        // weekly cycle, never prices, and never mixed into the store cart the
-        // user may already have waiting for a normal delivery.
+
         ChangeNotifierProvider(create: (_) => ApoyoCartProvider()),
       ],
       child: const NetworkAwareApp(),

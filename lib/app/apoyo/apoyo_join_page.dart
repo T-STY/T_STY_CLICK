@@ -8,26 +8,13 @@ import '../../utils/phone_format.dart';
 import '../settings/addresses_section.dart';
 import 'apoyo_common.dart';
 
-/// ── APOYO SOCIAL — join ─────────────────────────────────────────────────────
-///
-/// This screen is the ONLY place a neighbour learns the rules of the program,
-/// so everything that can cost them later — cash on delivery, the exact
-/// amount, the strikes ladder — is on-screen and readable BEFORE the button
-/// they press to join, never behind a tap.
-///
-/// The server (`applyApoyoMembership`) re-checks every gate and returns a
-/// finished Spanish sentence for each rejection; we render `e.message` as-is.
 class ApoyoJoinPage extends StatefulWidget {
   final ApoyoConfig config;
 
-  /// Existing membership row, when the user was rejected and is applying
-  /// again. Used only to explain the previous decision.
   final Map<String, dynamic>? previous;
 
   final VoidCallback? onBack;
 
-  /// Sends the user to the addresses screen. When null, this page pushes the
-  /// addresses screen itself — a user without an address must never dead-end.
   final VoidCallback? onAddAddress;
 
   final VoidCallback? onSubmitted;
@@ -52,17 +39,10 @@ class _ApoyoJoinPageState extends State<ApoyoJoinPage> {
   String? _selectedAddressId;
   bool _accepted = false;
 
-  /// Re-entrancy latch: a double tap must never fire two applications.
   bool _submitting = false;
 
-  /// Sticky once the callable succeeded. The member doc arrives on the next
-  /// Firestore snapshot, so for a beat after the confirmation dialog this
-  /// form is still on screen — without this the button would re-arm and a
-  /// second tap would earn an `already-exists` rejection for no reason.
   bool _sent = false;
 
-  /// One-shot auto-pick, so re-selecting by hand isn't undone on every
-  /// snapshot from the addresses stream.
   bool _autoPicked = false;
 
   @override
@@ -78,9 +58,6 @@ class _ApoyoJoinPageState extends State<ApoyoJoinPage> {
     super.dispose();
   }
 
-  /// Prefill from the profile phone. Signup writes a `0000000000` placeholder,
-  /// and the server rejects repeated-digit numbers — so a placeholder is left
-  /// out rather than pre-filled into a guaranteed error.
   Future<void> _prefillPhone() async {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) return;
@@ -95,13 +72,11 @@ class _ApoyoJoinPageState extends State<ApoyoJoinPage> {
       final digits = raw.replaceAll(RegExp(r'\D'), '');
       if (!mounted) return;
       if (digits.length == 10 && !_isRepeated(digits)) {
-        // setState, not a bare assignment: `_canSubmit` and the inline phone
-        // error are computed in build(), and the controller alone does not
-        // rebuild this State.
+
         setState(() => _phoneCtrl.text = formatMxPhone(digits));
       }
     } catch (_) {
-      // Offline / missing profile doc — the field just starts empty.
+
     }
   }
 
@@ -121,10 +96,6 @@ class _ApoyoJoinPageState extends State<ApoyoJoinPage> {
       !_submitting &&
       !_sent;
 
-  /// Mirrors the server's `householdKeyFrom`: it needs at least two of
-  /// street / number / colonia to identify the dwelling. Anything less is
-  /// refused server-side, so we flag it here instead of spending a round trip
-  /// on a guaranteed error.
   static bool _addressUsable(Map<String, dynamic> a) {
     var filled = 0;
     for (final k in ['street', 'streetNumber', 'colonia']) {
@@ -200,10 +171,7 @@ class _ApoyoJoinPageState extends State<ApoyoJoinPage> {
       if (!mounted) return;
       widget.onSubmitted?.call();
     } on FirebaseFunctionsException catch (e) {
-      // Rejections come back as finished Spanish sentences written for the
-      // member (household blocked, phone blocked, already applied, re-apply
-      // too soon…); `apoyoCallableMessage` renders those verbatim and swaps
-      // only the SDK's English transport strings for the fallback.
+
       if (!mounted) return;
       await apoyoAlert(
         context,
@@ -322,8 +290,6 @@ class _ApoyoJoinPageState extends State<ApoyoJoinPage> {
     );
   }
 
-  /// Shown only when re-applying after a rejection, so the user isn't left
-  /// guessing what changed.
   Widget _previousDecisionCard() {
     final reason = (widget.previous?['decisionReason'] ?? '').toString().trim();
     return ApoyoCard(
@@ -499,9 +465,6 @@ class _ApoyoJoinPageState extends State<ApoyoJoinPage> {
             if (_addressUsable(d.data())) d.id,
         ];
 
-        // Keep the selection honest against a stream that can change under us
-        // (address deleted or edited into an unusable shape), and pre-pick the
-        // obvious answer when there is only one.
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (!mounted) return;
           final current = _selectedAddressId;

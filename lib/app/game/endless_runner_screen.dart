@@ -209,10 +209,7 @@ class _EndlessRunnerScreenState extends State<EndlessRunnerScreen> {
         currentSaldo: _saldo);
     if (ns == null) return;
     if (!mounted) return;
-    // The replay charge already went through the CF, so `ns` is the
-    // authoritative committed saldo. Resync the ledger too — otherwise
-    // it stays behind by kArcadePlayCost and the next credit computes
-    // a negative delta and debits the player instead.
+
     _lastCommitted = ns;
     setState(() => _saldo = ns);
     widget.onSaldoChanged(ns);
@@ -411,12 +408,7 @@ class _EndlessRunnerScreenState extends State<EndlessRunnerScreen> {
   }
 
   Future<void> _updateFirestore(double newSaldo) async {
-    // Routes through the server-side `updateRewardsSaldo`
-    // callable instead of writing rewards/{docId} directly
-    // (admin-only collection — direct writes failed silently
-    // for every non-admin user). The CF resolves the wallet,
-    // applies the delta in a transaction, and mirrors the
-    // result to the owner-readable card cache.
+
     final delta = newSaldo - _lastCommitted;
     if (delta == 0) return;
     final result = await applyArcadeDelta(

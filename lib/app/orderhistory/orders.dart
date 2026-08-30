@@ -16,20 +16,13 @@ class UserOrder {
   final bool useRewardsBalance;
   final double appliedRewards;
   final String userId;
-  // Whether this order was placed for in-store pickup. Drives the
-  // "Recoger en tienda" label on the detail screen and swaps the
-  // displayed address from the user's home address to the store's
-  // address (`settings/address`).
+
   final bool isInstorePickup;
 
-  /// Client-chosen 30-min slot {date, start, end} (HH:mm), or null =
-  /// "lo antes posible". Written server-side by placeOrder.
   final Map<String, dynamic>? deliveryWindow;
 
-  /// Free-text note the customer left at checkout (may be empty).
   final String notes;
 
-  /// Cash the customer chose to pay with (efectivo only), 0 when unspecified.
   final double cashPaidWith;
 
   UserOrder({
@@ -53,7 +46,6 @@ class UserOrder {
     this.cashPaidWith = 0,
   });
 
-  /// "4:00 PM – 4:30 PM", or null when no window was chosen.
   String? get deliveryWindowLabel {
     final dw = deliveryWindow;
     if (dw == null) return null;
@@ -75,14 +67,6 @@ class UserOrder {
     return '$s – $e';
   }
 
-  /// Status label as the user should see it. Firestore still stores the
-  /// canonical workflow value (so PDV, admin and CFs keep agreeing on
-  /// state), but a pickup order in "Enviado" really means the package is
-  /// waiting at the counter for the customer — so we display "Listo"
-  /// instead. Single-word label sits naturally next to "Enviado",
-  /// "Entregado", "Cancelado" in the same status slot, and the chip
-  /// directly above already says "Recoger en tienda" so context makes
-  /// "Listo" unambiguously mean "ready to collect".
   String get displayStatus {
     if (isInstorePickup && status.toLowerCase() == 'enviado') {
       return 'Listo';

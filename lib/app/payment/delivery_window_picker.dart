@@ -2,17 +2,6 @@ import 'package:flutter/material.dart';
 
 import '../../utils/order_window.dart';
 
-/// Same-day 30-min delivery/pickup slot picker.
-///
-/// Generates slots from `max(now + 30min buffer, hours start)` — rounded UP
-/// to the next :00/:30 — through the hours end, where "hours" are the
-/// delivery window (`todayOpen..todayClose`) or, for pickup, the store's
-/// open span (the complement of quiet hours). `now` should be the
-/// skew-corrected NETWORK time; the placeOrder CF re-validates every rule
-/// server-side, so a stale device clock only costs the user a rejection
-/// message, never a bad order.
-///
-/// `selected == null` means "Lo antes posible" (no window on the order).
 class DeliveryWindowPicker extends StatelessWidget {
   final OrderWindow window;
   final bool isPickup;
@@ -33,13 +22,11 @@ class DeliveryWindowPicker extends StatelessWidget {
 
   static int _ceil30(int minutes) => ((minutes + 29) ~/ 30) * 30;
 
-  /// The valid slot starts for the current mode, or empty when the rest of
-  /// the day has no room (the picker then renders only "Lo antes posible").
   List<TimeOfDay> slots() {
     int startBound;
     int endBound;
     if (isPickup) {
-      // Store hours = complement of quiet hours (e.g. 08:00 → 22:00).
+
       startBound = _min(window.quietEnd);
       endBound = _min(window.quietStart);
     } else {
@@ -73,8 +60,7 @@ class DeliveryWindowPicker extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final available = slots();
-    // Keep the selection honest: if the chosen slot fell out of range
-    // (pickup toggled, time passed), snap back to "Lo antes posible".
+
     final TimeOfDay? effective = (selected != null &&
             available.any((s) =>
                 s.hour == selected!.hour && s.minute == selected!.minute))
@@ -84,8 +70,6 @@ class DeliveryWindowPicker extends StatelessWidget {
       WidgetsBinding.instance.addPostFrameCallback((_) => onChanged(null));
     }
 
-    // Agenda rows: "Lo antes posible" first, then each 30-min slot as a
-    // full-width, tappable time row.
     final rows = <Widget>[
       _AgendaRow(
         label: 'Lo antes posible',
@@ -136,8 +120,7 @@ class DeliveryWindowPicker extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 6),
-          // Bounded + scrollable so a full day of slots reads like an agenda
-          // without pushing the rest of checkout down.
+
           ConstrainedBox(
             constraints: const BoxConstraints(maxHeight: 268),
             child: ListView(
@@ -211,7 +194,7 @@ class _AgendaRow extends StatelessWidget {
                   ),
                 ),
               ),
-              // Radio indicator: filled black check when chosen, ring when not.
+
               Container(
                 width: 22,
                 height: 22,

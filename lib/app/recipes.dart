@@ -29,12 +29,6 @@ class RecipeDetailPage extends StatefulWidget {
 class RecipeDetailPageState extends State<RecipeDetailPage> {
   Map<String, dynamic>? recipeData;
 
-  // Re-entrancy + visible-progress guard for `_addItemsToCart`. The
-  // ingredient lookup fans out to many Firestore reads; without this
-  // flag a quick double-tap of the "agregar al carrito" button would
-  // race two passes and double-add. Flipped true on entry, restored
-  // in a finally block so the button can render a spinner and be
-  // disabled while the work is in flight.
   bool _isAddingToCart = false;
 
   @override

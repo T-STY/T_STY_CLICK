@@ -32,18 +32,15 @@ class _AddressesSectionState extends State<AddressesSection> {
   final _zipCodeController = TextEditingController();
   String? _selectedColonia;
   final _customColoniaController = TextEditingController();
-  // Delivery driver hint (entre calles, color de casa, portón…). Optional.
+
   final _referencesController = TextEditingController();
 
   final _city = 'Colima';
   final _state = 'Colima';
   LatLng? _selectedLocation;
 
-  // "Usar mi ubicación" busy flag (GPS fix + reverse geocode).
   bool _prefillingFromGps = false;
 
-  // In-card map step: when true, the add-address card swaps its form content
-  // for the map picker (instead of popping a dialog).
   bool _showMap = false;
   LatLng? _mapInitial;
   bool _mapAutoLocate = false;
@@ -298,8 +295,7 @@ class _AddressesSectionState extends State<AddressesSection> {
         ),
         child: Padding(
           padding: const EdgeInsets.all(16.0),
-          // Same card, two steps: the typed form, then — in place — the map
-          // to confirm the exact pin.
+
           child: _showMap
               ? LocationPickerView(
                   key: const ValueKey('addr-map'),
@@ -313,9 +309,7 @@ class _AddressesSectionState extends State<AddressesSection> {
                 )
               : Column(
             children: [
-              // Fastest path: drop the user at their GPS spot and prefill the
-              // street fields from a reverse geocode. They can correct any
-              // field after; the map step still confirms the exact pin.
+
               _buildUseMyLocationButton(),
               const SizedBox(height: 14),
               Row(
@@ -427,9 +421,6 @@ class _AddressesSectionState extends State<AddressesSection> {
     );
   }
 
-  /// GPS + reverse-geocode prefill. Gets a precise fix, reverse-geocodes it,
-  /// and drops the street/number/zip/colonia into the form (all editable
-  /// after). Sets `_selectedLocation` so the map step opens on the real spot.
   Widget _buildUseMyLocationButton() {
     return SizedBox(
       width: double.infinity,
@@ -497,8 +488,7 @@ class _AddressesSectionState extends State<AddressesSection> {
             if ((m.postalCode ?? '').isNotEmpty) {
               _zipCodeController.text = m.postalCode!;
             }
-            // subLocality ≈ colonia. Match it into the dropdown when the ZIP
-            // knows it, else drop it into the free-text "Otra" field.
+
             final colonia = (m.subLocality ?? '').trim();
             if (colonia.isNotEmpty) {
               final items = coloniasForZip(_zipCodeController.text);
@@ -512,10 +502,9 @@ class _AddressesSectionState extends State<AddressesSection> {
           });
         }
       } catch (_) {
-        // Reverse geocode can fail (new colonia / offline) — the pin is still
-        // set, so the map step works; the user just fills the fields.
+
       }
-      // No confirmation dialog: the fields visibly populating is the feedback.
+
     } catch (e) {
       if (!mounted) return;
       _showAlertDialog('Error',
@@ -662,10 +651,6 @@ class _AddressesSectionState extends State<AddressesSection> {
     );
   }
 
-  // Colima centro — camera seed when the geocoder can't resolve the typed
-  // address (brand-new colonias aren't in the geocoding database yet). The
-  // typed address is saved verbatim either way; the geocode only positions
-  // the initial map camera, so an unfound address must never be a dead end.
   static const LatLng _kColimaFallback = LatLng(19.2433, -103.7250);
 
   void _confirmAddress() async {
@@ -687,14 +672,11 @@ class _AddressesSectionState extends State<AddressesSection> {
               LatLng(locations.first.latitude, locations.first.longitude);
         }
       } catch (_) {
-        // Geocoder threw (new colonia, flaky service) — handled below; the
-        // user can still continue and drop the pin themselves.
+
       }
 
       if (!mounted) return;
 
-      // Unfound address: tell the user what we couldn't locate and let THEM
-      // decide to continue — the map + GPS pin takes over from here.
       bool autoLocate = false;
       if (initialPosition == null) {
         final proceed = await showDialog<bool>(
@@ -724,7 +706,7 @@ class _AddressesSectionState extends State<AddressesSection> {
       }
 
       if (!mounted) return;
-      // Swap the SAME card to the map step (no dialog).
+
       setState(() {
         _mapInitial =
             _selectedLocation ?? initialPosition ?? _kColimaFallback;
@@ -821,15 +803,9 @@ class _AddressesSectionState extends State<AddressesSection> {
   }
 }
 
-/// Embeddable map picker — renders inline INSIDE the add-address card (no
-/// dialog). Confirms the exact pin via [onConfirm]; [onCancel] returns to the
-/// form. All the GPS-fix + "center on me" logic lives here.
 class LocationPickerView extends StatefulWidget {
   final LatLng initialLocation;
 
-  /// When true, pulls the client's GPS fix on open and drops the pin there
-  /// without requiring a tap on the center button (which stays available).
-  /// Used when the geocoder couldn't resolve the typed address.
   final bool autoLocate;
 
   final ValueChanged<LatLng> onConfirm;
@@ -857,9 +833,7 @@ class _LocationPickerViewState extends State<LocationPickerView> {
     super.initState();
     _selectedPosition = widget.initialLocation;
     if (widget.autoLocate) {
-      // After first frame so the map controller/permission dialogs have a
-      // live context. _goToMyLocation already handles every failure mode
-      // (service off, denied permission) with its own dialogs.
+
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _goToMyLocation();
       });
@@ -883,14 +857,6 @@ class _LocationPickerViewState extends State<LocationPickerView> {
     );
   }
 
-  /// Returns the most precise fix obtainable within a short window.
-  ///
-  /// A single `getCurrentPosition` often returns the FIRST fix the OS has —
-  /// usually a coarse cell/Wi-Fi triangulation (~50m+) before the GPS chip
-  /// settles. Instead we open a position STREAM at the highest accuracy and
-  /// keep the reading with the smallest `accuracy` radius, finishing early
-  /// once a tight (≤12m) GPS fix arrives, or after [budget] with the best
-  /// reading seen. Falls back to a one-shot read if the stream yields nothing.
   Future<Position?> _getPreciseFix({
     Duration budget = const Duration(seconds: 6),
   }) async {
@@ -914,7 +880,7 @@ class _LocationPickerViewState extends State<LocationPickerView> {
     ).listen(
       (p) {
         if (best == null || p.accuracy < best!.accuracy) best = p;
-        // Good enough — a typical outdoor GPS lock is 3–10m.
+
         if (p.accuracy <= 12) finish();
       },
       onError: (_) => finish(),
@@ -925,7 +891,6 @@ class _LocationPickerViewState extends State<LocationPickerView> {
     final streamed = await completer.future;
     if (streamed != null) return streamed;
 
-    // Stream gave nothing (e.g. emulator / no fix yet) — one-shot fallback.
     try {
       return await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.best,
@@ -936,9 +901,6 @@ class _LocationPickerViewState extends State<LocationPickerView> {
     }
   }
 
-  /// Drops the pin on the device's current GPS position. Requests precise
-  /// location permission on demand; surfaces every failure mode through an
-  /// AlertDialog (no SnackBars — project convention).
   Future<void> _goToMyLocation() async {
     if (_locating) return;
     setState(() => _locating = true);
@@ -1041,9 +1003,7 @@ class _LocationPickerViewState extends State<LocationPickerView> {
                   onMapCreated: (controller) {
                     _mapController = controller;
                   },
-                  // Show the blue "you are here" dot once permission is
-                  // granted; the custom button below is what actually moves
-                  // the pin.
+
                   myLocationEnabled: true,
                   myLocationButtonEnabled: false,
                   markers: {
@@ -1066,7 +1026,7 @@ class _LocationPickerViewState extends State<LocationPickerView> {
                         ?.animateCamera(CameraUpdate.newLatLng(position));
                   },
                 ),
-                // "Use my location" button, above the native zoom controls.
+
                 Positioned(
                   right: 8,
                   bottom: 100,
@@ -1104,8 +1064,6 @@ class _LocationPickerViewState extends State<LocationPickerView> {
   }
 }
 
-/// Circular "center on my location" control rendered over the map, styled to
-/// sit naturally above Google's native zoom buttons.
 class _MyLocationButton extends StatelessWidget {
   final bool busy;
   final VoidCallback onTap;

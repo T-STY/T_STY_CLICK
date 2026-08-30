@@ -15,32 +15,27 @@ class _Plat {
   const _Plat(this.x, this.y, this.w, this.h, {this.isGround = false});
 }
 
-/// Hand-authored level definition. See `kMarioLevels` at the bottom
-/// of this file for the curated set of 20 (auto-cycle if `_level`
-/// exceeds the list). The auto-generator that used to live in
-/// `_generateMap` is gone — all maps are now data, all jumps are
-/// verified by design, no more random gaps the player can't clear.
 class MarioLevel {
   final String name;
   final double worldW;
   final double flagX;
   final double startX;
   final double startY;
-  // [startX, width]
+
   final List<List<double>> ground;
-  // [x, y, w]
+
   final List<List<double>> platforms;
-  // [x, y, vx]
+
   final List<List<double>> goombas;
-  // [cx, baseY, xMin, xMax, vx, phase]
+
   final List<List<double>> flyers;
-  // [x, y, vx]
+
   final List<List<double>> koopas;
-  // [x, y]
+
   final List<List<double>> coins;
-  // [x, blockTopY, typeIndex] (0=bigMario, 1=fireball, 2=life)
+
   final List<List<double>> powerBlocks;
-  // [x, y]
+
   final List<List<double>> spikes;
   const MarioLevel({
     required this.name,
@@ -67,11 +62,6 @@ class _Goomba {
       : alive = true, stomped = false, stompTimer = 0;
 }
 
-/// Flying enemy. Patrols a horizontal segment at a fixed altitude
-/// with a small sine-wave bob. Can be stomped (worth +200 score)
-/// or fireballed. Doesn't collide with ground platforms — it flies
-/// freely between `xMin` and `xMax`. Phase offset randomizes the
-/// bob so a row of three flyers doesn't move in lockstep.
 class _Flyer {
   double x, y, vx;
   final double baseY;
@@ -92,10 +82,6 @@ class _Flyer {
         stompTimer = 0;
 }
 
-/// Stationary spike trap on top of a ground tile. Cannot be
-/// stomped — touching it from any direction triggers the hit. The
-/// only counter is jumping over it. Worth 0 points (pure
-/// avoidance hazard).
 class _Spike {
   final double x, y;
   const _Spike(this.x, this.y);
@@ -103,16 +89,6 @@ class _Spike {
 
 enum _KoopaState { walking, shelled }
 
-/// Koopa Troopa — green turtle enemy that hides in its shell when
-/// hit rather than dying outright. Behavior matches the classic:
-///   * Walking → patrols a platform like a Goomba.
-///   * First stomp (from above) OR bonk-from-below on a block
-///     they're standing on: state flips to `shelled`. Immobile for
-///     `_kShellRevertSec` seconds, then walks again.
-///   * Second stomp WHILE shelled: instant kill (+200 score).
-///   * Player walking into a shelled Koopa: harmless — they can
-///     pass right through it.
-///   * Fireball: same as Goomba (instant kill).
 class _Koopa {
   double x, y, vx;
   _KoopaState state;
@@ -184,12 +160,7 @@ class _MarioGameScreenState extends State<MarioGameScreen> {
   static const double kMaxJumpHold = 0.5;
   static const double kWalkSpeed  = 5.5;
   static const double kRunSpeed   = 9.0;
-  // Reduced from -13.5 — at full hold the previous value rose
-  // ~6.7 units, which put the player well above where any
-  // legitimate platform could spawn. -11.5 caps max apex at ~5.2
-  // units, which still clears `kPlatYMin = 8.5` platforms from
-  // ground (Y=13) with comfortable margin while feeling closer
-  // to the classic Mario hop.
+
   static const double kJumpVel    = -11.5;
   static const double kMaxFall    = 24.0;
   static const double kPlayerW    = 0.82;
@@ -200,37 +171,15 @@ class _MarioGameScreenState extends State<MarioGameScreen> {
   static const double kPbH        = 0.55;
   static const int   kCols        = 10;
 
-  // Map-gen safety bounds — these are the ones the previous map
-  // generator violated, which is why characters got stuck and gaps
-  // were unjumpable. Derived from the physics constants above:
-  //   * Player on ground top (y=13) has body Y in [11.9, 13.0].
-  //     A floating platform's bottom edge must therefore be at
-  //     Y ≤ 11.4 (≥ 0.5 below the player's head) for the player
-  //     to walk underneath without clipping. With floating
-  //     platform height 0.5, that means platform top Y ≤ 10.9.
-  //   * Jump apex with hold (kJumpVel=-13.5 + kLowGravity for
-  //     kMaxJumpHold): ~6.7 units of rise. Player's feet can
-  //     reach Y=13-6.7=6.3. Platforms at Y<7.0 are unreachable.
-  //   * Walking-only jump horizontal distance ~5 units. Capping
-  //     ground gaps at 3.5 leaves comfortable margin even for a
-  //     tap-only jump.
   static const double kPlatYMin            = 8.5;
   static const double kPlatYMax            = 10.5;
   static const double kPlatHFloating       = 0.5;
   static const double kMinHorizPlatGap     = 1.5;
   static const double kMaxSafeGroundGap    = 3.5;
   static const double kSteppingStoneGapMax = 5.5;
-  // How long a Koopa stays in shell form before reverting to a
-  // walking turtle. Classic Mario uses ~5s; the user asked for 3s
-  // here so the player has to commit to a follow-up stomp quickly.
+
   static const double kShellRevertSec      = 3.0;
-  // Vertical offset from a platform top up to the power-block
-  // BOTTOM. At ~1.3× player height the block sits high enough
-  // that the player can walk underneath (clearance ≥ 0.3 above
-  // head) but low enough to feel like the classic Mario "hop &
-  // bonk" rather than a ceiling-stretch — the previous 1.95
-  // value pushed blocks so high the player had to use a perfect
-  // platform-jump just to graze them.
+
   static const double kPowerBlockLift      = 1.4;
 
   double _px = 1.0, _py = 0.0;
@@ -259,8 +208,6 @@ class _MarioGameScreenState extends State<MarioGameScreen> {
   List<_PowerBlock> _powerBlocks = [];
   List<_Fireball>   _fireballs   = [];
 
-  // Cumulative tick time for flyer sine-wave bob. Reset per map
-  // so a fresh level's flyers don't pick up mid-cycle.
   double _flyerClock = 0.0;
 
   bool _isRunning = false;
@@ -403,12 +350,6 @@ class _MarioGameScreenState extends State<MarioGameScreen> {
         _pvy = 2.0;
         _activatePower(pb.type);
 
-        // Classic Mario "bonk from below" — any enemy sitting on
-        // top of this block when it gets hit takes damage. Goombas
-        // and Flyers die outright; Koopas hide in their shell
-        // (still alive, follow-up stomp finishes them). The check
-        // is an "is enemy's bottom roughly at the block's top, AND
-        // do their x-spans overlap" test.
         _bonkEnemiesAbove(pb.x, pb.x + kPbW, pb.y);
       }
     }
@@ -447,7 +388,6 @@ class _MarioGameScreenState extends State<MarioGameScreen> {
       }
     }
 
-    // ── Flyer update + collision ────────────────────────────
     _flyerClock += dt;
     for (final f in _flyers) {
       if (!f.alive) continue;
@@ -456,19 +396,18 @@ class _MarioGameScreenState extends State<MarioGameScreen> {
         if (f.stompTimer <= 0) f.alive = false;
         continue;
       }
-      // Horizontal patrol — turn around at xMin/xMax.
+
       f.x += f.vx * dt;
       if (f.x < f.xMin) { f.x = f.xMin; f.vx = f.vx.abs(); }
       if (f.x > f.xMax) { f.x = f.xMax; f.vx = -f.vx.abs(); }
-      // Vertical bob — phase per-flyer so a cluster looks alive.
+
       f.y = f.baseY + sin(_flyerClock * 3.0 + f.phase) * 0.45;
 
       if (!_invincible) {
         final overX = _px + kPlayerW > f.x && _px < f.x + kEnemyW;
         final overY = _py + kPlayerH > f.y && _py < f.y + kEnemyH;
         if (overX && overY) {
-          // Same stomp test as Goomba: descending onto the top
-          // half of the flyer.
+
           if (_pvy > 0 && _py + kPlayerH < f.y + kEnemyH * 0.6) {
             f.stomped = true; f.stompTimer = 0.35;
             _pvy = -9.0; _score += 200;
@@ -480,7 +419,6 @@ class _MarioGameScreenState extends State<MarioGameScreen> {
       }
     }
 
-    // ── Koopa update + collision ────────────────────────────
     for (final k in _koopas) {
       if (!k.alive) continue;
       if (k.stomped) {
@@ -489,16 +427,14 @@ class _MarioGameScreenState extends State<MarioGameScreen> {
         continue;
       }
       if (k.state == _KoopaState.shelled) {
-        // Inert: no movement, no damage to player, count down to
-        // revert. Player walking THROUGH a shell is harmless —
-        // matches classic Mario where a still shell is touchable.
+
         k.shellTimer -= dt;
         if (k.shellTimer <= 0) {
           k.state = _KoopaState.walking;
         }
         continue;
       }
-      // Walking — same as Goomba (platform edge bouncing).
+
       k.x += k.vx * dt;
       for (final p in _platforms) {
         final kBottom = k.y + kEnemyH;
@@ -515,7 +451,7 @@ class _MarioGameScreenState extends State<MarioGameScreen> {
         final overY = _py + kPlayerH > k.y && _py < k.y + kEnemyH;
         if (overX && overY) {
           if (_pvy > 0 && _py + kPlayerH < k.y + kEnemyH * 0.6) {
-            // Stomp from above → hide in shell.
+
             k.state = _KoopaState.shelled;
             k.shellTimer = kShellRevertSec;
             _pvy = -9.0; _score += 100;
@@ -527,12 +463,6 @@ class _MarioGameScreenState extends State<MarioGameScreen> {
       }
     }
 
-    // ── Spike collision (lethal touch) ──────────────────────
-    // Spikes are stationary triangles glued to the ground. Any
-    // hitbox overlap triggers `_handlePlayerHit` — they cannot
-    // be stomped, the player must jump over them. The hitbox is
-    // generously tight (0.55w × 0.4h) so the player can land
-    // immediately adjacent without dying.
     if (!_invincible) {
       const spkW = 0.6;
       const spkH = 0.4;
@@ -562,21 +492,6 @@ class _MarioGameScreenState extends State<MarioGameScreen> {
     }
   }
 
-  /// Kills (or shells) any enemy currently standing on top of a
-  /// block whose top edge is at `blockTop` and whose horizontal
-  /// span is `[blockLeft, blockRight)`. Called immediately after
-  /// the player bonks a power block from below.
-  ///
-  /// Behavior:
-  ///   * Goomba — dies (sets stomped → fades out after the
-  ///     existing 0.35s animation timer).
-  ///   * Flyer — dies the same way.
-  ///   * Koopa — first hit puts it in shell; if it's already
-  ///     shelled, this counts as the follow-up that kills it.
-  ///
-  /// The "is the enemy sitting on top" test uses a generous 0.18
-  /// vertical tolerance so an enemy mid-platform-step still
-  /// registers, and the x-spans must overlap by any amount.
   void _bonkEnemiesAbove(
     double blockLeft, double blockRight, double blockTop) {
     const tol = 0.18;
@@ -606,12 +521,12 @@ class _MarioGameScreenState extends State<MarioGameScreen> {
       if ((kBottom - blockTop).abs() < tol &&
           k.x + kEnemyW > blockLeft && k.x < blockRight) {
         if (k.state == _KoopaState.shelled) {
-          // Follow-up bonk on the shell finishes it.
+
           k.stomped = true;
           k.stompTimer = 0.35;
           _score += 200;
         } else {
-          // First bonk hides it in the shell.
+
           k.state = _KoopaState.shelled;
           k.shellTimer = kShellRevertSec;
           _score += 100;
@@ -621,12 +536,7 @@ class _MarioGameScreenState extends State<MarioGameScreen> {
   }
 
   void _activatePower(_PowerType type) {
-    // Explicit `break;` on every case — the previous version
-    // relied on Dart 3's implicit-end-of-case behavior, but
-    // certain analyser configurations + the way the haptic call
-    // was the last statement caused fireball/life to silently
-    // chain into bigMario. Result on screen: every power-up
-    // looked like bigMario. Explicit breaks fix it.
+
     switch (type) {
       case _PowerType.fireball:
         _hasFireball = true;
@@ -681,7 +591,7 @@ class _MarioGameScreenState extends State<MarioGameScreen> {
           break;
         }
       }
-      // Flyers also vulnerable to fireball — same hitbox shape.
+
       if (!fb.alive) continue;
       for (final f in _flyers) {
         if (!f.alive || f.stomped) continue;
@@ -717,10 +627,7 @@ class _MarioGameScreenState extends State<MarioGameScreen> {
     _ticker?.cancel();
     _score += 500;
     HapticFeedback.heavyImpact();
-    // Award +1 saldo on level-complete — parity with maze_chase,
-    // breakout, etc. which already award per cleared level. Was
-    // a long-standing dead path on this game; harmless to fire
-    // optimistically because applyArcadeDelta tolerates retries.
+
     final newSaldo = _saldo + 1;
     _saldo = newSaldo;
     widget.onSaldoChanged(newSaldo);
@@ -736,10 +643,7 @@ class _MarioGameScreenState extends State<MarioGameScreen> {
           currentSaldo: _saldo);
       if (ns == null) return;
       if (!mounted) return;
-      // Resync the ledger: the replay charge was already committed
-      // server-side, so _lastCommitted has to follow _saldo. Without
-      // this the next credit's delta is computed against the
-      // pre-charge value and debits the player instead.
+
       _lastCommitted = ns;
       setState(() => _saldo = ns);
       widget.onSaldoChanged(ns);
@@ -757,12 +661,6 @@ class _MarioGameScreenState extends State<MarioGameScreen> {
     _startGame();
   }
 
-  /// Replaces the old auto-generator entirely. Loads a hand-
-  /// authored `MarioLevel` from `kMarioLevels`, cycling once the
-  /// player completes all 20. Every entity coordinate is data;
-  /// the physics envelope is enforced at design time, so there's
-  /// no risk of the auto-gen's "platforms too low to fit under"
-  /// class of bugs.
   void _generateMap() => _loadLevel();
 
   void _loadLevel() {
@@ -783,8 +681,7 @@ class _MarioGameScreenState extends State<MarioGameScreen> {
     _powerBlocks = [];
 
     if (kMarioLevels.isEmpty) {
-      // Should never happen — keeps the State alive if someone
-      // ever ships an empty registry.
+
       _worldW = 24.0;
       _flagX = 22.0;
       _px = 1.0; _py = 11.4;
@@ -839,9 +736,6 @@ class _MarioGameScreenState extends State<MarioGameScreen> {
     return;
   }
 
-  // ─── DEAD CODE BELOW (kept temporarily; the old auto-gen is
-  // now never invoked but I'm leaving the body in this branch so
-  // the diff is easier to review. Safe to delete in a follow-up.)
   // ignore: dead_code
   void _generateMapLegacy() {
     final rng  = Random();
@@ -859,12 +753,6 @@ class _MarioGameScreenState extends State<MarioGameScreen> {
     _coins       = [];
     _powerBlocks = [];
 
-    // ── Ground gaps ─────────────────────────────────────────────
-    // Cap each gap at kMaxSafeGroundGap (3.5 units) so a tap-only
-    // walking jump always clears it with margin. Higher levels can
-    // try a gap up to kSteppingStoneGapMax (5.5) but those MUST get
-    // a floating stepping-stone platform in the middle — physics
-    // guarantee one is reachable from each side.
     final gapCount   = 1 + (diff ~/ 2).clamp(0, 2);
     final gaps       = <(double, double)>[];
     double safeStart = 6.0;
@@ -884,9 +772,7 @@ class _MarioGameScreenState extends State<MarioGameScreen> {
       if (gs > prevEnd + 0.5) {
         _platforms.add(_Plat(prevEnd, 13.0, gs - prevEnd, 3.0, isGround: true));
       }
-      // Wide gap → drop a stepping-stone in the middle at a
-      // reachable Y. Top must be at Y ≤ ~10.5 so a running jump
-      // from ground (Y=13) can land on it.
+
       if (ge - gs > kMaxSafeGroundGap) {
         final stoneX = gs + (ge - gs) / 2 - 0.85;
         _platforms.add(_Plat(stoneX, 10.5, 1.7, kPlatHFloating));
@@ -895,17 +781,11 @@ class _MarioGameScreenState extends State<MarioGameScreen> {
     }
     _platforms.add(_Plat(prevEnd, 13.0, _worldW - prevEnd, 3.0, isGround: true));
 
-    // ── Floating platforms (jump targets) ───────────────────────
-    // Y bounds enforced so the player can always walk underneath
-    // them on the ground. X spacing enforced so two platforms never
-    // overlap, and never sit too close together to walk between.
     double x = 2.8;
     while (x < _worldW - 4.5) {
       final platW = 1.5 + rng.nextDouble() * 1.8;
       final platY = kPlatYMin + rng.nextDouble() * (kPlatYMax - kPlatYMin);
 
-      // Skip if this would overlap an existing platform (the
-      // stepping-stone we may have placed above).
       final overlapsExisting = _platforms.any((p) =>
           !p.isGround &&
           x < p.x + p.w + kMinHorizPlatGap &&
@@ -917,10 +797,6 @@ class _MarioGameScreenState extends State<MarioGameScreen> {
 
       _platforms.add(_Plat(x, platY, platW, kPlatHFloating));
 
-      // Mix in enemies. Goomba walking on this platform, OR a
-      // flying enemy patrolling above it, OR (higher levels)
-      // both. Spike traps only appear directly on ground tiles
-      // below — see the dedicated ground-decoration pass.
       final enemyRoll = rng.nextDouble();
       if (enemyRoll < 0.30 + diff * 0.04) {
         final baseSpeed = 0.8 + rng.nextDouble() * (1.0 + diff * 0.3);
@@ -928,8 +804,7 @@ class _MarioGameScreenState extends State<MarioGameScreen> {
             x: x + 0.1, y: platY - kEnemyH, vx: baseSpeed));
       }
       if (diff >= 1 && enemyRoll > 0.55 && rng.nextDouble() < 0.40) {
-        // Flyer hovers a bit above the platform top, patrolling a
-        // ±1.2-unit segment centered on the platform's middle.
+
         final cx = x + platW / 2;
         final flyY = (platY - 1.8).clamp(kPlatYMin - 1.5, kPlatYMax - 0.5);
         _flyers.add(_Flyer(
@@ -956,12 +831,7 @@ class _MarioGameScreenState extends State<MarioGameScreen> {
             : typeRoll < 0.75
                 ? _PowerType.fireball
                 : _PowerType.life;
-        // Lifted higher than before — `kPowerBlockLift` puts the
-        // block bottom ~1.95 above the platform top, so the player
-        // can stand under, jump straight up to bonk it from below,
-        // AND the block reads as a deliberate goal in the air
-        // rather than something at head height the player keeps
-        // bumping into walking past.
+
         _powerBlocks.add(_PowerBlock(
           x + platW / 2 - kPbW / 2,
           platY - kPowerBlockLift - kPbH,
@@ -972,10 +842,6 @@ class _MarioGameScreenState extends State<MarioGameScreen> {
       x += platW + 1.8 + rng.nextDouble() * 1.6;
     }
 
-    // ── Ground decorations: Goombas + Spike traps ──────────────
-    // Spike traps are tied to ground tiles (never over a gap) and
-    // spawn farther into the world so the player isn't surprised
-    // at level start. Density scales with difficulty.
     for (final p in _platforms.where((p) => p.isGround)) {
       if (p.w > 3.5 && rng.nextDouble() < 0.45) {
         final ex = p.x + 2.0 + rng.nextDouble() * (p.w - 2.5);
@@ -984,10 +850,7 @@ class _MarioGameScreenState extends State<MarioGameScreen> {
             y: 13.0 - kEnemyH,
             vx: 0.9 + rng.nextDouble() * (0.8 + diff * 0.25)));
       }
-      // Koopas — 20% chance on wide ground at diff ≥ 1, scaling
-      // a bit with level. Placed in the second half of the
-      // segment so they're not the very first enemy the player
-      // sees on the level.
+
       if (diff >= 1 && p.w > 4.5 && p.x > 6.0) {
         final koopaChance = 0.20 + diff * 0.04;
         if (rng.nextDouble() < koopaChance) {
@@ -1004,11 +867,7 @@ class _MarioGameScreenState extends State<MarioGameScreen> {
       if (diff >= 1 && p.w > 4.0 && p.x > 5.0) {
         final spikeChance = 0.18 + diff * 0.05;
         if (rng.nextDouble() < spikeChance) {
-          // Spike sits on top of the ground (its top at y=13.0
-          // means its hitbox occupies y=13.0..13.6, immediately
-          // above the ground surface). Keep at least 1.5 units
-          // away from the platform edges so the player has
-          // landing room on either side.
+
           final sx = p.x + 1.5 + rng.nextDouble() * (p.w - 3.0);
           _spikes.add(_Spike(sx, 12.4));
         }
@@ -1017,12 +876,7 @@ class _MarioGameScreenState extends State<MarioGameScreen> {
   }
 
   Future<void> _updateFirestore(double newSaldo) async {
-    // Routes through the server-side `updateRewardsSaldo`
-    // callable instead of writing rewards/{docId} directly
-    // (admin-only collection — direct writes failed silently
-    // for every non-admin user). The CF resolves the wallet,
-    // applies the delta in a transaction, and mirrors the
-    // result to the owner-readable card cache.
+
     final delta = newSaldo - _lastCommitted;
     if (delta == 0) return;
     final result = await applyArcadeDelta(
@@ -1119,7 +973,7 @@ class _MarioGameScreenState extends State<MarioGameScreen> {
       child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
         Text(
             _lives <= 0
-                // Left untranslated: idiomatic in Spanish arcades.
+
                 ? '💀 GAME OVER'
                 : _t('😵 ¡Perdiste una vida!', '😵 You lost a life!'),
             style: const TextStyle(color: Colors.red, fontSize: 22, fontWeight: FontWeight.bold)),
@@ -1290,9 +1144,6 @@ class _MarioPainter extends CustomPainter {
       canvas.drawPath(fp, Paint()..color = Colors.red);
     }
 
-    // Spike traps — fixed-position red triangles sitting on the
-    // ground. Drawn before enemies so a Goomba walking over one
-    // visually occludes its tip (slightly).
     for (final s in spikes) {
       final ssx = sx(s.x, cs);
       if (ssx + 0.6 * cs < 0 || ssx > size.width) continue;
@@ -1313,7 +1164,7 @@ class _MarioPainter extends CustomPainter {
           ..lineTo(baseRX, baseLY)
           ..close();
         canvas.drawPath(path, spikePaint);
-        // Subtle bottom shading line so it reads as 3D.
+
         canvas.drawLine(
             Offset(left, baseLY),
             Offset(baseRX, baseLY),
@@ -1340,10 +1191,6 @@ class _MarioPainter extends CustomPainter {
       }
     }
 
-    // Koopas — green turtles. Walking pose draws head + shell;
-    // shelled pose draws JUST the shell (lower, no head, with a
-    // band texture). Shell pulses when about to revert so the
-    // player knows the 3-second window is closing.
     for (final k in koopas) {
       if (!k.alive) continue;
       final ksx = sx(k.x, cs);
@@ -1358,8 +1205,7 @@ class _MarioPainter extends CustomPainter {
       final headColor  = const Color(0xFFAED581);
 
       if (isShelled || k.stomped) {
-        // Pulse hint: ramps up as shellTimer approaches 0 — only
-        // when about to revert (last second).
+
         final aboutToRevert =
             !k.stomped && k.shellTimer > 0 && k.shellTimer < 1.0;
         final pulse = aboutToRevert
@@ -1369,14 +1215,14 @@ class _MarioPainter extends CustomPainter {
         final shellOval = Rect.fromLTWH(
             ksx, ksy + (kEnemyH * cs - kh), kw, kh);
         canvas.drawOval(shellOval, shellPaint);
-        // Shell rim
+
         canvas.drawOval(
             shellOval,
             Paint()
               ..color = shellShade
               ..style = PaintingStyle.stroke
               ..strokeWidth = 1.6);
-        // Spotted band (3 dots across)
+
         if (!k.stomped) {
           final spotPaint = Paint()..color = shellShade;
           for (int i = 0; i < 3; i++) {
@@ -1386,8 +1232,7 @@ class _MarioPainter extends CustomPainter {
           }
         }
       } else {
-        // Walking: shell on top, head poking out (left or right
-        // based on movement direction).
+
         final shellPaint = Paint()..color = shellColor;
         final bodyR = Rect.fromLTWH(ksx, ksy + kh * 0.15, kw, kh * 0.85);
         canvas.drawOval(bodyR, shellPaint);
@@ -1397,7 +1242,7 @@ class _MarioPainter extends CustomPainter {
               ..color = shellShade
               ..style = PaintingStyle.stroke
               ..strokeWidth = 1.4);
-        // Head
+
         final facingRight = k.vx > 0;
         final headCx = facingRight
             ? ksx + kw * 0.85
@@ -1406,13 +1251,13 @@ class _MarioPainter extends CustomPainter {
             Offset(headCx, ksy + kh * 0.25),
             cs * 0.18,
             Paint()..color = headColor);
-        // Eye
+
         final eyeOff = facingRight ? cs * 0.06 : -cs * 0.06;
         canvas.drawCircle(
             Offset(headCx + eyeOff, ksy + kh * 0.22),
             cs * 0.045,
             Paint()..color = Colors.black);
-        // Feet
+
         canvas.drawOval(
             Rect.fromLTWH(ksx + kw * 0.05,
                 ksy + kh - cs * 0.13, kw * 0.4, cs * 0.18),
@@ -1424,9 +1269,6 @@ class _MarioPainter extends CustomPainter {
       }
     }
 
-    // Flyers — winged, purple-bodied enemies bobbing in the air.
-    // Wings flap on a 120ms timer so each flyer reads as alive,
-    // and squash flat when stomped (same convention as Goomba).
     final wingsUp =
         (DateTime.now().millisecondsSinceEpoch ~/ 120).isEven;
     for (final f in flyers) {
@@ -1439,7 +1281,7 @@ class _MarioPainter extends CustomPainter {
       final bodyR = Rect.fromLTWH(fsx, fsy + (kEnemyH * cs - fh), fw, fh);
 
       if (!f.stomped) {
-        // Wings — two trapezoids that flap.
+
         final wingPaint = Paint()..color = const Color(0xFFE1BEE7);
         final wingShade = Paint()..color = const Color(0xFFAB47BC);
         final wingOffsetY = wingsUp ? -fh * 0.15 : 0.0;
@@ -1459,7 +1301,6 @@ class _MarioPainter extends CustomPainter {
         canvas.drawPath(rightWing, wingShade);
       }
 
-      // Body (purple) — distinguishes from Goomba's brown.
       canvas.drawOval(
           bodyR, Paint()..color = const Color(0xFF6A1B9A));
       if (!f.stomped) {
@@ -1486,13 +1327,7 @@ class _MarioPainter extends CustomPainter {
   void _drawPlayer(Canvas canvas, double cs) {
     final scale = isBig ? 1.45 : 1.0;
     final psx = sx(px, cs);
-    // Anchor the visual to the COLLISION FEET so a bigger Mario
-    // grows UPWARD from the platform rather than sinking down
-    // through it. The collision box stays kPlayerH=1.1 tall
-    // regardless of `isBig`; without this offset the rendered
-    // sprite extended (1.45-1.0)*1.1=0.495 units below collision
-    // feet, which read on screen as "Mario is half-inside the
-    // floor".
+
     final extraH = kPlayerH * cs * (scale - 1.0);
     final psy = sy(py, cs) - extraH;
     final pw = kPlayerW * cs * scale;
@@ -1535,7 +1370,6 @@ class _MarioPainter extends CustomPainter {
   @override
   bool shouldRepaint(_MarioPainter old) => true;
 }
-
 
 const List<MarioLevel> kMarioLevels = [
   const MarioLevel(

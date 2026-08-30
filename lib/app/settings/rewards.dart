@@ -13,10 +13,6 @@ import '../../constants/app_images.dart';
 class RewardsCardPage extends StatefulWidget {
   final VoidCallback onBack;
 
-  /// Called when the user wants to open the "Crear monedero" flow. The
-  /// settings shell hosts the create screen as its own indexed page so the
-  /// bottom nav stays visible — passing the callback up keeps the nav
-  /// alive instead of pushing a fresh Navigator route on top of the shell.
   final VoidCallback? onCreateCard;
 
   const RewardsCardPage({
@@ -32,9 +28,6 @@ class RewardsCardPage extends StatefulWidget {
 class _RewardsCardPageState extends State<RewardsCardPage> {
   double _saldo = 0.0;
 
-  /// Whether the balance actually came back from the server. Until it does,
-  /// `_saldo` is just its 0.0 initial value — printing that as "$0.00" is how
-  /// a healthy wallet ends up looking empty to the customer.
   bool _balanceLoaded = false;
   bool _balanceFailed = false;
   String _cvv = '';
@@ -43,27 +36,16 @@ class _RewardsCardPageState extends State<RewardsCardPage> {
   final _cvvController = TextEditingController();
   bool _isAddingExistingCard = false;
 
-  // Linking-flow only: form key + loading + NIP-visibility toggle. The
-  // controllers above are reused (the link form is mutually exclusive with
-  // the update-NIP form so the shared `_cvvController` never collides).
   final GlobalKey<FormState> _linkFormKey = GlobalKey<FormState>();
   bool _isLinking = false;
   bool _linkNipVisible = false;
 
-  // Update-phone + update-NIP tile state. These render once the wallet is
-  // linked, mutually exclusive with the vincular flow. ExpansionTile
-  // manages its own open/closed visual — we only keep loading + NIP
-  // visibility here.
   final GlobalKey<FormState> _phoneFormKey = GlobalKey<FormState>();
   final GlobalKey<FormState> _nipFormKey = GlobalKey<FormState>();
   bool _newNipVisible = false;
   bool _isUpdatingPhone = false;
   bool _isUpdatingNip = false;
 
-  // Weak-PIN blacklist (same as the create-monedero validator). The new NIP
-  // must clear this and the all-same-digit regex below before we let it
-  // through to the CF — otherwise we'd be downgrading wallet security
-  // every time someone "updated" to 0000.
   static const Set<String> _weakPins = {
     '1234', '4321', '2345', '3456', '4567',
     '5678', '6789', '7890', '0123', '0987',
@@ -101,14 +83,12 @@ class _RewardsCardPageState extends State<RewardsCardPage> {
           _balanceFailed = false;
         });
       } else if (mounted) {
-        // Wallet link didn't resolve. Don't let the card keep printing the
-        // initial 0.0 as if it were the real balance.
+
         setState(() => _balanceFailed = true);
       }
     } catch (e) {
       if (kDebugMode) debugPrint('Error fetching balance: $e');
-      // Swallowing this used to render "$0.00" over a perfectly healthy
-      // wallet — the customer reads that as "my points are gone".
+
       if (mounted) setState(() => _balanceFailed = true);
     }
   }
@@ -155,8 +135,7 @@ class _RewardsCardPageState extends State<RewardsCardPage> {
       _fetchRewardsCardData();
     } on FirebaseFunctionsException catch (e) {
       if (!mounted) return;
-      // The CF returns a Spanish, human-readable reason for every reject
-      // (wrong NIP, unknown phone, already-linked, etc.). Surface it.
+
       _showAlertDialog('No se pudo vincular',
           e.message ?? 'No encontramos un monedero con esos datos.');
     } catch (e) {
@@ -265,10 +244,7 @@ class _RewardsCardPageState extends State<RewardsCardPage> {
   }
 
   void _navigateToCreateCard() {
-    // Old code pushed a fresh MaterialPageRoute via the root Navigator,
-    // which covered the bottom nav. The settings shell already hosts the
-    // create screen at its own index — defer to it via the callback so
-    // the nav bar stays visible.
+
     widget.onCreateCard?.call();
   }
 
@@ -388,11 +364,7 @@ class _RewardsCardPageState extends State<RewardsCardPage> {
                         _buildVipEnrollCard(),
                       ],
                       const SizedBox(height: 22),
-                      // Section eyebrow + two collapsible cards. Mirrors
-                      // the settings-page card pattern (white Card with
-                      // elevation 4, expansion tile, expand_more chevron,
-                      // small inline form) so the two screens read as one
-                      // product.
+
                       _settingsSectionLabel('Ajustes de monedero'),
                       _ExpandingPhoneCard(
                         formKey: _phoneFormKey,
@@ -435,10 +407,7 @@ class _RewardsCardPageState extends State<RewardsCardPage> {
       holder: holder,
       nip: _cvv,
       showNipReveal: true,
-      // The QR back face needs a real 10-digit phone to be useful; if the
-      // wallet doc somehow has a malformed/short number, just disable the
-      // flip (the front-only static card still works). A VIP token makes
-      // the flip useful regardless of the stored phone shape.
+
       enableQrFlip:
           digits.length == 10 || (qrToken != null && qrToken.isNotEmpty),
       qrToken: qrToken,
@@ -450,11 +419,6 @@ class _RewardsCardPageState extends State<RewardsCardPage> {
   bool _vipConfirming = false;
   String? _vipError;
 
-  /// Opt-in VIP enrollment — everything happens IN the card (no dialogs).
-  /// Mints the signed QR card (the PDV verifies it server-side) and flips the
-  /// persistent isVip flag that drives the +50% accrual. On success the
-  /// cardInfo stream flips isVip → this card auto-hides and the gold card
-  /// appears, so no confirmation popup is needed.
   Future<void> _enrollVip() async {
     if (_isEnrollingVip) return;
     setState(() {
@@ -463,7 +427,7 @@ class _RewardsCardPageState extends State<RewardsCardPage> {
     });
     try {
       await FirebaseFunctions.instance.httpsCallable('enrollVip').call();
-      // Success is signalled by the card swapping to the gold VIP card.
+
     } on FirebaseFunctionsException catch (e) {
       if (mounted) {
         setState(() =>
@@ -602,9 +566,6 @@ class _RewardsCardPageState extends State<RewardsCardPage> {
     );
   }
 
-  /// Section eyebrow matching the settings page (`_sectionLabel` there):
-  /// 12 px, w700, letter-spacing 0.8, grey[500], uppercased, with
-  /// `(4, 0, 4, 8)` padding above the first card.
   Widget _settingsSectionLabel(String text) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
@@ -663,19 +624,12 @@ class _RewardsCardPageState extends State<RewardsCardPage> {
 
   Widget _buildNoCardView() {
     return SingleChildScrollView(
-      // Bottom padding must clear the body's BottomFade region. The fade
-      // wraps the entire scaffold body with clearHeight 96 + fadeHeight 48
-      // (= 144px from the bottom is masked toward transparent). With less
-      // padding the "Si olvidaste tu NIP..." footer landed inside the fade
-      // and read as washed-out. 160 keeps it cleanly above the mask.
+
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 160),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Hero illustration block. Soft grey rounded panel with a piggy
-          // icon tile + "Sin monedero" copy. Sets the tone before the two
-          // options below — same dark gradient idea as the active card,
-          // just inverted (light surface, dark accent).
+
           Container(
             padding: const EdgeInsets.fromLTRB(20, 22, 20, 22),
             decoration: BoxDecoration(
@@ -733,7 +687,6 @@ class _RewardsCardPageState extends State<RewardsCardPage> {
           const _ChooseLabel(label: 'ELIGE UNA OPCIÓN'),
           const SizedBox(height: 10),
 
-          // Option 1 — Crear monedero (primary, leads to create screen).
           _OptionCard(
             icon: Icons.add_card_rounded,
             title: 'Crear monedero nuevo',
@@ -743,14 +696,12 @@ class _RewardsCardPageState extends State<RewardsCardPage> {
           ),
           const SizedBox(height: 10),
 
-          // Option 2 — Vincular monedero existente (secondary, expands).
           _LinkExistingTile(
             expanded: _isAddingExistingCard,
             onToggle: () => setState(
                 () => _isAddingExistingCard = !_isAddingExistingCard),
           ),
 
-          // Inline form is shown when the user opens the vincular tile.
           AnimatedSize(
             duration: const Duration(milliseconds: 200),
             curve: Curves.easeOutCubic,
@@ -775,8 +726,7 @@ class _RewardsCardPageState extends State<RewardsCardPage> {
           ),
 
           const SizedBox(height: 28),
-          // Privacy note at the bottom — same shield-style as the create
-          // screen so the two screens feel like one product.
+
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -805,10 +755,6 @@ class _RewardsCardPageState extends State<RewardsCardPage> {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────
-// No-card-view atoms — option cards, vincular tile + form, primary button
-// ─────────────────────────────────────────────────────────────────────────
-
 class _ChooseLabel extends StatelessWidget {
   final String label;
   const _ChooseLabel({required this.label});
@@ -830,9 +776,6 @@ class _ChooseLabel extends StatelessWidget {
   }
 }
 
-/// One-tap option card. The primary variant uses the dark ink fill (CTA),
-/// the secondary variant the soft-grey fill. Same shape on both so the two
-/// options read as siblings rather than competing buttons.
 class _OptionCard extends StatelessWidget {
   final IconData icon;
   final String title;
@@ -922,8 +865,6 @@ class _OptionCard extends StatelessWidget {
   }
 }
 
-/// Secondary-variant tile for "Ya tengo monedero". When tapped it doesn't
-/// navigate; it expands an inline form below itself.
 class _LinkExistingTile extends StatelessWidget {
   final bool expanded;
   final VoidCallback onToggle;
@@ -1003,7 +944,6 @@ class _LinkExistingTile extends StatelessWidget {
   }
 }
 
-/// Inline form rendered under the `_LinkExistingTile` when expanded.
 class _LinkForm extends StatelessWidget {
   final GlobalKey<FormState> formKey;
   final TextEditingController phoneController;
@@ -1117,9 +1057,6 @@ class _LinkForm extends StatelessWidget {
   }
 }
 
-/// Single labelled field used inside `_LinkForm`. Same visual rhythm as the
-/// fields on the create-monedero screen (ink icon tile + small eyebrow +
-/// bold input) so the two flows feel like one product.
 class _LinkField extends StatelessWidget {
   final IconData icon;
   final String label;
@@ -1224,15 +1161,6 @@ class _LinkField extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────
-// Update-section cards — these mirror `_buildExpandingInputCard` in
-// settings.dart: white Material `Card` (elevation 4, 12 px radius,
-// `Colors.black26` shadow), `ExpansionTile` with a black icon + 16 px w600
-// title, `expand_more` chevron in `black54`, and an inline form below with
-// a grey-100 filled `TextFormField` plus a small 50×50 check-icon black
-// button. Same look-and-feel as the rest of the settings shell.
-// ─────────────────────────────────────────────────────────────────────────
-
 const Color _kSettingsAccent = Colors.black;
 const Color _kSettingsCard = Colors.white;
 
@@ -1316,9 +1244,7 @@ class _ExpandingNipCard extends StatelessWidget {
           ],
           isLoading: isLoading,
           onSave: onSave,
-          // Eye toggle sits inside the field as a suffixIcon — matches
-          // how the password field on the settings page renders its
-          // show/hide affordance.
+
           suffixIcon: IconButton(
             onPressed: onToggleVisible,
             tooltip: nipVisible ? 'Ocultar NIP' : 'Mostrar NIP',
@@ -1337,10 +1263,6 @@ class _ExpandingNipCard extends StatelessWidget {
   }
 }
 
-/// Generic settings-style expanding card. Takes a title, leading icon and
-/// the body to render under the header. Settings page uses this exact
-/// surface treatment (elevation 4, 12 px radius, ExpansionTile with the
-/// `expand_more` chevron) for every editable field.
 class _SettingsExpandingCard extends StatelessWidget {
   final String title;
   final IconData icon;
@@ -1400,9 +1322,6 @@ class _SettingsExpandingCard extends StatelessWidget {
   }
 }
 
-/// Inline `TextFormField` + 50×50 black check button — same layout as
-/// settings' `_buildExpandingInputCard` body, with a spinner swapped in
-/// while the CF call is in flight.
 class _InlineFieldRow extends StatelessWidget {
   final TextEditingController controller;
   final String? Function(String?) validator;

@@ -26,7 +26,6 @@ class SettingsPage extends StatefulWidget {
 class _SettingsPageState extends State<SettingsPage> {
   int _currentIndex = 0;
 
-
   late TextEditingController _emailController;
   late TextEditingController _phoneNumberController;
   late TextEditingController _passwordController;
@@ -299,9 +298,7 @@ class _SettingsPageState extends State<SettingsPage> {
         onBack: _navigateToSettings,
         onCreateCard: () => setState(() => _currentIndex = 3),
       ),
-      // Back from create lands on the rewards page (index 2), not the
-      // settings home — the user came from rewards and expects to see
-      // their new monedero immediately after creating it.
+
       CreateNewCard(onBack: () => setState(() => _currentIndex = 2)),
       CouponsSection(onBack: _navigateToSettings),
     ];
@@ -825,7 +822,6 @@ class _SettingsPageState extends State<SettingsPage> {
       ),
     );
   }
-
 
   Widget _sectionLabel(String text) {
     return Padding(

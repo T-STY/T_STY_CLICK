@@ -9,10 +9,7 @@ import '../pass_reset.dart';
 import 'dart:ui';
 
 class LoginForm extends StatefulWidget {
-  /// Credentials carried over from a just-completed registration so the
-  /// customer doesn't retype them. They are only seeded into the fields —
-  /// sign-in still requires an explicit tap, because the account's email
-  /// has to be verified first.
+
   final String? prefillEmail;
   final String? prefillPassword;
 
@@ -27,8 +24,6 @@ class _LoginFormState extends State<LoginForm> {
   late final TextEditingController _emailController;
   late final TextEditingController _passwordController;
 
-  /// Same latch as the signup button: this screen is where every new user is
-  /// sent right after registering, so it inherits the repeat-tap habit.
   bool _signingIn = false;
 
   @override
@@ -181,15 +176,9 @@ class _LoginFormState extends State<LoginForm> {
                         password: _passwordController.text,
                       );
 
-                      // Resolve the verification state and tear down an
-                      // unverified session BEFORE any mounted check. A
-                      // `mounted` bail-out here used to return while the
-                      // session was still live and unverified, which
-                      // main.dart's _checkUser() would then admit on the
-                      // next cold launch.
                       try {
                         await userCredential.user!.reload();
-                      } catch (_) {/* fall back to the cached claim */}
+                      } catch (_) {}
                       final refreshed = _auth.currentUser;
                       final bool verified =
                           refreshed != null && refreshed.emailVerified;
@@ -425,11 +414,6 @@ class _LoginFormState extends State<LoginForm> {
   }
 }
 
-/// Shown when a sign-in succeeds but the address is still unverified. The
-/// session has already been torn down by the caller, so [email]/[password]
-/// are needed to re-authenticate for the duration of a resend — before this
-/// existed, a single failed send at registration left the customer with no
-/// way to ever get another verification mail.
 void _showEmailVerificationDialog(
   BuildContext context, {
   required String email,
@@ -456,8 +440,7 @@ void _showEmailVerificationDialog(
         String message;
         bool isError;
         try {
-          // Re-authenticate only long enough to send, then sign back out so
-          // no unverified session is left alive behind the dialog.
+
           final cred = await auth.signInWithEmailAndPassword(
             email: email,
             password: password,
@@ -477,7 +460,7 @@ void _showEmailVerificationDialog(
         } finally {
           try {
             await auth.signOut();
-          } catch (_) {/* the login gate still guards entry */}
+          } catch (_) {}
         }
 
         setLocal(() {

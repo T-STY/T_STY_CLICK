@@ -156,9 +156,7 @@ class _BreakoutScreenState extends State<BreakoutScreen> {
     if (ns == null) return;
     if (!mounted) return;
     _saldo = ns;
-    // The replay charge already landed on the server, so the committed
-    // ledger has to follow it. Without this the next credit computes its
-    // delta against the pre-charge value and debits the player instead.
+
     _lastCommitted = ns;
     widget.onSaldoChanged(ns);
     _startLevel();
@@ -309,12 +307,7 @@ class _BreakoutScreenState extends State<BreakoutScreen> {
   }
 
   Future<void> _updateFirestore(double newSaldo) async {
-    // Routes through the server-side `updateRewardsSaldo`
-    // callable instead of writing rewards/{docId} directly
-    // (admin-only collection — direct writes failed silently
-    // for every non-admin user). The CF resolves the wallet,
-    // applies the delta in a transaction, and mirrors the
-    // result to the owner-readable card cache.
+
     final delta = newSaldo - _lastCommitted;
     if (delta == 0) return;
     final result = await applyArcadeDelta(
@@ -375,8 +368,7 @@ class _BreakoutScreenState extends State<BreakoutScreen> {
           ),
         if (_state == _BKState.gameOver)
           _buildOverlay(
-            // "Game Over" is idiomatic in Spanish arcades and stays one line
-            // at the title size — left untranslated on purpose.
+
             title: 'GAME OVER',
             subtitle: _t('Puntuación: $_score', 'Score: $_score'),
             actionLabel: _t('NUEVA PARTIDA', 'NEW GAME'),

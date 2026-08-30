@@ -236,10 +236,7 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> {
     if (!mounted) return;
     setState(() {
       _saldo = ns;
-      // Resync the ledger: the replay charge already committed on the
-      // server, so _lastCommitted must follow _saldo. Otherwise the next
-      // credit's delta (newSaldo - _lastCommitted) comes out negative and
-      // debits the player instead of paying them.
+
       _lastCommitted = ns;
       _initGame();
     });
@@ -255,12 +252,7 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> {
   }
 
   Future<void> _updateFirestore(double newSaldo) async {
-    // Routes through the server-side `updateRewardsSaldo`
-    // callable instead of writing rewards/{docId} directly
-    // (admin-only collection — direct writes failed silently
-    // for every non-admin user). The CF resolves the wallet,
-    // applies the delta in a transaction, and mirrors the
-    // result to the owner-readable card cache.
+
     final delta = newSaldo - _lastCommitted;
     if (delta == 0) return;
     final result = await applyArcadeDelta(
@@ -414,8 +406,7 @@ class _SnakeGameScreenState extends State<SnakeGameScreen> {
           const Text('☠', style: TextStyle(fontSize: 48, color: Color(0xFF880000))),
           const SizedBox(height: 8),
           Text(
-            // Left untranslated: idiomatic in Spanish arcades, and keeps the
-            // title on a single line.
+
             'GAME OVER',
             style: const TextStyle(
               color: Color(0xFFFF3300),

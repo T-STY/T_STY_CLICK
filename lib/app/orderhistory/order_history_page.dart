@@ -21,12 +21,7 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
   int _currentIndex = 0;
   UserOrder? _selectedOrder;
   int? _selectedOrderIndex;
-  // When false, the visible list is filtered to orders from the last 30
-  // days. Tapping "Ver más antiguos" lifts the filter and shows the full
-  // history. Older orders ARE NOT deleted any more — the destructive
-  // cleanup that used to nuke anything past 30 days is gone, replaced by
-  // an admin-side CF archive trigger (functions/index.js) that mirrors
-  // every order delete to `users/{uid}/order_archive/{id}` for support.
+
   bool _showAllOrders = false;
 
   Stream<List<UserOrder>> _fetchOrderHistory() {
@@ -153,9 +148,7 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
           );
         } else {
           final allOrders = snapshot.data!;
-          // Default view = last 30 days. Anything older sits behind the
-          // "Ver más antiguos" expander so the most recent orders stay
-          // glanceable but the user can still self-serve their history.
+
           final cutoff = DateTime.now().subtract(const Duration(days: 30));
           final recent = allOrders
               .where((o) => o.timestamp.isAfter(cutoff))
@@ -166,8 +159,7 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
 
           final visible = _showAllOrders ? allOrders : recent;
           final hasOlder = older.isNotEmpty;
-          // Total cells = visible orders + (optional expander row) + bottom
-          // padding so nothing sits behind the nav bar.
+
           final extras = (hasOlder ? 1 : 0) + 1;
 
           return ListView.builder(
@@ -181,7 +173,7 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
                   onTap: () => _navigateToOrderDetail(order, index + 1),
                 );
               }
-              // Expander row, only when there are actually older orders.
+
               if (hasOlder && index == visible.length) {
                 return _OlderHistoryToggle(
                   expanded: _showAllOrders,
@@ -190,7 +182,7 @@ class _OrderHistoryPageState extends State<OrderHistoryPage> {
                       () => _showAllOrders = !_showAllOrders),
                 );
               }
-              // Bottom spacer for the nav bar.
+
               return const SizedBox(height: 120);
             },
           );
@@ -212,13 +204,6 @@ class OrderCard extends StatelessWidget {
     required this.onTap,
   });
 
-  /// Friendly Spanish date that adapts to recency:
-  ///   - same calendar day  → "Hoy · 14:30"
-  ///   - calendar day before → "Ayer · 14:30"
-  ///   - same year          → "2 Jun · 14:30"
-  ///   - older year         → "2 Jun 2025 · 14:30"
-  /// Same-row footprint as the old `02/06/2026 14:30` but scans faster
-  /// because recent orders skip the date entirely.
   String _formatDate(DateTime date) {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
@@ -229,9 +214,7 @@ class OrderCard extends StatelessWidget {
     if (diffDays == 0) return 'Hoy · $time';
     if (diffDays == 1) return 'Ayer · $time';
     final pattern = date.year == now.year ? 'd MMM' : 'd MMM yyyy';
-    // intl renders Spanish months lowercase ("2 jun"). Cap the first
-    // letter of the month name so it matches the rest of the labels
-    // on the row ("Hoy"/"Ayer" both start uppercase too).
+
     final formatted = DateFormat(pattern, 'es').format(date);
     final capped = formatted.replaceFirstMapped(
       RegExp(r'[a-záéíóúñ]'),
@@ -301,11 +284,7 @@ class OrderCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      // Show the last 6 chars uppercased — Firestore doc
-                      // ids are 20-char gibberish, full id makes the row
-                      // unreadable. Last 6 stays collision-free across a
-                      // user's own history (which is what we render here)
-                      // and reads more like a real order number.
+
                       'Pedido #${_shortId(order.id)}',
                       style: const TextStyle(
                         fontSize: 16,
@@ -352,10 +331,7 @@ class OrderCard extends StatelessWidget {
                             size: 16, color: Colors.grey),
                         const SizedBox(width: 4),
                         Text(
-                          // Show the user-facing label — pickup orders in
-                          // "Enviado" read as "Listo para recoger". The
-                          // underlying status keyword still drives the
-                          // colour so the visual state stays consistent.
+
                           order.displayStatus,
                           style: TextStyle(
                             fontSize: 14,
@@ -392,8 +368,7 @@ class OrderCard extends StatelessWidget {
               ),
             ],
           ),
-              // Small fulfillment marker pinned to the top-right corner —
-              // replaces the big chip that used to sit under the order id.
+
               Positioned(
                 top: 0,
                 right: 0,
@@ -407,13 +382,6 @@ class OrderCard extends StatelessWidget {
   }
 }
 
-/// Row that sits at the end of the recent-orders list. When the user has
-/// any orders older than 30 days, this acts as a toggle:
-///   - collapsed → "Ver pedidos anteriores (N)"
-///   - expanded  → "Mostrar solo los últimos 30 días"
-/// Older orders are NEVER deleted any more (the destructive cleanup the
-/// page used to do is gone) — the expander just lifts the visible filter
-/// against the same live stream.
 class _OlderHistoryToggle extends StatelessWidget {
   final bool expanded;
   final int olderCount;
@@ -472,9 +440,6 @@ class _OlderHistoryToggle extends StatelessWidget {
   }
 }
 
-/// Tiny fulfillment marker pinned to the top-right corner of an OrderCard —
-/// storefront for in-store pickup, delivery-moto for home delivery. Replaces
-/// the old full-width pill; a Tooltip keeps the meaning discoverable.
 class _FulfillmentMark extends StatelessWidget {
   final bool isPickup;
   const _FulfillmentMark({required this.isPickup});

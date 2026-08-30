@@ -65,10 +65,7 @@ class _CouponsSectionState extends State<CouponsSection> {
       if (!mounted) return;
       _onSuccess();
     } on FirebaseFunctionsException catch (e) {
-      // The CF returns a human-readable Spanish reason for every reject
-      // path (eligibility, expired, already-claimed, sold-out, bad code).
-      // Surfacing it so a user blocked by the audience filter sees WHY
-      // instead of a generic "Error" — otherwise they'll keep retrying.
+
       if (!mounted) return;
       _onError();
       _showRejectionDialog(e.message ?? 'No se pudo aplicar el cupón.');
@@ -305,9 +302,7 @@ class _CouponsSectionState extends State<CouponsSection> {
         c['expiry_date'] is Timestamp ? (c['expiry_date'] as Timestamp) : null;
     final expired =
         expiry != null && expiry.toDate().isBefore(DateTime.now());
-    // Surface the coupon's scope on the card so users know *before* checkout
-    // that "SAVE50" only applies to certain products. Without this they only
-    // learn at the cashier moment via the checkout's "No aplica" badge.
+
     final filter = c['productFilter'];
     final filterLabel = cf.productFilterSummary(filter is Map ? filter : null);
     final hasFilter = filterLabel.isNotEmpty;
@@ -338,7 +333,7 @@ class _CouponsSectionState extends State<CouponsSection> {
         elevation: 2.5,
         shadowColor: Colors.black.withValues(alpha: 0.22),
         child: SizedBox(
-          // Filter line needs ~24px more height than the unfiltered case.
+
           height: hasFilter ? 136 : 112,
           child: Stack(
             children: [

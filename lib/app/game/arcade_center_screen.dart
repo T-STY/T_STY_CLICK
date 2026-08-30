@@ -83,9 +83,7 @@ typedef ArcadeGameBuilder = Widget Function({
   required double currentSaldo,
   required ArcadeInputController controller,
   required void Function(double) onSaldoChanged,
-  // Cabinet language setting. Without this the cartridges couldn't see it and
-  // every in-game string was hardcoded — Spanish players read "GAME OVER" and
-  // English players read "Nueva Partida".
+
   required AppLanguage language,
 });
 
@@ -212,13 +210,8 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen>
   int? _lastPlayedIndex;
   ArcadeGameDef? _activeGame;
 
-  /// True while the launch-cost confirmation is on screen. Rendered inside the
-  /// console bezel (under the CRT overlay) rather than as a Material dialog so
-  /// it reads as part of the machine.
   bool _confirmPlay = false;
 
-  /// Set when a game screen asks (via [arcadeReplayConfirm]) to charge for a
-  /// restart. The shell owns the prompt so both spend points look identical.
   Completer<bool>? _pendingReplay;
 
   void _onReplayConfirmRequest() {
@@ -227,7 +220,6 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen>
     setState(() => _pendingReplay = c);
   }
 
-  /// Single exit for both prompts: A/Start confirms, B/Select cancels.
   void _resolveConfirm(bool ok) {
     final pending = _pendingReplay;
     if (pending != null) {
@@ -239,10 +231,7 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen>
     setState(() => _confirmPlay = false);
     if (ok) _startSelectedGame();
   }
-  // Sized to the registry — any game added to `kArcadeGames` gets
-  // a slot automatically. Hardcoded 12 here previously meant mario
-  // (index 12) crashed `_highScores[idx]` with RangeError, blocking
-  // navigation to the last game.
+
   final List<int> _highScores = List.filled(kArcadeGames.length, 0);
   int? _newRecordIndex;
   Timer? _recordTimer;
@@ -427,7 +416,7 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen>
     WidgetsBinding.instance.removeObserver(this);
     arcadeInsufficientSaldoTick.removeListener(_flashInsufficient);
     arcadeReplayConfirm.removeListener(_onReplayConfirmRequest);
-    // Never leave a game screen awaiting an answer that can no longer come.
+
     final pending = _pendingReplay;
     if (pending != null && !pending.isCompleted) pending.complete(false);
     arcadeReplayConfirm.value = null;
@@ -613,9 +602,6 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen>
       return;
     }
 
-    // The cost prompt is modal: it swallows every button so the D-pad can't
-    // shuffle the selection out from under the game the player is confirming,
-    // and so Select can't quit the game while a replay charge is pending.
     if (_confirmPlay || _pendingReplay != null) {
       if (btn == ArcadeButton.a || btn == ArcadeButton.start) {
         _resolveConfirm(true);
@@ -706,14 +692,10 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen>
     }
   }
 
-  /// Every entry point into a game funnels through here, so the cost
-  /// confirmation can't be bypassed by the carousel, the hero card or the
-  /// "recently played" tile. It only asks — the charge happens in
-  /// [_startSelectedGame] once the player confirms.
   void _launchSelected() {
     final game = kArcadeGames[_selectedIndex];
     if (game.locked || game.builder == null) return;
-    // Don't bother asking for a coin they don't have.
+
     if (_saldo < kArcadePlayCost) {
       _flashInsufficient();
       return;
@@ -724,7 +706,7 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen>
   Future<void> _startSelectedGame() async {
     final game = kArcadeGames[_selectedIndex];
     if (game.locked || game.builder == null) return;
-    // Re-checked at spend time: the balance can move while the prompt is up.
+
     if (_saldo < kArcadePlayCost) {
       _flashInsufficient();
       return;
@@ -1015,10 +997,7 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen>
             },
             child: (_activeGame == null || _poweringOff) ? _buildNeonGrid() : _buildActiveGame(),
           ),
-          // Drawn at bezel level (over the hub AND over a running game, since
-          // the replay prompt fires mid-game) but still UNDER the CRT pass, so
-          // the scanlines fall across it and it reads as part of the machine
-          // instead of an OS dialog floating over the cabinet.
+
           if (_confirmPlay || _pendingReplay != null)
             Positioned.fill(child: _buildPlayConfirm()),
           Positioned.fill(
@@ -1044,8 +1023,6 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen>
     ]);
   }
 
-  /// "Insert coin" prompt: states the cost before any points are spent.
-  /// A/Start confirms, B/Select cancels, and both are also tappable.
   Widget _buildPlayConfirm() {
     final idx = _selectedIndex.clamp(0, kArcadeGames.length - 1);
     final game = kArcadeGames[idx];
@@ -1054,7 +1031,7 @@ class _ArcadeCenterScreenState extends State<ArcadeCenterScreen>
     final bool isReplay = _pendingReplay != null;
 
     return GestureDetector(
-      // Absorbs taps on the scrim so the grid behind stays inert.
+
       onTap: () {},
       child: Container(
         color: Colors.black.withOpacity(0.82),
@@ -2232,9 +2209,7 @@ class _HeroDemoGame extends StatefulWidget {
   final ArcadeGameDef game;
   final String userId;
   final DocumentReference rewardsDocRef;
-  // The attract-mode demo renders a real cartridge, so it needs the cabinet
-  // language too — otherwise the preview would sit in Spanish while the rest
-  // of the machine is in English.
+
   final AppLanguage language;
   const _HeroDemoGame({super.key, required this.game, required this.userId,
       required this.rewardsDocRef, this.language = AppLanguage.spanish});
@@ -2250,10 +2225,7 @@ class _HeroDemoGameState extends State<_HeroDemoGame> {
   void initState() {
     super.initState();
     HighScoreService.setDemoMode(true);
-    // The demo drives a REAL cartridge, so its game-over restart would run the
-    // paid replay path against the signed-in user's wallet — charging them for
-    // a demo they never started, repeatedly, while they idle on the hub.
-    // High scores were already shielded above; puntos were not.
+
     enterArcadeDemo();
     _bot = ArcadeInputController();
     _botTimer = Timer.periodic(const Duration(milliseconds: 120), (_) {
@@ -2869,7 +2841,7 @@ class _CartridgePainter extends CustomPainter {
         break;
 
       case 12:
-        // Pixel mushroom power-up + brick ground.
+
         const cap = Color(0xFFE03A2A);
         const capShade = Color(0xFFA01E14);
         const spot = Color(0xFFFFF4E0);
@@ -2878,13 +2850,13 @@ class _CartridgePainter extends CustomPainter {
         const eye = Color(0xFF1A1A1A);
         const brick = Color(0xFFB46A2A);
         const brickDark = Color(0xFF7A4218);
-        // Cloud puffs in the sky.
+
         p.color = Colors.white.withOpacity(0.55);
         canvas.drawRect(Rect.fromLTWH(w*0.08, h*0.13, w*0.22, h*0.05), p);
         canvas.drawRect(Rect.fromLTWH(w*0.06, h*0.15, w*0.05, h*0.03), p);
         canvas.drawRect(Rect.fromLTWH(w*0.70, h*0.22, w*0.22, h*0.05), p);
         canvas.drawRect(Rect.fromLTWH(w*0.90, h*0.24, w*0.05, h*0.03), p);
-        // 12-wide x 12-tall pixel mushroom.
+
         const cols = 12, rows = 12;
         final pw = w * 0.62 / cols;
         final ph = h * 0.58 / rows;
@@ -2922,7 +2894,7 @@ class _CartridgePainter extends CustomPainter {
             );
           }
         }
-        // Brick ground strip at the bottom.
+
         final brickY = h * 0.84;
         final brickH = h * 0.12;
         const bcols = 6;
@@ -2992,13 +2964,7 @@ class _ConsoleDPadState extends State<_ConsoleDPad> {
 
   void _release() {
     for (final b in _active) widget.controller.release(b);
-    // The pointer-up event can arrive AFTER this widget has been
-    // disposed — common case: user taps a game tile, the arcade
-    // unmounts the d-pad while spinning up the game route, then
-    // the pending pointerUp fires here and would `setState` on a
-    // defunct State. Skip the rebuild but still release the
-    // controller so input state stays consistent for the next
-    // widget that picks it up.
+
     if (!mounted) {
       _active = const {};
       return;

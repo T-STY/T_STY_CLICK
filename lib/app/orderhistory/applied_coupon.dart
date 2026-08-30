@@ -4,11 +4,7 @@ class AppliedCoupon {
   final String code;
   final double maxDiscount;
   final double percentage;
-  /// Snapshot of the coupon's productFilter at order-placement time. Null
-  /// when the coupon applied to the full cart. Shape:
-  /// `{mode: 'include'|'exclude', subcategories, provedores, productIds}`.
-  /// Kept as a raw map (no model class) so future field additions stay
-  /// backward-compatible in stored orders.
+
   final Map<String, dynamic>? productFilter;
 
   AppliedCoupon({
@@ -28,7 +24,5 @@ class AppliedCoupon {
     );
   }
 
-  /// Short label used in order_detail + history cards.
-  /// Returns an empty string when no filter snapshot is present.
   String get productFilterSummary => cf.productFilterSummary(productFilter);
 }

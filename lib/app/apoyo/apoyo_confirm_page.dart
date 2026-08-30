@@ -9,25 +9,12 @@ import 'apoyo_common.dart';
 import 'apoyo_cycle.dart';
 import 'apoyo_done_page.dart';
 
-/// ── APOYO SOCIAL — confirm ──────────────────────────────────────────────────
-///
-/// Its own screen, deliberately not a branch of the store's CheckoutPage:
-/// nothing here is paid, nothing is a card, nothing is a coupon, and the only
-/// promise being made is that a person shows up on Friday with cash. Sharing
-/// checkout would drag every one of those concepts into a screen whose whole
-/// job is to make ONE commitment legible.
-///
-/// The client never sends a price — it sends `expectedTotal`, the number the
-/// member is looking at. `placeApoyoOrder` prices the order from the frozen
-/// snapshot and refuses anything more than a cent away, naming both totals.
 class ApoyoConfirmPage extends StatefulWidget {
   final ApoyoConfig config;
   final Map<String, dynamic> member;
   final ApoyoCycle cycle;
   final List<ApoyoDraftLine> lines;
 
-  /// The member's existing order for this cycle, when they are editing.
-  /// Re-submitting REPLACES it and keeps the same folio.
   final ApoyoOrder? existingOrder;
 
   const ApoyoConfirmPage({
@@ -51,9 +38,6 @@ class _ApoyoConfirmPageState extends State<ApoyoConfirmPage> {
   double? _cash;
   bool _accepted = false;
 
-  /// Re-entrancy latch: a double tap must never place two orders. `_sent`
-  /// stays true after success so the button cannot re-arm while the done
-  /// screen is being pushed.
   bool _submitting = false;
   bool _sent = false;
 
@@ -65,13 +49,7 @@ class _ApoyoConfirmPageState extends State<ApoyoConfirmPage> {
     super.initState();
     final prev = widget.existingOrder;
     _fulfillment = _forcePickup ? 'tienda' : (prev?.fulfillment ?? 'tienda');
-    // The delivery address is NOT a choice, and must never be presented as
-    // one. `placeApoyoOrder` stamps every order with the MEMBERSHIP's own
-    // `addressLine`/`colonia` — the household the program approved, and the
-    // one `apoyo_blocked/h_{householdKey}` is keyed on — no matter which
-    // `addressId` the client sends. A picker over `users/{uid}/addresses`
-    // would show the member one address, write another onto the order, and
-    // send the driver to the membership one with cash to collect.
+
     _addressId = _membershipAddressId.isEmpty ? null : _membershipAddressId;
     if (_fulfillment == 'domicilio' && _addressId == null) {
       _fulfillment = 'tienda';
@@ -79,9 +57,6 @@ class _ApoyoConfirmPageState extends State<ApoyoConfirmPage> {
     _cash = prev?.cashPaidWith;
     _notesCtrl.text = prev?.notes ?? '';
 
-    // The cutoff can pass while this screen is open. When it does, the
-    // commitment stops being one the member can make, and the button says so
-    // instead of sending them into a server rejection.
     _ticker = Timer.periodic(const Duration(seconds: 30), (_) {
       if (!mounted) return;
       setState(() => _now = DateTime.now());
@@ -95,19 +70,12 @@ class _ApoyoConfirmPageState extends State<ApoyoConfirmPage> {
     super.dispose();
   }
 
-  // ── the rules, mirrored from placeApoyoOrder ──────────────────────────────
-
   bool get _isFirstOrder => widget.member['firstOrderDone'] != true;
 
-  /// Same expression the callable evaluates: the first order obeys the
-  /// program-wide pickup-only switch, later ones obey the member's own flag.
   bool get _forcePickup => _isFirstOrder
       ? widget.config.firstOrderPickupOnly
       : widget.member['forcePickup'] == true;
 
-  /// The address the membership was approved on. Registration required a
-  /// street, number and colonia, and froze them onto `apoyo_members/{uid}`;
-  /// these are the exact fields the owner's Friday delivery list prints.
   String get _membershipAddressId =>
       (widget.member['addressId'] ?? '').toString().trim();
 
@@ -119,7 +87,6 @@ class _ApoyoConfirmPageState extends State<ApoyoConfirmPage> {
 
   bool get _hasMembershipAddress => _membershipAddressId.isNotEmpty;
 
-  /// What the driver will actually read off the order.
   String get _deliveryAddressText {
     final parts = [_membershipAddressLine, _membershipColonia]
         .where((s) => s.isNotEmpty)
@@ -146,9 +113,6 @@ class _ApoyoConfirmPageState extends State<ApoyoConfirmPage> {
   bool get _needsAddress =>
       _fulfillment == 'domicilio' && !_hasMembershipAddress;
 
-  /// The first thing standing between the member and a confirmed order. Shown
-  /// inline above the button — a disabled control with no reason is a dead
-  /// end.
   String? get _blockReason {
     if (!_isOpen) {
       return 'Los pedidos de esta semana ya cerraron. La próxima lista abre '
@@ -174,10 +138,6 @@ class _ApoyoConfirmPageState extends State<ApoyoConfirmPage> {
 
   bool get _canSubmit => _blockReason == null && !_submitting && !_sent;
 
-  // ── cash chips ────────────────────────────────────────────────────────────
-
-  /// The exact amount first, then the bills a neighbour actually carries.
-  /// This is the only way the owner knows what change to bring on Friday.
   List<double> _cashOptions() {
     final total = _total;
     final out = <double>[total];
@@ -195,8 +155,7 @@ class _ApoyoConfirmPageState extends State<ApoyoConfirmPage> {
     setState(() {
       _fulfillment = next;
       final newTotal = _total;
-      // "Exacto" must follow the total when the delivery fee joins or leaves;
-      // anything now below the total is no longer an answer to the question.
+
       if (_cash != null) {
         if ((_cash! - oldTotal).abs() < 0.001) {
           _cash = newTotal;
@@ -206,8 +165,6 @@ class _ApoyoConfirmPageState extends State<ApoyoConfirmPage> {
       }
     });
   }
-
-  // ── submit ────────────────────────────────────────────────────────────────
 
   Future<void> _submit() async {
     if (!_canSubmit) return;
@@ -235,8 +192,6 @@ class _ApoyoConfirmPageState extends State<ApoyoConfirmPage> {
       final receipt = ApoyoReceipt.fromCallable(res.data, fallbackTotal: total);
       setState(() => _sent = true);
 
-      // The order document is the source of truth from here on; a leftover
-      // selection would show the member the same basket twice.
       context.read<ApoyoCartProvider>().clear();
 
       await Navigator.of(context).push<void>(
@@ -274,8 +229,6 @@ class _ApoyoConfirmPageState extends State<ApoyoConfirmPage> {
     }
   }
 
-  // ── build ─────────────────────────────────────────────────────────────────
-
   @override
   Widget build(BuildContext context) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
@@ -310,8 +263,6 @@ class _ApoyoConfirmPageState extends State<ApoyoConfirmPage> {
       bottomNavigationBar: _bottomBar(),
     );
   }
-
-  // ── what they are ordering ────────────────────────────────────────────────
 
   Widget _summaryCard() {
     return ApoyoCard(
@@ -430,8 +381,6 @@ class _ApoyoConfirmPageState extends State<ApoyoConfirmPage> {
       ],
     );
   }
-
-  // ── pickup / delivery ─────────────────────────────────────────────────────
 
   Widget _fulfillmentCard() {
     return ApoyoCard(
@@ -600,16 +549,6 @@ class _ApoyoConfirmPageState extends State<ApoyoConfirmPage> {
     );
   }
 
-  // ── address ───────────────────────────────────────────────────────────────
-
-  /// A statement of fact, not a choice.
-  ///
-  /// `placeApoyoOrder` writes `addressLine`/`colonia` from the MEMBERSHIP doc
-  /// and ignores the `addressId` for anything but a presence check, so the
-  /// only address that can ever receive an Apoyo delivery is this one. It is
-  /// shown, never picked: a radio list over `users/{uid}/addresses` would let
-  /// a member select a second home, read it back on the receipt, and then
-  /// have the driver arrive at the first one expecting cash.
   Widget _addressCard() {
     return ApoyoCard(
       child: Column(
@@ -654,8 +593,6 @@ class _ApoyoConfirmPageState extends State<ApoyoConfirmPage> {
       ),
     );
   }
-
-  // ── cash ──────────────────────────────────────────────────────────────────
 
   Widget _cashCard() {
     final options = _cashOptions();
@@ -724,8 +661,6 @@ class _ApoyoConfirmPageState extends State<ApoyoConfirmPage> {
     );
   }
 
-  // ── notes ─────────────────────────────────────────────────────────────────
-
   Widget _notesCard() {
     return ApoyoCard(
       child: Column(
@@ -766,8 +701,6 @@ class _ApoyoConfirmPageState extends State<ApoyoConfirmPage> {
       ),
     );
   }
-
-  // ── the commitment ────────────────────────────────────────────────────────
 
   Widget _commitmentCard() {
     final day = widget.cycle.elDeliveryLabel;
@@ -828,8 +761,6 @@ class _ApoyoConfirmPageState extends State<ApoyoConfirmPage> {
       ),
     );
   }
-
-  // ── bottom bar ────────────────────────────────────────────────────────────
 
   Widget _bottomBar() {
     final reason = _blockReason;

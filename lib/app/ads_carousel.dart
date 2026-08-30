@@ -14,8 +14,6 @@ class AdsCarousel extends StatefulWidget {
 
   final void Function(String comboId)? onCombo;
 
-  /// Opens Apoyo Social inside the Home shell. Lets a banner be the way in,
-  /// configured from the admin panel like any other ad action.
   final void Function()? onApoyo;
 
   final List<String>? adIds;

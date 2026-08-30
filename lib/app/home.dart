@@ -68,21 +68,14 @@ class Home extends StatefulWidget {
 class HomeState extends State<Home>
     with TickerProviderStateMixin, WidgetsBindingObserver {
   final TextEditingController _searchController = TextEditingController();
-  // FocusNode lets us drive the search-mode UI off focus state, not
-  // just the typed text — so the home content fades out the moment
-  // the user taps into the field, before they've typed anything.
+
   final FocusNode _searchFocus = FocusNode();
-  // Mirrored in state because AnimatedSwitcher needs a setState
-  // signal when focus flips. Kept in sync via the focus listener.
+
   bool _searchFocused = false;
-  // Tracks the previous viewInsets.bottom so didChangeMetrics can
-  // detect the keyboard-just-closed transition. Initial value
-  // matches the "keyboard not open at app start" baseline.
+
   bool _wasKeyboardOpen = false;
   String _searchText = '';
-  // Debounces Algolia network calls so we fire one query when typing
-  // pauses, not one per keystroke. Cancelled in dispose and on every
-  // new keystroke.
+
   Timer? _searchDebounce;
 
   List<DocumentSnapshot> _searchResults = [];
@@ -196,16 +189,6 @@ class HomeState extends State<Home>
     }
   }
 
-  /// Watch for the keyboard-just-closed transition. When the OS
-  /// dismisses the keyboard (system back button, swipe-down, etc.)
-  /// AND the search bar is still focused with no text, we drop the
-  /// focus so the home view smoothly fades back in. If the user
-  /// typed something, focus is kept — they should still see their
-  /// results until they explicitly clear the bar.
-  ///
-  /// Reading viewInsets from `View.of(context)` directly because
-  /// `MediaQuery.of(context)` updates asynchronously after metrics
-  /// change, so it can lag a frame behind reality here.
   @override
   void didChangeMetrics() {
     super.didChangeMetrics();
@@ -224,13 +207,6 @@ class HomeState extends State<Home>
   bool get _inSearchMode =>
       _searchFocused || _isSearching || _searchText.isNotEmpty;
 
-  /// Refresh saldo when the app returns to the foreground. The
-  /// home now reads saldo via `getRewardsBalance` (callable) rather
-  /// than a Firestore stream, so we lose real-time updates. The
-  /// most common stale-saldo scenarios — PDV-side recharge, order
-  /// placement debit, claim-coupon top-up — all coincide with the
-  /// user putting the app in the background and re-opening it.
-  /// Polling on resume covers them with one round-trip.
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
@@ -240,16 +216,15 @@ class HomeState extends State<Home>
   }
 
   void _onSearchChanged() {
-    // Cancel any pending fire — the user is still typing.
+
     _searchDebounce?.cancel();
     setState(() {
       _searchText = _searchController.text;
       if (_searchText.isNotEmpty) {
-        // Flip the spinner on immediately so the UI feels responsive
-        // even though the network call waits for typing to settle.
+
         _isSearching = true;
       } else {
-        // Clearing happens instantly — no network call to debounce.
+
         _isSearching = false;
         _searchResults = [];
       }
@@ -258,8 +233,7 @@ class HomeState extends State<Home>
       final pending = _searchText;
       _searchDebounce = Timer(const Duration(milliseconds: 300), () {
         if (!mounted) return;
-        // Guard against a stale fire — if the text changed between
-        // scheduling and now, a newer Timer will (or has) handled it.
+
         if (_searchController.text != pending) return;
         _searchAlgolia(pending);
       });
@@ -293,9 +267,7 @@ class HomeState extends State<Home>
         .where('price', isLessThanOrEqualTo: priceRange.end);
 
     query.get().then((snapshot) {
-      // Guard against the user navigating away mid-query — without
-      // this the .then() lands on a defunct State and Flutter
-      // throws `setState() called after dispose()`.
+
       if (!mounted) return;
       final docs = snapshot.docs
           .where((d) =>
@@ -375,8 +347,7 @@ class HomeState extends State<Home>
       _isSearching = true;
     });
     Algolia algolia = AlgoliaService().algolia;
-    // Cap the hit count — the search list is for typeahead, 12 is plenty and
-    // it keeps the Firestore hydrate inside ONE whereIn chunk (cap = 30).
+
     AlgoliaQuery query = algolia.instance
         .index('t_sty.db')
         .query(searchText)
@@ -446,13 +417,7 @@ class HomeState extends State<Home>
   Future<List<DocumentSnapshot>> _hydrateProductDocs(
       List<String> ids) async {
     if (ids.isEmpty) return const [];
-    // Build chunks of 10 (Firestore whereIn cap is 30, kept at 10 for room
-    // to grow filters) and fire them in PARALLEL via Future.wait. The
-    // previous for-await loop was serial — at default hitsPerPage=20 that
-    // doubled the wall-clock added to every Algolia search. The hits cap
-    // (setHitsPerPage(12) in _searchAlgolia) keeps this to ONE chunk for
-    // the typical query, but the parallel shape stays robust if it's ever
-    // raised.
+
     final chunks = <List<String>>[];
     for (int i = 0; i < ids.length; i += 10) {
       chunks.add(ids.sublist(
@@ -513,9 +478,6 @@ class HomeState extends State<Home>
     return false;
   }
 
-  /// Apoyo Social lives HERE, not in Ajustes — it is a way to shop, not a
-  /// preference. Adding an address pushes the addresses editor as its own
-  /// route so the flow never has to hop to another tab and back.
   void _openApoyo() {
     setState(() => _showApoyo = true);
   }
@@ -553,20 +515,6 @@ class HomeState extends State<Home>
     });
   }
 
-  /// Fetches the signed-in user's wallet saldo via the
-  /// `getRewardsBalance` Cloud Function. The previous version
-  /// streamed `rewards/{docId}` directly from the client, which the
-  /// security rules deny to non-admins (the rewards collection is
-  /// admin-only by design — PIN/CVV/PII can't be read). The result
-  /// was that the arcade icon only appeared for admin accounts.
-  ///
-  /// The callable returns just `{saldo, hasWallet}` — no PII — so we
-  /// keep the existing security model intact while making the icon
-  /// visible to every signed-in user. We trade real-time updates
-  /// (the old snapshots() listener) for a polled read: we refresh
-  /// on init AND every time the app returns to the foreground
-  /// (`didChangeAppLifecycleState.resumed`), which is plenty fresh
-  /// for an icon visibility toggle.
   Future<void> _initSaldoListener() async {
     await _refreshSaldo();
   }
@@ -580,17 +528,11 @@ class HomeState extends State<Home>
       return;
     }
 
-    // Retries transient cold-launch failures (network/function warmup) so the
-    // saldo loads on first launch instead of staying blank until app resume.
     try {
       final res = await callIdempotentCallable('getRewardsBalance');
       final data = res.data;
       if (data is Map) {
-        // `hasWallet:false` means the wallet LINK failed to resolve (missing
-        // cardInfo, missing cardNumber, or an empty rewards query) — it is NOT
-        // a zero balance. Writing that 0 in blanked healthy wallets and, since
-        // the arcade icon is gated on `_walletSaldo`, made the icon vanish too.
-        // Keep whatever we already had and let the next resume retry.
+
         if (data['hasWallet'] == false) {
           if (kDebugMode) {
             debugPrint('getRewardsBalance: wallet unresolved; keeping cached saldo');
@@ -606,8 +548,7 @@ class HomeState extends State<Home>
         }
       }
     } catch (e) {
-      // Leave the cached value so a hiccup doesn't blank the icon mid-session;
-      // it'll refresh on the next app resume.
+
       if (kDebugMode) debugPrint('getRewardsBalance failed: $e');
     }
   }
@@ -617,26 +558,10 @@ class HomeState extends State<Home>
     if (user == null) return;
     final uid = user.uid;
 
-    // Saldo + wallet lookup — both routed through the
-    // `getRewardsBalance` Cloud Function so non-admin users don't
-    // hit PERMISSION_DENIED on the admin-only `rewards` collection.
-    // We force a fresh read here (instead of trusting the cached
-    // `_walletSaldo`) so a brand-new install / fresh sign-in still
-    // gets a correct gate-check without waiting for the next
-    // app-resume tick.
     await _refreshSaldo();
     if (!mounted) return;
     if (_walletSaldo < 5) return;
 
-    // The 11 arcade game widgets accept a `rewardsDocRef` param but
-    // none of them DEREFERENCE it any more (the Phase 2 refactor
-    // routes every saldo move through the `updateRewardsSaldo`
-    // callable, which resolves the wallet server-side from auth).
-    // The widget signatures still require a `DocumentReference`,
-    // so we pass the owner-readable `users/{uid}/rewardsCard/cardInfo`
-    // doc as a harmless placeholder. If a future game ever tries
-    // to use the ref, it'll read a doc the client owns rather than
-    // hitting the admin-only `rewards` collection.
     final placeholderRef = FirebaseFirestore.instance
         .collection('users')
         .doc(uid)
@@ -709,14 +634,7 @@ class HomeState extends State<Home>
         FirebaseAuth.instance.currentUser != null && _walletSaldo >= 5;
 
     final body = Scaffold(
-        // Keep the layout from collapsing under the keyboard. The
-        // BottomFade sits inside an Expanded; if the body shrinks
-        // when the keyboard opens, LayoutBuilder reports a smaller
-        // maxHeight and the fade rides up above the keyboard,
-        // detaching from the nav bar. With this off, the fade and
-        // nav stay pinned to the screen bottom and the keyboard
-        // simply overlays the lower portion of the product grid —
-        // which is what you want when the user is mid-search.
+
         resizeToAvoidBottomInset: false,
         appBar: AppBar(
           automaticallyImplyLeading: false,
@@ -812,16 +730,7 @@ class HomeState extends State<Home>
               child: BottomFade(
                 clearHeight: 96,
                 fadeHeight: 48,
-                // Crossfade between two top-level modes:
-                //   * Search mode — triggered by focus, in-flight
-                //     query, OR existing typed text. Renders a
-                //     skeleton list while empty / loading, real
-                //     results once they land.
-                //   * Home mode — the usual filtered or default
-                //     product grids.
-                // Keyed subtrees so AnimatedSwitcher knows to run
-                // the FadeTransition when we flip modes; same key
-                // would just rebuild in place.
+
                 child: AnimatedSwitcher(
                   duration: const Duration(milliseconds: 220),
                   switchInCurve: Curves.easeOut,
@@ -877,8 +786,7 @@ class HomeState extends State<Home>
                     onBack: _navigateBackToGrid,
                   )
                 : const SizedBox.shrink(),
-            // Apoyo Social — built only while open, so its streams are not
-            // running behind every other tab.
+
             _showApoyo
                 ? ApoyoSection(
                     onBack: _navigateBackToGrid,
@@ -1150,27 +1058,12 @@ class HomeState extends State<Home>
     );
   }
 
-  /// Single entry-point for the search pane shown by the home
-  /// AnimatedSwitcher. Picks between three states:
-  ///   * in-flight query → skeleton list
-  ///   * results landed and non-empty → results list
-  ///   * focused but no text (or empty results) → skeleton list as
-  ///     a calm placeholder, never the old "No products found"
-  ///     copy on tap (that'd be a confusing flash for the user who
-  ///     just opened the bar). The empty-text case never reaches
-  ///     `_buildSearchResults`, so its "No products found." copy
-  ///     remains the right thing for real empty-result queries.
   Widget _buildSearchModePane() {
     if (_isSearching) return _buildSearchSkeleton();
     if (_searchText.isNotEmpty) return _buildSearchResults();
     return _buildSearchSkeleton();
   }
 
-  /// Skeleton list shown while a search is in flight. Mirrors the
-  /// real `_renderSearchRow` layout — same margins, card shadow,
-  /// 90×90 image slot, three stacked text-sized bars, button-sized
-  /// bar on the right — so the layout doesn't jump when results
-  /// arrive. Replaces the old centred CustomLoader spinner.
   Widget _buildSearchSkeleton() {
     final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
     return ListView.builder(
@@ -1971,8 +1864,7 @@ class _AddToCartButtonState extends State<_AddToCartButton> {
     final cartProvider = Provider.of<CartProvider>(context, listen: false);
     final pricePerKilo = (widget.data['price'] as num?)?.toDouble() ?? 0.0;
     final cartItem = cartProvider.getItem(widget.data['docId']);
-    // Original behavior: prefill is computed first, but the cart-item value
-    // always overrides it (matches pre-refactor logic).
+
     final double initialKilos = cartItem?.quantity ??
         (prefill && _quantity > 0 ? _quantity.toDouble() : 0.0);
 
@@ -2023,10 +1915,6 @@ class _AddToCartButtonState extends State<_AddToCartButton> {
   }
 }
 
-/// Bulk-order dialog body. Owns its own FocusNode + TextEditingController
-/// instances so they get disposed when the dialog closes (the previous
-/// inline implementation leaked both nodes and their listeners every time
-/// the dialog opened).
 class _BulkOrderDialog extends StatefulWidget {
   final String imageUrl;
   final String nombre;
@@ -2256,7 +2144,6 @@ class _BulkOrderDialogState extends State<_BulkOrderDialog> {
     );
   }
 }
-// (_TermPhase removed: the boot sequence is the only phase now.)
 
 class _ArcadeLaunchPage extends StatefulWidget {
   final String userId;
@@ -2302,11 +2189,6 @@ class _ArcadeLaunchPageState extends State<_ArcadeLaunchPage> {
     ' [OK] JUGADOR RECONOCIDO — ACCESO CONCEDIDO',
   ];
 
-  // The old "hacker" phase (fake kernel exploit, "SISTEMA COMPROMETIDO",
-  // "DATOS EXFILTRADOS: 2.4 GB", "HUELLAS BORRADAS") was removed. It was
-  // meant as a joke, but this app holds wallets and saved cards — a customer
-  // has no way to tell a staged breach notice from a real one.
-
   @override
   void initState() {
     super.initState();
@@ -2321,7 +2203,6 @@ class _ArcadeLaunchPageState extends State<_ArcadeLaunchPage> {
     });
   }
 
-  // No gate anymore: the boot sequence rolls straight into the arcade.
   void _startBootLines() {
     int idx = 0;
     _lineTimer = Timer.periodic(const Duration(milliseconds: 90), (t) {
@@ -2417,8 +2298,7 @@ class _TermLine extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // The red "danger" styling went out with the fake-breach lines it used to
-    // colour; only the ordinary boot sequence renders here now.
+
     final isBanner  = text.contains('╔') || text.contains('║') || text.contains('╚')
         || text.contains('██') || text.contains('***');
     final isCmd     = text.trimLeft().startsWith(r'C:\>') || text.trimLeft().startsWith('[>]');

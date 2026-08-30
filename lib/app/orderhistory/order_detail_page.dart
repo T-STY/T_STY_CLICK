@@ -76,11 +76,7 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
   ];
 
   Future<void> _fetchAddress() async {
-    // Pickup orders display the STORE address (one fixed doc at
-    // `settings/address` maintained by the admin), not the customer's
-    // address. The user never set a delivery target for these orders —
-    // their `addressId` is null/"N/A" on the order doc, and we want to
-    // show them where to go pick up.
+
     if (widget.order.isInstorePickup) {
       try {
         final storeDoc = await FirebaseFirestore.instance
@@ -204,8 +200,7 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
               )
             else ...[
               AddressDisplayTile(
-                // For pickup, addressId is null/"N/A" on the order doc — we
-                // pass a stable marker key instead so the map pin renders.
+
                 addressId: widget.order.isInstorePickup
                     ? 'store-pickup'
                     : widget.order.addressId,
@@ -271,14 +266,9 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
   }
 
   Widget _buildStatusIndicator(UserOrder order) {
-    // `order.status` is the canonical Firestore value used by colour logic
-    // + the cancel-eligibility check. `order.displayStatus` is what the
-    // user sees — pickup orders flagged "Enviado" read as "Listo para
-    // recoger" so the customer knows to come collect the package.
+
     final String rawStatus = order.status;
-    // Customers may cancel while the order is still 'En Revisión' OR
-    // 'Preparando' — nothing has shipped or deducted stock yet at either
-    // stage. Once it's Enviado the cancel affordance disappears.
+
     final String rawStatusLower = rawStatus.toLowerCase();
     final bool canCancel =
         rawStatusLower == 'en revision' || rawStatusLower == 'preparando';
@@ -750,12 +740,6 @@ extension StringCasingExtension on String {
   }
 }
 
-/// Expanded scope view on a placed-order receipt — shows the actual
-/// subcategory / provedor names + a "N productos específicos" chip when
-/// the coupon was restricted, so the customer can audit the discount they
-/// got. The terser one-liner (`productFilterSummary`) is still used on
-/// smaller surfaces like the checkout coupon card and the "Mis cupones"
-/// list — this widget is only for the receipt where space is available.
 class _CouponScopeBlock extends StatelessWidget {
   final Map<String, dynamic>? filter;
 

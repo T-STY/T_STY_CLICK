@@ -6,23 +6,6 @@ import 'package:flutter/material.dart';
 import 'apoyo_join_page.dart';
 import 'apoyo_status_page.dart';
 
-/// ── APOYO SOCIAL — shared pieces ────────────────────────────────────────────
-///
-/// The membership itself is decided entirely server-side (`applyApoyoMembership`
-/// / `decideApoyoMembership`). Everything here is presentation: the program
-/// rules a neighbour reads BEFORE joining, the status chip, and the router that
-/// decides whether the user sees the join form or their standing.
-///
-/// Project convention: never a SnackBar. Every message is an AlertDialog or
-/// inline text inside the card it belongs to.
-
-// Palette — pulled from the styles already used across settings/rewards.
-// The app is black, white and grey. Everything else was drift.
-//
-// These names are kept so the call sites don't churn, but they no longer
-// carry a hue: "green" is ink, "amber" is a mid grey. Red survives alone,
-// because the rest of the app already uses red for real errors and nothing
-// else — and only for errors, never for emphasis.
 const Color kApoyoInk = Color(0xFF1A1A1A);
 const Color kApoyoGreen = kApoyoInk;
 const Color kApoyoGreenTint = Color(0xFFF4F4F4);
@@ -34,9 +17,6 @@ const Color kApoyoRed = Color(0xFFC62828);
 const Color kApoyoRedTint = Color(0xFFFDECEC);
 const Color kApoyoRedLine = Color(0xFFF2C7C7);
 
-/// Client mirror of `settings/apoyo_social`. Defaults match the Cloud
-/// Functions' `APOYO_DEFAULTS`, so copy stays correct even if the settings
-/// doc has not been created yet.
 class ApoyoConfig {
   final bool enabled;
   final num defaultMaxOrderTotal;
@@ -94,7 +74,6 @@ class ApoyoConfig {
   }
 }
 
-/// `$500`, `$5`, `$12.50` — no trailing `.00` on whole pesos.
 String apoyoMoney(num value) {
   final v = value.toDouble();
   return v == v.roundToDouble()
@@ -107,15 +86,6 @@ String apoyoDate(DateTime d) {
   return '${two(d.day)}/${two(d.month)}/${d.year}';
 }
 
-/// Same logo bar every settings sub-screen uses. The back arrow is optional so
-/// these pages also work when pushed as a standalone route.
-/// App bar for the apoyo screens that are PUSHED as their own route
-/// (catálogo, confirmar, listo).
-///
-/// Screens hosted inside Home's shell must NOT use this: Home already draws
-/// the T_STY header, so adding another one rendered the logo twice with a
-/// stray arrow under it. Same rule combo_detail.dart follows — it only builds
-/// its own Scaffold when `onBack == null`, i.e. when it was pushed.
 PreferredSizeWidget apoyoAppBar(
   BuildContext context, {
   VoidCallback? onBack,
@@ -148,9 +118,6 @@ PreferredSizeWidget apoyoAppBar(
   );
 }
 
-/// Callable failures whose `message` is an SDK string, not member-facing copy.
-/// Mirrors `_retryableCodes` in `utils/callable_retry.dart`; `unknown` and
-/// `cancelled` are added because they surface the same way.
 const Set<String> kApoyoTransportCodes = <String>{
   'unavailable',
   'deadline-exceeded',
@@ -159,16 +126,6 @@ const Set<String> kApoyoTransportCodes = <String>{
   'cancelled',
 };
 
-/// The message to show for a failed Apoyo callable.
-///
-/// Every reject path in the Apoyo functions returns a finished sentence
-/// written for the member (household blocked, order past the cutoff, a total
-/// that moved, a cap reached…). Showing it verbatim is the whole point — a
-/// generic "Error" would leave them retrying forever.
-///
-/// The exception: transport/crash codes carry the SDK's own English string
-/// ("INTERNAL", "UNAVAILABLE", "DEADLINE_EXCEEDED"), never a sentence anyone
-/// wrote for a member. Those get [fallback], in Spanish.
 String apoyoCallableMessage(FirebaseFunctionsException e, String fallback) {
   final authored = !kApoyoTransportCodes.contains(e.code) &&
       (e.message ?? '').trim().isNotEmpty;
@@ -197,7 +154,6 @@ Future<void> apoyoAlert(
   );
 }
 
-/// White rounded card matching the "Agregar cupón" card in coupons_section.
 class ApoyoCard extends StatelessWidget {
   final Widget child;
   final EdgeInsetsGeometry padding;
@@ -234,7 +190,6 @@ class ApoyoCard extends StatelessWidget {
   }
 }
 
-/// 42×42 tinted icon tile — same shape as the VIP enroll card in rewards.
 class ApoyoIconTile extends StatelessWidget {
   final IconData icon;
   final Color tint;
@@ -297,8 +252,6 @@ Widget apoyoBody(String text, {Color? color}) {
   );
 }
 
-/// One rule line: icon + text. Bold when the rule is one a member gets hurt by
-/// forgetting (cash complete, strikes).
 Widget apoyoRule(
   IconData icon,
   String text, {
@@ -328,9 +281,6 @@ Widget apoyoRule(
   );
 }
 
-/// Collapsed by default. A tappable header with a chevron; the body animates
-/// open. Used so the join screen is a form with reference material attached,
-/// not a wall of prose the member has to scroll past to reach the button.
 class ApoyoDisclosure extends StatefulWidget {
   final String title;
   final String? trailing;
@@ -419,9 +369,6 @@ class _ApoyoDisclosureState extends State<ApoyoDisclosure> {
   }
 }
 
-/// One line of the program spec: a label and its value, like a receipt.
-/// Deliberately NOT an icon plus an explanatory sentence — that reads like a
-/// brochure, and the member already knows what a delivery is.
 Widget apoyoSpecRow(String label, String value, {bool strong = false}) {
   return Padding(
     padding: const EdgeInsets.only(bottom: 9),
@@ -456,7 +403,6 @@ Widget apoyoSpecRow(String label, String value, {bool strong = false}) {
   );
 }
 
-/// The program as a spec sheet, collapsed by default.
 class ApoyoRulesCard extends StatelessWidget {
   final ApoyoConfig config;
   final bool initiallyOpen;
@@ -494,9 +440,6 @@ class ApoyoRulesCard extends StatelessWidget {
   }
 }
 
-/// The strikes ladder. Still shown before joining — a member must not meet
-/// this for the first time on the Friday they miss — but stated once, plainly,
-/// instead of shouted in a coloured panel.
 class ApoyoStrikesCard extends StatelessWidget {
   final ApoyoConfig config;
   final int? currentStrikes;
@@ -620,17 +563,9 @@ class ApoyoStatusChip extends StatelessWidget {
   }
 }
 
-/// Entry point used by SettingsPage: streams the program config and the user's
-/// own membership row, then shows the join form or their standing.
-///
-/// `apoyo_members/{uid}` is readable only by that user (and admins), so this
-/// stream is safe for every signed-in account — a non-member simply gets a
-/// non-existent doc.
 class ApoyoSection extends StatefulWidget {
   final VoidCallback onBack;
 
-  /// Called when the user has no address yet — SettingsPage swaps to its
-  /// addresses tab instead of dead-ending the flow.
   final VoidCallback? onAddAddress;
 
   const ApoyoSection({super.key, required this.onBack, this.onAddAddress});
@@ -639,23 +574,10 @@ class ApoyoSection extends StatefulWidget {
   State<ApoyoSection> createState() => ApoyoSectionState();
 }
 
-/// Public so SettingsPage can reach [handleBack] through a GlobalKey — the
-/// same pattern MainMenuScreen already uses for Home/Cart/Recetas.
-///
-/// This page deliberately has NO PopScope of its own. It lives inside
-/// SettingsPage's IndexedStack, which builds every section whether or not it
-/// is the visible one, so a PopScope here would register on the enclosing
-/// ModalRoute permanently: `ModalRoute.popDisposition` returns `doNotPop` if
-/// ANY registered entry says so, and `onPopInvokedWithResult` fires on ALL of
-/// them. An invisible section would then answer the Android back button.
 class ApoyoSectionState extends State<ApoyoSection> {
-  /// A rejected member who taps "Solicitar de nuevo" — the doc still exists,
-  /// so the router needs an explicit override to show the form again.
+
   bool _forceJoin = false;
 
-  /// Back-button hook for SettingsPage. Returns true when this section
-  /// consumed the press (the re-apply form steps back to the status screen)
-  /// and false when the caller should leave the section.
   bool handleBack() {
     if (_forceJoin) {
       setState(() => _forceJoin = false);
@@ -668,9 +590,6 @@ class ApoyoSectionState extends State<ApoyoSection> {
   Widget build(BuildContext context) {
     final uid = FirebaseAuth.instance.currentUser?.uid;
 
-    // Signed out: bail before opening any listener. SettingsPage keeps this
-    // page alive inside its IndexedStack even on the login screen, and both
-    // `settings/apoyo_social` and `apoyo_members/{uid}` require auth.
     if (uid == null) {
       return Scaffold(
         backgroundColor: Colors.white,
@@ -721,8 +640,7 @@ class ApoyoSectionState extends State<ApoyoSection> {
                 },
                 onAddAddress: widget.onAddAddress,
                 onSubmitted: () {
-                  // The member doc now exists → this builder swaps to the
-                  // status screen on the next snapshot.
+
                   if (mounted) setState(() => _forceJoin = false);
                 },
               );
@@ -741,12 +659,6 @@ class ApoyoSectionState extends State<ApoyoSection> {
   }
 }
 
-/// The way into Apoyo Social, shown on HOME.
-///
-/// It lived in Ajustes and that was wrong: this is a way to shop, not a
-/// preference. It stays hidden while the program is switched off AND the user
-/// has no membership row — no point advertising a closed door — but a member
-/// always keeps the way to their own standing, even after sign-ups pause.
 class ApoyoHomeEntry extends StatelessWidget {
   final VoidCallback onTap;
   const ApoyoHomeEntry({super.key, required this.onTap});

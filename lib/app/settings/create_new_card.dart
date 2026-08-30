@@ -6,12 +6,6 @@ import 'package:intl/intl.dart';
 import 'package:lottie/lottie.dart';
 import '../../constants/app_images.dart';
 
-/// Create-monedero screen.
-///
-/// Rendered by `settings.dart` as an indexed page inside the settings shell,
-/// so the bottom nav stays visible. After a successful create the screen
-/// calls `widget.onBack()` to swap the shell index back to the rewards
-/// page so the user sees their new monedero immediately.
 class CreateNewCard extends StatefulWidget {
   final VoidCallback onBack;
   const CreateNewCard({super.key, required this.onBack});
@@ -23,8 +17,6 @@ class CreateNewCard extends StatefulWidget {
 class _CreateNewCardState extends State<CreateNewCard> {
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
 
-  // Live values driving the CochinitoCard preview at the top. Each field
-  // calls setState on change so the preview tracks the user's typing.
   String _phone = '';
   String _holder = '';
   String _nip = '';
@@ -50,8 +42,6 @@ class _CreateNewCardState extends State<CreateNewCard> {
     }
   }
 
-  // ─── Validation ────────────────────────────────────────────────────────
-
   String? _validatePhone(String? value) {
     final v = (value ?? '').trim();
     if (v.isEmpty) return 'Ingresa tu número de teléfono';
@@ -71,19 +61,13 @@ class _CreateNewCardState extends State<CreateNewCard> {
     return null;
   }
 
-  // 4-digit NIP validator. Rejects everything that isn't four digits, plus a
-  // small blacklist of trivially guessable codes — keyboard runs, repeats,
-  // and the usual suspects from leaked-PIN analyses (DataGenetics 2012 et
-  // al). Catches the high-volume guesses (~top 25); not meant as a
-  // cryptographic strength check. All-same-digit (0000/1111/…/9999) is
-  // covered by the regex below so we don't bother repeating it in the set.
   static const Set<String> _weakPins = {
-    // ascending / descending keypad runs
+
     '1234', '4321', '2345', '3456', '4567',
     '5678', '6789', '7890', '0123', '0987',
     '9876', '8765', '7654', '6543', '5432',
-    // canonical leaked-PIN top hits
-    '1212', '1004', '2000', '2580', // 2580 = straight down the keypad
+
+    '1212', '1004', '2000', '2580',
     '1122', '1313', '2001', '1010',
   };
 
@@ -97,8 +81,6 @@ class _CreateNewCardState extends State<CreateNewCard> {
     if (_weakPins.contains(v)) return 'Elige un NIP menos común';
     return null;
   }
-
-  // ─── Submit ────────────────────────────────────────────────────────────
 
   void _showAlertDialog(String title, String message) {
     showDialog<void>(
@@ -147,11 +129,7 @@ class _CreateNewCardState extends State<CreateNewCard> {
       if (!mounted) return;
       _showAlertDialog(
           'Listo', 'Tu monedero se creó y quedó vinculado a tu cuenta.');
-      // Old code popped a Navigator route — which used to exist when the
-      // create screen was pushed via Navigator.push from rewards.dart. It's
-      // now an indexed page inside the settings shell, so call widget.onBack
-      // to swap the shell index back to rewards rather than popping the
-      // whole shell.
+
       Future.delayed(const Duration(seconds: 1), () {
         if (mounted) widget.onBack();
       });
@@ -168,8 +146,6 @@ class _CreateNewCardState extends State<CreateNewCard> {
       if (mounted) setState(() => _isLoading = false);
     }
   }
-
-  // ─── Build ─────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
@@ -207,10 +183,7 @@ class _CreateNewCardState extends State<CreateNewCard> {
             autovalidateMode: AutovalidateMode.onUserInteraction,
             child: CustomScrollView(
               slivers: [
-                // No card preview here — the cochinito card is reserved for
-                // the linked-monedero view in `rewards.dart`. Showing it
-                // during signup confused the metaphor (it looked like the
-                // wallet existed already, before the user had even submitted).
+
                 SliverToBoxAdapter(
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(20, 14, 20, 4),
@@ -244,9 +217,6 @@ class _CreateNewCardState extends State<CreateNewCard> {
                   ),
                 ),
 
-                // Three input cards — name, phone, NIP. Each is a soft
-                // rounded surface so the screen reads as "filling in info
-                // about you", not "entering credit-card data".
                 SliverList(
                   delegate: SliverChildListDelegate.fixed([
                     const SizedBox(height: 16),
@@ -289,11 +259,6 @@ class _CreateNewCardState extends State<CreateNewCard> {
                   ]),
                 ),
 
-                // Bottom strip: NIP help, member-since chip, primary CTA.
-                // Bottom padding must clear the shell's nav bar (~80px tall
-                // at this layer); otherwise the CTA sits behind it and the
-                // user can't tap it. ~120px matches the `clearHeight` rewards
-                // uses elsewhere on this shell.
                 SliverToBoxAdapter(
                   child: Padding(
                     padding:
@@ -327,10 +292,6 @@ class _CreateNewCardState extends State<CreateNewCard> {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────
-// Atoms — eyebrow label, single-field card, info row, badge, primary btn
-// ─────────────────────────────────────────────────────────────────────────
-
 class _EyebrowLabel extends StatelessWidget {
   final String text;
   const _EyebrowLabel(this.text);
@@ -349,12 +310,6 @@ class _EyebrowLabel extends StatelessWidget {
   }
 }
 
-/// Soft-grey filled card with an icon tile + label + a clean TextFormField.
-///
-/// Replaces the third-party `CreditCardForm` rows — those styled inputs
-/// as bank-card data, which set the wrong mental model for a wallet/PIN
-/// signup. Same shape on all three rows (name, phone, NIP) so the form
-/// reads as a single visual rhythm.
 class _FieldCard extends StatelessWidget {
   final IconData icon;
   final String label;
@@ -444,8 +399,7 @@ class _FieldCard extends StatelessWidget {
                       focusedBorder: InputBorder.none,
                       errorBorder: InputBorder.none,
                       focusedErrorBorder: InputBorder.none,
-                      // The Form-level autovalidate mode controls when the
-                      // errorText shows — we still want it visible inline.
+
                       errorStyle: const TextStyle(
                         fontSize: 11,
                         height: 1.2,
@@ -496,10 +450,6 @@ class _InfoRow extends StatelessWidget {
   }
 }
 
-/// Small dark "Te unes el …" pill rendered just above the CTA. Replaces
-/// the old disabled "Cliente Desde" text field — same information, but as
-/// a passive badge instead of a fake form row that suggested it was an
-/// editable field.
 class _SinceBadge extends StatelessWidget {
   final String label;
   const _SinceBadge({required this.label});

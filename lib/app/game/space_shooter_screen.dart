@@ -576,9 +576,7 @@ class _SpaceShooterScreenState extends State<SpaceShooterScreen> {
     if (ns == null) return;
     if (!mounted) return;
     setState(() => _saldo = ns);
-    // The replay charge already committed on the server, so the ledger has to
-    // move with it — otherwise the next credit's delta is computed against the
-    // pre-charge value and debits the player instead of paying them.
+
     _lastCommitted = ns;
     widget.onSaldoChanged(ns);
     _wave = 1;
@@ -598,12 +596,7 @@ class _SpaceShooterScreenState extends State<SpaceShooterScreen> {
   }
 
   Future<void> _updateFirestore(double newSaldo) async {
-    // Routes through the server-side `updateRewardsSaldo`
-    // callable instead of writing rewards/{docId} directly
-    // (admin-only collection — direct writes failed silently
-    // for every non-admin user). The CF resolves the wallet,
-    // applies the delta in a transaction, and mirrors the
-    // result to the owner-readable card cache.
+
     final delta = newSaldo - _lastCommitted;
     if (delta == 0) return;
     final result = await applyArcadeDelta(

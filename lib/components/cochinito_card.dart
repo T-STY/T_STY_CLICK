@@ -3,36 +3,12 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
-/// QR-code prefix carried on every app-rendered loyalty QR.
-///
-/// The PDV scans this exact string and uses it to distinguish:
-///   - "TSTYAPP:<10-digit-phone>"  → app user, accrues at the boosted rate
-///                                  (1.5%) because they're using the app's
-///                                  in-card QR instead of a phone lookup.
-///   - bare "<10-digit-phone>"     → walk-in / phone lookup, base rate (1%).
-///
-/// Keep this constant identical on the PDV side. If we ever need a v2 layout
-/// (e.g. extra signing), bump to `TSTYAPP2:` and keep this one understood
-/// for back-compat.
 const String kTstyAppQrPrefix = 'TSTYAPP:';
 
-/// Build the full payload string the QR encodes. Centralised so both the
-/// client (encode) and PDV (decode) sides agree on the exact format.
 String buildLoyaltyQrPayload(String phoneDigits) {
   return '$kTstyAppQrPrefix$phoneDigits';
 }
 
-/// The dark cochinito "card" used in two screens:
-///   1. The active wallet (`rewards.dart`) — tap to flip to the QR on the
-///      back. Reads real `saldo`, `nip`, `phone`, `holder` from Firestore.
-///   2. The create-wallet preview (`create_new_card.dart`) — live preview of
-///      the values the user is typing. No flip, no QR (we have no phone yet
-///      to encode).
-///
-/// `phoneDigits` MUST be ten ASCII digits when [enableQrFlip] is true — that
-/// is what the QR payload is built from. If the field is shorter (still
-/// being typed in the create-card preview) keep [enableQrFlip] false so the
-/// QR side never renders.
 class CochinitoCard extends StatefulWidget {
   final double saldo;
   final String phoneDigits;
@@ -40,18 +16,10 @@ class CochinitoCard extends StatefulWidget {
   final String nip;
   final bool showNipReveal;
 
-  /// When false the card is static (used as a typing-preview); when true a
-  /// tap on the card flips to the QR back face and a second tap flips back.
   final bool enableQrFlip;
 
-  /// VIP wallet token (`TSTYV1.…`) minted by the enrollVip CF. When present
-  /// the QR encodes THIS opaque signed token instead of the legacy
-  /// `TSTYAPP:<phone>` payload — unguessable and verified server-side by
-  /// the PDV.
   final String? qrToken;
 
-  /// Persisted VIP status (rewards doc `isVip`, mirrored on cardInfo) —
-  /// drives the gold treatment on the back face.
   final bool isVip;
 
   const CochinitoCard({
@@ -77,12 +45,8 @@ class _CochinitoCardState extends State<CochinitoCard>
   late final AnimationController _flipCtrl;
   late final Animation<double> _flipAnim;
 
-  /// True once the user has tapped to expose the back side. We also expose
-  /// the underlying [_flipCtrl] to drive the perspective math directly so
-  /// the lift/scale curve sits on the same timeline as the rotation.
   bool _showBack = false;
 
-  // NIP reveal sits on the front face only; safe to keep as private state.
   bool _nipRevealed = false;
 
   @override
@@ -114,11 +78,7 @@ class _CochinitoCardState extends State<CochinitoCard>
 
   @override
   Widget build(BuildContext context) {
-    // The outer GestureDetector used to wrap the whole card with
-    // `onTap: _toggleFlip`. That ate every tap before child detectors
-    // could see it — so the NIP-reveal eye underneath stopped working.
-    // The flip is now driven by a dedicated chip on each face, leaving
-    // inner detectors (NIP) to claim their own taps cleanly.
+
     return AnimatedBuilder(
       animation: _flipAnim,
       builder: (context, _) {
@@ -126,8 +86,6 @@ class _CochinitoCardState extends State<CochinitoCard>
         final angle = t * math.pi;
         final isFront = angle <= math.pi / 2;
 
-        // Subtle lift + scale during the half-flip so the card feels like
-        // it's coming up off the screen rather than just spinning flat.
         final lift = math.sin(angle) * 6;
         final scale = 1.0 - math.sin(angle) * 0.04;
 
@@ -136,7 +94,7 @@ class _CochinitoCardState extends State<CochinitoCard>
           child: Transform(
             alignment: Alignment.center,
             transform: Matrix4.identity()
-              ..setEntry(3, 2, 0.0012) // perspective
+              ..setEntry(3, 2, 0.0012)
               ..rotateY(angle)
               ..scaleByDouble(scale, scale, 1.0, 1.0),
             child: isFront
@@ -155,10 +113,7 @@ class _CochinitoCardState extends State<CochinitoCard>
                       onFlip: _toggleFlip,
                     ),
                   )
-                // The back face has to be flipped 180° about Y so the QR
-                // reads the right way around once the Matrix rotation
-                // brings it forward. Tapping the back flips back to the
-                // front (no inner detectors to compete with here).
+
                 : Transform(
                     alignment: Alignment.center,
                     transform: Matrix4.identity()..rotateY(math.pi),
@@ -180,10 +135,6 @@ class _CochinitoCardState extends State<CochinitoCard>
     );
   }
 }
-
-// ---------------------------------------------------------------------------
-// Outer shell — same dimensions / gradient / shadow on both faces.
-// ---------------------------------------------------------------------------
 
 class _CardShell extends StatelessWidget {
   final Widget child;
@@ -214,10 +165,6 @@ class _CardShell extends StatelessWidget {
     );
   }
 }
-
-// ---------------------------------------------------------------------------
-// Front face — title strip + saldo + phone/holder + NIP reveal.
-// ---------------------------------------------------------------------------
 
 class _Front extends StatelessWidget {
   final double saldo;
@@ -261,7 +208,7 @@ class _Front extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Title row
+
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -299,9 +246,7 @@ class _Front extends StatelessWidget {
                           fontSize: 16,
                           fontWeight: FontWeight.w900,
                           letterSpacing: 2.5,
-                          // Crunch the leading so the chip below has
-                          // somewhere to sit without making this column
-                          // taller than the original T_STY-only row.
+
                           height: 1.0,
                         ),
                       ),
@@ -417,10 +362,6 @@ class _Front extends StatelessWidget {
       );
 }
 
-/// Small "QR" pill that lives next to the T_STY wordmark in the title row.
-/// Tap-to-flip-the-card. The whole flip behaviour now hangs off this widget
-/// instead of a card-wide GestureDetector, so the NIP-reveal eye on the
-/// bottom-right keeps its own taps.
 class _FlipChip extends StatelessWidget {
   final VoidCallback onTap;
   const _FlipChip({required this.onTap});
@@ -434,10 +375,7 @@ class _FlipChip extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(999),
         child: const Padding(
-          // Tighter vertical padding so the chip + T_STY column stays
-          // close to the original T_STY-only height. The 200 px card has
-          // no spare room and this is the only place the new height
-          // came from.
+
           padding: EdgeInsets.symmetric(horizontal: 9, vertical: 2),
           child: Row(
             mainAxisSize: MainAxisSize.min,
@@ -463,10 +401,6 @@ class _FlipChip extends StatelessWidget {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Back face — QR + bunny animation + caption.
-// ---------------------------------------------------------------------------
-
 class _Back extends StatelessWidget {
   final String phoneDigits;
   final String? qrToken;
@@ -479,31 +413,25 @@ class _Back extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Enrolled VIPs carry the signed token; everyone else keeps the legacy
-    // phone payload the PDV has always understood.
+
     final payload = (qrToken != null && qrToken!.isNotEmpty)
         ? qrToken!
         : buildLoyaltyQrPayload(phoneDigits);
 
     return Stack(
       children: [
-        // Same decorative circles as the front so the back doesn't feel like
-        // a different card.
+
         Positioned(top: -34, right: -24, child: _ghostCircle(130, 0.06)),
         Positioned(bottom: -56, right: 48, child: _ghostCircle(150, 0.05)),
         Padding(
           padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
           child: Row(
             children: [
-              // White QR tile — needs a light surface so dark modules read.
+
               Container(
                 width: 168,
                 height: 168,
-                // Inner padding doubles as the QR "quiet zone". The spec
-                // wants ~4 modules of clear margin around the matrix for
-                // reliable scanning; 16 px gives roughly that at our
-                // module size. The previous 8 px left handheld barcode
-                // scanners refusing the code.
+
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
                   color: Colors.white,
@@ -519,16 +447,10 @@ class _Back extends StatelessWidget {
                 child: QrImageView(
                   data: payload,
                   version: QrVersions.auto,
-                  // Higher error correction so partial occlusion or
-                  // imperfect focus still resolves.
+
                   errorCorrectionLevel: QrErrorCorrectLevel.H,
                   backgroundColor: Colors.white,
-                  // Square eyes + square modules. The previous circle
-                  // style looked nicer but laser/CCD handheld scanners
-                  // read by detecting sharp cell-edge transitions, and
-                  // circles leave corner gaps that break the cell grid.
-                  // The card still feels distinct thanks to the rounded
-                  // white tile + decorative ring overlays.
+
                   eyeStyle: const QrEyeStyle(
                     eyeShape: QrEyeShape.square,
                     color: Color(0xFF141414),
@@ -546,10 +468,7 @@ class _Back extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    // VIP badge — small star icon + label. Bunny moved
-                    // into the QR centre, so the right column is text-only
-                    // now and we keep a tiny glyph here so the heading
-                    // doesn't sit bare on the dark background.
+
                     Row(
                       children: [
                         Container(

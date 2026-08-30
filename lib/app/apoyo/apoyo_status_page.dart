@@ -6,22 +6,11 @@ import '../../utils/phone_format.dart';
 import 'apoyo_common.dart';
 import 'apoyo_order_section.dart';
 
-/// ── APOYO SOCIAL — status ───────────────────────────────────────────────────
-///
-/// Renders `apoyo_members/{uid}` (streamed by [ApoyoSection]) for every status
-/// the server can set. The rules card stays on this screen too: a member who
-/// joined weeks ago should be able to re-read how the cycle works without
-/// hunting for the sign-up flow they can no longer reach.
-///
-/// The week itself — the open cycle, the member's order for it, and the way
-/// in and out while it is open — lives in [ApoyoOrderSection], which is the
-/// only part of this screen with listeners of its own.
 class ApoyoStatusPage extends StatelessWidget {
   final ApoyoConfig config;
   final Map<String, dynamic> member;
   final VoidCallback? onBack;
 
-  /// Rejected members only: switches back to the join form.
   final VoidCallback? onReapply;
 
   const ApoyoStatusPage({
@@ -43,8 +32,6 @@ class ApoyoStatusPage extends StatelessWidget {
     return v is Timestamp ? v.toDate().toLocal() : null;
   }
 
-  /// The server re-checks this; here it only decides whether the button reads
-  /// "Solicitar de nuevo" or tells them the date they can.
   DateTime? get _reapplyDate {
     final decided = _decidedAt;
     if (decided == null) return null;
@@ -69,8 +56,6 @@ class ApoyoStatusPage extends StatelessWidget {
       ),
     );
   }
-
-  // ── header ────────────────────────────────────────────────────────────────
 
   Widget _headerCard() {
     final s = ApoyoStatusStyle.of(_status);
@@ -134,8 +119,6 @@ class ApoyoStatusPage extends StatelessWidget {
         return 'Aquí verás el estado de tu membresía.';
     }
   }
-
-  // ── per-status body ───────────────────────────────────────────────────────
 
   List<Widget> _statusBody(BuildContext context) {
     switch (_status) {
@@ -268,8 +251,6 @@ class ApoyoStatusPage extends StatelessWidget {
     return config.suspensionCycles;
   }
 
-  // ── pieces ────────────────────────────────────────────────────────────────
-
   Widget _messageCard({
     required IconData icon,
     required String title,
@@ -314,8 +295,6 @@ class ApoyoStatusPage extends StatelessWidget {
     );
   }
 
-  /// What the user actually sent — so a pending member can check they typed
-  /// the right phone without digging through the form again.
   Widget _submittedDataCard() {
     final phone = (member['phone'] ?? '').toString();
     final address = [

@@ -380,11 +380,7 @@ class _Match3ScreenState extends State<Match3Screen> with SingleTickerProviderSt
   }
 
   Future<void> _awardRoundSaldo() async {
-    // Routes through the server-side `updateRewardsSaldo` callable instead of
-    // writing rewards/{docId} directly (admin-only collection — the old batch
-    // failed silently for every non-admin user, so the credit never persisted).
-    // The CF applies the delta in a transaction and returns the authoritative
-    // saldo, which we adopt over the optimistic +1.
+
     final newSaldo = _saldo + 1.0;
     setState(() => _saldo = newSaldo);
     widget.onSaldoChanged(newSaldo);
@@ -547,11 +543,6 @@ class _Match3ScreenState extends State<Match3Screen> with SingleTickerProviderSt
             ),
             const SizedBox(width: 8),
 
-            // FittedBox scales the inner score HUD down to fit when
-            // the parent row is narrow / short — the inner content
-            // sums to ~55px tall while the row constraint can be as
-            // tight as 41px on smaller phones, which used to overflow
-            // by 14px and break the whole frame.
             Expanded(
               child: FittedBox(
                 fit: BoxFit.scaleDown,

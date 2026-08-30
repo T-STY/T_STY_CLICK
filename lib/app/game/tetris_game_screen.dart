@@ -112,9 +112,6 @@ class _TetrisScreenState extends State<TetrisScreen> {
 
   _GameState _state = _GameState.start;
 
-  // The arcade shell already charged kArcadePlayCost to launch this
-  // cartridge, so the first start of a fresh run is free. Every restart
-  // after it pays again.
   bool _entryPaid = true;
 
   Timer? _gravTimer;
@@ -279,7 +276,7 @@ class _TetrisScreenState extends State<TetrisScreen> {
   }
 
   Future<void> _restart() async {
-    // First start of a freshly-launched run: the shell already paid for it.
+
     if (_entryPaid) {
       _entryPaid = false;
       _gravTimer?.cancel();
@@ -294,10 +291,7 @@ class _TetrisScreenState extends State<TetrisScreen> {
         currentSaldo: _saldo);
     if (ns == null) return;
     if (!mounted) return;
-    // The charge moved the server saldo without going through
-    // _updateFirestore, so the ledger has to be resynced here — otherwise
-    // the next credit's delta is measured against the pre-charge base and
-    // comes out negative, debiting the player instead of paying them.
+
     _lastCommitted = ns;
     setState(() => _saldo = ns);
     widget.onSaldoChanged(ns);
@@ -461,12 +455,7 @@ class _TetrisScreenState extends State<TetrisScreen> {
   }
 
   Future<void> _updateFirestore(double newSaldo) async {
-    // Routes through the server-side `updateRewardsSaldo`
-    // callable instead of writing rewards/{docId} directly
-    // (admin-only collection — direct writes failed silently
-    // for every non-admin user). The CF resolves the wallet,
-    // applies the delta in a transaction, and mirrors the
-    // result to the owner-readable card cache.
+
     final delta = newSaldo - _lastCommitted;
     if (delta == 0) return;
     final result = await applyArcadeDelta(
@@ -690,8 +679,7 @@ class _TetrisScreenState extends State<TetrisScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          // Left untranslated: idiomatic in Spanish arcades, and "FIN DEL
-          // JUEGO" wrapped to two lines at fontSize 38.
+
           _buildNeonTitle('GAME OVER', const Color(0xFFFF1744), 38),
           const SizedBox(height: 22),
           _buildHudCard(label: _t('PUNTUACIÓN', 'SCORE'), value: '$_score', accent: const Color(0xFF00E5FF)),

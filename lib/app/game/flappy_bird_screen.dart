@@ -257,12 +257,7 @@ class _FlappyBirdScreenState extends State<FlappyBirdScreen> {
   Future<void> _awardSaldo() async {
     if (_awardingPoints) return;
     _awardingPoints = true;
-    // Routes through the server-side `updateRewardsSaldo`
-    // callable instead of writing rewards/{docId} directly
-    // (admin-only collection — direct writes failed silently
-    // for every non-admin user). The CF resolves the wallet,
-    // applies the delta in a transaction, and mirrors the
-    // result to the owner-readable card cache.
+
     final result = await applyArcadeDelta(
       delta: 1.0,
       reason: 'flappy',
@@ -421,7 +416,7 @@ class _FlappyBirdScreenState extends State<FlappyBirdScreen> {
               child: SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  // Same paid path as the D-pad restart — no free replays.
+
                   onPressed: _payAndReplay,
                   style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF5EC8E8),

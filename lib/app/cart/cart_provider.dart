@@ -62,21 +62,9 @@ class CartProvider extends ChangeNotifier {
   double _totalDiscount = 0.0;
   List<CartGroup> _groups = [];
 
-  // Lazy cache of product metadata (category + distribuitor_name) keyed by
-  // productId. Populated by fire-and-forget Firestore reads from `addItem`,
-  // `setItem`, and `_loadCartFromStorage`. Read by `eligibleSubtotalFor` to
-  // evaluate coupon product-filter restrictions without async work in the
-  // build path. NOTE: products store the typo'd field `distribuitor_name`.
   final Map<String, _ProductMeta> _productMeta = {};
   final Set<String> _productMetaInFlight = {};
 
-  /// Bumped each time a `_ensureProductMeta` fetch resolves. Checkout's
-  /// coupon row listens to this directly so it can re-evaluate
-  /// `eligibleSubtotalFor` without forcing every Consumer<CartProvider>
-  /// in the app to rebuild. Important on the search/home screen, where
-  /// each visible search hit registers an `_AddToCartButton` listener on
-  /// CartProvider — fanning out a full `notifyListeners` per meta read
-  /// stutters the search results during typing.
   final ValueNotifier<int> productMetaVersion = ValueNotifier<int>(0);
 
   List<String> get appliedPromosList => _groups.map((g) => g.name).toList();
@@ -86,12 +74,6 @@ class CartProvider extends ChangeNotifier {
 
   final Completer<void> _readyCompleter = Completer<void>();
 
-  /// Resolves once the initial async setup (`fetchActivePromotions` +
-  /// `_loadCartFromStorage`) has completed. Callers can optionally await this
-  /// before reading [items], [groups], or combo data to avoid the race where
-  /// they observe empty state before the constructor's fire-and-forget `_init`
-  /// resolves. Awaiting is optional — existing fire-and-forget behavior is
-  /// unchanged.
   Future<void> get ready => _readyCompleter.future;
 
   CartProvider() {
@@ -143,21 +125,6 @@ class CartProvider extends ChangeNotifier {
     return remaining < 0 ? 0 : remaining;
   }
 
-  /// Sum of (price × quantity) over the cart items that satisfy a coupon's
-  /// `productFilter`. Mirrors the server-side math in
-  /// click-main/functions/index.js `_computeEligibleSubtotal` so the on-screen
-  /// preview matches the order's recomputed discount.
-  ///
-  /// Pass `null` (or a filter map with `mode != 'include'/'exclude'`) to get
-  /// the raw subtotal — legacy "no filter" behavior. The caller (checkout)
-  /// is responsible for clamping the result to `totalPriceAfterDiscount` so
-  /// combos and the coupon discount don't compound past the cart's value.
-  ///
-  /// Returns `null` IFF an active filter needs category/provedor data and at
-  /// least one in-cart item's metadata hasn't loaded yet — the UI should
-  /// render a neutral "verifying eligibility" state in that case instead of
-  /// the misleading "No aplica" badge that would result from treating
-  /// missing meta as "no match".
   double? eligibleSubtotalFor(Map<String, dynamic>? filterMap) {
     if (filterMap == null) return totalPrice;
     final mode = (filterMap['mode'] ?? 'all').toString();
@@ -168,17 +135,14 @@ class CartProvider extends ChangeNotifier {
     final subs = readList(filterMap['subcategories']).toSet();
     final provs = readList(filterMap['provedores']).toSet();
     final ids = readList(filterMap['productIds']).toSet();
-    // If the filter only matches by productId (no category/provedor lists),
-    // we don't need product metadata at all — productId is already on the
-    // cart line. Skip the loading-state check in that case.
+
     final needsMeta = subs.isNotEmpty || provs.isNotEmpty;
 
     double eligible = 0.0;
     for (final item in _items.values) {
       final meta = _productMeta[item.productId];
       if (needsMeta && meta == null) {
-        // Metadata still loading for at least one in-cart item; refuse to
-        // give a partial answer.
+
         return null;
       }
       final cat = meta?.category ?? '';
@@ -194,9 +158,6 @@ class CartProvider extends ChangeNotifier {
     return eligible;
   }
 
-  /// Fire-and-forget product metadata fetch — populates `_productMeta` so a
-  /// subsequent synchronous `eligibleSubtotalFor` call has the data it needs.
-  /// Called from `addItem` / `setItem` and from cart-storage reload.
   void _ensureProductMeta(String productId) {
     if (productId.isEmpty) return;
     if (_productMeta.containsKey(productId)) return;
@@ -214,10 +175,7 @@ class CartProvider extends ChangeNotifier {
         category: (d['category'] ?? '').toString(),
         distribuitorName: (d['distribuitor_name'] ?? '').toString(),
       );
-      // SCOPED notification — checkout's coupon row listens via
-      // `productMetaVersion` so it can refresh eligibility without
-      // waking every CartProvider listener (e.g. every search-result
-      // row's `_AddToCartButton`).
+
       productMetaVersion.value++;
     }).catchError((_) {
       _productMetaInFlight.remove(productId);
@@ -424,11 +382,6 @@ class CartProvider extends ChangeNotifier {
     _pruneProductMeta();
   }
 
-  /// Drop cached product metadata for any productId that is no longer in
-  /// the cart. Keeps the cache from leaking, and — more importantly —
-  /// guarantees that the next time the user re-adds the product, a fresh
-  /// Firestore read picks up any admin re-categorization that happened
-  /// since the last time the item was in cart.
   void _pruneProductMeta() {
     if (_productMeta.isEmpty) return;
     final live = _items.values.map((i) => i.productId).toSet();
@@ -468,9 +421,7 @@ class CartProvider extends ChangeNotifier {
             .map((e) => ComboInstance.fromJson(Map<String, dynamic>.from(e as Map)))
             .toList();
       }
-      // Backfill product metadata for everything in the restored cart so a
-      // freshly opened checkout has eligibility data ready without waiting
-      // for the user to interact with the cart.
+
       for (final item in _items.values) {
         _ensureProductMeta(item.productId);
       }

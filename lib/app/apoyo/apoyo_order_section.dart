@@ -11,18 +11,6 @@ import 'apoyo_catalog_page.dart';
 import 'apoyo_common.dart';
 import 'apoyo_cycle.dart';
 
-/// ── APOYO SOCIAL — "tu pedido", on the status screen ────────────────────────
-///
-/// The one place a member checks on Thursday to answer "how much do I need on
-/// Friday?". It shows the week, and — while the cycle is open — the way in and
-/// out of it.
-///
-/// It reads the LATEST cycles rather than only the open one. Requirement: a
-/// member must still see their order (folio, total, items) after the Tuesday
-/// cutoff, when `state` has already flipped to 'cerrado' and an
-/// `abierto`-only query returns nothing — that is exactly the window where
-/// they most need to know the amount. The open cycle is derived from the same
-/// snapshot, so nothing is read twice.
 class ApoyoOrderSection extends StatefulWidget {
   final ApoyoConfig config;
   final Map<String, dynamic> member;
@@ -47,7 +35,6 @@ class _ApoyoOrderSectionState extends State<ApoyoOrderSection> {
   String? _orderCycleId;
   bool _loading = true;
 
-  /// Re-entrancy latch on the cancel callable.
   bool _cancelling = false;
 
   DateTime _now = DateTime.now();
@@ -56,8 +43,6 @@ class _ApoyoOrderSectionState extends State<ApoyoOrderSection> {
   void initState() {
     super.initState();
 
-    // Cycle ids are 'YYYY-MM-DD', so document-id order IS chronological
-    // order — no composite index, and no date parsed on the client.
     _cyclesSub = FirebaseFirestore.instance
         .collection('apoyo_cycles')
         .orderBy(FieldPath.documentId, descending: true)
@@ -74,15 +59,10 @@ class _ApoyoOrderSectionState extends State<ApoyoOrderSection> {
       if (mounted) setState(() => _loading = false);
     });
 
-    // Coarse: this widget lives inside SettingsPage's IndexedStack, which
-    // builds it whether or not it is the visible section. Half a minute is
-    // enough to flip the screen to "cerrado" the moment the cutoff passes
-    // without spending a rebuild every second on a page nobody is looking at.
     _ticker = Timer.periodic(const Duration(seconds: 30), (_) {
       if (!mounted) return;
       setState(() => _now = DateTime.now());
-      // The cutoff passing can move the focus from an open cycle to a newer
-      // one, which is a different order document.
+
       _syncOrderSub();
     });
   }
@@ -95,8 +75,6 @@ class _ApoyoOrderSectionState extends State<ApoyoOrderSection> {
     super.dispose();
   }
 
-  /// The cycle this screen is about: the open one while ordering is possible,
-  /// otherwise the most recent one — the week whose delivery is still coming.
   ApoyoCycle? get _focusCycle {
     for (final c in _cycles) {
       if (c.isOpenAt(_now)) return c;
@@ -114,8 +92,7 @@ class _ApoyoOrderSectionState extends State<ApoyoOrderSection> {
 
     _orderCycleId = cycleId;
     _orderSub?.cancel();
-    // Never show one week's order under another week's header while the new
-    // subscription is still in flight.
+
     if (_order != null) setState(() => _order = null);
     _orderSub = FirebaseFirestore.instance
         .doc('apoyo_orders/${cycleId}_$uid')
@@ -126,17 +103,12 @@ class _ApoyoOrderSectionState extends State<ApoyoOrderSection> {
     }, onError: (_) {});
   }
 
-  /// Why Editar and Cancelar are dead after the cutoff — the server's own
-  /// reason ("Ya compramos tu pedido…"), shown inline instead of letting the
-  /// member tap into a rejection they could have read first.
   String get _lockedReason {
     final phone = widget.config.storePhone;
     return 'Ya no puedes editar ni cancelar: ya compramos tu pedido. '
         '${phone.isEmpty ? 'Habla con la tienda' : 'Llámanos al $phone'} si '
         'algo cambió.';
   }
-
-  // ── actions ───────────────────────────────────────────────────────────────
 
   Future<void> _openCatalog() async {
     final cycle = _focusCycle;
@@ -187,8 +159,7 @@ class _ApoyoOrderSectionState extends State<ApoyoOrderSection> {
           .httpsCallable('cancelApoyoOrder')
           .call(<String, dynamic>{'cycleId': cycle.id});
       if (!mounted) return;
-      // The selection is rebuilt from the catalog next time; leaving the old
-      // lines behind would re-offer a basket they just cancelled.
+
       context.read<ApoyoCartProvider>().clear();
       await apoyoAlert(
         context,
@@ -220,8 +191,6 @@ class _ApoyoOrderSectionState extends State<ApoyoOrderSection> {
     }
   }
 
-  // ── build ─────────────────────────────────────────────────────────────────
-
   @override
   Widget build(BuildContext context) {
     if (_loading) {
@@ -247,7 +216,6 @@ class _ApoyoOrderSectionState extends State<ApoyoOrderSection> {
     return _orderCard(cycle, order);
   }
 
-  /// No cycle document at all — the week has not been opened yet.
   Widget _noCycleCard() {
     return ApoyoCard(
       padding: const EdgeInsets.fromLTRB(16, 20, 16, 20),
@@ -374,8 +342,6 @@ class _ApoyoOrderSectionState extends State<ApoyoOrderSection> {
       ),
     );
   }
-
-  // ── the order itself ──────────────────────────────────────────────────────
 
   Widget _orderCard(ApoyoCycle cycle, ApoyoOrder order) {
     if (order.isCancelled) return _cancelledCard(cycle, order);
@@ -664,8 +630,6 @@ class _ApoyoOrderSectionState extends State<ApoyoOrderSection> {
     );
   }
 
-  /// The server cancels an order at close when the membership is no longer
-  /// active. The member must find out here, not on Friday at the door.
   Widget _cancelledCard(ApoyoCycle cycle, ApoyoOrder order) {
     return ApoyoCard(
       color: kApoyoRedTint,
@@ -705,7 +669,6 @@ class _ApoyoOrderSectionState extends State<ApoyoOrderSection> {
     );
   }
 
-  /// Countdown + the exact instant, both formatted from the server Timestamp.
   Widget _cutoffStrip(ApoyoCycle cycle) {
     final left = cycle.timeLeftAt(_now);
     return Container(

@@ -38,15 +38,7 @@ class LocalNotificationsService {
     await _plugin.initialize(
       initSettings,
       onDidReceiveNotificationResponse: (response) {
-        // Two flavors of local notification reach this handler:
-        //   1. Cart reminders we scheduled ourselves — no payload, so
-        //      we synthesize a `cart_reminder` action.
-        //   2. The foreground-FCM bridge (`showRemoteForeground`) —
-        //      payload is the FCM `msg.data` map encoded as JSON, so
-        //      we decode and dispatch it verbatim. This routes order /
-        //      coupon taps through the same dispatcher the background
-        //      `onMessageOpenedApp` handler uses, keeping deep-link
-        //      behavior identical regardless of fg/bg.
+
         final raw = response.payload;
         if (raw != null && raw.isNotEmpty) {
           try {
@@ -57,7 +49,7 @@ class LocalNotificationsService {
               return;
             }
           } catch (_) {
-            // Fall through to cart_reminder fallback.
+
           }
         }
         NotificationActions.instance.dispatch({'type': 'cart_reminder'});
@@ -117,25 +109,9 @@ class LocalNotificationsService {
     }
   }
 
-  // ID range for foreground FCM bridge notifications. We hash the FCM
-  // message id (or fall back to a timestamp) into this range so
-  // back-to-back arrivals don't collide / replace each other in the
-  // tray. Keep this range disjoint from the static reminder IDs above.
   static const int _fgFcmIdBase = 10000;
   static const int _fgFcmIdMod = 50000;
 
-  /// Bridge for FCM messages that arrive while the app is in the
-  /// foreground on Android. The FCM SDK does NOT auto-display these
-  /// (it just fires `onMessage`), so without this bridge the customer
-  /// sees nothing until they background the app — which means missed
-  /// order updates and coupon broadcasts they were physically present
-  /// for. iOS handles foreground display via
-  /// `setForegroundNotificationPresentationOptions` and doesn't need
-  /// this path; the caller gates on `defaultTargetPlatform == android`.
-  ///
-  /// [payload] is forwarded into the tap callback so the existing
-  /// `NotificationActions` dispatcher can route a tap to the right
-  /// screen (order_status → orders tab, coupon → claim dialog, etc.).
   Future<void> showRemoteForeground({
     required String? title,
     required String? body,
@@ -145,7 +121,7 @@ class LocalNotificationsService {
     if (title == null && body == null) return;
     try {
       await init();
-      // Stable per-message id so duplicate deliveries don't double-post.
+
       final int id = ((messageId?.hashCode ?? DateTime.now().microsecondsSinceEpoch)
                   .abs() %
               _fgFcmIdMod) +
