@@ -1,10 +1,11 @@
 import 'dart:ui';
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+
+import '../bulk_order_dialog.dart';
+import '../fraction_utils.dart';
 import 'package:provider/provider.dart';
 import '../../components/bottom_fade.dart';
-import '../../components/shimmer_placeholder.dart';
 import '../../constants/app_colors.dart';
 import '../../constants/app_defaults.dart';
 import '../../constants/app_images.dart';
@@ -449,25 +450,17 @@ class CartPageState extends State<CartPage> {
         isBulk: item.isBulk,
         typeSpecific: item.typeSpecific,
         variante: item.variante,
-        increaseQuantity: () {
-          if (item.isBulk) {
-            _showBulkOrderDialog(context, cart, item);
+        increaseQuantity: () { _editCartLine(context, cart, item); },
+        decreaseQuantity: () {
+          if (item.fracciones.isNotEmpty ||
+              item.isBulk ||
+              item.permitePorPieza ||
+              item.pricePending) {
+            _editCartLine(context, cart, item);
           } else {
-            cart.addItem(
-              item.objectID,
-              item.nombre,
-              item.price,
-              item.imageUrl,
-              quantity: 1,
-              isBulk: item.isBulk,
-              stock: item.stock,
-              typeSpecific: item.typeSpecific,
-              variante: item.variante,
-            );
+            cart.removeItem(item.objectID, isBulk: item.isBulk);
           }
         },
-        decreaseQuantity: () =>
-            cart.removeItem(item.objectID, isBulk: item.isBulk),
       ));
     }
 
@@ -555,234 +548,169 @@ class CartPageState extends State<CartPage> {
     );
   }
 
+  /// Un renglón del carrito se vuelve a editar con el mismo diálogo con el que
+  /// se agregó: por peso, por pieza o por fracción según el producto.
   void _showBulkOrderDialog(
       BuildContext context, CartProvider cartProvider, CartItem item) {
     showDialog(
       context: context,
-      builder: (context) {
-        return BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
-          child: _BulkOrderDialog(
-            item: item,
-            onConfirm: (kilos) {
-              Navigator.of(context).pop();
-              if (item.objectID.isNotEmpty) {
-                cartProvider.setItem(
-                  item.objectID,
-                  item.nombre,
-                  item.price,
-                  item.imageUrl,
-                  kilos,
-                  isBulk: item.isBulk,
-                  stock: item.stock,
-                );
-              }
-            },
-          ),
-        );
-      },
-    );
-  }
-}
-
-class _BulkOrderDialog extends StatefulWidget {
-  final CartItem item;
-  final ValueChanged<double> onConfirm;
-
-  const _BulkOrderDialog({
-    required this.item,
-    required this.onConfirm,
-  });
-
-  @override
-  State<_BulkOrderDialog> createState() => _BulkOrderDialogState();
-}
-
-class _BulkOrderDialogState extends State<_BulkOrderDialog> {
-  final TextEditingController pesosController = TextEditingController();
-  final TextEditingController kilosController = TextEditingController();
-  final FocusNode pesosFocusNode = FocusNode();
-  final FocusNode kilosFocusNode = FocusNode();
-
-  double get _pricePerKilo => widget.item.price;
-
-  @override
-  void initState() {
-    super.initState();
-    kilosController.text = widget.item.quantity.toStringAsFixed(3);
-    pesosController.text =
-    '\$${(widget.item.quantity * _pricePerKilo).toStringAsFixed(2)}';
-
-    pesosFocusNode.addListener(_handlePesosFocus);
-    kilosFocusNode.addListener(_handleKilosFocus);
-  }
-
-  void _handlePesosFocus() {
-    if (!pesosFocusNode.hasFocus) {
-      final pesos =
-          double.tryParse(pesosController.text.replaceAll('\$', '')) ?? 0.0;
-      if (_pricePerKilo != 0.0) {
-        final kilos = pesos / _pricePerKilo;
-        kilosController.text = kilos.toStringAsFixed(3);
-        pesosController.text = '\$${pesos.toStringAsFixed(2)}';
-      }
-    }
-  }
-
-  void _handleKilosFocus() {
-    if (!kilosFocusNode.hasFocus) {
-      final kilos = double.tryParse(kilosController.text) ?? 0.0;
-      if (_pricePerKilo != 0.0) {
-        final pesos = kilos * _pricePerKilo;
-        pesosController.text = '\$${pesos.toStringAsFixed(2)}';
-      }
-    }
-  }
-
-  @override
-  void dispose() {
-    pesosFocusNode.removeListener(_handlePesosFocus);
-    kilosFocusNode.removeListener(_handleKilosFocus);
-    pesosFocusNode.dispose();
-    kilosFocusNode.dispose();
-    pesosController.dispose();
-    kilosController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final item = widget.item;
-    return AlertDialog(
-      title: const Center(child: Text("Producto a Granel")),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Row(
-            children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(8.0),
-                child: CachedNetworkImage(
-                  imageUrl: item.imageUrl,
-                  fit: BoxFit.contain,
-                  width: 50,
-                  height: 50,
-                  placeholder: (context, url) =>
-                  const ShimmerPlaceholder(width: 50, height: 50),
-                  errorWidget: (context, url, error) =>
-                  const Icon(Icons.error),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    item.nombre,
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Precio por Kilo: ${_pricePerKilo.toStringAsFixed(2)}',
-                    style: const TextStyle(color: Colors.green),
-                  ),
-                ],
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          const Align(
-            alignment: Alignment.centerLeft,
-            child: Text(
-              'Valor en pesos',
-              style: TextStyle(color: Colors.black),
-            ),
-          ),
-          Row(
-            children: [
-              Expanded(
-                flex: 2,
-                child: TextField(
-                  controller: pesosController,
-                  keyboardType: TextInputType.number,
-                  focusNode: pesosFocusNode,
-                  textAlign: TextAlign.center,
-                  decoration: InputDecoration(
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 10),
-              const Expanded(
-                flex: 1,
-                child: Text(
-                  'MXN',
-                  style: TextStyle(color: Colors.black),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          const Align(
-            alignment: Alignment.centerLeft,
-            child: Text(
-              'Peso en kilo',
-              style: TextStyle(color: Colors.black),
-            ),
-          ),
-          Row(
-            children: [
-              Expanded(
-                flex: 2,
-                child: TextField(
-                  controller: kilosController,
-                  keyboardType: TextInputType.number,
-                  focusNode: kilosFocusNode,
-                  textAlign: TextAlign.center,
-                  decoration: InputDecoration(
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 10),
-              const Expanded(
-                flex: 1,
-                child: Text(
-                  'kg',
-                  style: TextStyle(color: Colors.black),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          RichText(
-            textAlign: TextAlign.justify,
-            text: const TextSpan(
-              style: TextStyle(color: Colors.black),
-              children: [
-                TextSpan(
-                  text:
-                  "\n*Tenga en cuenta que la cantidad recibida puede variar ligeramente.",
-                  style: TextStyle(fontStyle: FontStyle.italic),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-      actions: [
-        TextButton(
-          onPressed: () {
-            final kilos = double.tryParse(kilosController.text) ?? 0.0;
-            widget.onConfirm(kilos);
+      builder: (ctx) => BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+        child: BulkOrderDialog(
+          imageUrl: item.imageUrl,
+          nombre: item.nombre,
+          variante: item.variante,
+          priceLabel: '\$${item.price.toStringAsFixed(2)}',
+          pricePerKilo: item.price,
+          initialKilos: item.quantity,
+          stock: item.stock,
+          allowByPiece: item.permitePorPieza,
+          onConfirmPieces: (pieces) {
+            Navigator.of(ctx).pop();
+            cartProvider.setItem(
+              item.productId,
+              item.nombre,
+              item.price,
+              item.imageUrl,
+              0,
+              isBulk: true,
+              stock: item.stock,
+              typeSpecific: item.typeSpecific,
+              variante: item.variante,
+              variantKey: item.variantKey,
+              variantName: item.variantName,
+              pieces: pieces.toDouble(),
+              pricePending: true,
+              fracciones: item.fracciones,
+              fraccionUnidad: item.fraccionUnidad,
+              permitePorPieza: item.permitePorPieza,
+            );
           },
-          child: const Text('Agregar'),
+          onConfirm: (kilos) {
+            Navigator.of(ctx).pop();
+            cartProvider.setItem(
+              item.productId,
+              item.nombre,
+              item.price,
+              item.imageUrl,
+              kilos,
+              isBulk: item.isBulk,
+              stock: item.stock,
+              typeSpecific: item.typeSpecific,
+              variante: item.variante,
+              variantKey: item.variantKey,
+              variantName: item.variantName,
+              fracciones: item.fracciones,
+              fraccionUnidad: item.fraccionUnidad,
+              permitePorPieza: item.permitePorPieza,
+            );
+          },
         ),
-      ],
+      ),
     );
+  }
+
+  /// Fracciones: se reabre su propio selector de tamaño y cantidad.
+  Future<void> _editFractionLine(
+      BuildContext context, CartProvider cartProvider, CartItem item) async {
+    final chosen = await pickFraction(
+      context: context,
+      productName: item.nombre,
+      variante: item.variante,
+      imageUrl: item.imageUrl,
+      fractions: item.fracciones,
+      unitPrice: item.price,
+      stock: item.stock,
+      unit: item.fraccionUnidad,
+    );
+    if (chosen == null) return;
+    cartProvider.setItem(
+      item.productId,
+      item.nombre,
+      item.price,
+      item.imageUrl,
+      chosen,
+      isBulk: true,
+      stock: item.stock,
+      typeSpecific: item.typeSpecific,
+      variante: item.variante,
+      variantKey: item.variantKey,
+      variantName: item.variantName,
+      fracciones: item.fracciones,
+      fraccionUnidad: item.fraccionUnidad,
+      permitePorPieza: item.permitePorPieza,
+    );
+  }
+
+  /// Un solo lugar decide qué hace + o − en el carrito, para que un producto
+  /// por fracciones no acabe abriendo el diálogo de kilos ni sumando de uno.
+  ///
+  /// La forma de venta se lee del PRODUCTO, no de la línea: un carrito guardado
+  /// antes de que existieran las fracciones no la trae, y ahí volveríamos a
+  /// abrir el diálogo equivocado. Si la lectura falla, se usa lo que traiga la
+  /// línea.
+  Future<void> _editCartLine(
+      BuildContext context, CartProvider cartProvider, CartItem item) async {
+    List<double> fracciones = item.fracciones;
+    String unidad = item.fraccionUnidad;
+    bool porPieza = item.permitePorPieza;
+    bool bulk = item.isBulk;
+
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('products')
+          .doc(item.productId)
+          .get();
+      final data = doc.data();
+      if (data != null) {
+        fracciones = productFractions(data);
+        unidad = fractionUnit(data);
+        porPieza = data['permite_por_pieza'] == true;
+        bulk = data['bulk'] == true;
+      }
+    } catch (_) {
+      // Sin conexión se queda con lo que la línea ya sabía.
+    }
+    if (!context.mounted) return;
+
+    final resolved = CartItem(
+      nombre: item.nombre,
+      price: item.price,
+      quantity: item.quantity,
+      imageUrl: item.imageUrl,
+      objectID: item.objectID,
+      isBulk: bulk,
+      stock: item.stock,
+      typeSpecific: item.typeSpecific,
+      variante: item.variante,
+      brand: item.brand,
+      productId: item.productId,
+      variantKey: item.variantKey,
+      variantName: item.variantName,
+      pieces: item.pieces,
+      pricePending: item.pricePending,
+      fracciones: fracciones,
+      fraccionUnidad: unidad,
+      permitePorPieza: porPieza,
+    );
+
+    if (fracciones.isNotEmpty) {
+      await _editFractionLine(context, cartProvider, resolved);
+    } else if (bulk || porPieza || item.pricePending) {
+      if (!context.mounted) return;
+      _showBulkOrderDialog(context, cartProvider, resolved);
+    } else {
+      cartProvider.addItem(
+        item.objectID,
+        item.nombre,
+        item.price,
+        item.imageUrl,
+        quantity: 1,
+        isBulk: item.isBulk,
+        stock: item.stock,
+        typeSpecific: item.typeSpecific,
+        variante: item.variante,
+      );
+    }
   }
 }

@@ -1731,6 +1731,9 @@ class _AddToCartButtonState extends State<_AddToCartButton> {
         variante: variante,
         variantKey: variantKey,
         variantName: variantName,
+        fracciones: productFractions(widget.data),
+        fraccionUnidad: fractionUnit(widget.data),
+        permitePorPieza: widget.data['permite_por_pieza'] == true,
       );
     } else {
       cartProvider.removeItemCompletely(buildCartLineId(docId, variantKey));
@@ -1989,6 +1992,9 @@ class _AddToCartButtonState extends State<_AddToCartButton> {
                 variantName: widget.data['variantName'] as String?,
                 pieces: pieces.toDouble(),
                 pricePending: true,
+                fracciones: productFractions(widget.data),
+                fraccionUnidad: fractionUnit(widget.data),
+                permitePorPieza: widget.data['permite_por_pieza'] == true,
               );
             },
             onConfirm: (kilos) {
@@ -2007,6 +2013,9 @@ class _AddToCartButtonState extends State<_AddToCartButton> {
                   variante: widget.data['variante'],
                   variantKey: widget.data['variantKey'] as String?,
                   variantName: widget.data['variantName'] as String?,
+                  fracciones: productFractions(widget.data),
+                  fraccionUnidad: fractionUnit(widget.data),
+                  permitePorPieza: widget.data['permite_por_pieza'] == true,
                 );
               }
               if (kDebugMode) {

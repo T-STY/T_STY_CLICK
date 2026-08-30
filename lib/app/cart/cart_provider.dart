@@ -553,7 +553,10 @@ class CartProvider extends ChangeNotifier {
       String? variantKey,
       String? variantName,
       double? pieces,
-      bool pricePending = false}) {
+      bool pricePending = false,
+      List<double> fracciones = const [],
+      String fraccionUnidad = 'pieza',
+      bool permitePorPieza = false}) {
     if (!pricePending && quantity > stock) {
       quantity = stock;
       _showStockExceededDialog(name);
@@ -582,6 +585,11 @@ class CartProvider extends ChangeNotifier {
           variantName: variantName ?? existingCartItem.variantName,
           pieces: pieces ?? existingCartItem.pieces,
           pricePending: pricePending,
+          fracciones: fracciones.isNotEmpty
+              ? fracciones
+              : existingCartItem.fracciones,
+          fraccionUnidad: fraccionUnidad,
+          permitePorPieza: permitePorPieza,
         ),
         ifAbsent: () => CartItem(
           nombre: name,
@@ -599,6 +607,9 @@ class CartProvider extends ChangeNotifier {
           variantName: variantName,
           pieces: pieces,
           pricePending: pricePending,
+          fracciones: fracciones,
+          fraccionUnidad: fraccionUnidad,
+          permitePorPieza: permitePorPieza,
         ),
       );
       _ensureProductMeta(productId);
@@ -779,6 +790,13 @@ class CartItem {
   /// Null cuando la línea se pidió por kilo.
   final double? pieces;
 
+  /// Cómo se vende el producto, guardado en la línea porque el carrito ya no
+  /// tiene el documento a la mano y los botones + y − necesitan saber qué
+  /// diálogo abrir.
+  final List<double> fracciones;
+  final String fraccionUnidad;
+  final bool permitePorPieza;
+
   /// El total todavía no se puede cobrar: depende de lo que pesen esas piezas.
   /// La línea entra al pedido igual, pero no suma al total hasta que la tienda
   /// las pese y cierre el precio.
@@ -800,6 +818,9 @@ class CartItem {
     this.variantName,
     this.pieces,
     this.pricePending = false,
+    this.fracciones = const [],
+    this.fraccionUnidad = 'pieza',
+    this.permitePorPieza = false,
   }) : productId = productId ?? objectID;
 
   /// Lo que esta línea aporta al total de hoy. Una línea por pesar aporta cero
@@ -825,6 +846,9 @@ class CartItem {
       if (variantName != null) 'variantName': variantName,
       if (pieces != null) 'pieces': pieces,
       if (pricePending) 'pricePending': true,
+      if (fracciones.isNotEmpty) 'fracciones': fracciones,
+      'fraccionUnidad': fraccionUnidad,
+      if (permitePorPieza) 'permitePorPieza': true,
     };
   }
 
@@ -845,6 +869,12 @@ class CartItem {
       variantName: json['variantName'] as String?,
       pieces: (json['pieces'] as num?)?.toDouble(),
       pricePending: json['pricePending'] == true,
+      fracciones: (json['fracciones'] as List?)
+              ?.map((v) => (v as num).toDouble())
+              .toList() ??
+          const [],
+      fraccionUnidad: json['fraccionUnidad'] as String? ?? 'pieza',
+      permitePorPieza: json['permitePorPieza'] == true,
     );
   }
 }
