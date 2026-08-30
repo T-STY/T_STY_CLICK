@@ -212,73 +212,19 @@ class BulkOrderDialogState extends State<BulkOrderDialog> {
                 ],
               ),
             ),
-            const SizedBox(height: 10),
-            const Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                'Valor en pesos',
-                style: TextStyle(color: Colors.black),
-              ),
+            const SizedBox(height: 16),
+            _MoneyField(
+              label: 'Valor en pesos',
+              suffix: 'MXN',
+              controller: pesosController,
+              focusNode: pesosFocusNode,
             ),
-            Row(
-              children: [
-                Expanded(
-                  flex: 2,
-                  child: TextField(
-                    controller: pesosController,
-                    keyboardType: TextInputType.number,
-                    focusNode: pesosFocusNode,
-                    textAlign: TextAlign.center,
-                    decoration: InputDecoration(
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                const Expanded(
-                  flex: 1,
-                  child: Text(
-                    'MXN',
-                    style: TextStyle(color: Colors.black),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            const Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                'Peso en kilo',
-                style: TextStyle(color: Colors.black),
-              ),
-            ),
-            Row(
-              children: [
-                Expanded(
-                  flex: 2,
-                  child: TextField(
-                    controller: kilosController,
-                    keyboardType: TextInputType.number,
-                    focusNode: kilosFocusNode,
-                    textAlign: TextAlign.center,
-                    decoration: InputDecoration(
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                const Expanded(
-                  flex: 1,
-                  child: Text(
-                    'kg',
-                    style: TextStyle(color: Colors.black),
-                  ),
-                ),
-              ],
+            const SizedBox(height: 14),
+            _MoneyField(
+              label: 'Peso en kilo',
+              suffix: 'kg',
+              controller: kilosController,
+              focusNode: kilosFocusNode,
             ),
             const SizedBox(height: 10),
             RichText(
@@ -360,6 +306,73 @@ class ModeChip extends StatelessWidget {
             style: TextStyle(
                 fontWeight: selected ? FontWeight.w800 : FontWeight.w600)),
       ),
+    );
+  }
+}
+
+
+/// Campo de captura del diálogo de granel.
+///
+/// Antes el campo iba a dos tercios del ancho con un "MXN" suelto flotando al
+/// lado, así que se veía angosto y descentrado. Ahora ocupa todo el ancho con
+/// la unidad adentro, y usa las mismas esquinas y el mismo peso de texto que
+/// las fichas de fracciones.
+class _MoneyField extends StatelessWidget {
+  final String label;
+  final String suffix;
+  final TextEditingController controller;
+  final FocusNode focusNode;
+
+  const _MoneyField({
+    required this.label,
+    required this.suffix,
+    required this.controller,
+    required this.focusNode,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              color: Colors.grey.shade700),
+        ),
+        const SizedBox(height: 8),
+        TextField(
+          controller: controller,
+          focusNode: focusNode,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+          decoration: InputDecoration(
+            filled: true,
+            fillColor: Colors.grey.shade50,
+            suffixText: suffix,
+            suffixStyle: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+                color: Colors.grey.shade600),
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: BorderSide(color: Colors.grey.shade300),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: BorderSide(color: Colors.grey.shade300),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: const BorderSide(color: Colors.black87, width: 2),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
