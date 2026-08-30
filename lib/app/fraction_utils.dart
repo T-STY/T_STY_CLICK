@@ -25,192 +25,75 @@ String fractionLabel(double f) {
   return s.replaceFirst(RegExp(r'\.?0+$'), '');
 }
 
-Future<double?> pickFraction({
-  required BuildContext context,
-  required String productName,
-  required List<double> fractions,
-  required double unitPrice,
-  required double stock,
-}) {
-  return showDialog<double>(
-    context: context,
-    barrierColor: Colors.black.withValues(alpha: 0.3),
-    builder: (_) => _FractionPickerDialog(
-      productName: productName,
-      fractions: fractions,
-      unitPrice: unitPrice,
-      stock: stock,
-    ),
-  );
-}
-
-class _FractionPickerDialog extends StatelessWidget {
-  final String productName;
-  final List<double> fractions;
-  final double unitPrice;
-  final double stock;
-
-  const _FractionPickerDialog({
-    required this.productName,
-    required this.fractions,
-    required this.unitPrice,
-    required this.stock,
-  });
-
-  String _money(double v) => '\$${v.toStringAsFixed(2)}';
-
-  String _stockText() {
-    final s = stock % 1 == 0
-        ? stock.toStringAsFixed(0)
-        : stock.toStringAsFixed(2);
-    return 'Quedan $s';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Dialog(
-      backgroundColor: Colors.white,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      insetPadding: const EdgeInsets.symmetric(horizontal: 28),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 560),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 18, 12, 14),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          '¿Cuánto se lleva?',
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                            letterSpacing: 0.6,
-                            color: Colors.grey.shade600,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          productName,
-                          style: const TextStyle(
-                              fontSize: 18, fontWeight: FontWeight.bold),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
-                    ),
-                  ),
-                  IconButton(
-                    onPressed: () => Navigator.of(context).pop(),
-                    icon: const Icon(Icons.close),
-                    tooltip: 'Cancelar',
-                  ),
-                ],
-              ),
-            ),
-            Divider(height: 1, thickness: 1, color: Colors.grey.shade200),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-              child: Row(
-                children: [
-                  for (int i = 0; i < fractions.length; i++) ...[
-                    if (i > 0) const SizedBox(width: 12),
-                    Expanded(
-                      child: _FractionTile(
-                        label: fractionLabel(fractions[i]),
-                        price: _money(unitPrice * fractions[i]),
-                        enabled: fractions[i] <= stock + 1e-9,
-                        onTap: () =>
-                            Navigator.of(context).pop(fractions[i]),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 4, 20, 16),
-              child: Text(
-                _stockText(),
-                style: TextStyle(
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.grey.shade600),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _FractionTile extends StatelessWidget {
+class FractionTile extends StatelessWidget {
   final String label;
   final String price;
   final bool enabled;
+  final bool isDark;
   final VoidCallback onTap;
 
-  const _FractionTile({
+  const FractionTile({
+    super.key,
     required this.label,
     required this.price,
     required this.enabled,
     required this.onTap,
+    this.isDark = false,
   });
 
   @override
   Widget build(BuildContext context) {
+    final Color fill = isDark ? Colors.black26 : Colors.grey[50]!;
+    final Color line = isDark ? Colors.white10 : Colors.grey[300]!;
+    final Color ink = isDark ? Colors.white : Colors.black87;
     return Opacity(
       opacity: enabled ? 1 : 0.45,
       child: Material(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        color: Colors.transparent,
         child: InkWell(
           onTap: enabled ? onTap : null,
           borderRadius: BorderRadius.circular(16),
           child: Container(
-            padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 14),
+            padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 12),
             decoration: BoxDecoration(
+              color: fill,
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.grey.shade300),
+              border: Border.all(color: line),
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Un glifo corto como ½ y una palabra como "Entera" no caben
-                // igual: se escala hacia abajo para que ninguna se pegue a los
-                // bordes y las dos se lean con el mismo peso.
+                // Una palabra como "Entera" y un glifo como ½ no ocupan igual;
+                // se escala hacia abajo para que las dos se lean parejas.
                 SizedBox(
-                  height: 38,
+                  height: 34,
                   child: FittedBox(
                     fit: BoxFit.scaleDown,
                     child: Text(
                       label,
                       maxLines: 1,
-                      style: const TextStyle(
-                          fontSize: 32,
+                      style: TextStyle(
+                          fontSize: 28,
                           height: 1.05,
-                          fontWeight: FontWeight.w900),
+                          fontWeight: FontWeight.w900,
+                          color: ink),
                     ),
                   ),
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 8),
                 Text(
                   price,
-                  style: const TextStyle(
-                      fontSize: 17, fontWeight: FontWeight.w700),
+                  style: TextStyle(
+                      fontSize: 16, fontWeight: FontWeight.w700, color: ink),
                 ),
                 if (!enabled)
-                  const Padding(
-                    padding: EdgeInsets.only(top: 4),
+                  Padding(
+                    padding: const EdgeInsets.only(top: 3),
                     child: Text('sin stock',
-                        style: TextStyle(fontSize: 11, height: 1)),
+                        style: TextStyle(
+                            fontSize: 11,
+                            height: 1,
+                            color: isDark ? Colors.white54 : Colors.black54)),
                   ),
               ],
             ),
@@ -219,4 +102,92 @@ class _FractionTile extends StatelessWidget {
       ),
     );
   }
+}
+
+/// El diálogo de fracciones de la app del cliente: mismo formato que el de
+/// granel de esta app —AlertDialog, título centrado, la fila con imagen,
+/// nombre, variante y precio en verde— pero ofreciendo las fracciones.
+Future<double?> pickFraction({
+  required BuildContext context,
+  required String productName,
+  required String? variante,
+  required String imageUrl,
+  required List<double> fractions,
+  required double unitPrice,
+  required double stock,
+}) {
+  return showDialog<double>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: const Center(child: Text('Producto por Fracción')),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8.0),
+                  child: Image.network(
+                    imageUrl,
+                    fit: BoxFit.contain,
+                    width: 50,
+                    height: 50,
+                    errorBuilder: (c, e, st) =>
+                        const Icon(Icons.image_not_supported_outlined),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(productName,
+                          style: const TextStyle(fontWeight: FontWeight.bold)),
+                      if ((variante ?? '').isNotEmpty) Text(variante!),
+                      Text(
+                        '\$${unitPrice.toStringAsFixed(2)} c/u',
+                        style: const TextStyle(color: Colors.green),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            const Text(
+              'Este producto se vende por piezas completas o partidas. '
+              'Elige cuánto quieres llevar.',
+              textAlign: TextAlign.justify,
+              style: TextStyle(color: Colors.black),
+            ),
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                for (int i = 0; i < fractions.length; i++) ...[
+                  if (i > 0) const SizedBox(width: 10),
+                  Expanded(
+                    child: FractionTile(
+                      label: fractionLabel(fractions[i]),
+                      price:
+                          '\$${(unitPrice * fractions[i]).toStringAsFixed(2)}',
+                      enabled: fractions[i] <= stock + 1e-9,
+                      onTap: () => Navigator.pop(ctx, fractions[i]),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(ctx),
+          child: const Text('Cancelar'),
+        ),
+      ],
+    ),
+  );
 }

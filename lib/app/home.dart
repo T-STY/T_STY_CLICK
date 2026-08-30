@@ -1667,6 +1667,8 @@ class _AddToCartButtonState extends State<_AddToCartButton> {
           final chosen = await pickFraction(
             context: context,
             productName: name,
+            variante: variante,
+            imageUrl: imageUrl,
             fractions: fractions,
             unitPrice: price,
             stock: (widget.data['stock'] as num?)?.toDouble() ?? 0.0,

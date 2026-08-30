@@ -799,9 +799,6 @@ class _AddToCartButtonState extends State<AddToCartButton> {
     }
   }
 
-  /// Fracciones fijas: entera o media, sin pesar nada. Por dentro es un
-  /// producto a granel con las cantidades limitadas, así que el carrito, el
-  /// precio y el pedido no cambian en nada.
   Future<void> _showFractionOrderDialog(
     CartProvider cartProvider,
     String docId,
@@ -815,14 +812,14 @@ class _AddToCartButtonState extends State<AddToCartButton> {
   ) async {
     final fractions = productFractions(widget.data);
     if (fractions.isEmpty) return;
-    final double available =
-        (widget.data['stock'] as num?)?.toDouble() ?? 0.0;
     final chosen = await pickFraction(
       context: context,
       productName: name,
+      variante: variante,
+      imageUrl: imageUrl,
       fractions: fractions,
       unitPrice: price,
-      stock: available,
+      stock: (widget.data['stock'] as num?)?.toDouble() ?? 0.0,
     );
     if (chosen == null || !mounted) return;
     setState(() {
