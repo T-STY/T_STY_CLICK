@@ -11,11 +11,8 @@ class BulkOrderDialog extends StatefulWidget {
   final double initialKilos;
   final double stock;
   final ValueChanged<double> onConfirm;
-  /// Verdura y fruta que también se puede pedir por pieza ("3 manzanas").
   final bool allowByPiece;
-  /// Peso promedio por pieza aprendido en el mostrador, si ya hay muestras.
   final double? avgPieceKg;
-  /// Piezas pedidas; el precio queda pendiente hasta que la tienda las pese.
   final ValueChanged<int>? onConfirmPieces;
 
   const BulkOrderDialog({
@@ -310,13 +307,6 @@ class ModeChip extends StatelessWidget {
   }
 }
 
-
-/// Campo de captura del diálogo de granel.
-///
-/// Antes el campo iba a dos tercios del ancho con un "MXN" suelto flotando al
-/// lado, así que se veía angosto y descentrado. Ahora ocupa todo el ancho con
-/// la unidad adentro, y usa las mismas esquinas y el mismo peso de texto que
-/// las fichas de fracciones.
 class _MoneyField extends StatelessWidget {
   final String label;
   final String suffix;

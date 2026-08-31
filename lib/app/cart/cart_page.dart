@@ -38,7 +38,6 @@ class CartPageState extends State<CartPage> {
     final cart = Provider.of<CartProvider>(context, listen: false);
     for (final item in cart.items.values.toList()) {
       try {
-
         final doc = await FirebaseFirestore.instance
             .collection('products')
             .doc(item.productId)
@@ -141,7 +140,6 @@ class CartPageState extends State<CartPage> {
   }
 
   Widget _buildCartContent(BuildContext context, {bool isLoading = false}) {
-
     final OrderingStatus status = _window.status;
     final bool ctaEnabled = status != OrderingStatus.closed;
 
@@ -548,8 +546,6 @@ class CartPageState extends State<CartPage> {
     );
   }
 
-  /// Un renglón del carrito se vuelve a editar con el mismo diálogo con el que
-  /// se agregó: por peso, por pieza o por fracción según el producto.
   void _showBulkOrderDialog(
       BuildContext context, CartProvider cartProvider, CartItem item) {
     showDialog(
@@ -613,7 +609,6 @@ class CartPageState extends State<CartPage> {
     );
   }
 
-  /// Fracciones: se reabre su propio selector de tamaño y cantidad.
   Future<void> _editFractionLine(
       BuildContext context, CartProvider cartProvider, CartItem item) async {
     final chosen = await pickFraction(
@@ -646,13 +641,6 @@ class CartPageState extends State<CartPage> {
     );
   }
 
-  /// Un solo lugar decide qué hace + o − en el carrito, para que un producto
-  /// por fracciones no acabe abriendo el diálogo de kilos ni sumando de uno.
-  ///
-  /// La forma de venta se lee del PRODUCTO, no de la línea: un carrito guardado
-  /// antes de que existieran las fracciones no la trae, y ahí volveríamos a
-  /// abrir el diálogo equivocado. Si la lectura falla, se usa lo que traiga la
-  /// línea.
   Future<void> _editCartLine(
       BuildContext context, CartProvider cartProvider, CartItem item) async {
     List<double> fracciones = item.fracciones;
@@ -673,7 +661,6 @@ class CartPageState extends State<CartPage> {
         bulk = data['bulk'] == true;
       }
     } catch (_) {
-      // Sin conexión se queda con lo que la línea ya sabía.
     }
     if (!context.mounted) return;
 

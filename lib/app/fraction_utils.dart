@@ -15,8 +15,6 @@ List<double> productFractions(Map<String, dynamic>? data) {
 bool sellsByFraction(Map<String, dynamic>? data) =>
     productFractions(data).isNotEmpty;
 
-/// De qué es la fracción. Una lechuga se parte a la mitad; un camarón no —ahí
-/// la mitad es de KILO. Cambia las etiquetas y el texto, nunca el cálculo.
 String fractionUnit(Map<String, dynamic>? data) =>
     (data?['fraccion_unidad'] as String?) == 'kilo' ? 'kilo' : 'pieza';
 
@@ -36,9 +34,6 @@ String fractionLabel(double f, {String unit = 'pieza'}) {
   return _plainFraction(f);
 }
 
-/// Una cantidad como se le enseña a una persona: 1 y no "1.0", 0.5 y no
-/// "0.500". Interpolar el double directo alarga el texto y desbordaba el botón
-/// de "Agregado".
 String qtyLabel(double q) {
   if (q == q.roundToDouble()) return q.toStringAsFixed(0);
   return q.toStringAsFixed(3).replaceFirst(RegExp(r'0+$'), '');
@@ -93,8 +88,6 @@ class FractionTile extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Una palabra como "Entera" y un glifo como ½ no ocupan igual;
-                // se escala hacia abajo para que las dos se lean parejas.
                 SizedBox(
                   height: 34,
                   child: FittedBox(
@@ -111,8 +104,6 @@ class FractionTile extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 8),
-                // Con tres fracciones las fichas quedan angostas y un precio
-                // como $110.00 se partía en dos renglones.
                 FittedBox(
                   fit: BoxFit.scaleDown,
                   child: Text(
@@ -141,10 +132,6 @@ class FractionTile extends StatelessWidget {
   }
 }
 
-
-/// Elegir CUÁNTO: primero el tamaño (1 kg, ½ kg, Entera…) y luego cuántos de
-/// ese tamaño. Sin el contador no había manera de pedir 2 kilos de camarón ni
-/// dos lechugas: la lista de fracciones sólo llega hasta la pieza completa.
 class FractionChooser extends StatefulWidget {
   final List<double> fractions;
   final String unit;
@@ -278,7 +265,6 @@ class _FractionChooserState extends State<FractionChooser> {
             backgroundColor: Colors.black,
             foregroundColor: Colors.white,
             elevation: 0,
-            // Con alto fijo el texto quedaba recortado arriba y abajo.
             padding: const EdgeInsets.symmetric(vertical: 16),
             shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(14)),
@@ -331,13 +317,6 @@ class _StepBtn extends StatelessWidget {
   }
 }
 
-
-/// Peso promedio por pieza, aprendido de lo que se pesa en el mostrador.
-///
-/// Se guardan DOS sumas —kilos y piezas— en vez de un promedio ya calculado.
-/// Así cada muestra es un FieldValue.increment: no hace falta transacción, dos
-/// cajas pueden registrar a la vez sin pisarse, y funciona aunque la escritura
-/// salga de la cola de sincronización mucho después.
 double? avgPieceWeight(Map<String, dynamic>? data) {
   final kg = (data?['peso_muestra_total'] as num?)?.toDouble() ?? 0;
   final pz = (data?['piezas_muestra_total'] as num?)?.toDouble() ?? 0;
@@ -348,9 +327,6 @@ double? avgPieceWeight(Map<String, dynamic>? data) {
 int pieceSampleCount(Map<String, dynamic>? data) =>
     ((data?['muestras_pieza'] as num?)?.toInt()) ?? 0;
 
-/// El diálogo de fracciones de la app del cliente: mismo formato que el de
-/// granel de esta app —AlertDialog, título centrado, la fila con imagen,
-/// nombre, variante y precio— con el selector de tamaño y cantidad.
 Future<double?> pickFraction({
   required BuildContext context,
   required String productName,
@@ -365,8 +341,6 @@ Future<double?> pickFraction({
     context: context,
     builder: (ctx) => AlertDialog(
       title: const Center(child: Text('Producto por Fracción')),
-      // El relleno por omisión del AlertDialog (24 por lado) no deja espacio
-      // para tres fichas y la fila se desbordaba.
       contentPadding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
       content: SingleChildScrollView(
         child: Column(

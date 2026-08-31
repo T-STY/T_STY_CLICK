@@ -219,15 +219,12 @@ class HomeState extends State<Home>
   }
 
   void _onSearchChanged() {
-
     _searchDebounce?.cancel();
     setState(() {
       _searchText = _searchController.text;
       if (_searchText.isNotEmpty) {
-
         _isSearching = true;
       } else {
-
         _isSearching = false;
         _searchResults = [];
       }
@@ -270,7 +267,6 @@ class HomeState extends State<Home>
         .where('price', isLessThanOrEqualTo: priceRange.end);
 
     query.get().then((snapshot) {
-
       if (!mounted) return;
       final docs = snapshot.docs
           .where((d) =>
@@ -535,7 +531,6 @@ class HomeState extends State<Home>
       final res = await callIdempotentCallable('getRewardsBalance');
       final data = res.data;
       if (data is Map) {
-
         if (data['hasWallet'] == false) {
           if (kDebugMode) {
             debugPrint('getRewardsBalance: wallet unresolved; keeping cached saldo');
@@ -551,7 +546,6 @@ class HomeState extends State<Home>
         }
       }
     } catch (e) {
-
       if (kDebugMode) debugPrint('getRewardsBalance failed: $e');
     }
   }
@@ -1123,7 +1117,6 @@ class HomeState extends State<Home>
   }
 
   Widget _buildListItem(BuildContext context, dynamic doc) {
-
     if (doc is DocumentSnapshot) {
       final raw = doc.data();
       final m = raw is Map<String, dynamic> ? raw : null;
@@ -1745,8 +1738,6 @@ class _AddToCartButtonState extends State<_AddToCartButton> {
     }
   }
 
-  /// Una línea por pesar tiene cantidad 0 —todavía no hay kilos—, así que el
-  /// botón decía "Agregado (0)". Lo que el cliente pidió son piezas.
   String _addedLabel() {
     final cart = Provider.of<CartProvider>(context, listen: false);
     final item = cart.getItem(buildCartLineId(
@@ -1817,8 +1808,6 @@ class _AddToCartButtonState extends State<_AddToCartButton> {
   }
 
   void _incrementQuantity() {
-    // Sumar 1 en un producto por fracciones no significa nada: media lechuga
-    // pasaría a 1.5. Se vuelve a abrir el selector.
     if (sellsByFraction(widget.data)) {
       _reopenFractionDialog();
       return;
@@ -2200,7 +2189,6 @@ class _ArcadeLaunchPageState extends State<_ArcadeLaunchPage> {
       ),
     );
   }
-
 }
 
 class _TermLine extends StatelessWidget {
@@ -2209,7 +2197,6 @@ class _TermLine extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-
     final isBanner  = text.contains('╔') || text.contains('║') || text.contains('╚')
         || text.contains('██') || text.contains('***');
     final isCmd     = text.trimLeft().startsWith(r'C:\>') || text.trimLeft().startsWith('[>]');

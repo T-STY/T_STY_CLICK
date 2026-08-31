@@ -48,7 +48,6 @@ class ProductDisplayPage extends StatefulWidget {
 }
 
 class ProductDisplayPageState extends State<ProductDisplayPage> {
-
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
 
@@ -393,7 +392,6 @@ class ProductDisplayPageState extends State<ProductDisplayPage> {
       final bool parentMatches =
           parentName.contains(q) || parentVariante.contains(q);
       if (parentMatches) {
-
         out.addAll(group);
         continue;
       }
@@ -894,8 +892,6 @@ class _AddToCartButtonState extends State<AddToCartButton> {
     }
   }
 
-  /// Una línea por pesar tiene cantidad 0 —todavía no hay kilos—, así que el
-  /// botón decía "Agregado (0)". Lo que el cliente pidió son piezas.
   String _addedLabel() {
     final cart = Provider.of<CartProvider>(context, listen: false);
     final item = cart.getItem(buildCartLineId(
@@ -930,14 +926,10 @@ class _AddToCartButtonState extends State<AddToCartButton> {
   }
 
   void _incrementQuantity() {
-    // En un producto por fracciones sumar 1 no significa nada: media lechuga
-    // pasaría a 1.5. Se vuelve a abrir el selector para que elija tamaño y
-    // cantidad otra vez.
     if (sellsByFraction(widget.data)) {
       _reopenFractionDialog();
       return;
     }
-    // A granel tampoco tiene sentido sumar 1: se pide por peso, no por pieza.
     if (widget.data['bulk'] == true) {
       _showBulkOrderDialog(prefill: true);
       return;
@@ -1114,9 +1106,6 @@ class _AddToCartButtonState extends State<AddToCartButton> {
               final docId = widget.data['docId'];
               final nombre = widget.data['nombre'];
               if (docId == null || nombre == null) return;
-              // Sin precio: la línea entra al pedido pero no suma al total
-              // hasta que la tienda pese las piezas. Poner un estimado aquí
-              // sería prometer un precio que la báscula no ha confirmado.
               cartProvider.setItem(
                 docId,
                 nombre,

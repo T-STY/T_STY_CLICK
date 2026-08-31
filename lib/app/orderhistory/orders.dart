@@ -143,9 +143,6 @@ class OrderItem {
   final double price;
   final String imageUrl;
   final bool isBulk;
-  /// Piezas pedidas y kilos que salieron de la báscula, cuando se pidió por
-  /// pieza. El cliente pidió piezas pero paga por lo que pesaron, así que el
-  /// ticket enseña las dos cosas.
   final double? pieces;
   final double? weightKg;
 

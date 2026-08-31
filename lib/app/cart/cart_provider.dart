@@ -105,9 +105,6 @@ class CartProvider extends ChangeNotifier {
     return total;
   }
 
-  /// Líneas pedidas por pieza cuyo precio depende de la báscula. No suman al
-  /// total todavía, así que hay que decirlo en pantalla: si no, el cliente ve
-  /// un total que no es lo que va a pagar.
   int get pendingWeighCount =>
       _items.values.where((i) => i.pricePending).length;
 
@@ -150,7 +147,6 @@ class CartProvider extends ChangeNotifier {
     for (final item in _items.values) {
       final meta = _productMeta[item.productId];
       if (needsMeta && meta == null) {
-
         return null;
       }
       final cat = meta?.category ?? '';
@@ -565,8 +561,6 @@ class CartProvider extends ChangeNotifier {
 
     final lineId = buildCartLineId(productId, variantKey);
 
-    // Una línea por pesar llega con cantidad 0 —todavía no hay kilos— y la
-    // guarda de "quantity > 0" la borraba en el acto.
     if (quantity > 0 || pricePending) {
       _items.update(
         lineId,
@@ -789,22 +783,13 @@ class CartItem {
   final String? variantKey;
   final String? variantName;
 
-  /// Piezas pedidas cuando el cliente pidió "3 manzanas" en vez de un peso.
-  /// Null cuando la línea se pidió por kilo.
   final double? pieces;
 
-  /// Cómo se vende el producto, guardado en la línea porque el carrito ya no
-  /// tiene el documento a la mano y los botones + y − necesitan saber qué
-  /// diálogo abrir.
   final List<double> fracciones;
   final String fraccionUnidad;
   final bool permitePorPieza;
-  /// Peso promedio por pieza aprendido en el mostrador.
   final double? avgPieceKg;
 
-  /// El total todavía no se puede cobrar: depende de lo que pesen esas piezas.
-  /// La línea entra al pedido igual, pero no suma al total hasta que la tienda
-  /// las pese y cierre el precio.
   final bool pricePending;
 
   CartItem({
@@ -829,9 +814,6 @@ class CartItem {
     this.avgPieceKg,
   }) : productId = productId ?? objectID;
 
-  /// Lo que esta línea aporta al total de hoy. Una línea por pesar aporta cero
-  /// hasta que alguien la pese: mostrar un número inventado ahí es prometerle
-  /// al cliente un precio que la báscula todavía no confirmó.
   double get lineTotal => pricePending ? 0 : price * quantity;
 
   Map<String, dynamic> toMap() {
